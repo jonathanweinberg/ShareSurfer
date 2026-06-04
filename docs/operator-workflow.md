@@ -20,6 +20,8 @@ ShareSurfer V1 is a Windows PowerShell 5.1-only collector for SMB share discover
 
 Use the lab fixture in a disposable lab before touching production shares.
 
+Firm environment note: do not use `prlctl` for ShareSurfer development or validation. Run lab setup and validation directly in the designated Windows/AD test environment.
+
 ```powershell
 $labRoot = 'C:\ShareSurferLab'
 New-ShareSurferLabFixture -OutputPlanOnly -RootPath $labRoot -DomainNetBiosName 'CONTOSO' -ObsAttribute 'extensionAttribute10'
@@ -34,6 +36,20 @@ The V1 fixture is expected to create:
 - Inheritance breaks and deep explicit ACEs.
 - Long path fixtures.
 - Share-vs-NTFS permission conflicts.
+
+For a repeatable Windows Server validation run, use the script from the repository root:
+
+```powershell
+.\scripts\Invoke-ShareSurferLabValidation.ps1 `
+  -CreateLab `
+  -LabRoot 'C:\ShareSurferLab' `
+  -OutputRoot 'C:\ShareSurfer\lab-validation' `
+  -DomainNetBiosName 'CONTOSO' `
+  -ObsAttribute 'extensionAttribute10' `
+  -IncludeFiles
+```
+
+The script writes `lab-plan.json`, `validation.json`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run.
 
 ## Scan Workflow
 

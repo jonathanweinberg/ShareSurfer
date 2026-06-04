@@ -74,6 +74,10 @@ function ConvertTo-ShareSurferReport {
       <h2>Group Expansion</h2>
       <div class="scroll"><table id="groups"></table></div>
     </section>
+    <section>
+      <h2>Scan Events</h2>
+      <div class="scroll"><table id="events"></table></div>
+    </section>
   </main>
   <script id="sharesurfer-data" type="application/json">__SHARESURFER_DATA__</script>
   <script>
@@ -84,7 +88,8 @@ function ConvertTo-ShareSurferReport {
       ['ACL entries', data.acl_entries.length],
       ['Findings', data.findings.length],
       ['Conflicts', data.conflicts.length],
-      ['Identities', data.identities.length]
+      ['Identities', data.identities.length],
+      ['Events', data.scan_events.length]
     ];
     const summary = document.getElementById('summary');
     counts.forEach(([label, value]) => {
@@ -138,6 +143,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('conflicts', data.conflicts.filter(match));
       renderTable('owners', data.owner_mappings.filter(match));
       renderTable('groups', data.group_edges.filter(match));
+      renderTable('events', data.scan_events.filter(match));
     }
     document.getElementById('filter').addEventListener('input', applyFilter);
     applyFilter();

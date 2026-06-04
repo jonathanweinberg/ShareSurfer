@@ -339,6 +339,7 @@ $tests = @(
             Assert-True ($report -like '*operational migration policy*') 'Report should distinguish policy warning from hard Azure limit.'
             Assert-True ($report -like '*type="application/json"*') 'Report should embed scan data as application/json rather than executable JavaScript.'
             Assert-True ($report -notlike '*innerHTML = columns.map*') 'Report table rendering must not inject CSV-derived values with innerHTML.'
+            Assert-True ($report -like '*Scan Events*') 'Report should expose scan event logs.'
         }
     },
     @{
