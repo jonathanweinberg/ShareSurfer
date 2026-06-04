@@ -829,11 +829,13 @@ $tests = @(
     @{
         Name = 'Documentation includes workflow visuals for operator review'
         Body = {
+            $pesterWrapper = Join-Path $repoRoot 'tests/ShareSurfer.Tests.ps1'
             $visualDoc = Join-Path $repoRoot 'docs/workflow-visuals.md'
             $visualRoot = Join-Path $repoRoot 'docs/visuals'
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
+            $readme = Join-Path $repoRoot 'README.md'
             $expectedVisuals = @(
                 'collector-to-report.svg',
                 'enterprise-lab-validation.svg',
@@ -861,6 +863,13 @@ $tests = @(
                 Assert-True (Test-Path -LiteralPath $path) ("Missing report screenshot {0}" -f $screenshot)
                 Assert-True ((Get-Item -LiteralPath $path).Length -gt 10000) ("Report screenshot {0} should be a real image asset." -f $screenshot)
             }
+
+            Assert-True (Test-Path -LiteralPath $pesterWrapper) 'Tests should include a Pester-compatible entrypoint.'
+            $pesterWrapperText = Get-Content -LiteralPath $pesterWrapper -Raw
+            Assert-True ($pesterWrapperText -like '*Describe*ShareSurfer*') 'Pester wrapper should expose a ShareSurfer Describe block.'
+            Assert-True ($pesterWrapperText -like '*Invoke-ShareSurferTests.ps1*') 'Pester wrapper should run the fast dependency-free test suite.'
+            $readmeText = Get-Content -LiteralPath $readme -Raw
+            Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw

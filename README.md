@@ -68,8 +68,14 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 
 ## Tests
 
-The current test runner avoids external dependencies so it can run before Pester packaging is decided:
+The default test runner avoids external dependencies so it can run on a fresh collector workstation:
 
 ```powershell
 pwsh -NoLogo -NoProfile -File tests/Invoke-ShareSurferTests.ps1
+```
+
+If Pester is installed, you can use the Pester-compatible wrapper:
+
+```powershell
+pwsh -NoLogo -NoProfile -File scripts/Invoke-ShareSurferPester.ps1
 ```
