@@ -44,6 +44,8 @@ function ConvertTo-ShareSurferReport {
     .high { color: var(--bad); font-weight: 600; }
     .warning { color: var(--warn); font-weight: 600; }
     .note { color: var(--muted); max-width: 980px; line-height: 1.45; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .controls input { max-width: 360px; }
   </style>
 </head>
 <body>
@@ -63,8 +65,16 @@ function ConvertTo-ShareSurferReport {
       <div class="scroll"><table id="findings"></table></div>
     </section>
     <section>
+      <h2>Finding Rollups</h2>
+      <div class="scroll"><table id="finding-rollups"></table></div>
+    </section>
+    <section>
       <h2>Share vs NTFS Conflicts</h2>
       <div class="scroll"><table id="conflicts"></table></div>
+    </section>
+    <section>
+      <h2>Conflict Rollups</h2>
+      <div class="scroll"><table id="conflict-rollups"></table></div>
     </section>
     <section>
       <h2>Owner and Business Unit Mappings</h2>
@@ -77,6 +87,17 @@ function ConvertTo-ShareSurferReport {
     <section>
       <h2>Group Expansion</h2>
       <div class="scroll"><table id="groups"></table></div>
+    </section>
+    <section>
+      <h2>Group Browser</h2>
+      <div class="controls">
+        <input id="group-filter" type="search" placeholder="Filter group or member">
+      </div>
+      <div class="scroll"><table id="group-browser"></table></div>
+    </section>
+    <section>
+      <h2>Org Chain Rollups</h2>
+      <div class="scroll"><table id="org-rollups"></table></div>
     </section>
     <section>
       <h2>Scan Events</h2>
@@ -161,19 +182,74 @@ function ConvertTo-ShareSurferReport {
       });
       return Array.from(pivots.values()).sort((a, b) => String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
     }
+    function buildRollups(rows, fields) {
+      const rollups = new Map();
+      rows.forEach(row => {
+        const keyValues = fields.map(field => String(row[field] || ''));
+        const key = keyValues.join('|');
+        if (!rollups.has(key)) {
+          const record = {};
+          fields.forEach((field, index) => { record[field] = keyValues[index]; });
+          record.Count = 0;
+          rollups.set(key, record);
+        }
+        rollups.get(key).Count += 1;
+      });
+      return Array.from(rollups.values()).sort((a, b) => String(a[fields[0]] || '').localeCompare(String(b[fields[0]] || '')));
+    }
+    function buildOrgChainRollups() {
+      const rollups = new Map();
+      data.org_chains.forEach(chain => {
+        const key = [chain.ObsPath || '', chain.ManagerLevel1 || '', chain.ManagerLevel2 || ''].join('|');
+        if (!rollups.has(key)) {
+          rollups.set(key, {
+            ObsPath: chain.ObsPath || '',
+            ManagerLevel1: chain.ManagerLevel1 || '',
+            ManagerLevel2: chain.ManagerLevel2 || '',
+            Identities: 0
+          });
+        }
+        rollups.get(key).Identities += 1;
+      });
+      return Array.from(rollups.values()).sort((a, b) => String(a.ObsPath).localeCompare(String(b.ObsPath)) || String(a.ManagerLevel1).localeCompare(String(b.ManagerLevel1)));
+    }
+    function buildGroupBrowserRows() {
+      return data.group_edges.map(edge => ({
+        ParentGroup: edge.ParentGroup || '',
+        ChildIdentity: edge.ChildIdentity || '',
+        ChildObjectClass: edge.ChildObjectClass || '',
+        Depth: edge.Depth || '',
+        IsCycle: edge.IsCycle || '',
+        IsTruncated: edge.IsTruncated || ''
+      }));
+    }
     const owner_pivots = buildOwnerPivots();
+    const finding_rollups = buildRollups(data.findings, ['FindingType', 'Severity']);
+    const conflict_rollups = buildRollups(data.conflicts, ['ConflictType', 'Severity']);
+    const org_rollups = buildOrgChainRollups();
+    const group_browser_rows = buildGroupBrowserRows();
+    function applyGroupBrowser() {
+      const q = document.getElementById('group-filter').value.toLowerCase();
+      const match = row => JSON.stringify(row).toLowerCase().includes(q);
+      renderTable('group-browser', group_browser_rows.filter(match));
+    }
     function applyFilter() {
       const q = document.getElementById('filter').value.toLowerCase();
       const match = row => JSON.stringify(row).toLowerCase().includes(q);
       renderTable('findings', data.findings.filter(match));
+      renderTable('finding-rollups', finding_rollups.filter(match));
       renderTable('conflicts', data.conflicts.filter(match));
+      renderTable('conflict-rollups', conflict_rollups.filter(match));
       renderTable('owners', data.owner_mappings.filter(match));
       renderTable('owner-pivots', owner_pivots.filter(match));
       renderTable('groups', data.group_edges.filter(match));
+      renderTable('org-rollups', org_rollups.filter(match));
       renderTable('events', data.scan_events.filter(match));
     }
     document.getElementById('filter').addEventListener('input', applyFilter);
+    document.getElementById('group-filter').addEventListener('input', applyGroupBrowser);
     applyFilter();
+    applyGroupBrowser();
   </script>
 </body>
 </html>

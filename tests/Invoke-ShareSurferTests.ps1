@@ -409,6 +409,11 @@ $tests = @(
             Assert-True ($report -like '*Scan Events*') 'Report should expose scan event logs.'
             Assert-True ($report -like '*Business Unit Pivots*') 'Report should expose business-unit pivots.'
             Assert-True ($report -like '*owner_pivots*') 'Report should build owner pivots from exported mappings and items.'
+            Assert-True ($report -like '*Finding Rollups*') 'Report should expose finding rollups for business-unit triage.'
+            Assert-True ($report -like '*Conflict Rollups*') 'Report should expose conflict rollups for access-model triage.'
+            Assert-True ($report -like '*Org Chain Rollups*') 'Report should expose manager and OBS rollups.'
+            Assert-True ($report -like '*Group Browser*') 'Report should expose a group expansion browsing view.'
+            Assert-True ($report -like '*buildRollups*') 'Report should build dynamic rollup tables from CSV exports.'
         }
     },
     @{
