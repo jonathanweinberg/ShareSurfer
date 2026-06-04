@@ -434,6 +434,11 @@ $tests = @(
             foreach ($file in $expectedFiles) {
                 Assert-True (Test-Path -LiteralPath (Join-Path $outputPath $file)) ("Missing export file {0}" -f $file)
             }
+            Assert-True (Test-Path -LiteralPath (Join-Path $outputPath 'scan_events.jsonl')) 'Scan exports should include a first-class raw JSONL event log.'
+            $eventLogLines = @(Get-Content -LiteralPath (Join-Path $outputPath 'scan_events.jsonl'))
+            Assert-True ($eventLogLines.Count -gt 0) 'Raw JSONL event log should include scan events.'
+            $firstEventLogRow = $eventLogLines[0] | ConvertFrom-Json
+            Assert-True (-not [string]::IsNullOrWhiteSpace([string]$firstEventLogRow.EventType)) 'Raw JSONL event log rows should be structured event objects.'
 
             $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
             Assert-True ($findings.FindingType -contains 'LongPathOperationalPolicy') 'Findings should include the operational 256-character warning.'
@@ -734,10 +739,28 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
             $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBundle-' + [guid]::NewGuid().ToString('N'))
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+            $inventory = New-TestInventory
+            $inventory | Add-Member -MemberType NoteProperty -Name ScanEvents -Value @(
+                [pscustomobject]@{
+                    EventId = 'event-sensitive'
+                    Timestamp = '2026-06-04T00:00:00.0000000Z'
+                    Level = 'Info'
+                    EventType = 'FixtureSensitiveEvent'
+                    Source = 'Fixture'
+                    ShareId = 'share-finance'
+                    ItemId = 'item-deep'
+                    Message = 'Collected CONTOSO\FinanceEditors from \\files01\Finance'
+                    Detail = '\\files01\Finance\Delegated'
+                }
+            )
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
             ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath (Join-Path $outputPath 'report.html') | Out-Null
 
             New-ShareSurferSupportBundle -ExportPath $outputPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'unit-test' -IncludeReport | Out-Null
+            $rawEventLogPath = Join-Path $outputPath 'scan_events.jsonl'
+            $redactedEventLogPath = Join-Path $bundlePath 'scan_events.jsonl'
+            $rawEventLog = Get-Content -LiteralPath $rawEventLogPath -Raw
+            $redactedEventLog = Get-Content -LiteralPath $redactedEventLogPath -Raw
             $redactedAcl = Get-Content -LiteralPath (Join-Path $bundlePath 'acl_entries.csv') -Raw
             $redactedFindings = Get-Content -LiteralPath (Join-Path $bundlePath 'findings.csv') -Raw
             $redactedConflicts = Get-Content -LiteralPath (Join-Path $bundlePath 'conflicts.csv') -Raw
@@ -748,6 +771,10 @@ $tests = @(
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
             $redactionAuditPath = Join-Path $bundlePath 'support_bundle_redaction_audit.csv'
 
+            Assert-True ($rawEventLog -like '*CONTOSO*') 'Raw JSONL event log should preserve source values for trusted internal debugging.'
+            Assert-True ($redactedEventLog -notlike '*CONTOSO*') 'Redacted JSONL event log must not contain source domain names.'
+            Assert-True ($redactedEventLog -notlike '*files01*') 'Redacted JSONL event log must not contain source server names.'
+            Assert-True ($redactedEventLog -like '*ID-*') 'Redacted JSONL event log should preserve relationships with stable tokens.'
             Assert-True ($redactedAcl -notlike '*CONTOSO*') 'Redacted bundle must not contain the source domain name.'
             Assert-True ($redactedAcl -notlike '*FinanceEditors*') 'Redacted bundle must not contain source group names.'
             Assert-True ($redactedAcl -like '*ID-*') 'Stable token redaction should preserve relationships with synthetic IDs.'
@@ -779,6 +806,7 @@ $tests = @(
             Assert-Equal $bundleManifest[0].ReportIncluded 'True' 'Support bundle manifest should record that the redacted report was included.'
             Assert-Equal $bundleManifest[0].RedactionLeakCount '0' 'Support bundle manifest should record zero redaction leaks.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
+            Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_redaction_audit.csv') 'Support bundle file diagnostics should include redaction audit diagnostics.'
             Assert-True ($redactionAudit.Count -gt 0) 'Redaction audit should include checked sensitive source values.'

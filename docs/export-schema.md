@@ -38,6 +38,8 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
 | `scan_manifest.csv` | One row per scan | Records scan settings, versions, and collection health. |
 
+Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with the same structured event records as `scan_events.csv`. Keep this file with the trusted raw export; use the redacted support bundle version for bug reports.
+
 ## Column Reference
 
 ### `shares.csv`

@@ -71,6 +71,7 @@ A useful support bundle includes:
 
 - The full redacted CSV export set.
 - `scan_manifest.csv` with sensitive values redacted but scan settings preserved.
+- `scan_events.jsonl` with redacted structured scan events for support tools that prefer JSON Lines logs.
 - `support_bundle_manifest.csv` with redaction mode, validation status, and bundle-level file counts.
 - `support_bundle_files.csv` with redacted CSV row counts and SHA256 hashes for support-case integrity checks.
 - `support_bundle_redaction_audit.csv` with checked source-value tokens, leak status, and leak file names when any are found.

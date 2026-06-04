@@ -43,6 +43,15 @@ function New-ShareSurferSupportBundle {
         })
     }
 
+    $redactedEventLogPath = Join-Path $OutputPath 'scan_events.jsonl'
+    $redactedEventRows = @(Read-ShareSurferCsv -Path (Join-Path $OutputPath 'scan_events.csv'))
+    Export-ShareSurferJsonLines -Path $redactedEventLogPath -Rows $redactedEventRows
+    [void]$fileDiagnostics.Add([pscustomobject]@{
+        FileName = 'scan_events.jsonl'
+        RowCount = @($redactedEventRows).Count
+        Sha256 = Get-ShareSurferFileSha256 -Path $redactedEventLogPath
+    })
+
     $validation = Test-ShareSurferExport -ExportPath $OutputPath
     $reportIncluded = $false
     if ($IncludeReport) {
@@ -95,7 +104,8 @@ function New-ShareSurferSupportBundle {
         'Relationship-preserving StableToken mode uses salted synthetic IDs and does not include the salt in this bundle.',
         'support_bundle_manifest.csv records bundle-level diagnostics.',
         'support_bundle_files.csv records redacted file row counts and hashes.',
-        'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.'
+        'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
+        'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.'
     ) -Encoding UTF8
 
     [pscustomobject]@{

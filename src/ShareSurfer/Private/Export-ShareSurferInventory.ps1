@@ -88,6 +88,11 @@ function Export-ShareSurferInventory {
         Export-ShareSurferCsv -Path (Join-Path $OutputPath $fileName) -Columns $schema[$fileName] -Rows $data[$fileName]
     }
 
+    $eventLogRows = foreach ($event in @($scanEvents)) {
+        New-ShareSurferRecord -Columns $schema['scan_events.csv'] -InputObject $event
+    }
+    Export-ShareSurferJsonLines -Path (Join-Path $OutputPath 'scan_events.jsonl') -Rows $eventLogRows
+
     [pscustomobject]@{
         OutputPath = $OutputPath
         Shares = $shares.Count
