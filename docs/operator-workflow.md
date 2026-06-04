@@ -29,6 +29,22 @@ New-ShareSurferLabFixture -OutputPlanOnly -RootPath $labRoot -DomainNetBiosName 
 
 Review the plan first. When the plan is acceptable and the lab is disposable, rerun without `-OutputPlanOnly`.
 
+For enterprise-scale validation, plan the larger profile before creating anything:
+
+```powershell
+$labRoot = 'C:\ShareSurferEnterpriseLab'
+New-ShareSurferLabFixture `
+  -OutputPlanOnly `
+  -RootPath $labRoot `
+  -DomainNetBiosName 'CONTOSO' `
+  -ObsAttribute 'extensionAttribute10' `
+  -Scale Enterprise `
+  -EnterpriseUserCount 2500 `
+  -EnterpriseShareCount 250 `
+  -EnterpriseFilesPerShare 8 `
+  -MaxLabBytes 8589934592
+```
+
 The V1 fixture is expected to create:
 
 - AD users, groups, nested group membership, manager chains, and OBS extension attributes.
@@ -37,6 +53,14 @@ The V1 fixture is expected to create:
 - Inheritance breaks, deep explicit ACEs, and NTFS deny examples.
 - Long path fixtures.
 - Share-vs-NTFS permission conflicts.
+
+The enterprise profile must additionally prove:
+
+- A multi-thousand user population.
+- Hundreds of SMB shares.
+- Deep share trees and intricate folder paths.
+- Real file objects throughout the trees, using small file contents.
+- Estimated generated lab data under 8 GB.
 
 For a repeatable Windows Server validation run, use the script from the repository root:
 
@@ -48,6 +72,16 @@ For a repeatable Windows Server validation run, use the script from the reposito
   -DomainNetBiosName 'CONTOSO' `
   -ObsAttribute 'extensionAttribute10' `
   -IncludeFiles
+```
+
+For the enterprise profile, add:
+
+```powershell
+  -Scale Enterprise `
+  -EnterpriseUserCount 2500 `
+  -EnterpriseShareCount 250 `
+  -EnterpriseFilesPerShare 8 `
+  -MaxLabBytes 8589934592
 ```
 
 The script writes `lab-plan.json`, `validation.json`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run.

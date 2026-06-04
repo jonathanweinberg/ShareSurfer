@@ -4,6 +4,12 @@ param(
     [string] $OutputRoot = 'C:\ShareSurfer\lab-validation',
     [string] $DomainNetBiosName = $env:USERDOMAIN,
     [string] $ObsAttribute = 'extensionAttribute10',
+    [ValidateSet('Focused', 'Enterprise')]
+    [string] $Scale = 'Focused',
+    [int] $EnterpriseUserCount = 2500,
+    [int] $EnterpriseShareCount = 250,
+    [int] $EnterpriseFilesPerShare = 8,
+    [int64] $MaxLabBytes = 8589934592,
     [switch] $CreateLab,
     [switch] $IncludeFiles
 )
@@ -27,12 +33,12 @@ $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
-$plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute
+$plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes
 $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'lab-plan.json') -Encoding UTF8
 
 if ($CreateLab) {
     if ($PSCmdlet.ShouldProcess($LabRoot, 'Create or update ShareSurfer Windows/AD lab fixtures')) {
-        New-ShareSurferLabFixture -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Force | Out-Null
+        New-ShareSurferLabFixture -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes -Force | Out-Null
     }
 }
 
@@ -55,5 +61,10 @@ New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -Re
     SupportBundlePath = $bundlePath
     ValidationPath = Join-Path $runRoot 'validation.json'
     LabCreated = [bool]$CreateLab
+    Scale = $Scale
+    EstimatedLabBytes = $plan.EstimatedLabBytes
+    MaxLabBytes = $plan.MaxLabBytes
     ShareCount = @($plan.Shares).Count
+    UserCount = @($plan.Users).Count
+    FileFixtureCount = @($plan.FileFixtures).Count
 }

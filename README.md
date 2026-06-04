@@ -41,6 +41,14 @@ New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferLab' -DomainN
 
 On a disposable Windows/AD lab host, rerun without `-OutputPlanOnly` to create the filesystem/share fixtures and, when the ActiveDirectory module is available, demo users, groups, manager chains, employee fields, and OBS extension attributes. The lab plan includes directory ACLs, file-specific ACLs, ownership examples, broken inheritance, deep explicit ACEs, long-path fixtures, NTFS deny examples, and share-vs-NTFS conflict cases.
 
+Enterprise validation should use the scaled profile:
+
+```powershell
+New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab' -Scale Enterprise -EnterpriseUserCount 2500 -EnterpriseShareCount 250 -EnterpriseFilesPerShare 8 -MaxLabBytes 8589934592
+```
+
+The enterprise profile is designed for a multi-thousand user population, hundreds of SMB shares, deep folder trees with real small files throughout, and an estimated lab data footprint under 8 GB.
+
 Firm environment note: do not use `prlctl` for ShareSurfer development or validation. ShareSurfer lab validation is intended to run inside the designated Windows/AD test environment directly, not through the old Parallels test setup.
 
 ## Azure Files Path Policy

@@ -232,6 +232,25 @@ $tests = @(
         }
     },
     @{
+        Name = 'New-ShareSurferLabFixture can plan an enterprise-scale lab under the disk budget'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $labRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferEnterpriseLab-' + [guid]::NewGuid().ToString('N'))
+            $eightGb = [int64]8589934592
+
+            $plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $labRoot -DomainNetBiosName 'CONTOSO' -ObsAttribute 'extensionAttribute10' -Scale Enterprise -EnterpriseUserCount 2500 -EnterpriseShareCount 200 -MaxLabBytes $eightGb
+
+            Assert-Equal $plan.ScaleProfile 'Enterprise' 'Enterprise lab plan should record its scale profile.'
+            Assert-True ($plan.Users.Count -ge 2500) 'Enterprise lab plan should include a multi-thousand user population.'
+            Assert-True ($plan.Shares.Count -ge 200) 'Enterprise lab plan should include hundreds of SMB shares.'
+            Assert-True ($plan.FileFixtures.Count -ge 1000) 'Enterprise lab plan should include real file objects throughout share trees.'
+            Assert-True ([int64]$plan.EstimatedLabBytes -le $eightGb) 'Enterprise lab plan should stay under the 8 GB lab-data budget.'
+            Assert-True (@($plan.FileFixtures | Where-Object { ([string]$_.RelativePath -split '\\').Count -ge 6 }).Count -gt 0) 'Enterprise lab plan should include deep folder/file paths.'
+            Assert-True (@($plan.AclScenarios | Where-Object { ([string]$_.RelativePath).Length -gt 256 }).Count -gt 0) 'Enterprise lab plan should include operational long-path fixtures.'
+            Assert-True (-not (Test-Path -LiteralPath $labRoot)) 'OutputPlanOnly enterprise planning must not create the lab root.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan exports normalized CSVs and findings from imported inventory'
         Body = {
             Import-Module $moduleManifest -Force

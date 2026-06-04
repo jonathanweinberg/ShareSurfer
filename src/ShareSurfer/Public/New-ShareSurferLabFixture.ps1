@@ -6,11 +6,17 @@ function New-ShareSurferLabFixture {
 
         [string] $DomainNetBiosName = 'CONTOSO',
         [string] $ObsAttribute = 'extensionAttribute10',
+        [ValidateSet('Focused', 'Enterprise')]
+        [string] $Scale = 'Focused',
+        [int] $EnterpriseUserCount = 2500,
+        [int] $EnterpriseShareCount = 250,
+        [int] $EnterpriseFilesPerShare = 8,
+        [int64] $MaxLabBytes = 8589934592,
         [switch] $OutputPlanOnly,
         [switch] $Force
     )
 
-    $plan = New-ShareSurferLabPlan -RootPath $RootPath -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute
+    $plan = New-ShareSurferLabPlan -RootPath $RootPath -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes
     if ($OutputPlanOnly) {
         return $plan
     }
@@ -21,6 +27,10 @@ function New-ShareSurferLabFixture {
 
     if ((Test-Path -LiteralPath $RootPath) -and -not $Force) {
         throw "Lab root already exists: $RootPath. Use -Force to reuse it."
+    }
+
+    if ([int64]$plan.EstimatedLabBytes -gt [int64]$plan.MaxLabBytes) {
+        throw ('Lab plan estimates {0} bytes, which exceeds MaxLabBytes {1}.' -f $plan.EstimatedLabBytes, $plan.MaxLabBytes)
     }
 
     if ($PSCmdlet.ShouldProcess($RootPath, 'Create ShareSurfer lab directories and Windows SMB shares')) {
@@ -41,6 +51,20 @@ function New-ShareSurferLabFixture {
             else {
                 New-Item -ItemType Directory -Path $scenarioPath -Force | Out-Null
                 Set-Content -Path (Join-Path $scenarioPath 'sample.txt') -Value ('ShareSurfer fixture: {0}' -f $scenario.Name) -Encoding UTF8
+            }
+        }
+
+        if ($plan.PSObject.Properties['FileFixtures']) {
+            foreach ($file in @($plan.FileFixtures)) {
+                $share = @($plan.Shares | Where-Object { $_.ShareName -eq $file.ShareName })[0]
+                if ($null -eq $share) {
+                    continue
+                }
+                $filePath = Join-Path $share.LocalPath $file.RelativePath
+                $parentPath = Split-Path -Parent $filePath
+                New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
+                $content = 'ShareSurfer file fixture {0}' -f $file.ContentTag
+                Set-Content -Path $filePath -Value $content -Encoding UTF8
             }
         }
 

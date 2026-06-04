@@ -4,7 +4,15 @@ function New-ShareSurferLabPlan {
         [string] $RootPath,
 
         [string] $DomainNetBiosName = 'CONTOSO',
-        [string] $ObsAttribute = 'extensionAttribute10'
+        [string] $ObsAttribute = 'extensionAttribute10',
+
+        [ValidateSet('Focused', 'Enterprise')]
+        [string] $Scale = 'Focused',
+
+        [int] $EnterpriseUserCount = 2500,
+        [int] $EnterpriseShareCount = 250,
+        [int] $EnterpriseFilesPerShare = 8,
+        [int64] $MaxLabBytes = 8589934592
     )
 
     $users = @(
@@ -28,6 +36,35 @@ function New-ShareSurferLabPlan {
         }
         $record[$ObsAttribute] = $_.Obs
         [pscustomobject]$record
+    }
+
+    if ($Scale -eq 'Enterprise') {
+        $userList = New-Object System.Collections.ArrayList
+        foreach ($user in @($users)) {
+            [void]$userList.Add($user)
+        }
+
+        $departments = @('FIN', 'ENG', 'OPS', 'HR', 'LEGAL', 'SALES', 'MKT', 'RISK')
+        $managers = @('Morgan.Manager', 'Parker.Manager', 'Quinn.Manager')
+        $nextUserId = 1
+        while ($userList.Count -lt $EnterpriseUserCount) {
+            $department = $departments[($nextUserId - 1) % $departments.Count]
+            $manager = $managers[($nextUserId - 1) % $managers.Count]
+            $sam = 'SSUser{0:D5}' -f $nextUserId
+            $record = [ordered]@{
+                SamAccountName = $sam
+                UserPrincipalName = ('{0}@example.test' -f $sam)
+                DisplayName = ('ShareSurfer User {0:D5}' -f $nextUserId)
+                EmployeeId = ('E{0:D7}' -f $nextUserId)
+                EmployeeNumber = ('{0:D7}' -f $nextUserId)
+                Manager = $manager
+                Enabled = $true
+            }
+            $record[$ObsAttribute] = ('CORP.{0}.UNIT{1:D2}' -f $department, (($nextUserId - 1) % 25) + 1)
+            [void]$userList.Add([pscustomobject]$record)
+            $nextUserId++
+        }
+        $users = @($userList)
     }
 
     $groups = @(
@@ -77,15 +114,89 @@ function New-ShareSurferLabPlan {
         [pscustomobject]@{ Name = 'FileSpecificAce'; ShareName = 'SSOperations'; RelativePath = 'Restricted\FileOnly\executive-note.txt'; TargetType = 'File'; Identity = "$DomainNetBiosName\SS-Operations-Owners"; Rights = 'Read'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 3; OwnerIdentity = "$DomainNetBiosName\Leo.Operations" }
     )
 
+    $fileFixtures = New-Object System.Collections.ArrayList
+    [void]$fileFixtures.Add([pscustomobject]@{ ShareName = 'SSFinance'; RelativePath = 'AP\Vendor\Archive\sample.txt'; SizeBytes = 512; ContentTag = 'FocusedDeepExplicitAce' })
+    [void]$fileFixtures.Add([pscustomobject]@{ ShareName = 'SSOperations'; RelativePath = 'Restricted\FileOnly\executive-note.txt'; SizeBytes = 512; ContentTag = 'FocusedFileSpecificAce' })
+
+    if ($Scale -eq 'Enterprise') {
+        $groupList = New-Object System.Collections.ArrayList
+        foreach ($group in @($groups)) {
+            [void]$groupList.Add($group)
+        }
+        $shareList = New-Object System.Collections.ArrayList
+        foreach ($share in @($shares)) {
+            [void]$shareList.Add($share)
+        }
+        $aclList = New-Object System.Collections.ArrayList
+        foreach ($scenario in @($aclScenarios)) {
+            [void]$aclList.Add($scenario)
+        }
+
+        $targetShareCount = [Math]::Max($EnterpriseShareCount, 1)
+        for ($i = 1; $shareList.Count -lt $targetShareCount; $i++) {
+            $shareName = 'SSEnt{0:D4}' -f $i
+            $readerGroup = 'SS-ENT-{0:D4}-Readers' -f $i
+            $editorGroup = 'SS-ENT-{0:D4}-Editors' -f $i
+            $firstUser = 'SSUser{0:D5}' -f ((($i - 1) % [Math]::Max($EnterpriseUserCount - 8, 1)) + 1)
+            $secondUser = 'SSUser{0:D5}' -f (($i % [Math]::Max($EnterpriseUserCount - 8, 1)) + 1)
+
+            [void]$groupList.Add([pscustomobject]@{ Name = $readerGroup; Members = @($firstUser, $secondUser); Description = ('Enterprise share {0:D4} read access' -f $i) })
+            [void]$groupList.Add([pscustomobject]@{ Name = $editorGroup; Members = @($readerGroup); Description = ('Enterprise share {0:D4} modify access' -f $i) })
+
+            [void]$shareList.Add([pscustomobject]@{
+                ShareName = $shareName
+                LocalPath = Join-Path $RootPath ('Enterprise\Share{0:D4}' -f $i)
+                Description = ('Enterprise-scale complex share {0:D4}' -f $i)
+                SharePermissions = @(
+                    [pscustomobject]@{ Identity = "$DomainNetBiosName\$readerGroup"; Rights = 'Read' }
+                )
+            })
+
+            $deepPath = 'Division{0:D2}\Region{1:D2}\Program{2:D2}\Project{3:D2}\Workstream{4:D2}' -f (($i % 12) + 1), (($i % 18) + 1), (($i % 30) + 1), (($i % 40) + 1), (($i % 50) + 1)
+            [void]$aclList.Add([pscustomobject]@{ Name = ('EnterpriseDeepExplicitAce{0:D4}' -f $i); ShareName = $shareName; RelativePath = $deepPath; TargetType = 'Directory'; Identity = "$DomainNetBiosName\$editorGroup"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 5; OwnerIdentity = '' })
+
+            if ($i -eq 1) {
+                $longRelativePath = $deepPath + '\' + ('L' * 120) + '\' + ('M' * 120)
+                [void]$aclList.Add([pscustomobject]@{ Name = 'EnterpriseLongPath'; ShareName = $shareName; RelativePath = $longRelativePath; TargetType = 'Directory'; Identity = "$DomainNetBiosName\$editorGroup"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 7; OwnerIdentity = '' })
+            }
+
+            for ($fileIndex = 1; $fileIndex -le $EnterpriseFilesPerShare; $fileIndex++) {
+                $fileRelativePath = $deepPath + ('\Folder{0:D2}\File{1:D2}.txt' -f $fileIndex, $fileIndex)
+                [void]$fileFixtures.Add([pscustomobject]@{
+                    ShareName = $shareName
+                    RelativePath = $fileRelativePath
+                    SizeBytes = 512
+                    ContentTag = ('EnterpriseShare{0:D4}File{1:D2}' -f $i, $fileIndex)
+                })
+            }
+        }
+
+        $groups = @($groupList)
+        $shares = @($shareList)
+        $aclScenarios = @($aclList)
+    }
+
+    $estimatedLabBytes = 0
+    foreach ($file in @($fileFixtures)) {
+        $estimatedLabBytes += [int64]$file.SizeBytes
+    }
+    if ($estimatedLabBytes -gt $MaxLabBytes) {
+        throw ('Lab plan estimates {0} bytes, which exceeds MaxLabBytes {1}.' -f $estimatedLabBytes, $MaxLabBytes)
+    }
+
     [pscustomobject]@{
         LabName = 'ShareSurferLab'
+        ScaleProfile = $Scale
         RootPath = $RootPath
         DomainNetBiosName = $DomainNetBiosName
         ObsAttribute = $ObsAttribute
+        MaxLabBytes = $MaxLabBytes
+        EstimatedLabBytes = $estimatedLabBytes
         OrganizationalUnit = 'OU=ShareSurferLab'
         Users = @($users)
         Groups = @($groups)
         Shares = @($shares)
         AclScenarios = @($aclScenarios)
+        FileFixtures = @($fileFixtures)
     }
 }
