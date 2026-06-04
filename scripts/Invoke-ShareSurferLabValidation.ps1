@@ -35,6 +35,7 @@ $reportPath = Join-Path $runRoot 'report.html'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
+$acceptancePath = Join-Path $runRoot 'v1-acceptance.json'
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
@@ -70,6 +71,12 @@ if ($RequireLiveEvidence -and -not $liveEvidence.IsValid) {
 
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport | Out-Null
+$acceptanceScriptPath = Join-Path $PSScriptRoot 'Test-ShareSurferV1Acceptance.ps1'
+$acceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence
+$acceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptancePath -Encoding UTF8
+if (-not $acceptance.IsValid) {
+    throw ('ShareSurfer V1 acceptance validation failed. See {0}' -f $acceptancePath)
+}
 
 [pscustomobject]@{
     RunRoot = $runRoot
@@ -79,6 +86,9 @@ New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -Re
     ValidationPath = Join-Path $runRoot 'validation.json'
     CriteriaPath = $criteriaPath
     LiveEvidencePath = $liveEvidencePath
+    AcceptancePath = $acceptancePath
+    AcceptanceIsValid = [bool]$acceptance.IsValid
+    AcceptanceFailedCheckCount = [int]$acceptance.FailedCheckCount
     LiveEvidenceRequired = [bool]$RequireLiveEvidence
     LiveEvidenceIsValid = [bool]$liveEvidence.IsValid
     LiveEvidenceFallbackCount = [int]$liveEvidence.FallbackCount

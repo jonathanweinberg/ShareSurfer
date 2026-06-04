@@ -864,6 +864,11 @@ $tests = @(
             $failedResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True (-not $failedResult.IsValid) 'Acceptance checker should fail when a required support bundle artifact is missing.'
             Assert-True (@($failedResult.Checks | Where-Object { $_.Name -eq 'RedactedSupportBundle' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should identify missing redacted support bundle evidence.'
+
+            $labValidationScript = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-ShareSurferLabValidation.ps1') -Raw
+            Assert-True ($labValidationScript -like '*Test-ShareSurferV1Acceptance.ps1*') 'Lab validation should run the V1 acceptance checker automatically.'
+            Assert-True ($labValidationScript -like '*v1-acceptance.json*') 'Lab validation should write an acceptance result artifact.'
+            Assert-True ($labValidationScript -like '*AcceptancePath*') 'Lab validation output should include the acceptance artifact path.'
         }
     },
     @{
