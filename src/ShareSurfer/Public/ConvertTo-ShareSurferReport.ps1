@@ -299,6 +299,7 @@ function ConvertTo-ShareSurferReport {
     table {
       border-collapse: collapse;
       width: 100%;
+      min-width: 760px;
       font-size: 13px;
     }
     th, td {
@@ -338,6 +339,7 @@ function ConvertTo-ShareSurferReport {
       header { padding: 26px 20px 18px; }
       main { padding: 18px 20px 28px; }
       .hero-grid, .toolbar, .two-column { grid-template-columns: 1fr; }
+      .summary, .visual-grid { grid-template-columns: 1fr; }
       .view-tabs { justify-content: flex-start; }
       h1 { font-size: 28px; }
     }

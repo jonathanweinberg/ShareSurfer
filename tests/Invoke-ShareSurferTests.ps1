@@ -650,6 +650,8 @@ $tests = @(
             Assert-True ($report -like '*data-chart="owner"*') 'Report should expose an owner/business-unit chart container.'
             Assert-True ($report -like '*renderBarChart*') 'Report should render offline native bar charts from embedded CSV data.'
             Assert-True ($report -like '*focusDashboardValue*') 'Report should support chart-driven drilldown filtering.'
+            Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'
+            Assert-True ($report -like '*.summary, .visual-grid { grid-template-columns: 1fr; }*') 'Report summary and visual grids should collapse cleanly on mobile.'
         }
     },
     @{
@@ -837,6 +839,10 @@ $tests = @(
                 'enterprise-lab-validation.svg',
                 'support-bundle-diagnostics.svg'
             )
+            $expectedScreenshots = @(
+                'report-dashboard-overview.png',
+                'report-dashboard-findings.png'
+            )
 
             Assert-True (Test-Path -LiteralPath $visualDoc) 'Workflow visual documentation should exist.'
             $visualDocText = Get-Content -LiteralPath $visualDoc -Raw
@@ -850,6 +856,11 @@ $tests = @(
                 Assert-True ($svg -like '*<svg*') ("Workflow visual {0} should be an SVG asset." -f $visual)
                 Assert-True ($visualDocText -like ("*visuals/{0}*" -f $visual)) ("Workflow visual doc should reference {0}" -f $visual)
             }
+            foreach ($screenshot in $expectedScreenshots) {
+                $path = Join-Path $visualRoot $screenshot
+                Assert-True (Test-Path -LiteralPath $path) ("Missing report screenshot {0}" -f $screenshot)
+                Assert-True ((Get-Item -LiteralPath $path).Length -gt 10000) ("Report screenshot {0} should be a real image asset." -f $screenshot)
+            }
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
@@ -859,6 +870,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*Run the Collector*') 'First-run guide should explain running the collector.'
             Assert-True ($firstRunText -like '*Understand Outputs*') 'First-run guide should explain output interpretation.'
             Assert-True ($firstRunText -like '*Redacted Support Bundle*') 'First-run guide should explain redacted support bundle creation.'
+            Assert-True ($firstRunText -like '*visuals/report-dashboard-overview.png*') 'First-run guide should show an example dashboard screenshot.'
+            Assert-True ($firstRunText -like '*visuals/report-dashboard-findings.png*') 'First-run guide should show an example findings screenshot.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -867,6 +880,8 @@ $tests = @(
             Assert-True ($managementText -like '*migration-risk*') 'Management overview should explain migration-risk findings.'
             Assert-True ($managementText -like '*owner/business-unit*') 'Management overview should explain owner/business-unit pivots.'
             Assert-True ($managementText -like '*expected outcomes*') 'Management overview should explain expected outcomes.'
+            Assert-True ($managementText -like '*visuals/report-dashboard-overview.png*') 'Management overview should include an example dashboard screenshot.'
+            Assert-True ($managementText -like '*visuals/report-dashboard-findings.png*') 'Management overview should include an example findings screenshot.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw

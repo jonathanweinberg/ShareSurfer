@@ -55,6 +55,16 @@ After a useful scan, leaders should expect:
 - Redacted support evidence when the project team needs help diagnosing a bug.
 - A repeatable process for rescanning after cleanup.
 
+## Example Report Views
+
+Dashboard overview:
+
+![ShareSurfer dashboard overview](visuals/report-dashboard-overview.png)
+
+Findings drilldown:
+
+![ShareSurfer findings drilldown](visuals/report-dashboard-findings.png)
+
 ## Suggested Leadership Message
 
 ShareSurfer is not changing permissions. It is creating understandable evidence so business owners can decide what should be cleaned up before migration or audit work. The expected result is fewer surprises, clearer ownership, and a prioritized remediation list.

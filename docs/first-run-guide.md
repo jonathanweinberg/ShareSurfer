@@ -188,6 +188,14 @@ ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\rep
 
 Open `report.html` from the export folder. It does not need a server or internet access.
 
+Example dashboard overview:
+
+![ShareSurfer dashboard overview](visuals/report-dashboard-overview.png)
+
+Example findings drilldown:
+
+![ShareSurfer findings drilldown](visuals/report-dashboard-findings.png)
+
 Use the dashboard to review:
 
 - Executive summary cards.

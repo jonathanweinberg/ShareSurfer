@@ -88,6 +88,30 @@
     .outcomes {
       border-top: 5px solid #2563eb;
     }
+    .preview {
+      min-height: 0;
+      background: #ffffff;
+    }
+    .screenshot-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    figure {
+      margin: 0;
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    figcaption {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
     footer {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -108,6 +132,9 @@
         padding: 28px 22px;
       }
       .grid {
+        grid-template-columns: 1fr;
+      }
+      .screenshot-grid {
         grid-template-columns: 1fr;
       }
       h1 {
@@ -165,6 +192,20 @@
         </ul>
       </section>
     </div>
+
+    <section class="preview">
+      <h2>Example Report Views</h2>
+      <div class="screenshot-grid">
+        <figure>
+          <img src="visuals/report-dashboard-overview.png" alt="ShareSurfer dashboard overview with executive summary and visual risk rollups">
+          <figcaption>Dashboard overview for business-unit review.</figcaption>
+        </figure>
+        <figure>
+          <img src="visuals/report-dashboard-findings.png" alt="ShareSurfer findings drilldown table and rollups">
+          <figcaption>Findings drilldown for migration-risk triage.</figcaption>
+        </figure>
+      </div>
+    </section>
 
     <footer>
       <div>
