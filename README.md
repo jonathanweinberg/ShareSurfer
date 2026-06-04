@@ -61,6 +61,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [Export schema](docs/export-schema.md)
 - [Azure Files path policy](docs/azure-files-path-policy.md)
 - [Redacted support bundles](docs/redacted-support-bundles.md)
+- [Workflow visuals](docs/workflow-visuals.md)
 
 ## Tests
 

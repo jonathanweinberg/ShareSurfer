@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">ShareSurfer collector to report workflow</title>
+  <desc id="desc">Workflow from SMB shares through permission collection, identity enrichment, CSV exports, offline report, and support bundle.</desc>
+  <defs>
+    <style>
+      .bg{fill:#f8fbfc}.panel{fill:#fff;stroke:#c7d7dc;stroke-width:2}.head{fill:#0b6e69}.text{font-family:Segoe UI,Arial,sans-serif;fill:#17202a;font-size:24px}.small{font-size:18px;fill:#536b76}.white{fill:#fff}.arrow{stroke:#0b6e69;stroke-width:4;fill:none;marker-end:url(#arrow)}
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#0b6e69"/>
+    </marker>
+  </defs>
+  <rect class="bg" width="1200" height="520"/>
+  <text x="48" y="58" class="text" font-size="34" font-weight="700">ShareSurfer V1 Data Flow</text>
+  <text x="48" y="90" class="small">Two permission layers, identity context, normalized exports, and offline review.</text>
+  <g transform="translate(44 145)">
+    <rect class="panel" width="190" height="205" rx="8"/>
+    <rect class="head" width="190" height="44" rx="8"/>
+    <text x="18" y="30" class="white text" font-size="20">Targets</text>
+    <text x="18" y="86" class="text">Windows SMB</text>
+    <text x="18" y="120" class="small">Samba-style SMB</text>
+    <text x="18" y="154" class="small">UNC paths</text>
+  </g>
+  <path class="arrow" d="M250 248 H325"/>
+  <g transform="translate(330 145)">
+    <rect class="panel" width="205" height="205" rx="8"/>
+    <rect class="head" width="205" height="44" rx="8"/>
+    <text x="18" y="30" class="white text" font-size="20">Collector</text>
+    <text x="18" y="86" class="text">Share gates</text>
+    <text x="18" y="120" class="small">NTFS ACLs</text>
+    <text x="18" y="154" class="small">Ownership</text>
+    <text x="18" y="188" class="small">Inheritance</text>
+  </g>
+  <path class="arrow" d="M550 248 H625"/>
+  <g transform="translate(630 145)">
+    <rect class="panel" width="210" height="205" rx="8"/>
+    <rect class="head" width="210" height="44" rx="8"/>
+    <text x="18" y="30" class="white text" font-size="20">Identity</text>
+    <text x="18" y="86" class="text">AD / LDAP</text>
+    <text x="18" y="120" class="small">Groups</text>
+    <text x="18" y="154" class="small">Managers</text>
+    <text x="18" y="188" class="small">OBS attributes</text>
+  </g>
+  <path class="arrow" d="M855 248 H930"/>
+  <g transform="translate(935 145)">
+    <rect class="panel" width="220" height="205" rx="8"/>
+    <rect class="head" width="220" height="44" rx="8"/>
+    <text x="18" y="30" class="white text" font-size="20">Outputs</text>
+    <text x="18" y="86" class="text">CSV export set</text>
+    <text x="18" y="120" class="small">Offline report</text>
+    <text x="18" y="154" class="small">Findings</text>
+    <text x="18" y="188" class="small">Support bundle</text>
+  </g>
+  <text x="120" y="430" class="small">Partial data is flagged when share-level permissions cannot be proven.</text>
+  <text x="735" y="430" class="small">CSV remains the durable source of truth.</text>
+</svg>

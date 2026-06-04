@@ -606,6 +606,31 @@ $tests = @(
             Assert-True ($aclToken -ne '') 'ACL export should contain at least one stable token.'
             Assert-True ($redactedConflicts -like "*$aclToken*") 'The same identity token should be reused across ACL and conflict exports.'
         }
+    },
+    @{
+        Name = 'Documentation includes workflow visuals for operator review'
+        Body = {
+            $visualDoc = Join-Path $repoRoot 'docs/workflow-visuals.md'
+            $visualRoot = Join-Path $repoRoot 'docs/visuals'
+            $expectedVisuals = @(
+                'collector-to-report.svg',
+                'enterprise-lab-validation.svg',
+                'support-bundle-diagnostics.svg'
+            )
+
+            Assert-True (Test-Path -LiteralPath $visualDoc) 'Workflow visual documentation should exist.'
+            $visualDocText = Get-Content -LiteralPath $visualDoc -Raw
+            Assert-True ($visualDocText -like '*image-gen2 visual concept*') 'Workflow visual documentation should record the image-gen2 visual concept.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $visualRoot 'share-surfer-workflow-concept.png')) 'Workflow visuals should include the generated image-gen2 concept PNG.'
+            Assert-True ($visualDocText -like '*visuals/share-surfer-workflow-concept.png*') 'Workflow visual doc should reference the generated image-gen2 concept.'
+            foreach ($visual in $expectedVisuals) {
+                $path = Join-Path $visualRoot $visual
+                Assert-True (Test-Path -LiteralPath $path) ("Missing workflow visual {0}" -f $visual)
+                $svg = Get-Content -LiteralPath $path -Raw
+                Assert-True ($svg -like '*<svg*') ("Workflow visual {0} should be an SVG asset." -f $visual)
+                Assert-True ($visualDocText -like ("*visuals/{0}*" -f $visual)) ("Workflow visual doc should reference {0}" -f $visual)
+            }
+        }
     }
 )
 
