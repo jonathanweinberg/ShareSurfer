@@ -715,6 +715,7 @@ $tests = @(
             $redactedReportPath = Join-Path $bundlePath 'report.html'
             $bundleManifestPath = Join-Path $bundlePath 'support_bundle_manifest.csv'
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
+            $redactionAuditPath = Join-Path $bundlePath 'support_bundle_redaction_audit.csv'
 
             Assert-True ($redactedAcl -notlike '*CONTOSO*') 'Redacted bundle must not contain the source domain name.'
             Assert-True ($redactedAcl -notlike '*FinanceEditors*') 'Redacted bundle must not contain source group names.'
@@ -737,14 +738,24 @@ $tests = @(
             Assert-True ($redactedReport -like '*ID-*') 'Redacted report should preserve relationships with stable tokens.'
             Assert-True (Test-Path -LiteralPath $bundleManifestPath) 'Support bundle should include a machine-readable support bundle manifest.'
             Assert-True (Test-Path -LiteralPath $bundleFilesPath) 'Support bundle should include per-file diagnostics.'
+            Assert-True (Test-Path -LiteralPath $redactionAuditPath) 'Support bundle should include a redaction leak audit.'
 
             $bundleManifest = Import-Csv -LiteralPath $bundleManifestPath
             $bundleFiles = Import-Csv -LiteralPath $bundleFilesPath
+            $redactionAudit = Import-Csv -LiteralPath $redactionAuditPath
             Assert-Equal $bundleManifest[0].RedactionMode 'StableToken' 'Support bundle manifest should record the redaction mode.'
             Assert-Equal $bundleManifest[0].ValidationIsValid 'True' 'Support bundle manifest should record validation status.'
             Assert-Equal $bundleManifest[0].ReportIncluded 'True' 'Support bundle manifest should record that the redacted report was included.'
+            Assert-Equal $bundleManifest[0].RedactionLeakCount '0' 'Support bundle manifest should record zero redaction leaks.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
+            Assert-True ($bundleFiles.FileName -contains 'support_bundle_redaction_audit.csv') 'Support bundle file diagnostics should include redaction audit diagnostics.'
+            Assert-True ($redactionAudit.Count -gt 0) 'Redaction audit should include checked sensitive source values.'
+            Assert-True (@($redactionAudit | Where-Object { $_.LeakDetected -eq 'True' }).Count -eq 0) 'Redaction audit should not detect leaked source values.'
+            Assert-True (($redactionAudit | Get-Member -MemberType NoteProperty).Name -contains 'ValueToken') 'Redaction audit should use synthetic tokens instead of raw source values.'
+            $auditContent = Get-Content -LiteralPath $redactionAuditPath -Raw
+            Assert-True ($auditContent -notlike '*CONTOSO*') 'Redaction audit must not contain source domain names.'
+            Assert-True ($auditContent -notlike '*FinanceEditors*') 'Redaction audit must not contain source group names.'
             $aclFile = @($bundleFiles | Where-Object { $_.FileName -eq 'acl_entries.csv' })[0]
             Assert-True ([int]$aclFile.RowCount -gt 0) 'Support bundle file diagnostics should record row counts.'
             Assert-True ($aclFile.Sha256 -match '^[0-9A-Fa-f]{64}$') 'Support bundle file diagnostics should record a SHA256 hash for redacted files.'

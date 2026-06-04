@@ -27,6 +27,15 @@ Validate the bundle before sharing:
 Test-ShareSurferExport -ExportPath 'C:\ShareSurfer\support\scan-2026-06-04-redacted'
 ```
 
+Review the redaction audit before sharing:
+
+```powershell
+Import-Csv 'C:\ShareSurfer\support\scan-2026-06-04-redacted\support_bundle_redaction_audit.csv' |
+  Where-Object { $_.LeakDetected -eq 'True' }
+```
+
+This should return no rows. The audit stores source-value tokens and lengths, not raw source values.
+
 ## Stable Token Redaction
 
 Stable token redaction replaces repeated sensitive values with the same synthetic value. This preserves joins and relationships while hiding the original value.
@@ -64,6 +73,7 @@ A useful support bundle includes:
 - `scan_manifest.csv` with sensitive values redacted but scan settings preserved.
 - `support_bundle_manifest.csv` with redaction mode, validation status, and bundle-level file counts.
 - `support_bundle_files.csv` with redacted CSV row counts and SHA256 hashes for support-case integrity checks.
+- `support_bundle_redaction_audit.csv` with checked source-value tokens, leak status, and leak file names when any are found.
 - Any validation result from `Test-ShareSurferExport`.
 - A regenerated redacted `report.html`, when `-IncludeReport` is used.
 
@@ -76,5 +86,7 @@ Before sending a support bundle outside the trusted team:
 1. Search the bundle for obvious source domains, server names, user names, and share names.
 2. Confirm paths and identities use synthetic tokens.
 3. Confirm relationships still work across CSV files.
-4. Confirm the Azure path policy threshold and explicit ACE depth threshold are still visible.
-5. Share the smallest bundle that answers the support question.
+4. Confirm `support_bundle_manifest.csv` shows `RedactionLeakCount` as `0`.
+5. Confirm `support_bundle_redaction_audit.csv` has no rows with `LeakDetected=True`.
+6. Confirm the Azure path policy threshold and explicit ACE depth threshold are still visible.
+7. Share the smallest bundle that answers the support question.
