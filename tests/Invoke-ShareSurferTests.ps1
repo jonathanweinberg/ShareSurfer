@@ -285,6 +285,45 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan classifies restrictive share gates and NTFS deny collisions'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $inventory = New-TestInventory
+            $inventory.AclEntries += [pscustomobject]@{
+                ItemId = 'item-root'
+                ShareId = 'share-finance'
+                FullPath = '\\files01\Finance'
+                Identity = 'CONTOSO\FinanceReaders'
+                Rights = 'Modify'
+                AccessControlType = 'Allow'
+                IsInherited = $false
+                InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                PropagationFlags = 'None'
+                Depth = 0
+            }
+            $inventory.AclEntries += [pscustomobject]@{
+                ItemId = 'item-root'
+                ShareId = 'share-finance'
+                FullPath = '\\files01\Finance'
+                Identity = 'CONTOSO\FinanceReaders'
+                Rights = 'Read'
+                AccessControlType = 'Deny'
+                IsInherited = $false
+                InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                PropagationFlags = 'None'
+                Depth = 0
+            }
+
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+            $conflicts = Import-Csv -LiteralPath (Join-Path $outputPath 'conflicts.csv')
+
+            Assert-True ($conflicts.ConflictType -contains 'ShareRightsRestrictNtfs') 'Conflicts should show when share-level rights restrict broader NTFS allows.'
+            Assert-True ($conflicts.ConflictType -contains 'NtfsDenyAllowCollision') 'Conflicts should show when the same identity has NTFS allow and deny entries on an item.'
+            Assert-True ($conflicts.ConflictType -contains 'ShareAllowsNtfsDenies') 'Conflicts should show when a share gate allows an identity that is denied by NTFS.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan carries inheritance break ancestry to descendants'
         Body = {
             Import-Module $moduleManifest -Force

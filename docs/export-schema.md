@@ -83,7 +83,13 @@ When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV 
 
 Expected columns: `ConflictId`, `ConflictType`, `ShareId`, `ItemId`, `Identity`, `ShareRights`, `NtfsRights`, `Severity`, `Message`.
 
-Common V1 conflict types include `NtfsIdentityMissingShareGate` for identities that appear in NTFS ACLs but are not represented at the share-permission layer.
+Common V1 conflict types include:
+
+- `NtfsIdentityMissingShareGate` for identities that appear in NTFS ACLs but are not represented at the share-permission layer.
+- `ShareIdentityMissingNtfsEntry` for share-level identities with no observed NTFS ACL entry in the scanned share.
+- `ShareRightsRestrictNtfs` when share-level rights are narrower than NTFS allow rights for the same identity.
+- `NtfsDenyAllowCollision` when the same identity has NTFS allow and deny entries on the same item.
+- `ShareAllowsNtfsDenies` when share-level permissions allow an identity that is denied by NTFS on an item.
 
 ### `findings.csv`
 
