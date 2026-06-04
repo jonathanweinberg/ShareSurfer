@@ -61,6 +61,8 @@ A useful support bundle includes:
 
 - The full redacted CSV export set.
 - `scan_manifest.csv` with sensitive values redacted but scan settings preserved.
+- `support_bundle_manifest.csv` with redaction mode, validation status, and bundle-level file counts.
+- `support_bundle_files.csv` with redacted CSV row counts and SHA256 hashes for support-case integrity checks.
 - Any validation result from `Test-ShareSurferExport`.
 - A redacted report, if generated.
 
