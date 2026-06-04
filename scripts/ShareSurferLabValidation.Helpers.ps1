@@ -296,3 +296,26 @@ function New-ShareSurferLabValidationCriteriaRows {
         }
     }
 }
+
+function Test-ShareSurferLabValidationLiveEvidence {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]] $CriteriaRows
+    )
+
+    $fallbackRows = @($CriteriaRows | Where-Object {
+        $source = [string]$_.EvidenceSource
+        [bool]$_.Required -and (
+            [string]::IsNullOrWhiteSpace($source) -or
+            $source -eq 'LabPlan' -or
+            $source -like '*Unavailable*'
+        )
+    })
+
+    [pscustomobject]@{
+        IsValid = ($fallbackRows.Count -eq 0)
+        FallbackCount = $fallbackRows.Count
+        FallbackCriteria = @($fallbackRows | ForEach-Object { [string]$_.Name })
+        FallbackEvidenceSources = @($fallbackRows | ForEach-Object { [string]$_.EvidenceSource } | Sort-Object -Unique)
+    }
+}

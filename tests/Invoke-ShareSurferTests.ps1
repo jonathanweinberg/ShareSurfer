@@ -382,6 +382,31 @@ $tests = @(
             Assert-Equal $diskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should measure the lab root when available.'
             Assert-True ([string]$diskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Disk budget evidence should include measured bytes.'
             Assert-True (@($criteria | Where-Object { -not $_.Passed }).Count -eq 0) 'All synthetic validation criteria should pass.'
+
+            $liveEvidence = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $criteria
+            Assert-True $liveEvidence.IsValid 'Live evidence gate should pass when all required criteria have live evidence.'
+            Assert-Equal ([int]$liveEvidence.FallbackCount) 0 'Live evidence gate should not report fallback criteria when live evidence is present.'
+
+            $fallbackCriteria = @(
+                $criteria
+                [pscustomobject]@{
+                    Name = 'EnterprisePlanOnlyProof'
+                    Required = $true
+                    EvidenceSource = 'LabPlan'
+                    EvidenceDetail = 'Planned only'
+                }
+                [pscustomobject]@{
+                    Name = 'EnterpriseUnavailableProof'
+                    Required = $true
+                    EvidenceSource = 'DirectoryUnavailable'
+                    EvidenceDetail = 'Directory query failed'
+                }
+            )
+            $fallbackResult = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $fallbackCriteria
+            Assert-True (-not $fallbackResult.IsValid) 'Live evidence gate should fail when required criteria use fallback evidence.'
+            Assert-Equal ([int]$fallbackResult.FallbackCount) 2 'Live evidence gate should count required fallback criteria.'
+            Assert-True ($fallbackResult.FallbackCriteria -contains 'EnterprisePlanOnlyProof') 'Live evidence gate should identify plan-only criteria.'
+            Assert-True ($fallbackResult.FallbackCriteria -contains 'EnterpriseUnavailableProof') 'Live evidence gate should identify unavailable evidence criteria.'
         }
     },
     @{

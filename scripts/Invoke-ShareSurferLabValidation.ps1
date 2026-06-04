@@ -11,7 +11,8 @@ param(
     [int] $EnterpriseFilesPerShare = 8,
     [int64] $MaxLabBytes = 8589934592,
     [switch] $CreateLab,
-    [switch] $IncludeFiles
+    [switch] $IncludeFiles,
+    [switch] $RequireLiveEvidence
 )
 
 Set-StrictMode -Version 2.0
@@ -33,6 +34,7 @@ $exportPath = Join-Path $runRoot 'export'
 $reportPath = Join-Path $runRoot 'report.html'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
+$liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
@@ -56,9 +58,14 @@ if (-not $validation.IsValid) {
 
 $criteriaRows = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $LabRoot -CreateLab:$CreateLab -IncludeFiles:$IncludeFiles)
 @($criteriaRows) | Export-Csv -LiteralPath $criteriaPath -NoTypeInformation -Encoding UTF8
+$liveEvidence = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $criteriaRows
+$liveEvidence | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $liveEvidencePath -Encoding UTF8
 $failedRequiredCriteria = @($criteriaRows | Where-Object { $_.Required -and -not $_.Passed })
 if ($failedRequiredCriteria.Count -gt 0) {
     throw ('ShareSurfer lab validation criteria failed. See {0}' -f $criteriaPath)
+}
+if ($RequireLiveEvidence -and -not $liveEvidence.IsValid) {
+    throw ('ShareSurfer live lab evidence validation failed. See {0}' -f $liveEvidencePath)
 }
 
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
@@ -71,6 +78,10 @@ New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -Re
     SupportBundlePath = $bundlePath
     ValidationPath = Join-Path $runRoot 'validation.json'
     CriteriaPath = $criteriaPath
+    LiveEvidencePath = $liveEvidencePath
+    LiveEvidenceRequired = [bool]$RequireLiveEvidence
+    LiveEvidenceIsValid = [bool]$liveEvidence.IsValid
+    LiveEvidenceFallbackCount = [int]$liveEvidence.FallbackCount
     LabCreated = [bool]$CreateLab
     Scale = $Scale
     EstimatedLabBytes = $plan.EstimatedLabBytes
