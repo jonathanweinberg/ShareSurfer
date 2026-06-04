@@ -12,6 +12,8 @@ function Export-ShareSurferInventory {
         [int] $AzureFullPathLimit = 2048,
         [int] $ExplicitAceDepthThreshold = 2,
         [int] $GroupExpansionMaxDepth = 20,
+        [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
+        [string] $AdLookupMode = 'Auto',
         [string] $SourceMode = 'InputObject',
         [switch] $SkipIdentityEnrichment
     )
@@ -42,7 +44,7 @@ function Export-ShareSurferInventory {
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ScanStarted' -Source $SourceMode -Message ('ShareSurfer scan export started for {0}' -f $SourceMode)))
 
     if (-not $SkipIdentityEnrichment) {
-        $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth
+        $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode
         $identities = @(ConvertTo-ShareSurferArray $identityInventory.Identities)
         $groupEdges = @(ConvertTo-ShareSurferArray $identityInventory.GroupEdges)
         $orgChains = @(ConvertTo-ShareSurferArray $identityInventory.OrgChains)
@@ -62,6 +64,7 @@ function Export-ShareSurferInventory {
             AzureFullPathLimit = $AzureFullPathLimit
             ExplicitAceDepthThreshold = $ExplicitAceDepthThreshold
             GroupExpansionMaxDepth = $GroupExpansionMaxDepth
+            AdLookupMode = $AdLookupMode
         }
     )
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportCompleted' -Source 'Export' -Message ('Export completed at {0}' -f $OutputPath) -Detail ('Findings={0}; Conflicts={1}' -f $findings.Count, $conflicts.Count)))

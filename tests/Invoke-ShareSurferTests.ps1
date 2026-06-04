@@ -288,6 +288,21 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan records AD lookup mode and marks truncated group expansion'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 | Out-Null
+
+            $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
+            $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
+
+            Assert-Equal $manifest[0].AdLookupMode 'DirectoryOnly' 'Scan manifest should record the requested AD lookup mode.'
+            Assert-True (@($groupEdges | Where-Object { $_.ParentGroup -eq 'CONTOSO\FinanceEditors' -and $_.IsTruncated -eq 'True' }).Count -gt 0) 'Group expansion should mark edges truncated at the configured max depth.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan classifies restrictive share gates and NTFS deny collisions'
         Body = {
             Import-Module $moduleManifest -Force
@@ -510,6 +525,7 @@ $tests = @(
             $redactedFindings = Get-Content -LiteralPath (Join-Path $bundlePath 'findings.csv') -Raw
             $redactedConflicts = Get-Content -LiteralPath (Join-Path $bundlePath 'conflicts.csv') -Raw
             $redactedEvents = Get-Content -LiteralPath (Join-Path $bundlePath 'scan_events.csv') -Raw
+            $redactedManifest = Get-Content -LiteralPath (Join-Path $bundlePath 'scan_manifest.csv') -Raw
 
             Assert-True ($redactedAcl -notlike '*CONTOSO*') 'Redacted bundle must not contain the source domain name.'
             Assert-True ($redactedAcl -notlike '*FinanceEditors*') 'Redacted bundle must not contain source group names.'
@@ -523,6 +539,8 @@ $tests = @(
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
+            Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
+            Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
 
             $aclToken = ([regex]::Match($redactedAcl, 'ID-[0-9A-F]{12}')).Value
             Assert-True ($aclToken -ne '') 'ACL export should contain at least one stable token.'

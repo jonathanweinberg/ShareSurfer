@@ -77,6 +77,7 @@ function Protect-ShareSurferValue {
         'AzureFullPathLimit',
         'ExplicitAceDepthThreshold',
         'GroupExpansionMaxDepth',
+        'AdLookupMode',
         'ObsAttribute',
         'GeneratedAt'
     )

@@ -65,6 +65,7 @@ Invoke-ShareSurferScan `
   -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
+  -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```
 
@@ -76,10 +77,13 @@ Invoke-ShareSurferScan `
   -ShareName 'Finance' `
   -OutputPath $exportPath `
   -IncludeFiles `
+  -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```
 
 If a pre-collected inventory object is being tested, pass it with `-InputObject`. For production collection, use the source-selection parameters supported by the implementation and keep the same export path discipline.
+
+Use `-AdLookupMode Auto` for normal runs. Use `ActiveDirectory` to force the AD PowerShell module path, `Ldap` to force the built-in .NET directory searcher fallback, or `DirectoryOnly` for imported fixture data where no live directory lookup should occur.
 
 After every scan, validate the export set:
 

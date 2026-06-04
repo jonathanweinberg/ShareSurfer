@@ -3,8 +3,15 @@ function Get-ShareSurferDirectoryIdentity {
         [Parameter(Mandatory = $true)]
         [string] $Identity,
 
-        [string] $ObsAttribute = 'extensionAttribute10'
+        [string] $ObsAttribute = 'extensionAttribute10',
+
+        [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
+        [string] $AdLookupMode = 'Auto'
     )
+
+    if ($AdLookupMode -eq 'DirectoryOnly') {
+        return $null
+    }
 
     $sam = Get-ShareSurferIdentityName -Identity $Identity
     $domain = Get-ShareSurferIdentityDomain -Identity $Identity
@@ -13,7 +20,7 @@ function Get-ShareSurferDirectoryIdentity {
     $getAdGroup = Get-Command Get-ADGroup -ErrorAction SilentlyContinue
     $getAdGroupMember = Get-Command Get-ADGroupMember -ErrorAction SilentlyContinue
 
-    if ($null -ne $getAdUser -and $null -ne $getAdGroup) {
+    if ($AdLookupMode -ne 'Ldap' -and $null -ne $getAdUser -and $null -ne $getAdGroup) {
         try {
             $properties = @('employeeID', 'employeeNumber', 'manager', 'displayName', $ObsAttribute)
             $user = Get-ADUser -Identity $sam -Properties $properties -ErrorAction Stop
@@ -81,6 +88,10 @@ function Get-ShareSurferDirectoryIdentity {
                 return $null
             }
         }
+    }
+
+    if ($AdLookupMode -eq 'ActiveDirectory') {
+        return $null
     }
 
     try {

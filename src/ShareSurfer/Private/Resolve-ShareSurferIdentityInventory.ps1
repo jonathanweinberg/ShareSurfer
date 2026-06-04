@@ -4,7 +4,10 @@ function Resolve-ShareSurferIdentityInventory {
         $Inventory,
 
         [string] $ObsAttribute = 'extensionAttribute10',
-        [int] $GroupExpansionMaxDepth = 20
+        [int] $GroupExpansionMaxDepth = 20,
+
+        [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
+        [string] $AdLookupMode = 'Auto'
     )
 
     $directoryByIdentity = @{}
@@ -53,8 +56,8 @@ function Resolve-ShareSurferIdentityInventory {
         if ($directoryByIdentity.ContainsKey($key)) {
             $entry = $directoryByIdentity[$key]
         }
-        else {
-            $entry = Get-ShareSurferDirectoryIdentity -Identity $Identity -ObsAttribute $ObsAttribute
+        elseif ($AdLookupMode -ne 'DirectoryOnly') {
+            $entry = Get-ShareSurferDirectoryIdentity -Identity $Identity -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode
             if ($null -ne $entry) {
                 $directoryByIdentity[$key] = $entry
             }
