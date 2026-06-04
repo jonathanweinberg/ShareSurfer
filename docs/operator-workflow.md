@@ -2,6 +2,8 @@
 
 ShareSurfer V1 is a Windows PowerShell 5.1-only collector for SMB share discovery, ACL collection, identity enrichment, normalized CSV export, and offline reporting. It is designed for Windows SMB shares and can make a best-effort pass over Samba-style SMB shares when the operator can enumerate paths and permissions from the Windows host.
 
+If this is your first time using ShareSurfer, start with the [First-run guide](first-run-guide.md). It walks through prerequisites, choosing scan targets, running the collector, understanding outputs, generating reports, creating redacted support bundles, and next actions in beginner-friendly language.
+
 ## Scope
 
 - Primary target: Windows file servers and Windows SMB shares.

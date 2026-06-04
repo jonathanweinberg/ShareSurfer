@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShareSurfer Management Overview</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5b6775;
+      --line: #d7dde5;
+      --panel: #f7f9fb;
+      --accent: #0f766e;
+      --accent-2: #7c3aed;
+      --warn: #b45309;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+    }
+    main {
+      width: min(1280px, 100%);
+      min-height: 720px;
+      margin: 0 auto;
+      padding: 44px 52px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 28px;
+    }
+    header {
+      border-bottom: 3px solid var(--line);
+      padding-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 44px;
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      margin: 0;
+      max-width: 940px;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.45;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      align-content: stretch;
+    }
+    section {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 20px;
+      min-height: 260px;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 21px;
+      letter-spacing: 0;
+    }
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    li {
+      margin: 0 0 12px;
+      line-height: 1.35;
+      font-size: 16px;
+    }
+    .purpose {
+      border-top: 5px solid var(--accent);
+    }
+    .risk {
+      border-top: 5px solid var(--warn);
+    }
+    .pivot {
+      border-top: 5px solid var(--accent-2);
+    }
+    .outcomes {
+      border-top: 5px solid #2563eb;
+    }
+    footer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 20px;
+      align-items: end;
+      color: var(--muted);
+      font-size: 15px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+    .tagline {
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    @media (max-width: 900px) {
+      main {
+        padding: 28px 22px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      h1 {
+        font-size: 34px;
+      }
+      footer {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ShareSurfer Management Overview</h1>
+      <p class="subtitle">A business-readable view of complex file-share access, ownership, and migration readiness.</p>
+    </header>
+
+    <div class="grid" aria-label="Management briefing sections">
+      <section class="purpose">
+        <h2>Purpose</h2>
+        <ul>
+          <li>Show who can access shared business data.</li>
+          <li>Connect share permissions, folder permissions, file permissions, ownership, and group membership.</li>
+          <li>Create evidence before cleanup, audit, or migration work.</li>
+        </ul>
+      </section>
+
+      <section class="risk">
+        <h2>Migration-Risk Findings</h2>
+        <ul>
+          <li>Broken inheritance and deep explicit permissions.</li>
+          <li>Share-vs-NTFS permission conflicts.</li>
+          <li>Operational long-path warnings for migration planning.</li>
+          <li>Partial data where access could not be proven.</li>
+        </ul>
+      </section>
+
+      <section class="pivot">
+        <h2>Owner/Business-Unit Pivots</h2>
+        <ul>
+          <li>Route findings by owner, business unit, OBS/OID path, manager, or security group.</li>
+          <li>Expand groups so business owners can review actual membership paths.</li>
+          <li>Support Excel, Power BI, audit, and remediation tracking.</li>
+        </ul>
+      </section>
+
+      <section class="outcomes">
+        <h2>Expected Outcomes</h2>
+        <ul>
+          <li>Validated CSV exports and an offline report.</li>
+          <li>Prioritized access and migration-risk review list.</li>
+          <li>Clearer ownership before changes are made.</li>
+          <li>Redacted support bundle when troubleshooting help is needed.</li>
+        </ul>
+      </section>
+    </div>
+
+    <footer>
+      <div>
+        <div class="tagline">ShareSurfer does not change permissions. It makes the current state understandable.</div>
+        <div>Azure Files note: ShareSurfer's 256-character full-path warning is an operational migration policy, separate from Microsoft's documented Azure Files hard limits.</div>
+      </div>
+      <div>ShareSurfer V1</div>
+    </footer>
+  </main>
+</body>
+</html>

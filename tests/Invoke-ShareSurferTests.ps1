@@ -621,6 +621,9 @@ $tests = @(
         Body = {
             $visualDoc = Join-Path $repoRoot 'docs/workflow-visuals.md'
             $visualRoot = Join-Path $repoRoot 'docs/visuals'
+            $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
+            $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
+            $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $expectedVisuals = @(
                 'collector-to-report.svg',
                 'enterprise-lab-validation.svg',
@@ -639,6 +642,23 @@ $tests = @(
                 Assert-True ($svg -like '*<svg*') ("Workflow visual {0} should be an SVG asset." -f $visual)
                 Assert-True ($visualDocText -like ("*visuals/{0}*" -f $visual)) ("Workflow visual doc should reference {0}" -f $visual)
             }
+
+            Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
+            $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
+            Assert-True ($firstRunText -like '*first-time*') 'First-run guide should explicitly address first-time operators.'
+            Assert-True ($firstRunText -like '*Prerequisites*') 'First-run guide should explain prerequisites.'
+            Assert-True ($firstRunText -like '*Choose Scan Targets*') 'First-run guide should explain choosing scan targets.'
+            Assert-True ($firstRunText -like '*Run the Collector*') 'First-run guide should explain running the collector.'
+            Assert-True ($firstRunText -like '*Understand Outputs*') 'First-run guide should explain output interpretation.'
+            Assert-True ($firstRunText -like '*Redacted Support Bundle*') 'First-run guide should explain redacted support bundle creation.'
+
+            Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
+            Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
+            $managementText = (Get-Content -LiteralPath $managementOverview -Raw) + (Get-Content -LiteralPath $managementSlide -Raw)
+            Assert-True ($managementText -like '*business value*') 'Management overview should explain business value.'
+            Assert-True ($managementText -like '*migration-risk*') 'Management overview should explain migration-risk findings.'
+            Assert-True ($managementText -like '*owner/business-unit*') 'Management overview should explain owner/business-unit pivots.'
+            Assert-True ($managementText -like '*expected outcomes*') 'Management overview should explain expected outcomes.'
         }
     }
 )

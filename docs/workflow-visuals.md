@@ -23,3 +23,7 @@ Use this visual when planning the scaled Windows/AD lab run. The validation crit
 ![Redacted support bundle workflow](visuals/support-bundle-diagnostics.svg)
 
 Use this visual when explaining what can be shared outside the trusted team. Raw exports stay internal; redacted CSVs, bundle manifests, row counts, and hashes can be attached to support cases.
+
+## Management Overview
+
+Use [management-overview.html](management-overview.html) when briefing non-technical leaders. It is a high-level management overview slide that explains purpose, business value, migration-risk findings, owner/business-unit pivots, and expected outcomes without requiring Windows or AD expertise.

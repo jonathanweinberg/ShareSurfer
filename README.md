@@ -20,6 +20,8 @@ V1 is PowerShell-first and designed for airgapped or tightly controlled environm
 
 ## Quick Start
 
+For a first-time walkthrough, start with the [First-run guide](docs/first-run-guide.md). It explains prerequisites, target selection, collector commands, CSV outputs, reports, and redacted support bundles for operators who are new to ShareSurfer or new to Windows file-share auditing.
+
 ```powershell
 Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
 
@@ -58,6 +60,9 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 ## Documentation
 
 - [Operator workflow](docs/operator-workflow.md)
+- [First-run guide](docs/first-run-guide.md)
+- [Management overview](docs/management-overview.md)
+- [Offline management overview slide](docs/management-overview.html)
 - [Export schema](docs/export-schema.md)
 - [Azure Files path policy](docs/azure-files-path-policy.md)
 - [Redacted support bundles](docs/redacted-support-bundles.md)
