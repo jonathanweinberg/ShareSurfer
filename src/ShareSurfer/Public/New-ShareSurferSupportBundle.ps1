@@ -10,7 +10,9 @@ function New-ShareSurferSupportBundle {
         [ValidateSet('StableToken', 'Strict')]
         [string] $RedactionMode = 'StableToken',
 
-        [string] $RedactionSalt = ''
+        [string] $RedactionSalt = '',
+
+        [switch] $IncludeReport
     )
 
     if ($RedactionSalt -eq '') {
@@ -42,6 +44,18 @@ function New-ShareSurferSupportBundle {
     }
 
     $validation = Test-ShareSurferExport -ExportPath $OutputPath
+    $reportIncluded = $false
+    if ($IncludeReport) {
+        $reportPath = Join-Path $OutputPath 'report.html'
+        ConvertTo-ShareSurferReport -ExportPath $OutputPath -OutputPath $reportPath | Out-Null
+        $reportIncluded = $true
+        [void]$fileDiagnostics.Add([pscustomobject]@{
+            FileName = 'report.html'
+            RowCount = 1
+            Sha256 = Get-ShareSurferFileSha256 -Path $reportPath
+        })
+    }
+
     $manifest = @(
         [pscustomobject]@{
             GeneratedAt = $generatedAt
@@ -49,6 +63,7 @@ function New-ShareSurferSupportBundle {
             RelationshipPreserving = [bool]($RedactionMode -eq 'StableToken')
             ExportFileCount = @($schema.Keys).Count
             DiagnosticFileCount = @($fileDiagnostics).Count
+            ReportIncluded = [bool]$reportIncluded
             ValidationIsValid = [bool]$validation.IsValid
             MissingFileCount = @($validation.MissingFiles).Count
             SchemaErrorCount = @($validation.SchemaErrors).Count
@@ -63,6 +78,7 @@ function New-ShareSurferSupportBundle {
         ('GeneratedAt={0}' -f $generatedAt),
         ('RedactionMode={0}' -f $RedactionMode),
         ('ValidationIsValid={0}' -f [bool]$validation.IsValid),
+        ('ReportIncluded={0}' -f [bool]$reportIncluded),
         'Relationship-preserving StableToken mode uses salted synthetic IDs and does not include the salt in this bundle.',
         'support_bundle_manifest.csv records bundle-level diagnostics.',
         'support_bundle_files.csv records redacted file row counts and hashes.'
@@ -72,6 +88,7 @@ function New-ShareSurferSupportBundle {
         OutputPath = $OutputPath
         RedactionMode = $RedactionMode
         ValidationIsValid = [bool]$validation.IsValid
+        ReportIncluded = [bool]$reportIncluded
     }
 }
 

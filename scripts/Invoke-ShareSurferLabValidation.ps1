@@ -81,7 +81,7 @@ if ($failedRequiredCriteria.Count -gt 0) {
 }
 
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
-New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken | Out-Null
+New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport | Out-Null
 
 [pscustomobject]@{
     RunRoot = $runRoot

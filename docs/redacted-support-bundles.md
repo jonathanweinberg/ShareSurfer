@@ -17,7 +17,8 @@ New-ShareSurferSupportBundle `
   -ExportPath $exportPath `
   -OutputPath 'C:\ShareSurfer\support\scan-2026-06-04-redacted' `
   -RedactionMode StableToken `
-  -RedactionSalt 'internal-case-1234'
+  -RedactionSalt 'internal-case-1234' `
+  -IncludeReport
 ```
 
 Validate the bundle before sharing:
@@ -64,7 +65,7 @@ A useful support bundle includes:
 - `support_bundle_manifest.csv` with redaction mode, validation status, and bundle-level file counts.
 - `support_bundle_files.csv` with redacted CSV row counts and SHA256 hashes for support-case integrity checks.
 - Any validation result from `Test-ShareSurferExport`.
-- A redacted report, if generated.
+- A regenerated redacted `report.html`, when `-IncludeReport` is used.
 
 Do not include a reversal map in the shared bundle. If an implementation produces a map for internal troubleshooting, store it separately with the raw export and treat it as sensitive.
 
