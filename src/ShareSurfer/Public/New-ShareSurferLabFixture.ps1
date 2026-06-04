@@ -32,8 +32,16 @@ function New-ShareSurferLabFixture {
         foreach ($scenario in $plan.AclScenarios) {
             $share = @($plan.Shares | Where-Object { $_.ShareName -eq $scenario.ShareName })[0]
             $scenarioPath = Join-Path $share.LocalPath $scenario.RelativePath
-            New-Item -ItemType Directory -Path $scenarioPath -Force | Out-Null
-            Set-Content -Path (Join-Path $scenarioPath 'sample.txt') -Value ('ShareSurfer fixture: {0}' -f $scenario.Name) -Encoding UTF8
+            $targetType = Get-ShareSurferLabScenarioTargetType -Scenario $scenario
+            if ($targetType -eq 'File') {
+                $parentPath = Split-Path -Parent $scenarioPath
+                New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
+                Set-Content -Path $scenarioPath -Value ('ShareSurfer file fixture: {0}' -f $scenario.Name) -Encoding UTF8
+            }
+            else {
+                New-Item -ItemType Directory -Path $scenarioPath -Force | Out-Null
+                Set-Content -Path (Join-Path $scenarioPath 'sample.txt') -Value ('ShareSurfer fixture: {0}' -f $scenario.Name) -Encoding UTF8
+            }
         }
 
         Initialize-ShareSurferLabDirectoryObjects -Plan $plan
@@ -61,19 +69,31 @@ function New-ShareSurferLabFixture {
             $share = @($plan.Shares | Where-Object { $_.ShareName -eq $scenario.ShareName })[0]
             $scenarioPath = Join-Path $share.LocalPath $scenario.RelativePath
             try {
+                $targetType = Get-ShareSurferLabScenarioTargetType -Scenario $scenario
                 $aclTargetPath = if ($scenario.IsInherited) { $share.LocalPath } else { $scenarioPath }
                 $acl = Get-Acl -LiteralPath $aclTargetPath -ErrorAction Stop
                 if ($scenario.Name -eq 'BrokenInheritance') {
                     $acl.SetAccessRuleProtection($true, $true)
                 }
+                $inheritanceFlags = if ($targetType -eq 'File') { 'None' } else { 'ContainerInherit,ObjectInherit' }
+                $accessControlType = Get-ShareSurferLabScenarioAccessType -Scenario $scenario
                 $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
                     $scenario.Identity,
                     $scenario.Rights,
-                    'ContainerInherit,ObjectInherit',
+                    $inheritanceFlags,
                     'None',
-                    'Allow'
+                    $accessControlType
                 )
-                $acl.SetAccessRule($rule)
+                if ($accessControlType -eq 'Deny') {
+                    $acl.AddAccessRule($rule)
+                }
+                else {
+                    $acl.SetAccessRule($rule)
+                }
+                $ownerIdentity = Get-ShareSurferLabScenarioOwnerIdentity -Scenario $scenario
+                if ($ownerIdentity -ne '') {
+                    $acl.SetOwner((New-Object System.Security.Principal.NTAccount($ownerIdentity)))
+                }
                 Set-Acl -LiteralPath $aclTargetPath -AclObject $acl -ErrorAction Stop
             }
             catch {
@@ -83,4 +103,40 @@ function New-ShareSurferLabFixture {
     }
 
     $plan
+}
+
+function Get-ShareSurferLabScenarioTargetType {
+    param(
+        $Scenario
+    )
+
+    if ($Scenario.PSObject.Properties['TargetType'] -and [string]$Scenario.TargetType -ne '') {
+        return [string]$Scenario.TargetType
+    }
+
+    'Directory'
+}
+
+function Get-ShareSurferLabScenarioAccessType {
+    param(
+        $Scenario
+    )
+
+    if ($Scenario.PSObject.Properties['AccessControlType'] -and [string]$Scenario.AccessControlType -ne '') {
+        return [string]$Scenario.AccessControlType
+    }
+
+    'Allow'
+}
+
+function Get-ShareSurferLabScenarioOwnerIdentity {
+    param(
+        $Scenario
+    )
+
+    if ($Scenario.PSObject.Properties['OwnerIdentity'] -and [string]$Scenario.OwnerIdentity -ne '') {
+        return [string]$Scenario.OwnerIdentity
+    }
+
+    ''
 }

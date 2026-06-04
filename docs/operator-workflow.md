@@ -33,7 +33,8 @@ The V1 fixture is expected to create:
 
 - AD users, groups, nested group membership, manager chains, and OBS extension attributes.
 - SMB shares, files, and folders.
-- Inheritance breaks and deep explicit ACEs.
+- Directory ACLs, file-specific ACLs, and ownership examples.
+- Inheritance breaks, deep explicit ACEs, and NTFS deny examples.
 - Long path fixtures.
 - Share-vs-NTFS permission conflicts.
 

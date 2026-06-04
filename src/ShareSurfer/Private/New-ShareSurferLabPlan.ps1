@@ -67,11 +67,14 @@ function New-ShareSurferLabPlan {
     )
 
     $aclScenarios = @(
-        [pscustomobject]@{ Name = 'InheritedBaseline'; ShareName = 'SSEngineering'; RelativePath = 'Projects'; Identity = "$DomainNetBiosName\SS-Engineering-Readers"; Rights = 'ReadAndExecute'; IsInherited = $true; Depth = 1 },
-        [pscustomobject]@{ Name = 'BrokenInheritance'; ShareName = 'SSOperations'; RelativePath = 'Restricted'; Identity = "$DomainNetBiosName\SS-Operations-Owners"; Rights = 'Modify'; IsInherited = $false; Depth = 1 },
-        [pscustomobject]@{ Name = 'DeepExplicitAce'; ShareName = 'SSFinance'; RelativePath = 'AP\Vendor\Archive'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'Modify'; IsInherited = $false; Depth = 3 },
-        [pscustomobject]@{ Name = 'LongPath'; ShareName = 'SSFinance'; RelativePath = ('AP\LongPath\' + ('A' * 125) + '\' + ('B' * 125)); Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'ReadAndExecute'; IsInherited = $false; Depth = 4 },
-        [pscustomobject]@{ Name = 'ShareVsNtfsConflict'; ShareName = 'SSFinance'; RelativePath = 'AP\Conflict'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'Modify'; IsInherited = $false; Depth = 2 }
+        [pscustomobject]@{ Name = 'InheritedBaseline'; ShareName = 'SSEngineering'; RelativePath = 'Projects'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Engineering-Readers"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $true; Depth = 1; OwnerIdentity = '' },
+        [pscustomobject]@{ Name = 'BrokenInheritance'; ShareName = 'SSOperations'; RelativePath = 'Restricted'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Operations-Owners"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 1; OwnerIdentity = "$DomainNetBiosName\Quinn.Manager" },
+        [pscustomobject]@{ Name = 'DeepExplicitAce'; ShareName = 'SSFinance'; RelativePath = 'AP\Vendor\Archive'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 3; OwnerIdentity = '' },
+        [pscustomobject]@{ Name = 'LongPath'; ShareName = 'SSFinance'; RelativePath = ('AP\LongPath\' + ('A' * 125) + '\' + ('B' * 125)); TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 4; OwnerIdentity = '' },
+        [pscustomobject]@{ Name = 'ShareVsNtfsConflict'; ShareName = 'SSFinance'; RelativePath = 'AP\Conflict'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 2; OwnerIdentity = '' },
+        [pscustomobject]@{ Name = 'ShareRightsRestriction'; ShareName = 'SSFinance'; RelativePath = 'AP\Conflict\ReaderModify'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Readers"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 3; OwnerIdentity = "$DomainNetBiosName\Morgan.Manager" },
+        [pscustomobject]@{ Name = 'NtfsDenyCollision'; ShareName = 'SSFinance'; RelativePath = 'AP\Conflict\ReaderModify'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Readers"; Rights = 'Read'; AccessControlType = 'Deny'; IsInherited = $false; Depth = 3; OwnerIdentity = '' },
+        [pscustomobject]@{ Name = 'FileSpecificAce'; ShareName = 'SSOperations'; RelativePath = 'Restricted\FileOnly\executive-note.txt'; TargetType = 'File'; Identity = "$DomainNetBiosName\SS-Operations-Owners"; Rights = 'Read'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 3; OwnerIdentity = "$DomainNetBiosName\Leo.Operations" }
     )
 
     [pscustomobject]@{
