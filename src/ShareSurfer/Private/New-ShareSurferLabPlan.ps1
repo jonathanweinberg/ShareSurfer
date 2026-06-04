@@ -236,6 +236,62 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes paths beyond the operational 256-character migration policy threshold.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseSharePermissions'
+            MinimumValue = @($shares).Count
+            ActualPlanValue = @($shares | ForEach-Object { @($_.SharePermissions).Count } | Measure-Object -Sum).Sum
+            Unit = 'share permission rows'
+            Required = $true
+            Description = 'Enterprise validation includes collected share-level permission rows.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseAclEntries'
+            MinimumValue = @($aclScenarios).Count
+            ActualPlanValue = @($aclScenarios).Count
+            Unit = 'acl rows'
+            Required = $true
+            Description = 'Enterprise validation includes collected folder and file ACL entries.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseFileAclEntries'
+            MinimumValue = 1
+            ActualPlanValue = @($aclScenarios | Where-Object { $_.TargetType -eq 'File' }).Count
+            Unit = 'file acl rows'
+            Required = $true
+            Description = 'Enterprise validation includes file-specific ACL evidence.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseDeepExplicitAceFindings'
+            MinimumValue = 1
+            ActualPlanValue = @($aclScenarios | Where-Object { $_.Depth -gt 2 -and -not $_.IsInherited }).Count
+            Unit = 'findings'
+            Required = $true
+            Description = 'Enterprise validation includes deep explicit ACE findings.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseBrokenInheritanceFindings'
+            MinimumValue = 1
+            ActualPlanValue = @($aclScenarios | Where-Object { $_.Name -like '*BrokenInheritance*' }).Count
+            Unit = 'findings'
+            Required = $true
+            Description = 'Enterprise validation includes broken inheritance findings.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseConflictFindings'
+            MinimumValue = 1
+            ActualPlanValue = @($aclScenarios | Where-Object { $_.Name -like '*Conflict*' -or $_.Name -like '*Restriction*' -or $_.AccessControlType -eq 'Deny' }).Count
+            Unit = 'conflicts'
+            Required = $true
+            Description = 'Enterprise validation includes share-vs-NTFS conflict evidence.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseGroupExpansion'
+            MinimumValue = 1
+            ActualPlanValue = @($groups | Where-Object { @($_.Members).Count -gt 0 }).Count
+            Unit = 'group edges'
+            Required = $true
+            Description = 'Enterprise validation includes expandable security group membership evidence.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseDiskBudget'
             MinimumValue = 1
             ActualPlanValue = if ($estimatedLabBytes -le $MaxLabBytes) { 1 } else { 0 }

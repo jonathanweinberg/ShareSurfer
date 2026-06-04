@@ -279,7 +279,22 @@ $tests = @(
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'items.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ FindingId = 'finding-001'; FindingType = 'LongPathOperationalPolicy'; Severity = 'Warning'; ShareId = 'share-001'; ItemId = 'item-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = ''; ObservedValue = '300'; PolicyValue = '256'; Message = 'Long path evidence' }
+                [pscustomobject]@{ FindingId = 'finding-002'; FindingType = 'DeepExplicitAce'; Severity = 'High'; ShareId = 'share-001'; ItemId = 'item-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = 'CONTOSO\Editors'; ObservedValue = '7'; PolicyValue = '2'; Message = 'Deep explicit ACE evidence' }
+                [pscustomobject]@{ FindingId = 'finding-003'; FindingType = 'BrokenInheritance'; Severity = 'Medium'; ShareId = 'share-001'; ItemId = 'item-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = ''; ObservedValue = '\\files01\Share001\Deep'; PolicyValue = 'Inherited'; Message = 'Broken inheritance evidence' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'findings.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ConflictId = 'conflict-001'; ConflictType = 'NtfsIdentityMissingShareGate'; ShareId = 'share-001'; ItemId = 'item-001'; Identity = 'CONTOSO\Editors'; ShareRights = ''; NtfsRights = 'Modify'; Severity = 'High'; Message = 'Conflict evidence' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'conflicts.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\Readers'; Rights = 'Read'; AccessControlType = 'Allow'; Source = 'Get-SmbShareAccess' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'share_permissions.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ItemId = 'item-001'; ShareId = 'share-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = 'CONTOSO\Editors'; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = 'False'; InheritanceFlags = 'ContainerInherit,ObjectInherit'; PropagationFlags = 'None'; Depth = '7' },
+                [pscustomobject]@{ ItemId = 'item-002'; ShareId = 'share-001'; FullPath = '\\files01\Share001\file02.txt'; Identity = 'CONTOSO\FileReaders'; Rights = 'Read'; AccessControlType = 'Allow'; IsInherited = 'False'; InheritanceFlags = 'None'; PropagationFlags = 'None'; Depth = '1' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'acl_entries.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ParentGroup = 'CONTOSO\Readers'; ChildIdentity = 'CONTOSO\SSUser00001'; ChildObjectClass = 'user'; Depth = '1'; IsCycle = 'False'; IsTruncated = 'False' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'group_edges.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
                 MaxLabBytes = [int64]8589934592
@@ -304,6 +319,13 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterpriseRealFiles'; Required = $true; MinimumValue = 3; Unit = 'file fixtures'; Description = 'Files' },
                     [pscustomobject]@{ Name = 'EnterpriseDeepPaths'; Required = $true; MinimumValue = 1; Unit = 'deep file fixtures'; Description = 'Deep paths' },
                     [pscustomobject]@{ Name = 'EnterpriseLongPathPolicy'; Required = $true; MinimumValue = 1; Unit = 'long-path scenarios'; Description = 'Long paths' },
+                    [pscustomobject]@{ Name = 'EnterpriseSharePermissions'; Required = $true; MinimumValue = 1; Unit = 'share permission rows'; Description = 'Share permissions' },
+                    [pscustomobject]@{ Name = 'EnterpriseAclEntries'; Required = $true; MinimumValue = 2; Unit = 'acl rows'; Description = 'ACL rows' },
+                    [pscustomobject]@{ Name = 'EnterpriseFileAclEntries'; Required = $true; MinimumValue = 1; Unit = 'file acl rows'; Description = 'File ACL rows' },
+                    [pscustomobject]@{ Name = 'EnterpriseDeepExplicitAceFindings'; Required = $true; MinimumValue = 1; Unit = 'findings'; Description = 'Deep explicit ACE findings' },
+                    [pscustomobject]@{ Name = 'EnterpriseBrokenInheritanceFindings'; Required = $true; MinimumValue = 1; Unit = 'findings'; Description = 'Broken inheritance findings' },
+                    [pscustomobject]@{ Name = 'EnterpriseConflictFindings'; Required = $true; MinimumValue = 1; Unit = 'conflicts'; Description = 'Conflicts' },
+                    [pscustomobject]@{ Name = 'EnterpriseGroupExpansion'; Required = $true; MinimumValue = 1; Unit = 'group edges'; Description = 'Group expansion' },
                     [pscustomobject]@{ Name = 'EnterpriseDiskBudget'; Required = $true; MinimumValue = 1; Unit = 'pass/fail'; Description = 'Disk budget' }
                 )
             }
@@ -323,6 +345,13 @@ $tests = @(
             $fileCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseRealFiles' })[0]
             $deepCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDeepPaths' })[0]
             $longPathCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseLongPathPolicy' })[0]
+            $sharePermissionCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseSharePermissions' })[0]
+            $aclCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseAclEntries' })[0]
+            $fileAclCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseFileAclEntries' })[0]
+            $deepAceCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDeepExplicitAceFindings' })[0]
+            $brokenInheritanceCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseBrokenInheritanceFindings' })[0]
+            $conflictCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseConflictFindings' })[0]
+            $groupExpansionCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseGroupExpansion' })[0]
             $diskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
 
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
@@ -335,6 +364,20 @@ $tests = @(
             Assert-Equal $deepCriterion.EvidenceSource 'ScanExport:items.csv' 'Deep path validation should identify scanned item evidence.'
             Assert-Equal ([int]$longPathCriterion.ActualValue) 1 'Long-path validation should use generated findings.'
             Assert-Equal $longPathCriterion.EvidenceSource 'ScanExport:findings.csv' 'Long-path validation should identify findings evidence.'
+            Assert-Equal ([int]$sharePermissionCriterion.ActualValue) 1 'Share permission validation should use scanned share permission rows.'
+            Assert-Equal $sharePermissionCriterion.EvidenceSource 'ScanExport:share_permissions.csv' 'Share permission validation should identify share permission evidence.'
+            Assert-Equal ([int]$aclCriterion.ActualValue) 2 'ACL validation should use scanned ACL rows.'
+            Assert-Equal $aclCriterion.EvidenceSource 'ScanExport:acl_entries.csv' 'ACL validation should identify ACL export evidence.'
+            Assert-Equal ([int]$fileAclCriterion.ActualValue) 1 'File ACL validation should use file-specific ACL rows.'
+            Assert-Equal $fileAclCriterion.EvidenceSource 'ScanExport:acl_entries.csv' 'File ACL validation should identify ACL export evidence.'
+            Assert-Equal ([int]$deepAceCriterion.ActualValue) 1 'Deep explicit ACE validation should use findings.'
+            Assert-Equal $deepAceCriterion.EvidenceSource 'ScanExport:findings.csv' 'Deep explicit ACE validation should identify findings evidence.'
+            Assert-Equal ([int]$brokenInheritanceCriterion.ActualValue) 1 'Broken inheritance validation should use findings.'
+            Assert-Equal $brokenInheritanceCriterion.EvidenceSource 'ScanExport:findings.csv' 'Broken inheritance validation should identify findings evidence.'
+            Assert-Equal ([int]$conflictCriterion.ActualValue) 1 'Conflict validation should use conflict rows.'
+            Assert-Equal $conflictCriterion.EvidenceSource 'ScanExport:conflicts.csv' 'Conflict validation should identify conflicts evidence.'
+            Assert-Equal ([int]$groupExpansionCriterion.ActualValue) 1 'Group expansion validation should use group edge rows.'
+            Assert-Equal $groupExpansionCriterion.EvidenceSource 'ScanExport:group_edges.csv' 'Group expansion validation should identify group expansion evidence.'
             Assert-Equal ([int]$diskCriterion.ActualValue) 1 'Disk budget validation should pass under the configured budget.'
             Assert-Equal $diskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should measure the lab root when available.'
             Assert-True ([string]$diskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Disk budget evidence should include measured bytes.'

@@ -34,6 +34,10 @@ function Measure-ShareSurferLabValidationEvidence {
     $shares = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'shares.csv'))
     $items = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'items.csv'))
     $findings = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'findings.csv'))
+    $conflicts = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'conflicts.csv'))
+    $sharePermissions = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'share_permissions.csv'))
+    $aclEntries = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'acl_entries.csv'))
+    $groupEdges = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'group_edges.csv'))
     $scannedFiles = @($items | Where-Object { $_.ItemType -eq 'File' })
     $scannedDeepItems = @($items | Where-Object {
         $depth = 0
@@ -41,6 +45,13 @@ function Measure-ShareSurferLabValidationEvidence {
         $depth -ge 6
     })
     $longPathFindings = @($findings | Where-Object { $_.FindingType -eq 'LongPathOperationalPolicy' })
+    $deepExplicitAceFindings = @($findings | Where-Object { $_.FindingType -eq 'DeepExplicitAce' })
+    $brokenInheritanceFindings = @($findings | Where-Object { $_.FindingType -eq 'BrokenInheritance' })
+    $fileAclEntries = @($aclEntries | Where-Object {
+        $entryItemId = [string]$_.ItemId
+        (@($scannedFiles | Where-Object { [string]$_.ItemId -eq $entryItemId }).Count -gt 0) -and
+        ([string]$_.InheritanceFlags -eq 'None')
+    })
     $directoryCounts = Get-ShareSurferLabValidationDirectoryCounts -Plan $Plan
 
     $actualFileCount = $null
@@ -74,6 +85,13 @@ function Measure-ShareSurferLabValidationEvidence {
         ScannedFileItemCount = $scannedFiles.Count
         ScannedDeepItemCount = $scannedDeepItems.Count
         LongPathFindingCount = $longPathFindings.Count
+        DeepExplicitAceFindingCount = $deepExplicitAceFindings.Count
+        BrokenInheritanceFindingCount = $brokenInheritanceFindings.Count
+        ConflictCount = $conflicts.Count
+        SharePermissionCount = $sharePermissions.Count
+        AclEntryCount = $aclEntries.Count
+        FileAclEntryCount = $fileAclEntries.Count
+        GroupEdgeCount = $groupEdges.Count
         ActualFileCount = $actualFileCount
         ActualDeepFileCount = $actualDeepFileCount
         ActualLabBytes = $actualBytes
@@ -212,6 +230,41 @@ function New-ShareSurferLabValidationCriteriaRows {
                     $source = 'LabPlan'
                 }
                 $detail = 'LongPathFindings={0}; PlannedLongPathScenarios={1}' -f $evidence.LongPathFindingCount, $evidence.PlannedLongPathScenarioCount
+            }
+            'EnterpriseSharePermissions' {
+                $actual = [int64]$evidence.SharePermissionCount
+                $source = 'ScanExport:share_permissions.csv'
+                $detail = 'SharePermissionRows={0}' -f $evidence.SharePermissionCount
+            }
+            'EnterpriseAclEntries' {
+                $actual = [int64]$evidence.AclEntryCount
+                $source = 'ScanExport:acl_entries.csv'
+                $detail = 'AclRows={0}' -f $evidence.AclEntryCount
+            }
+            'EnterpriseFileAclEntries' {
+                $actual = [int64]$evidence.FileAclEntryCount
+                $source = 'ScanExport:acl_entries.csv'
+                $detail = 'FileAclRows={0}; ScannedFileItems={1}' -f $evidence.FileAclEntryCount, $evidence.ScannedFileItemCount
+            }
+            'EnterpriseDeepExplicitAceFindings' {
+                $actual = [int64]$evidence.DeepExplicitAceFindingCount
+                $source = 'ScanExport:findings.csv'
+                $detail = 'DeepExplicitAceFindings={0}' -f $evidence.DeepExplicitAceFindingCount
+            }
+            'EnterpriseBrokenInheritanceFindings' {
+                $actual = [int64]$evidence.BrokenInheritanceFindingCount
+                $source = 'ScanExport:findings.csv'
+                $detail = 'BrokenInheritanceFindings={0}' -f $evidence.BrokenInheritanceFindingCount
+            }
+            'EnterpriseConflictFindings' {
+                $actual = [int64]$evidence.ConflictCount
+                $source = 'ScanExport:conflicts.csv'
+                $detail = 'ConflictRows={0}' -f $evidence.ConflictCount
+            }
+            'EnterpriseGroupExpansion' {
+                $actual = [int64]$evidence.GroupEdgeCount
+                $source = 'ScanExport:group_edges.csv'
+                $detail = 'GroupEdgeRows={0}' -f $evidence.GroupEdgeCount
             }
             'EnterpriseDiskBudget' {
                 if ($null -ne $evidence.ActualLabBytes) {
