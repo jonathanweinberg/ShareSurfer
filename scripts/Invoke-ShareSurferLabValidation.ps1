@@ -19,7 +19,9 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $modulePath = Join-Path $repoRoot 'src\ShareSurfer\ShareSurfer.psd1'
+$helperPath = Join-Path $PSScriptRoot 'ShareSurferLabValidation.Helpers.ps1'
 Import-Module $modulePath -Force -ErrorAction Stop
+. $helperPath
 
 if ([string]::IsNullOrWhiteSpace($DomainNetBiosName)) {
     $DomainNetBiosName = 'CONTOSO'
@@ -52,28 +54,7 @@ if (-not $validation.IsValid) {
     throw ('ShareSurfer export validation failed. See {0}' -f (Join-Path $runRoot 'validation.json'))
 }
 
-$fileResults = @($validation.FileResults)
-$shareRows = @($fileResults | Where-Object { $_.FileName -eq 'shares.csv' } | Select-Object -First 1)
-$itemRows = @($fileResults | Where-Object { $_.FileName -eq 'items.csv' } | Select-Object -First 1)
-$criteriaRows = foreach ($criterion in @($plan.ValidationCriteria)) {
-    $actual = [int64]$criterion.ActualPlanValue
-    if ($criterion.Name -eq 'EnterpriseSharePopulation' -and $shareRows.Count -gt 0) {
-        $actual = [int64]$shareRows[0].RowCount
-    }
-    if ($criterion.Name -eq 'EnterpriseRealFiles' -and $itemRows.Count -gt 0) {
-        $actual = [int64]$itemRows[0].RowCount
-    }
-
-    [pscustomobject]@{
-        Name = $criterion.Name
-        Required = [bool]$criterion.Required
-        MinimumValue = [int64]$criterion.MinimumValue
-        ActualValue = $actual
-        Unit = [string]$criterion.Unit
-        Passed = ($actual -ge [int64]$criterion.MinimumValue)
-        Description = [string]$criterion.Description
-    }
-}
+$criteriaRows = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $LabRoot -CreateLab:$CreateLab -IncludeFiles:$IncludeFiles)
 @($criteriaRows) | Export-Csv -LiteralPath $criteriaPath -NoTypeInformation -Encoding UTF8
 $failedRequiredCriteria = @($criteriaRows | Where-Object { $_.Required -and -not $_.Passed })
 if ($failedRequiredCriteria.Count -gt 0) {

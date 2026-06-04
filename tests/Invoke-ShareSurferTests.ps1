@@ -255,6 +255,93 @@ $tests = @(
         }
     },
     @{
+        Name = 'Lab validation criteria prefer scan and filesystem evidence over plan-only values'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $helperPath = Join-Path $repoRoot 'scripts/ShareSurferLabValidation.Helpers.ps1'
+            . $helperPath
+
+            $labRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferEvidenceLab-' + [guid]::NewGuid().ToString('N'))
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferEvidenceExport-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $labRoot -Force | Out-Null
+            New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $labRoot 'Share001\Deep\Path') -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $labRoot 'Share001\Deep\Path\file01.txt') -Value 'evidence file' -Encoding UTF8
+
+            @(
+                [pscustomobject]@{ ShareId = 'share-001'; Source = 'SMB'; ComputerName = 'files01'; ShareName = 'Share001'; UNCPath = '\\files01\Share001'; LocalPath = (Join-Path $labRoot 'Share001'); Description = ''; PartialData = 'False'; PartialReason = '' },
+                [pscustomobject]@{ ShareId = 'share-002'; Source = 'SMB'; ComputerName = 'files01'; ShareName = 'Share002'; UNCPath = '\\files01\Share002'; LocalPath = (Join-Path $labRoot 'Share002'); Description = ''; PartialData = 'False'; PartialReason = '' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'shares.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ItemId = 'item-001'; ShareId = 'share-001'; ItemType = 'File'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; RelativePath = 'Deep\Path\file01.txt'; Depth = 7; Owner = 'CONTOSO\Owner'; InheritanceEnabled = 'True'; InheritanceBrokenAt = '' },
+                [pscustomobject]@{ ItemId = 'item-002'; ShareId = 'share-001'; ItemType = 'File'; FullPath = '\\files01\Share001\file02.txt'; RelativePath = 'file02.txt'; Depth = 1; Owner = 'CONTOSO\Owner'; InheritanceEnabled = 'True'; InheritanceBrokenAt = '' },
+                [pscustomobject]@{ ItemId = 'item-003'; ShareId = 'share-002'; ItemType = 'File'; FullPath = '\\files01\Share002\file03.txt'; RelativePath = 'file03.txt'; Depth = 1; Owner = 'CONTOSO\Owner'; InheritanceEnabled = 'True'; InheritanceBrokenAt = '' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'items.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ FindingId = 'finding-001'; FindingType = 'LongPathOperationalPolicy'; Severity = 'Warning'; ShareId = 'share-001'; ItemId = 'item-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = ''; ObservedValue = '300'; PolicyValue = '256'; Message = 'Long path evidence' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'findings.csv') -NoTypeInformation -Encoding UTF8
+
+            $plan = [pscustomobject]@{
+                MaxLabBytes = [int64]8589934592
+                Users = @(
+                    [pscustomobject]@{ SamAccountName = 'SSUser00001' },
+                    [pscustomobject]@{ SamAccountName = 'SSUser00002' },
+                    [pscustomobject]@{ SamAccountName = 'SSUser00003' }
+                )
+                Shares = @(
+                    [pscustomobject]@{ ShareName = 'Share001' },
+                    [pscustomobject]@{ ShareName = 'Share002' }
+                )
+                FileFixtures = @(
+                    [pscustomobject]@{ ShareName = 'Share001'; RelativePath = 'Deep\Path\file01.txt'; SizeBytes = 512 }
+                )
+                AclScenarios = @(
+                    [pscustomobject]@{ Name = 'EnterpriseLongPath'; RelativePath = ('A' * 260) }
+                )
+                ValidationCriteria = @(
+                    [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 3; Unit = 'users'; Description = 'Users' },
+                    [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 2; Unit = 'shares'; Description = 'Shares' },
+                    [pscustomobject]@{ Name = 'EnterpriseRealFiles'; Required = $true; MinimumValue = 3; Unit = 'file fixtures'; Description = 'Files' },
+                    [pscustomobject]@{ Name = 'EnterpriseDeepPaths'; Required = $true; MinimumValue = 1; Unit = 'deep file fixtures'; Description = 'Deep paths' },
+                    [pscustomobject]@{ Name = 'EnterpriseLongPathPolicy'; Required = $true; MinimumValue = 1; Unit = 'long-path scenarios'; Description = 'Long paths' },
+                    [pscustomobject]@{ Name = 'EnterpriseDiskBudget'; Required = $true; MinimumValue = 1; Unit = 'pass/fail'; Description = 'Disk budget' }
+                )
+            }
+
+            function Get-ShareSurferLabValidationDirectoryCounts {
+                [pscustomobject]@{
+                    UserCount = 4
+                    GroupCount = 2
+                    EvidenceSource = 'ActiveDirectory'
+                    EvidenceDetail = 'MockedDirectoryUsers=4; MockedDirectoryGroups=2'
+                }
+            }
+
+            $criteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
+            $userCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserPopulation' })[0]
+            $shareCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseSharePopulation' })[0]
+            $fileCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseRealFiles' })[0]
+            $deepCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDeepPaths' })[0]
+            $longPathCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseLongPathPolicy' })[0]
+            $diskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
+
+            Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
+            Assert-Equal $userCriterion.EvidenceSource 'ActiveDirectory' 'User validation should identify directory evidence.'
+            Assert-Equal ([int]$shareCriterion.ActualValue) 2 'Share validation should use scanned shares.'
+            Assert-Equal $shareCriterion.EvidenceSource 'ScanExport:shares.csv' 'Share validation should identify scan export evidence.'
+            Assert-Equal ([int]$fileCriterion.ActualValue) 3 'File validation should use scanned file item rows.'
+            Assert-Equal $fileCriterion.EvidenceSource 'ScanExport:items.csv' 'File validation should identify scanned item evidence.'
+            Assert-Equal ([int]$deepCriterion.ActualValue) 1 'Deep path validation should use scanned item depth.'
+            Assert-Equal $deepCriterion.EvidenceSource 'ScanExport:items.csv' 'Deep path validation should identify scanned item evidence.'
+            Assert-Equal ([int]$longPathCriterion.ActualValue) 1 'Long-path validation should use generated findings.'
+            Assert-Equal $longPathCriterion.EvidenceSource 'ScanExport:findings.csv' 'Long-path validation should identify findings evidence.'
+            Assert-Equal ([int]$diskCriterion.ActualValue) 1 'Disk budget validation should pass under the configured budget.'
+            Assert-Equal $diskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should measure the lab root when available.'
+            Assert-True ([string]$diskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Disk budget evidence should include measured bytes.'
+            Assert-True (@($criteria | Where-Object { -not $_.Passed }).Count -eq 0) 'All synthetic validation criteria should pass.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan exports normalized CSVs and findings from imported inventory'
         Body = {
             Import-Module $moduleManifest -Force

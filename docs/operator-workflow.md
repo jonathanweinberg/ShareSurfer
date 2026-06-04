@@ -86,6 +86,8 @@ For the enterprise profile, add:
 
 The script writes `lab-plan.json`, `validation.json`, `lab-validation-criteria.csv`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run. For enterprise validation, `lab-validation-criteria.csv` is the pass/fail evidence for user population, share population, real file fixtures, deep paths, long-path policy fixtures, and the 8 GB disk budget.
 
+Each criteria row includes `EvidenceSource` and `EvidenceDetail`. Prefer rows backed by live evidence such as `ActiveDirectory`, `ScanExport:shares.csv`, `ScanExport:items.csv`, `ScanExport:findings.csv`, or `FileSystem`. `LabPlan` rows are useful for planning, but they are not enough by themselves for final enterprise-scale proof.
+
 ## Scan Workflow
 
 Use a dated export path for each run.
