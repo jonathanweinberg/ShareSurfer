@@ -827,6 +827,46 @@ $tests = @(
         }
     },
     @{
+        Name = 'Test-ShareSurferV1Acceptance validates a complete run package'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $acceptanceScript = Join-Path $repoRoot 'scripts/Test-ShareSurferV1Acceptance.ps1'
+            $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferAcceptance-' + [guid]::NewGuid().ToString('N'))
+            $exportPath = Join-Path $runRoot 'export'
+            $reportPath = Join-Path $runRoot 'report.html'
+            $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
+            New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport | Out-Null
+            @(
+                [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users'; Passed = $true; EvidenceSource = 'ActiveDirectory'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Users' },
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'shares'; Passed = $true; EvidenceSource = 'ScanExport:shares.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Shares' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-validation-criteria.csv') -NoTypeInformation -Encoding UTF8
+            [pscustomobject]@{
+                IsValid = $true
+                FallbackCount = 0
+                FallbackCriteria = @()
+                FallbackEvidenceSources = @()
+            } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $runRoot 'live-evidence.json') -Encoding UTF8
+
+            Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
+            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
+            Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
+            Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
+            Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
+            Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
+            Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
+
+            Remove-Item -LiteralPath (Join-Path $bundlePath 'scan_events.jsonl') -Force
+            $failedResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $failedResult.IsValid) 'Acceptance checker should fail when a required support bundle artifact is missing.'
+            Assert-True (@($failedResult.Checks | Where-Object { $_.Name -eq 'RedactedSupportBundle' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should identify missing redacted support bundle evidence.'
+        }
+    },
+    @{
         Name = 'Documentation includes workflow visuals for operator review'
         Body = {
             $pesterWrapper = Join-Path $repoRoot 'tests/ShareSurfer.Tests.ps1'
@@ -901,6 +941,7 @@ $tests = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
                 Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
             ) -join "`n"
+            Assert-True ($publicText -like '*Test-ShareSurferV1Acceptance.ps1*') 'Operator documentation should include the final V1 acceptance checker.'
             $oldLabToolPattern = 'pr' + 'lctl'
             $internalVisualPattern = '(?i)' + 'image' + '-gen2'
             Assert-True ($publicText -notmatch $oldLabToolPattern) 'Public docs should not mention old internal test-environment tooling.'

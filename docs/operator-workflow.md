@@ -89,6 +89,16 @@ The script writes `lab-plan.json`, `validation.json`, `lab-validation-criteria.c
 
 Each criteria row includes `EvidenceSource` and `EvidenceDetail`. Prefer rows backed by live evidence such as `ActiveDirectory`, `ScanExport:shares.csv`, `ScanExport:share_permissions.csv`, `ScanExport:items.csv`, `ScanExport:acl_entries.csv`, `ScanExport:findings.csv`, `ScanExport:conflicts.csv`, `ScanExport:group_edges.csv`, or `FileSystem`. `LabPlan` rows are useful for planning, but they are not enough by themselves for final enterprise-scale proof. `-RequireLiveEvidence` makes this strict: the run fails if any required enterprise criterion is still backed only by the lab plan, blank evidence, or unavailable directory evidence. Open `live-evidence.json` to see which proof points need another scan or lab correction.
 
+After the run finishes, validate the complete evidence package. Use the timestamped run folder created under `-OutputRoot`:
+
+```powershell
+.\scripts\Test-ShareSurferV1Acceptance.ps1 `
+  -RunRoot 'C:\ShareSurfer\lab-validation\20260604-193000' `
+  -RequireLiveEvidence
+```
+
+This checks the normalized CSV export set, raw `scan_events.jsonl`, offline `report.html`, redacted support bundle, lab validation criteria, and live-evidence gate.
+
 ## Scan Workflow
 
 Use a dated export path for each run.
