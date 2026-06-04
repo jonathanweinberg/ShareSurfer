@@ -405,6 +405,30 @@ $tests = @(
         }
     },
     @{
+        Name = 'Test-ShareSurferExport reports row counts and structured schema errors'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            $validResult = Test-ShareSurferExport -ExportPath $outputPath
+            $aclResult = @($validResult.FileResults | Where-Object { $_.FileName -eq 'acl_entries.csv' })[0]
+            $manifestResult = @($validResult.FileResults | Where-Object { $_.FileName -eq 'scan_manifest.csv' })[0]
+            Assert-True ([int]$aclResult.RowCount -gt 0) 'Export validation should report row counts for populated CSVs.'
+            Assert-Equal ([int]$manifestResult.RowCount) 1 'Export validation should report the single scan manifest row.'
+
+            $aclPath = Join-Path $outputPath 'acl_entries.csv'
+            $brokenRows = Import-Csv -LiteralPath $aclPath | Select-Object ItemId, ShareId, FullPath, Rights, AccessControlType, IsInherited, InheritanceFlags, PropagationFlags, Depth
+            $brokenRows | Export-Csv -LiteralPath $aclPath -NoTypeInformation -Encoding UTF8
+
+            $brokenResult = Test-ShareSurferExport -ExportPath $outputPath
+            $brokenAclResult = @($brokenResult.FileResults | Where-Object { $_.FileName -eq 'acl_entries.csv' })[0]
+            Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a required column is missing.'
+            Assert-True ($brokenAclResult.MissingColumns -contains 'Identity') 'File-level validation should report the missing column.'
+            Assert-True ($brokenResult.SchemaErrors -contains 'acl_entries.csv is missing column Identity.') 'Top-level schema errors should keep the readable error message.'
+        }
+    },
+    @{
         Name = 'ConvertTo-ShareSurferReport generates an offline static report with Azure path policy language'
         Body = {
             Import-Module $moduleManifest -Force

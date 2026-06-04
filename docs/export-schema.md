@@ -1,6 +1,6 @@
 # ShareSurfer V1 Export Schema
 
-ShareSurfer V1 writes a normalized CSV export set. Each scan should produce all files listed here, even when a file has only headers or a small number of rows. `Test-ShareSurferExport` validates that the expected set is present.
+ShareSurfer V1 writes a normalized CSV export set. Each scan should produce all files listed here, even when a file has only headers or a small number of rows. `Test-ShareSurferExport` validates that the expected set is present and reports structured file-level diagnostics.
 
 ## General Conventions
 
@@ -9,6 +9,17 @@ ShareSurfer V1 writes a normalized CSV export set. Each scan should produce all 
 - Boolean fields should use PowerShell-friendly values such as `True` and `False`.
 - Identity values should keep a consistent display form, usually `DOMAIN\Name`, before redaction.
 - Implementations may add columns, but should not remove or rename V1 columns without a schema version change.
+
+## Export Validation
+
+`Test-ShareSurferExport` returns:
+
+- `IsValid`, `MissingFiles`, and `SchemaErrors` for quick pass/fail automation.
+- `FileResults` with one record per expected CSV.
+- `FileResults.RowCount` for populated versus header-only CSVs.
+- `FileResults.MissingColumns` and `FileResults.ExtraColumns` for schema triage.
+
+Extra columns are reported for review but do not fail validation. Missing V1 columns fail validation.
 
 ## Files
 
