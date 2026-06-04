@@ -32,7 +32,7 @@ Use a Windows collector machine with:
 
 For AD enrichment, record the OBS attribute before scanning. The default is `extensionAttribute10`, but your environment may use another extension attribute.
 
-For lab validation, use the designated Windows/AD lab host directly. Do not use `prlctl` for ShareSurfer development or validation.
+For lab validation, use the designated Windows/AD lab host directly.
 
 ## Step 1: Open PowerShell
 

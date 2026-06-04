@@ -1,10 +1,10 @@
 # ShareSurfer Workflow Visuals
 
-This page gives operators and business reviewers a visual map of the V1 workflow. The committed SVGs are intentionally plain, offline, and airgap-friendly. An image-gen2 visual concept was also generated and committed to guide the visual language: a clean enterprise workflow from SMB shares through ACL collection, identity enrichment, CSV exports, offline reporting, and redacted support bundles.
+This page gives operators and business reviewers a visual map of the V1 workflow. The committed visuals are intentionally plain, offline, and airgap-friendly.
 
-## Image-Gen2 Concept
+## Workflow Overview
 
-![Image-gen2 workflow concept](visuals/share-surfer-workflow-concept.png)
+![ShareSurfer workflow overview](visuals/share-surfer-workflow-concept.png)
 
 ## Collector To Report
 

@@ -51,8 +51,6 @@ New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab
 
 The enterprise profile is designed for a multi-thousand user population, hundreds of SMB shares, deep folder trees with real small files throughout, and an estimated lab data footprint under 8 GB.
 
-Firm environment note: do not use `prlctl` for ShareSurfer development or validation. ShareSurfer lab validation is intended to run inside the designated Windows/AD test environment directly, not through the old Parallels test setup.
-
 ## Azure Files Path Policy
 
 ShareSurfer separates Azure Files hard limits from migration policy warnings. Microsoft documents 255-character path components and 2,048-character full paths for Azure Files. ShareSurfer defaults to flagging full paths over 256 characters as an operational migration warning, not as proof that Azure Files cannot store the path.

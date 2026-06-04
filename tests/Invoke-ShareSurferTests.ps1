@@ -632,9 +632,9 @@ $tests = @(
 
             Assert-True (Test-Path -LiteralPath $visualDoc) 'Workflow visual documentation should exist.'
             $visualDocText = Get-Content -LiteralPath $visualDoc -Raw
-            Assert-True ($visualDocText -like '*image-gen2 visual concept*') 'Workflow visual documentation should record the image-gen2 visual concept.'
-            Assert-True (Test-Path -LiteralPath (Join-Path $visualRoot 'share-surfer-workflow-concept.png')) 'Workflow visuals should include the generated image-gen2 concept PNG.'
-            Assert-True ($visualDocText -like '*visuals/share-surfer-workflow-concept.png*') 'Workflow visual doc should reference the generated image-gen2 concept.'
+            Assert-True ($visualDocText -like '*Workflow Overview*') 'Workflow visual documentation should include the overview section.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $visualRoot 'share-surfer-workflow-concept.png')) 'Workflow visuals should include the overview PNG.'
+            Assert-True ($visualDocText -like '*visuals/share-surfer-workflow-concept.png*') 'Workflow visual doc should reference the overview PNG.'
             foreach ($visual in $expectedVisuals) {
                 $path = Join-Path $visualRoot $visual
                 Assert-True (Test-Path -LiteralPath $path) ("Missing workflow visual {0}" -f $visual)
@@ -659,6 +659,20 @@ $tests = @(
             Assert-True ($managementText -like '*migration-risk*') 'Management overview should explain migration-risk findings.'
             Assert-True ($managementText -like '*owner/business-unit*') 'Management overview should explain owner/business-unit pivots.'
             Assert-True ($managementText -like '*expected outcomes*') 'Management overview should explain expected outcomes.'
+
+            $publicText = @(
+                Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
+                Get-Content -LiteralPath $visualDoc -Raw
+                Get-Content -LiteralPath $firstRunGuide -Raw
+                Get-Content -LiteralPath $managementOverview -Raw
+                Get-Content -LiteralPath $managementSlide -Raw
+                Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
+                Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
+            ) -join "`n"
+            $oldLabToolPattern = 'pr' + 'lctl'
+            $internalVisualPattern = '(?i)' + 'image' + '-gen2'
+            Assert-True ($publicText -notmatch $oldLabToolPattern) 'Public docs should not mention old internal test-environment tooling.'
+            Assert-True ($publicText -notmatch $internalVisualPattern) 'Public docs should not expose internal visual provenance labels.'
         }
     }
 )

@@ -22,8 +22,6 @@ If this is your first time using ShareSurfer, start with the [First-run guide](f
 
 Use the lab fixture in a disposable lab before touching production shares.
 
-Firm environment note: do not use `prlctl` for ShareSurfer development or validation. Run lab setup and validation directly in the designated Windows/AD test environment.
-
 ```powershell
 $labRoot = 'C:\ShareSurferLab'
 New-ShareSurferLabFixture -OutputPlanOnly -RootPath $labRoot -DomainNetBiosName 'CONTOSO' -ObsAttribute 'extensionAttribute10'
