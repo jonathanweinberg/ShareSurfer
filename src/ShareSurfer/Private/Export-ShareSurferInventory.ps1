@@ -33,6 +33,13 @@ function Export-ShareSurferInventory {
     if ($null -ne $Inventory.PSObject.Properties['ScanErrors']) {
         $scanErrors = @(ConvertTo-ShareSurferArray $Inventory.ScanErrors)
     }
+    $scanEvents = New-Object System.Collections.ArrayList
+    if ($null -ne $Inventory.PSObject.Properties['ScanEvents']) {
+        foreach ($event in @(ConvertTo-ShareSurferArray $Inventory.ScanEvents)) {
+            [void]$scanEvents.Add($event)
+        }
+    }
+    [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ScanStarted' -Source $SourceMode -Message ('ShareSurfer scan export started for {0}' -f $SourceMode)))
 
     if (-not $SkipIdentityEnrichment) {
         $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth
@@ -57,6 +64,7 @@ function Export-ShareSurferInventory {
             GroupExpansionMaxDepth = $GroupExpansionMaxDepth
         }
     )
+    [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportCompleted' -Source 'Export' -Message ('Export completed at {0}' -f $OutputPath) -Detail ('Findings={0}; Conflicts={1}' -f $findings.Count, $conflicts.Count)))
 
     $data = @{
         'shares.csv' = $shares
@@ -69,6 +77,7 @@ function Export-ShareSurferInventory {
         'owner_mappings.csv' = $ownerMappings
         'conflicts.csv' = $conflicts
         'findings.csv' = $findings
+        'scan_events.csv' = @($scanEvents)
         'scan_manifest.csv' = $manifest
     }
 

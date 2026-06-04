@@ -247,6 +247,7 @@ $tests = @(
                 'owner_mappings.csv',
                 'conflicts.csv',
                 'findings.csv',
+                'scan_events.csv',
                 'scan_manifest.csv'
             )
             foreach ($file in $expectedFiles) {
@@ -260,6 +261,10 @@ $tests = @(
 
             $conflicts = Import-Csv -LiteralPath (Join-Path $outputPath 'conflicts.csv')
             Assert-True ($conflicts.ConflictType -contains 'NtfsIdentityMissingShareGate') 'Conflicts should show NTFS identities missing at the share gate.'
+
+            $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+            Assert-True ($events.EventType -contains 'ScanStarted') 'Scan events should record scan start.'
+            Assert-True ($events.EventType -contains 'ExportCompleted') 'Scan events should record export completion.'
         }
     },
     @{
@@ -366,6 +371,58 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan scans mocked SMB share targets by ComputerName and ShareName'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSmbShare-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shareRoot 'share-file.txt') -Value 'share mode'
+
+            function global:Get-SmbShare {
+                param(
+                    [string] $Name,
+                    [string] $CimSession
+                )
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = $shareRoot
+                    Description = 'Mocked SMB share'
+                    PSComputerName = $CimSession
+                }
+            }
+
+            function global:Get-SmbShareAccess {
+                param(
+                    [string] $Name,
+                    [string] $CimSession
+                )
+                [pscustomobject]@{
+                    Name = $Name
+                    AccountName = 'CONTOSO\ShareModeReaders'
+                    AccessRight = 'Read'
+                    AccessControlType = 'Allow'
+                }
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'files01' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+                $permissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
+                $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+
+                Assert-Equal $shares[0].ComputerName 'files01' 'SMB share scans should preserve the requested computer name.'
+                Assert-Equal $shares[0].ShareName 'Finance' 'SMB share scans should preserve the requested share name.'
+                Assert-True ($permissions.Identity -contains 'CONTOSO\ShareModeReaders') 'SMB share scans should collect share-level permissions.'
+                Assert-True ($events.EventType -contains 'ShareTargetResolved') 'SMB share scans should log share target resolution.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'New-ShareSurferSupportBundle redacts sensitive values with stable tokens'
         Body = {
             Import-Module $moduleManifest -Force
@@ -377,6 +434,7 @@ $tests = @(
             $redactedAcl = Get-Content -LiteralPath (Join-Path $bundlePath 'acl_entries.csv') -Raw
             $redactedFindings = Get-Content -LiteralPath (Join-Path $bundlePath 'findings.csv') -Raw
             $redactedConflicts = Get-Content -LiteralPath (Join-Path $bundlePath 'conflicts.csv') -Raw
+            $redactedEvents = Get-Content -LiteralPath (Join-Path $bundlePath 'scan_events.csv') -Raw
 
             Assert-True ($redactedAcl -notlike '*CONTOSO*') 'Redacted bundle must not contain the source domain name.'
             Assert-True ($redactedAcl -notlike '*FinanceEditors*') 'Redacted bundle must not contain source group names.'
@@ -389,6 +447,7 @@ $tests = @(
             Assert-True ($redactedIdentities -notlike '*E1001*') 'Employee IDs must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
+            Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
 
             $aclToken = ([regex]::Match($redactedAcl, 'ID-[0-9A-F]{12}')).Value
             Assert-True ($aclToken -ne '') 'ACL export should contain at least one stable token.'

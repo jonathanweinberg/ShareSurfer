@@ -50,6 +50,17 @@ Invoke-ShareSurferScan `
   -ObsAttribute 'extensionAttribute10'
 ```
 
+When the Windows SMB cmdlets can resolve the share directly, scan by computer and share name:
+
+```powershell
+Invoke-ShareSurferScan `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -OutputPath $exportPath `
+  -IncludeFiles `
+  -ObsAttribute 'extensionAttribute10'
+```
+
 If a pre-collected inventory object is being tested, pass it with `-InputObject`. For production collection, use the source-selection parameters supported by the implementation and keep the same export path discipline.
 
 After every scan, validate the export set:
@@ -91,6 +102,7 @@ Use the report as a triage guide, not as the only source of truth.
 - `share_permissions` and `acl_entries` show the two permission layers that determine effective access.
 - `conflicts` highlight mismatches such as NTFS identities that are not granted through the share gate.
 - `findings` highlight migration and governance risks such as broken inheritance, deep explicit ACEs, and long paths.
+- `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, and where the owner sits in the organization.
 
 Path findings need careful wording. Microsoft documents Azure Files limits of 255-character path components and 2,048-character full paths. ShareSurfer's default warning for full paths over 256 characters is an operational migration policy, not the Azure Files hard full-path limit.

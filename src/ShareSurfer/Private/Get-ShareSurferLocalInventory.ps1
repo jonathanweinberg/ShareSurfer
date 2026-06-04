@@ -11,6 +11,7 @@ function Get-ShareSurferLocalInventory {
     $aclEntries = New-Object System.Collections.ArrayList
     $sharePermissions = New-Object System.Collections.ArrayList
     $scanErrors = New-Object System.Collections.ArrayList
+    $scanEvents = New-Object System.Collections.ArrayList
 
     $getAcl = Get-Command Get-Acl -ErrorAction SilentlyContinue
     $index = 0
@@ -19,6 +20,7 @@ function Get-ShareSurferLocalInventory {
         $shareId = 'target-{0}' -f $index
         $targetItem = Get-Item -LiteralPath $target -ErrorAction Stop
         $shareInfo = Get-ShareSurferTargetShareInfo -TargetPath $target -TargetItem $targetItem
+        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetItem.FullName))
         $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
         foreach ($permissionRow in $permissionRows) {
             [void]$sharePermissions.Add($permissionRow)
@@ -122,5 +124,6 @@ function Get-ShareSurferLocalInventory {
         OrgChains = @()
         OwnerMappings = @()
         ScanErrors = @($scanErrors)
+        ScanEvents = @($scanEvents)
     }
 }

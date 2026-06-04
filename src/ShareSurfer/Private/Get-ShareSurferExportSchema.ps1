@@ -99,6 +99,17 @@ function Get-ShareSurferExportSchema {
             'PolicyValue',
             'Message'
         )
+        'scan_events.csv' = @(
+            'EventId',
+            'Timestamp',
+            'Level',
+            'EventType',
+            'Source',
+            'ShareId',
+            'ItemId',
+            'Message',
+            'Detail'
+        )
         'scan_manifest.csv' = @(
             'ScanId',
             'GeneratedAt',

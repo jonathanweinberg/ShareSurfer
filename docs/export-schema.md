@@ -24,6 +24,7 @@ ShareSurfer V1 writes a normalized CSV export set. Each scan should produce all 
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
+| `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
 | `scan_manifest.csv` | One row per scan | Records scan settings, versions, and collection health. |
 
 ## Column Reference
@@ -91,6 +92,14 @@ Common V1 finding types include:
 - `LongPathOperationalPolicy`
 - `DeepExplicitAce`
 - `BrokenInheritance`
+
+### `scan_manifest.csv`
+
+### `scan_events.csv`
+
+Expected columns: `EventId`, `Timestamp`, `Level`, `EventType`, `Source`, `ShareId`, `ItemId`, `Message`, `Detail`.
+
+Use this file to troubleshoot collection behavior without scraping console output. Redacted support bundles should preserve event types and levels while anonymizing paths, hostnames, identities, and detailed messages.
 
 ### `scan_manifest.csv`
 

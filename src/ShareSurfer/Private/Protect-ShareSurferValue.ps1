@@ -45,7 +45,9 @@ function Protect-ShareSurferValue {
         'ChildIdentity',
         'ComputerName',
         'ShareName',
-        'Description'
+        'Description',
+        'Message',
+        'Detail'
     )
 
     $preserveColumns = @(

@@ -7,6 +7,12 @@ function Invoke-ShareSurferScan {
         [Parameter(Mandatory = $true, ParameterSetName = 'TargetPath')]
         [string[]] $TargetPath,
 
+        [Parameter(Mandatory = $true, ParameterSetName = 'SmbShare')]
+        [string] $ComputerName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'SmbShare')]
+        [string[]] $ShareName,
+
         [Parameter(Mandatory = $true)]
         [string] $OutputPath,
 
@@ -25,8 +31,14 @@ function Invoke-ShareSurferScan {
         $sourceMode = 'InputObject'
     }
     else {
-        $inventory = Get-ShareSurferLocalInventory -TargetPath $TargetPath -IncludeFiles:$IncludeFiles
-        $sourceMode = 'TargetPath'
+        if ($PSCmdlet.ParameterSetName -eq 'SmbShare') {
+            $inventory = Get-ShareSurferSmbShareInventory -ComputerName $ComputerName -ShareName $ShareName -IncludeFiles:$IncludeFiles
+            $sourceMode = 'SmbShare'
+        }
+        else {
+            $inventory = Get-ShareSurferLocalInventory -TargetPath $TargetPath -IncludeFiles:$IncludeFiles
+            $sourceMode = 'TargetPath'
+        }
     }
 
     Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -SourceMode $sourceMode -SkipIdentityEnrichment:$SkipIdentityEnrichment
