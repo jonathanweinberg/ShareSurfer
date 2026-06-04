@@ -30,6 +30,7 @@ $runRoot = Join-Path $OutputRoot $timestamp
 $exportPath = Join-Path $runRoot 'export'
 $reportPath = Join-Path $runRoot 'report.html'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
+$criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
@@ -51,6 +52,34 @@ if (-not $validation.IsValid) {
     throw ('ShareSurfer export validation failed. See {0}' -f (Join-Path $runRoot 'validation.json'))
 }
 
+$fileResults = @($validation.FileResults)
+$shareRows = @($fileResults | Where-Object { $_.FileName -eq 'shares.csv' } | Select-Object -First 1)
+$itemRows = @($fileResults | Where-Object { $_.FileName -eq 'items.csv' } | Select-Object -First 1)
+$criteriaRows = foreach ($criterion in @($plan.ValidationCriteria)) {
+    $actual = [int64]$criterion.ActualPlanValue
+    if ($criterion.Name -eq 'EnterpriseSharePopulation' -and $shareRows.Count -gt 0) {
+        $actual = [int64]$shareRows[0].RowCount
+    }
+    if ($criterion.Name -eq 'EnterpriseRealFiles' -and $itemRows.Count -gt 0) {
+        $actual = [int64]$itemRows[0].RowCount
+    }
+
+    [pscustomobject]@{
+        Name = $criterion.Name
+        Required = [bool]$criterion.Required
+        MinimumValue = [int64]$criterion.MinimumValue
+        ActualValue = $actual
+        Unit = [string]$criterion.Unit
+        Passed = ($actual -ge [int64]$criterion.MinimumValue)
+        Description = [string]$criterion.Description
+    }
+}
+@($criteriaRows) | Export-Csv -LiteralPath $criteriaPath -NoTypeInformation -Encoding UTF8
+$failedRequiredCriteria = @($criteriaRows | Where-Object { $_.Required -and -not $_.Passed })
+if ($failedRequiredCriteria.Count -gt 0) {
+    throw ('ShareSurfer lab validation criteria failed. See {0}' -f $criteriaPath)
+}
+
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken | Out-Null
 
@@ -60,6 +89,7 @@ New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -Re
     ReportPath = $reportPath
     SupportBundlePath = $bundlePath
     ValidationPath = Join-Path $runRoot 'validation.json'
+    CriteriaPath = $criteriaPath
     LabCreated = [bool]$CreateLab
     Scale = $Scale
     EstimatedLabBytes = $plan.EstimatedLabBytes

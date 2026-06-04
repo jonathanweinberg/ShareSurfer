@@ -184,6 +184,67 @@ function New-ShareSurferLabPlan {
         throw ('Lab plan estimates {0} bytes, which exceeds MaxLabBytes {1}.' -f $estimatedLabBytes, $MaxLabBytes)
     }
 
+    $validationCriteria = New-Object System.Collections.ArrayList
+    [void]$validationCriteria.Add([pscustomobject]@{
+        Name = 'FocusedAclScenarios'
+        MinimumValue = 1
+        ActualPlanValue = @($aclScenarios).Count
+        Unit = 'acl scenarios'
+        Required = $true
+        Description = 'Fixture includes ACL scenarios for inheritance, explicit ACEs, long paths, ownership, file ACLs, and share-vs-NTFS conflicts.'
+    })
+
+    if ($Scale -eq 'Enterprise') {
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseUserPopulation'
+            MinimumValue = $EnterpriseUserCount
+            ActualPlanValue = @($users).Count
+            Unit = 'users'
+            Required = $true
+            Description = 'Enterprise validation includes a multi-thousand user population.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseSharePopulation'
+            MinimumValue = $EnterpriseShareCount
+            ActualPlanValue = @($shares).Count
+            Unit = 'shares'
+            Required = $true
+            Description = 'Enterprise validation includes hundreds of SMB shares.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseRealFiles'
+            MinimumValue = $EnterpriseShareCount * $EnterpriseFilesPerShare
+            ActualPlanValue = @($fileFixtures).Count
+            Unit = 'file fixtures'
+            Required = $true
+            Description = 'Enterprise validation includes real small file objects throughout share trees.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseDeepPaths'
+            MinimumValue = 1
+            ActualPlanValue = @($fileFixtures | Where-Object { ([string]$_.RelativePath -split '\\').Count -ge 6 }).Count
+            Unit = 'deep file fixtures'
+            Required = $true
+            Description = 'Enterprise validation includes deep share trees and intricate folder paths.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseLongPathPolicy'
+            MinimumValue = 1
+            ActualPlanValue = @($aclScenarios | Where-Object { ([string]$_.RelativePath).Length -gt 256 }).Count
+            Unit = 'long-path scenarios'
+            Required = $true
+            Description = 'Enterprise validation includes paths beyond the operational 256-character migration policy threshold.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseDiskBudget'
+            MinimumValue = 1
+            ActualPlanValue = if ($estimatedLabBytes -le $MaxLabBytes) { 1 } else { 0 }
+            Unit = 'pass/fail'
+            Required = $true
+            Description = 'Enterprise validation keeps generated lab file data under the configured disk budget.'
+        })
+    }
+
     [pscustomobject]@{
         LabName = 'ShareSurferLab'
         ScaleProfile = $Scale
@@ -198,5 +259,6 @@ function New-ShareSurferLabPlan {
         Shares = @($shares)
         AclScenarios = @($aclScenarios)
         FileFixtures = @($fileFixtures)
+        ValidationCriteria = @($validationCriteria)
     }
 }

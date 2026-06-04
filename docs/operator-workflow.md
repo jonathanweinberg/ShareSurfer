@@ -84,7 +84,7 @@ For the enterprise profile, add:
   -MaxLabBytes 8589934592
 ```
 
-The script writes `lab-plan.json`, `validation.json`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run.
+The script writes `lab-plan.json`, `validation.json`, `lab-validation-criteria.csv`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run. For enterprise validation, `lab-validation-criteria.csv` is the pass/fail evidence for user population, share population, real file fixtures, deep paths, long-path policy fixtures, and the 8 GB disk budget.
 
 ## Scan Workflow
 
