@@ -476,6 +476,14 @@ $tests = @(
             Assert-True ($report -like '*Org Chain Rollups*') 'Report should expose manager and OBS rollups.'
             Assert-True ($report -like '*Group Browser*') 'Report should expose a group expansion browsing view.'
             Assert-True ($report -like '*buildRollups*') 'Report should build dynamic rollup tables from CSV exports.'
+            Assert-True ($report -like '*Business Review Dashboard*') 'Report should present as a business-review dashboard.'
+            Assert-True ($report -like '*Executive Summary*') 'Report should include an executive summary section.'
+            Assert-True ($report -like '*Priority Actions*') 'Report should include prioritized next actions for business reviewers.'
+            Assert-True ($report -like '*Dashboard Filters*') 'Report should include dashboard-level filters.'
+            Assert-True ($report -like '*data-view="findings"*') 'Report should include tabbed dashboard views.'
+            Assert-True ($report -like '*renderPriorityActions*') 'Report should dynamically build priority actions from exported data.'
+            Assert-True ($report -like '*showView*') 'Report should dynamically switch dashboard views.'
+            Assert-True ($report -like '*risk-badge*') 'Report should include visual risk badges for business users.'
         }
     },
     @{

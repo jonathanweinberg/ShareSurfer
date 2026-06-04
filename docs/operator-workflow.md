@@ -152,7 +152,7 @@ New-ShareSurferSupportBundle `
 
 ## Report Interpretation
 
-Use the report as a triage guide, not as the only source of truth.
+Use the report dashboard as a triage guide, not as the only source of truth.
 
 - `shares` and `items` show the collected scope and whether data was partial.
 - `share_permissions` and `acl_entries` show the two permission layers that determine effective access.
@@ -160,7 +160,7 @@ Use the report as a triage guide, not as the only source of truth.
 - `findings` highlight migration and governance risks such as broken inheritance, deep explicit ACEs, and long paths.
 - `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, and where the owner sits in the organization.
-- Start with the report's finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
+- Start with the executive summary, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
 - Use the group browser when a security group is assigned rights and the business unit needs to see the expanded membership path.
 
 Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards, for example `\\files01\Finance*`.

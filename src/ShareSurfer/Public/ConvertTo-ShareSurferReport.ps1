@@ -23,123 +23,517 @@ function ConvertTo-ShareSurferReport {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ShareSurfer Report</title>
+  <title>ShareSurfer Business Review Dashboard</title>
   <style>
-    :root { color-scheme: light; --ink: #17202a; --muted: #5d6d7e; --line: #d8dee9; --panel: #f7f9fb; --accent: #0b6e69; --warn: #ad5b00; --bad: #9f1d35; }
-    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; color: var(--ink); background: white; }
-    header { padding: 24px 32px 16px; border-bottom: 1px solid var(--line); }
-    h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: 0; }
-    h2 { margin: 0 0 12px; font-size: 18px; }
-    main { padding: 20px 32px 32px; display: grid; gap: 18px; }
-    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-    .metric { border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: var(--panel); }
-    .metric strong { display: block; font-size: 24px; margin-bottom: 2px; }
-    .metric span { color: var(--muted); font-size: 12px; }
-    section { border-top: 1px solid var(--line); padding-top: 16px; }
-    input { width: 100%; max-width: 520px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
-    table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 10px; }
-    th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
-    th { background: var(--panel); position: sticky; top: 0; }
-    .scroll { overflow: auto; max-height: 360px; border: 1px solid var(--line); border-radius: 8px; }
-    .high { color: var(--bad); font-weight: 600; }
-    .warning { color: var(--warn); font-weight: 600; }
-    .note { color: var(--muted); max-width: 980px; line-height: 1.45; }
-    .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    :root {
+      color-scheme: light;
+      --ink: #16202a;
+      --muted: #5b6673;
+      --line: #d8dee8;
+      --panel: #f6f8fb;
+      --panel-strong: #eef3f8;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --blue: #2563eb;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --good: #15803d;
+      --shadow: 0 12px 34px rgba(22, 32, 42, .08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+    }
+    header {
+      padding: 34px 40px 24px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #f9fbfc 0%, #ffffff 100%);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+    main {
+      padding: 22px 40px 40px;
+      display: grid;
+      gap: 18px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: end;
+      max-width: 1260px;
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      max-width: 900px;
+      line-height: 1.5;
+      font-size: 16px;
+    }
+    .risk-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .risk-badge.high { border-color: #fecaca; background: #fff1f2; color: var(--bad); }
+    .risk-badge.warning { border-color: #fed7aa; background: #fff7ed; color: var(--warn); }
+    .risk-badge.good { border-color: #bbf7d0; background: #f0fdf4; color: var(--good); }
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 520px) auto;
+      gap: 14px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 14px;
+      background: #ffffff;
+      color: var(--ink);
+    }
+    .view-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 9px 11px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button[aria-selected="true"] {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+      min-height: 98px;
+    }
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .view-panel { display: none; }
+    .view-panel.active {
+      display: grid;
+      gap: 18px;
+    }
+    .two-column {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+      gap: 18px;
+      align-items: start;
+    }
+    .note {
+      color: var(--muted);
+      max-width: 980px;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .actions {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+    .actions li {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--accent);
+      border-radius: 8px;
+      padding: 11px 12px;
+      background: var(--panel);
+    }
+    .actions li.high { border-left-color: var(--bad); }
+    .actions li.warning { border-left-color: var(--warn); }
+    .actions strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .count {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+      max-width: 360px;
+      word-break: break-word;
+    }
+    th {
+      background: var(--panel-strong);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .scroll {
+      overflow: auto;
+      max-height: 390px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+    .empty {
+      color: var(--muted);
+      padding: 16px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 10px;
+    }
     .controls input { max-width: 360px; }
+    @media (max-width: 940px) {
+      header { padding: 26px 20px 18px; }
+      main { padding: 18px 20px 28px; }
+      .hero-grid, .toolbar, .two-column { grid-template-columns: 1fr; }
+      .view-tabs { justify-content: flex-start; }
+      h1 { font-size: 28px; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>ShareSurfer</h1>
-    <p class="note">Offline SMB share, NTFS ACL, identity, organization, and Azure Files migration-readiness report.</p>
+    <div class="hero-grid">
+      <div>
+        <h1>ShareSurfer Business Review Dashboard</h1>
+        <p class="subtitle">Offline SMB share, NTFS ACL, identity, organization, and Azure Files migration-readiness report for business-unit and data-owner review.</p>
+      </div>
+      <span class="risk-badge" id="overall-risk">Review Needed</span>
+    </div>
   </header>
   <main>
-    <div class="summary" id="summary"></div>
-    <section>
-      <h2>Azure Files Path Policy</h2>
-      <p class="note">Microsoft documents 255-character path components and 2,048-character full paths for Azure Files. ShareSurfer's default 256-character finding is an operational migration policy warning for complex Windows file-share moves, not a statement that Azure Files cannot store the path.</p>
-    </section>
-    <section>
-      <h2>Findings</h2>
-      <input id="filter" type="search" placeholder="Filter tables">
-      <div class="scroll"><table id="findings"></table></div>
-    </section>
-    <section>
-      <h2>Finding Rollups</h2>
-      <div class="scroll"><table id="finding-rollups"></table></div>
-    </section>
-    <section>
-      <h2>Share vs NTFS Conflicts</h2>
-      <div class="scroll"><table id="conflicts"></table></div>
-    </section>
-    <section>
-      <h2>Conflict Rollups</h2>
-      <div class="scroll"><table id="conflict-rollups"></table></div>
-    </section>
-    <section>
-      <h2>Owner and Business Unit Mappings</h2>
-      <div class="scroll"><table id="owners"></table></div>
-    </section>
-    <section>
-      <h2>Business Unit Pivots</h2>
-      <div class="scroll"><table id="owner-pivots"></table></div>
-    </section>
-    <section>
-      <h2>Group Expansion</h2>
-      <div class="scroll"><table id="groups"></table></div>
-    </section>
-    <section>
-      <h2>Group Browser</h2>
-      <div class="controls">
-        <input id="group-filter" type="search" placeholder="Filter group or member">
+    <section class="toolbar" aria-label="Dashboard Filters">
+      <div>
+        <label for="filter">Dashboard Filters</label>
+        <input id="filter" type="search" placeholder="Search findings, conflicts, owners, groups, events, or paths">
       </div>
-      <div class="scroll"><table id="group-browser"></table></div>
+      <nav class="view-tabs" aria-label="Dashboard views">
+        <button type="button" data-view="overview" aria-selected="true">Overview</button>
+        <button type="button" data-view="findings" aria-selected="false">Findings</button>
+        <button type="button" data-view="conflicts" aria-selected="false">Conflicts</button>
+        <button type="button" data-view="owners" aria-selected="false">Owners</button>
+        <button type="button" data-view="groups" aria-selected="false">Groups</button>
+        <button type="button" data-view="org" aria-selected="false">Org & Logs</button>
+      </nav>
     </section>
-    <section>
-      <h2>Org Chain Rollups</h2>
-      <div class="scroll"><table id="org-rollups"></table></div>
+
+    <section class="view-panel active" id="view-overview" data-panel="overview">
+      <div class="panel">
+        <h2>Executive Summary</h2>
+        <div class="summary" id="summary"></div>
+      </div>
+      <div class="two-column">
+        <div class="panel">
+          <h2>Priority Actions</h2>
+          <ul class="actions" id="priority-actions"></ul>
+        </div>
+        <div class="panel">
+          <h2>Azure Files Path Policy</h2>
+          <p class="note">Microsoft documents 255-character path components and 2,048-character full paths for Azure Files. ShareSurfer's default 256-character finding is an operational migration policy warning for complex Windows file-share moves, not a statement that Azure Files cannot store the path.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>Business Unit Pivots</h2>
+          <span class="count" id="owner-pivots-count"></span>
+        </div>
+        <div class="scroll"><table id="owner-pivots"></table></div>
+      </div>
     </section>
-    <section>
-      <h2>Scan Events</h2>
-      <div class="scroll"><table id="events"></table></div>
+
+    <section class="view-panel" id="view-findings" data-panel="findings">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Findings</h2>
+          <span class="count" id="findings-count"></span>
+        </div>
+        <div class="scroll"><table id="findings"></table></div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>Finding Rollups</h2>
+          <span class="count" id="finding-rollups-count"></span>
+        </div>
+        <div class="scroll"><table id="finding-rollups"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-conflicts" data-panel="conflicts">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Share vs NTFS Conflicts</h2>
+          <span class="count" id="conflicts-count"></span>
+        </div>
+        <div class="scroll"><table id="conflicts"></table></div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>Conflict Rollups</h2>
+          <span class="count" id="conflict-rollups-count"></span>
+        </div>
+        <div class="scroll"><table id="conflict-rollups"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-owners" data-panel="owners">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Owner and Business Unit Mappings</h2>
+          <span class="count" id="owners-count"></span>
+        </div>
+        <div class="scroll"><table id="owners"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-groups" data-panel="groups">
+      <div class="panel">
+        <h2>Group Browser</h2>
+        <div class="controls">
+          <input id="group-filter" type="search" placeholder="Filter group or member">
+          <span class="count" id="group-browser-count"></span>
+        </div>
+        <div class="scroll"><table id="group-browser"></table></div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>Group Expansion</h2>
+          <span class="count" id="groups-count"></span>
+        </div>
+        <div class="scroll"><table id="groups"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-org" data-panel="org">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Org Chain Rollups</h2>
+          <span class="count" id="org-rollups-count"></span>
+        </div>
+        <div class="scroll"><table id="org-rollups"></table></div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>Scan Events</h2>
+          <span class="count" id="events-count"></span>
+        </div>
+        <div class="scroll"><table id="events"></table></div>
+      </div>
     </section>
   </main>
   <script id="sharesurfer-data" type="application/json">__SHARESURFER_DATA__</script>
   <script>
     const data = JSON.parse(document.getElementById('sharesurfer-data').textContent);
-    const counts = [
-      ['Shares', data.shares.length],
-      ['Items', data.items.length],
-      ['ACL entries', data.acl_entries.length],
-      ['Findings', data.findings.length],
-      ['Conflicts', data.conflicts.length],
-      ['Identities', data.identities.length],
-      ['Events', data.scan_events.length]
-    ];
-    const summary = document.getElementById('summary');
-    counts.forEach(([label, value]) => {
-      const div = document.createElement('div');
-      div.className = 'metric';
+    function asRows(rows) {
+      return Array.isArray(rows) ? rows : [];
+    }
+    const severityRank = { Critical: 4, High: 3, Medium: 2, Warning: 2, Low: 1, Informational: 0, Info: 0 };
+    function isHighRisk(row) {
+      const severity = String(row.Severity || '');
+      return severityRank[severity] >= 3;
+    }
+    function distinctCount(rows, field) {
+      const values = new Set();
+      asRows(rows).forEach(row => {
+        const value = String(row[field] || '').trim();
+        if (value) { values.add(value); }
+      });
+      return values.size;
+    }
+    function countWhere(rows, predicate) {
+      return asRows(rows).filter(predicate).length;
+    }
+    function setCount(id, rows) {
+      const target = document.getElementById(id + '-count');
+      if (target) {
+        target.textContent = String(asRows(rows).length) + ' row' + (asRows(rows).length === 1 ? '' : 's');
+      }
+    }
+    function updateOverallRisk() {
+      const risk = document.getElementById('overall-risk');
+      const highFindings = countWhere(data.findings, isHighRisk);
+      const highConflicts = countWhere(data.conflicts, isHighRisk);
+      if (highFindings + highConflicts > 0) {
+        risk.className = 'risk-badge high';
+        risk.textContent = String(highFindings + highConflicts) + ' high-priority items';
+      } else if (data.findings.length + data.conflicts.length > 0) {
+        risk.className = 'risk-badge warning';
+        risk.textContent = 'Review recommended';
+      } else {
+        risk.className = 'risk-badge good';
+        risk.textContent = 'No findings in export';
+      }
+    }
+    function renderSummary() {
+      const metrics = [
+        { label: 'Shares scanned', value: data.shares.length, hint: 'Collected SMB shares' },
+        { label: 'Items reviewed', value: data.items.length, hint: 'Folders and files in scope' },
+        { label: 'Findings', value: data.findings.length, hint: 'Migration and governance risks' },
+        { label: 'High-priority findings', value: countWhere(data.findings, isHighRisk), hint: 'Start here for remediation' },
+        { label: 'Access conflicts', value: data.conflicts.length, hint: 'Share and NTFS mismatch checks' },
+        { label: 'Business units', value: distinctCount(data.owner_mappings, 'BusinessUnit'), hint: 'Owner mapping pivots' },
+        { label: 'Expanded groups', value: distinctCount(data.group_edges, 'ParentGroup'), hint: 'Security groups with membership edges' },
+        { label: 'Partial shares', value: countWhere(data.shares, row => String(row.PartialData) === 'True'), hint: 'Collection gaps to review' }
+      ];
+      const summary = document.getElementById('summary');
+      summary.textContent = '';
+      metrics.forEach(metric => {
+        const div = document.createElement('div');
+        div.className = 'metric';
+        const strong = document.createElement('strong');
+        strong.textContent = metric.value;
+        const label = document.createElement('span');
+        label.textContent = metric.label + '. ' + metric.hint + '.';
+        div.appendChild(strong);
+        div.appendChild(label);
+        summary.appendChild(div);
+      });
+    }
+    function addPriorityAction(list, severity, title, detail) {
+      const li = document.createElement('li');
+      li.className = severity;
       const strong = document.createElement('strong');
-      strong.textContent = value;
+      strong.textContent = title;
       const span = document.createElement('span');
-      span.textContent = label;
-      div.appendChild(strong);
-      div.appendChild(span);
-      summary.appendChild(div);
-    });
+      span.textContent = detail;
+      li.appendChild(strong);
+      li.appendChild(span);
+      list.appendChild(li);
+    }
+    function renderPriorityActions() {
+      const list = document.getElementById('priority-actions');
+      list.textContent = '';
+      const highFindings = countWhere(data.findings, isHighRisk);
+      const highConflicts = countWhere(data.conflicts, isHighRisk);
+      const longPaths = countWhere(data.findings, row => row.FindingType === 'LongPathOperationalPolicy');
+      const deepAces = countWhere(data.findings, row => row.FindingType === 'DeepExplicitAce');
+      const inheritanceBreaks = countWhere(data.findings, row => row.FindingType === 'BrokenInheritance');
+      const partialShares = countWhere(data.shares, row => String(row.PartialData) === 'True');
+      const truncatedGroups = countWhere(data.group_edges, row => String(row.IsTruncated) === 'True');
+      if (highFindings > 0) {
+        addPriorityAction(list, 'high', 'Review high-severity findings', String(highFindings) + ' finding(s) need owner or business-unit review.');
+      }
+      if (highConflicts > 0) {
+        addPriorityAction(list, 'high', 'Resolve high-severity access conflicts', String(highConflicts) + ' conflict(s) show share-vs-NTFS mismatch risk.');
+      }
+      if (longPaths > 0) {
+        addPriorityAction(list, 'warning', 'Plan long-path remediation', String(longPaths) + ' path finding(s) exceed the operational migration threshold.');
+      }
+      if (deepAces > 0 || inheritanceBreaks > 0) {
+        addPriorityAction(list, 'warning', 'Confirm delegated folder access', String(deepAces) + ' deep explicit ACE(s) and ' + String(inheritanceBreaks) + ' inheritance break(s) need review.');
+      }
+      if (partialShares > 0) {
+        addPriorityAction(list, 'warning', 'Investigate partial collection', String(partialShares) + ' share(s) have incomplete metadata.');
+      }
+      if (truncatedGroups > 0) {
+        addPriorityAction(list, 'warning', 'Revisit group expansion depth', String(truncatedGroups) + ' group edge(s) were truncated.');
+      }
+      if (list.children.length === 0) {
+        addPriorityAction(list, 'good', 'No immediate high-priority actions', 'Review owner mappings and rerun after any cleanup or migration planning changes.');
+      }
+    }
     function renderTable(id, rows) {
       const table = document.getElementById(id);
       table.innerHTML = '';
-      if (!rows || rows.length === 0) {
+      const safeRows = asRows(rows);
+      setCount(id, safeRows);
+      if (safeRows.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.textContent = 'No rows';
+        td.className = 'empty';
+        td.textContent = 'No matching rows';
         tr.appendChild(td);
         table.appendChild(tr);
         return;
       }
-      const columns = Object.keys(rows[0]);
+      const columns = Object.keys(safeRows[0]);
       const thead = document.createElement('thead');
       const headerRow = document.createElement('tr');
       columns.forEach(c => {
@@ -149,7 +543,7 @@ function ConvertTo-ShareSurferReport {
       });
       thead.appendChild(headerRow);
       const tbody = document.createElement('tbody');
-      rows.forEach(row => {
+      safeRows.forEach(row => {
         const tr = document.createElement('tr');
         columns.forEach(c => {
           const td = document.createElement('td');
@@ -184,7 +578,7 @@ function ConvertTo-ShareSurferReport {
     }
     function buildRollups(rows, fields) {
       const rollups = new Map();
-      rows.forEach(row => {
+      asRows(rows).forEach(row => {
         const keyValues = fields.map(field => String(row[field] || ''));
         const key = keyValues.join('|');
         if (!rollups.has(key)) {
@@ -245,11 +639,26 @@ function ConvertTo-ShareSurferReport {
       renderTable('groups', data.group_edges.filter(match));
       renderTable('org-rollups', org_rollups.filter(match));
       renderTable('events', data.scan_events.filter(match));
+      applyGroupBrowser();
     }
+    function showView(viewName) {
+      document.querySelectorAll('[data-panel]').forEach(panel => {
+        panel.classList.toggle('active', panel.dataset.panel === viewName);
+      });
+      document.querySelectorAll('[data-view]').forEach(button => {
+        button.setAttribute('aria-selected', String(button.dataset.view === viewName));
+      });
+    }
+    document.querySelectorAll('[data-view]').forEach(button => {
+      button.addEventListener('click', () => showView(button.dataset.view));
+    });
     document.getElementById('filter').addEventListener('input', applyFilter);
     document.getElementById('group-filter').addEventListener('input', applyGroupBrowser);
+    renderSummary();
+    renderPriorityActions();
+    updateOverallRisk();
     applyFilter();
-    applyGroupBrowser();
+    showView('overview');
   </script>
 </body>
 </html>

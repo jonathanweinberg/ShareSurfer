@@ -188,8 +188,11 @@ ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\rep
 
 Open `report.html` from the export folder. It does not need a server or internet access.
 
-Use the report to review:
+Use the dashboard to review:
 
+- Executive summary cards.
+- Priority actions.
+- Dashboard-level search and view tabs.
 - Business-unit and owner pivots.
 - Finding rollups.
 - Conflict rollups.
