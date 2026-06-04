@@ -22,6 +22,7 @@ function Invoke-ShareSurferScan {
         [int] $AzureFullPathLimit = 2048,
         [int] $ExplicitAceDepthThreshold = 2,
         [int] $GroupExpansionMaxDepth = 20,
+        [string] $OwnerMappingPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles
     )
@@ -40,6 +41,8 @@ function Invoke-ShareSurferScan {
             $sourceMode = 'TargetPath'
         }
     }
+
+    $inventory = Add-ShareSurferOwnerMappings -Inventory $inventory -OwnerMappingPath $OwnerMappingPath
 
     Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -SourceMode $sourceMode -SkipIdentityEnrichment:$SkipIdentityEnrichment
 }

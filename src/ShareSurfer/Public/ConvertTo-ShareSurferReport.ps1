@@ -71,6 +71,10 @@ function ConvertTo-ShareSurferReport {
       <div class="scroll"><table id="owners"></table></div>
     </section>
     <section>
+      <h2>Business Unit Pivots</h2>
+      <div class="scroll"><table id="owner-pivots"></table></div>
+    </section>
+    <section>
       <h2>Group Expansion</h2>
       <div class="scroll"><table id="groups"></table></div>
     </section>
@@ -136,12 +140,35 @@ function ConvertTo-ShareSurferReport {
       table.appendChild(thead);
       table.appendChild(tbody);
     }
+    function wildcardMatch(pattern, value) {
+      const escaped = String(pattern || '').replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+      return new RegExp('^' + escaped + '$', 'i').test(String(value || ''));
+    }
+    function buildOwnerPivots() {
+      const pivots = new Map();
+      data.owner_mappings.forEach(mapping => {
+        const matchedItems = data.items.filter(item => wildcardMatch(mapping.Pattern, item.FullPath));
+        const key = [mapping.BusinessUnit || '', mapping.Owner || '', mapping.Pattern || ''].join('|');
+        pivots.set(key, {
+          BusinessUnit: mapping.BusinessUnit || '',
+          Owner: mapping.Owner || '',
+          Pattern: mapping.Pattern || '',
+          Source: mapping.Source || '',
+          MatchingItems: matchedItems.length,
+          Directories: matchedItems.filter(item => item.ItemType === 'Directory').length,
+          Files: matchedItems.filter(item => item.ItemType === 'File').length
+        });
+      });
+      return Array.from(pivots.values()).sort((a, b) => String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
+    }
+    const owner_pivots = buildOwnerPivots();
     function applyFilter() {
       const q = document.getElementById('filter').value.toLowerCase();
       const match = row => JSON.stringify(row).toLowerCase().includes(q);
       renderTable('findings', data.findings.filter(match));
       renderTable('conflicts', data.conflicts.filter(match));
       renderTable('owners', data.owner_mappings.filter(match));
+      renderTable('owner-pivots', owner_pivots.filter(match));
       renderTable('groups', data.group_edges.filter(match));
       renderTable('events', data.scan_events.filter(match));
     }

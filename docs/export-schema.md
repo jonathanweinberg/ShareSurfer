@@ -77,6 +77,8 @@ Expected columns: `Pattern`, `Owner`, `BusinessUnit`, `Source`.
 
 Use this file for business ownership rules such as path prefixes, share names, or imported mapping tables.
 
+When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV must include `Pattern`, `Owner`, and `BusinessUnit`; `Source` is optional and defaults to `OwnerMappingPath`.
+
 ### `conflicts.csv`
 
 Expected columns: `ConflictId`, `ConflictType`, `ShareId`, `ItemId`, `Identity`, `ShareRights`, `NtfsRights`, `Severity`, `Message`.

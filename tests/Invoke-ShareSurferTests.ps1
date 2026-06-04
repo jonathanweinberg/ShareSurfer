@@ -310,6 +310,31 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan imports owner mapping CSVs for business-unit pivots'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $mappingPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMap-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    Pattern = '\\files01\Finance*'
+                    Owner = 'Finance Operations'
+                    BusinessUnit = 'Finance'
+                    Source = 'unit-test-csv'
+                }
+            ) | Export-Csv -LiteralPath $mappingPath -NoTypeInformation -Encoding UTF8
+            $inventory = New-TestInventory
+            $inventory.OwnerMappings = @()
+
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -OwnerMappingPath $mappingPath -SkipIdentityEnrichment | Out-Null
+            $ownerMappings = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_mappings.csv')
+
+            Assert-Equal $ownerMappings[0].Pattern '\\files01\Finance*' 'Owner mapping pattern should be imported from CSV.'
+            Assert-Equal $ownerMappings[0].BusinessUnit 'Finance' 'Owner mapping business unit should be imported from CSV.'
+            Assert-Equal $ownerMappings[0].Source 'unit-test-csv' 'Owner mapping source should be imported from CSV.'
+        }
+    },
+    @{
         Name = 'Test-ShareSurferExport validates the normalized CSV set'
         Body = {
             Import-Module $moduleManifest -Force
@@ -340,6 +365,8 @@ $tests = @(
             Assert-True ($report -like '*type="application/json"*') 'Report should embed scan data as application/json rather than executable JavaScript.'
             Assert-True ($report -notlike '*innerHTML = columns.map*') 'Report table rendering must not inject CSV-derived values with innerHTML.'
             Assert-True ($report -like '*Scan Events*') 'Report should expose scan event logs.'
+            Assert-True ($report -like '*Business Unit Pivots*') 'Report should expose business-unit pivots.'
+            Assert-True ($report -like '*owner_pivots*') 'Report should build owner pivots from exported mappings and items.'
         }
     },
     @{

@@ -61,6 +61,7 @@ $exportPath = 'C:\ShareSurfer\exports\scan-2026-06-04'
 Invoke-ShareSurferScan `
   -TargetPath '\\files01\Finance' `
   -OutputPath $exportPath `
+  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -ObsAttribute 'extensionAttribute10'
@@ -120,5 +121,7 @@ Use the report as a triage guide, not as the only source of truth.
 - `findings` highlight migration and governance risks such as broken inheritance, deep explicit ACEs, and long paths.
 - `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, and where the owner sits in the organization.
+
+Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards, for example `\\files01\Finance*`.
 
 Path findings need careful wording. Microsoft documents Azure Files limits of 255-character path components and 2,048-character full paths. ShareSurfer's default warning for full paths over 256 characters is an operational migration policy, not the Azure Files hard full-path limit.
