@@ -164,6 +164,7 @@ Use the report dashboard as a triage guide, not as the only source of truth.
 - `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, and where the owner sits in the organization.
 - Start with the executive summary, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
+- Use the visual risk rollups to quickly filter the dashboard by finding type, conflict type, owner, or business unit before opening the detailed rows.
 - Use the group browser when a security group is assigned rights and the business unit needs to see the expanded membership path.
 
 Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards, for example `\\files01\Finance*`.

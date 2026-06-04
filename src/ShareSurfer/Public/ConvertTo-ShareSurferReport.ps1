@@ -176,6 +176,70 @@ function ConvertTo-ShareSurferReport {
       font-size: 13px;
       line-height: 1.35;
     }
+    .visual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .chart {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--panel);
+      min-height: 210px;
+    }
+    .chart h3 {
+      margin-bottom: 12px;
+    }
+    .bar-list {
+      display: grid;
+      gap: 9px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(86px, 1fr) minmax(120px, 2fr) auto;
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      border-radius: 6px;
+      padding: 8px;
+      background: #ffffff;
+      cursor: pointer;
+      text-align: left;
+    }
+    .bar-row:hover, .bar-row:focus {
+      outline: 2px solid #99f6e4;
+      outline-offset: 1px;
+    }
+    .bar-label {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .bar-track {
+      height: 12px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      min-width: 3px;
+      border-radius: 999px;
+      background: var(--blue);
+    }
+    .bar-fill.high { background: var(--bad); }
+    .bar-fill.warning { background: var(--warn); }
+    .bar-fill.owner { background: var(--accent); }
+    .bar-value {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 28px;
+      text-align: right;
+    }
     .panel {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -309,6 +373,24 @@ function ConvertTo-ShareSurferReport {
       <div class="panel">
         <h2>Executive Summary</h2>
         <div class="summary" id="summary"></div>
+      </div>
+      <div class="panel">
+        <h2>Visual Risk Rollups</h2>
+        <p class="note">Click a bar to filter the dashboard to that risk, conflict, owner, or business unit.</p>
+        <div class="visual-grid">
+          <div class="chart" data-chart="finding">
+            <h3>Findings by Type</h3>
+            <div class="bar-list" id="finding-chart"></div>
+          </div>
+          <div class="chart" data-chart="conflict">
+            <h3>Conflicts by Type</h3>
+            <div class="bar-list" id="conflict-chart"></div>
+          </div>
+          <div class="chart" data-chart="owner">
+            <h3>Business Units by Matching Items</h3>
+            <div class="bar-list" id="owner-chart"></div>
+          </div>
+        </div>
       </div>
       <div class="two-column">
         <div class="panel">
@@ -617,11 +699,78 @@ function ConvertTo-ShareSurferReport {
         IsTruncated: edge.IsTruncated || ''
       }));
     }
+    function takeTopRows(rows, valueField, limit) {
+      return asRows(rows)
+        .slice()
+        .sort((a, b) => Number(b[valueField] || 0) - Number(a[valueField] || 0))
+        .slice(0, limit);
+    }
+    function buildOwnerChartRows() {
+      const rollups = new Map();
+      owner_pivots.forEach(pivot => {
+        const key = pivot.BusinessUnit || pivot.Owner || 'Unmapped';
+        if (!rollups.has(key)) {
+          rollups.set(key, { Label: key, Count: 0, FilterValue: key });
+        }
+        rollups.get(key).Count += Number(pivot.MatchingItems || 0);
+      });
+      return takeTopRows(Array.from(rollups.values()), 'Count', 6);
+    }
+    function focusDashboardValue(value, viewName) {
+      const filter = document.getElementById('filter');
+      filter.value = String(value || '');
+      applyFilter();
+      showView(viewName || 'findings');
+      filter.focus();
+    }
+    function renderBarChart(id, rows, options) {
+      const target = document.getElementById(id);
+      target.textContent = '';
+      const safeRows = takeTopRows(rows, options.valueField, options.limit || 6);
+      if (safeRows.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'No data to chart';
+        target.appendChild(empty);
+        return;
+      }
+      const maxValue = Math.max(...safeRows.map(row => Number(row[options.valueField] || 0)), 1);
+      safeRows.forEach(row => {
+        const label = String(row[options.labelField] || 'Unspecified');
+        const value = Number(row[options.valueField] || 0);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'bar-row';
+        button.title = 'Filter dashboard to ' + label;
+        button.addEventListener('click', () => focusDashboardValue(row.FilterValue || label, options.viewName));
+
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'bar-label';
+        labelSpan.textContent = label;
+        const track = document.createElement('span');
+        track.className = 'bar-track';
+        const fill = document.createElement('span');
+        fill.className = 'bar-fill ' + (options.fillClass || '');
+        fill.style.width = String(Math.max(4, Math.round((value / maxValue) * 100))) + '%';
+        track.appendChild(fill);
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'bar-value';
+        valueSpan.textContent = String(value);
+
+        button.appendChild(labelSpan);
+        button.appendChild(track);
+        button.appendChild(valueSpan);
+        target.appendChild(button);
+      });
+    }
     const owner_pivots = buildOwnerPivots();
     const finding_rollups = buildRollups(data.findings, ['FindingType', 'Severity']);
     const conflict_rollups = buildRollups(data.conflicts, ['ConflictType', 'Severity']);
     const org_rollups = buildOrgChainRollups();
     const group_browser_rows = buildGroupBrowserRows();
+    const finding_chart_rows = buildRollups(data.findings, ['FindingType']).map(row => ({ Label: row.FindingType || 'Unspecified', Count: row.Count, FilterValue: row.FindingType || '' }));
+    const conflict_chart_rows = buildRollups(data.conflicts, ['ConflictType']).map(row => ({ Label: row.ConflictType || 'Unspecified', Count: row.Count, FilterValue: row.ConflictType || '' }));
+    const owner_chart_rows = buildOwnerChartRows();
     function applyGroupBrowser() {
       const q = document.getElementById('group-filter').value.toLowerCase();
       const match = row => JSON.stringify(row).toLowerCase().includes(q);
@@ -655,6 +804,9 @@ function ConvertTo-ShareSurferReport {
     document.getElementById('filter').addEventListener('input', applyFilter);
     document.getElementById('group-filter').addEventListener('input', applyGroupBrowser);
     renderSummary();
+    renderBarChart('finding-chart', finding_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'warning', viewName: 'findings' });
+    renderBarChart('conflict-chart', conflict_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'high', viewName: 'conflicts' });
+    renderBarChart('owner-chart', owner_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'owner', viewName: 'owners' });
     renderPriorityActions();
     updateOverallRisk();
     applyFilter();

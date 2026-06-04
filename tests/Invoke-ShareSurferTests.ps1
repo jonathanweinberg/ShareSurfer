@@ -639,6 +639,12 @@ $tests = @(
             Assert-True ($report -like '*renderPriorityActions*') 'Report should dynamically build priority actions from exported data.'
             Assert-True ($report -like '*showView*') 'Report should dynamically switch dashboard views.'
             Assert-True ($report -like '*risk-badge*') 'Report should include visual risk badges for business users.'
+            Assert-True ($report -like '*Visual Risk Rollups*') 'Report should include visual risk rollups for business reviewers.'
+            Assert-True ($report -like '*data-chart="finding"*') 'Report should expose a finding chart container.'
+            Assert-True ($report -like '*data-chart="conflict"*') 'Report should expose a conflict chart container.'
+            Assert-True ($report -like '*data-chart="owner"*') 'Report should expose an owner/business-unit chart container.'
+            Assert-True ($report -like '*renderBarChart*') 'Report should render offline native bar charts from embedded CSV data.'
+            Assert-True ($report -like '*focusDashboardValue*') 'Report should support chart-driven drilldown filtering.'
         }
     },
     @{

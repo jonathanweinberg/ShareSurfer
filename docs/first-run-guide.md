@@ -192,6 +192,7 @@ Use the dashboard to review:
 
 - Executive summary cards.
 - Priority actions.
+- Visual risk rollups. Click a bar to filter the dashboard to that finding type, conflict type, owner, or business unit.
 - Dashboard-level search and view tabs.
 - Business-unit and owner pivots.
 - Finding rollups.
