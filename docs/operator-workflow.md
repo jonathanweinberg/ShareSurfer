@@ -63,7 +63,7 @@ The enterprise profile must additionally prove:
 - Owner/business-unit mappings and generated owner-risk pivot rows.
 - Estimated generated lab data under the default 2 GiB file-data budget. The 8 GiB ceiling is reserved for explicit stress runs.
 
-See [Scaled lab generator spec](scaled-lab-generator-spec.md) for the enterprise defaults, count formulas, disk-budget math, and plan/live acceptance criteria.
+See [Scaled lab generator spec](scaled-lab-generator-spec.md) for the enterprise defaults, count formulas, disk-budget math, and plan/live acceptance criteria. Before running the live enterprise validation, use the [Windows lab readiness checklist](windows-lab-readiness-checklist.md) to confirm host prerequisites, permissions, disk budget, preflight gates, and expected evidence artifacts.
 
 For a repeatable Windows Server validation run, use the script from the repository root:
 

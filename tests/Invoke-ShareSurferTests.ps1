@@ -1646,6 +1646,7 @@ $tests = @(
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
+            $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
             $readme = Join-Path $repoRoot 'README.md'
             $expectedVisuals = @(
                 'collector-to-report.svg',
@@ -1683,6 +1684,7 @@ $tests = @(
             Assert-True ($pesterWrapperText -like '*Invoke-ShareSurferTests.ps1*') 'Pester wrapper should run the fast dependency-free test suite.'
             $readmeText = Get-Content -LiteralPath $readme -Raw
             Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
+            Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
@@ -1713,12 +1715,23 @@ $tests = @(
             Assert-True ($managementText -like '*visuals/report-dashboard-findings.png*') 'Management overview should include an example findings screenshot.'
             Assert-True ($managementText -like '*visuals/report-dashboard-migration.png*') 'Management overview should include an example migration discovery screenshot.'
 
+            Assert-True (Test-Path -LiteralPath $labReadinessChecklist) 'Documentation should include a Windows lab readiness checklist.'
+            $labReadinessText = Get-Content -LiteralPath $labReadinessChecklist -Raw
+            Assert-True ($labReadinessText -like '*Run Preflight First*') 'Lab readiness checklist should tell operators to run preflight first.'
+            Assert-True ($labReadinessText -like '*-PreflightOnly*') 'Lab readiness checklist should include the preflight-only command.'
+            Assert-True ($labReadinessText -like '*-Scale Enterprise*') 'Lab readiness checklist should include the enterprise validation command.'
+            Assert-True ($labReadinessText -like '*v1-acceptance-summary.json*') 'Lab readiness checklist should explain the concise acceptance artifact.'
+            Assert-True ($labReadinessText -like '*support-bundle-redacted*') 'Lab readiness checklist should explain the redacted support bundle artifact.'
+            Assert-True ($labReadinessText -like '*Go Gates*') 'Lab readiness checklist should include go gates.'
+            Assert-True ($labReadinessText -like '*Stop Gates*') 'Lab readiness checklist should include stop gates.'
+
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
                 Get-Content -LiteralPath $visualDoc -Raw
                 Get-Content -LiteralPath $firstRunGuide -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
+                Get-Content -LiteralPath $labReadinessChecklist -Raw
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
                 Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
             ) -join "`n"
