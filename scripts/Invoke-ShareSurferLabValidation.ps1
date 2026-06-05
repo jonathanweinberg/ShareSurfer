@@ -86,7 +86,7 @@ if ($RequireLiveEvidence -and -not $liveEvidence.IsValid) {
 }
 
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
-New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport | Out-Null
+New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
 $acceptanceScriptPath = Join-Path $PSScriptRoot 'Test-ShareSurferV1Acceptance.ps1'
 $acceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence
 $acceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptancePath -Encoding UTF8

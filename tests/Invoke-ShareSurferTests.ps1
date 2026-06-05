@@ -1140,6 +1140,7 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
             $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBundle-' + [guid]::NewGuid().ToString('N'))
+            $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRun-' + [guid]::NewGuid().ToString('N'))
             $inventory = New-TestInventory
             $inventory | Add-Member -MemberType NoteProperty -Name ScanEvents -Value @(
                 [pscustomobject]@{
@@ -1156,8 +1157,36 @@ $tests = @(
             )
             Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
             ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath (Join-Path $outputPath 'report.html') | Out-Null
+            New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+            @(
+                [pscustomobject]@{ Name = 'WindowsCollectorHost'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'RunRoot=C:\ShareSurfer\lab-validation\CONTOSO; Group=CONTOSO\FinanceEditors'; NextAction = 'No action needed.' },
+                [pscustomobject]@{ Name = 'PlanCriteria'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = '\\files01\Finance passed synthetic validation'; NextAction = 'No action needed.' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-preflight.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users'; Passed = $true; EvidenceSource = 'ActiveDirectory'; EvidenceDetail = 'Checked CONTOSO\FinanceEditors in C:\ShareSurferLab'; Description = 'Users' },
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'shares'; Passed = $true; EvidenceSource = 'ScanExport:shares.csv'; EvidenceDetail = 'Scanned \\files01\Finance'; Description = 'Shares' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-validation-criteria.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ActiveDirectory'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Manager chain includes CONTOSO\FinanceEditors'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:shares.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = '\\files01\Finance evidence'; NextAction = 'No action needed for this criterion.' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'live-evidence-review.csv') -NoTypeInformation -Encoding UTF8
+            [pscustomobject]@{
+                IsValid = $true
+                FallbackCount = 0
+                FallbackCriteria = @()
+                FallbackEvidenceSources = @()
+            } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $runRoot 'live-evidence.json') -Encoding UTF8
+            [pscustomobject]@{
+                IsValid = $true
+                RequireLiveEvidence = $true
+                FailedCheckCount = 0
+                Checks = @(
+                    [pscustomobject]@{ Name = 'LabPreflight'; Passed = $true; Detail = 'Preflight=C:\ShareSurfer\lab-validation\CONTOSO\lab-preflight.csv' },
+                    [pscustomobject]@{ Name = 'RedactedSupportBundle'; Passed = $true; Detail = 'Bundle=C:\ShareSurfer\lab-validation\CONTOSO\support-bundle-redacted' }
+                )
+            } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
 
-            New-ShareSurferSupportBundle -ExportPath $outputPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'unit-test' -IncludeReport | Out-Null
+            New-ShareSurferSupportBundle -ExportPath $outputPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'unit-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $rawEventLogPath = Join-Path $outputPath 'scan_events.jsonl'
             $redactedEventLogPath = Join-Path $bundlePath 'scan_events.jsonl'
             $rawEventLog = Get-Content -LiteralPath $rawEventLogPath -Raw
@@ -1172,6 +1201,7 @@ $tests = @(
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
             $bundleSummaryPath = Join-Path $bundlePath 'support_bundle_summary.json'
             $bundleDiagnosticsPath = Join-Path $bundlePath 'support_bundle_diagnostics.json'
+            $labRunDiagnosticsPath = Join-Path $bundlePath 'lab_run_diagnostics.json'
             $redactionAuditPath = Join-Path $bundlePath 'support_bundle_redaction_audit.csv'
 
             Assert-True ($rawEventLog -like '*CONTOSO*') 'Raw JSONL event log should preserve source values for trusted internal debugging.'
@@ -1212,6 +1242,7 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $bundleFilesPath) 'Support bundle should include per-file diagnostics.'
             Assert-True (Test-Path -LiteralPath $bundleSummaryPath) 'Support bundle should include a redacted JSON summary for support triage.'
             Assert-True (Test-Path -LiteralPath $bundleDiagnosticsPath) 'Support bundle should include redacted diagnostics for support triage.'
+            Assert-True (Test-Path -LiteralPath $labRunDiagnosticsPath) 'Support bundle should include redacted lab-run diagnostics when a run root is supplied.'
             Assert-True (Test-Path -LiteralPath $redactionAuditPath) 'Support bundle should include a redaction leak audit.'
 
             $bundleManifest = Import-Csv -LiteralPath $bundleManifestPath
@@ -1220,17 +1251,27 @@ $tests = @(
             $bundleSummary = $bundleSummaryText | ConvertFrom-Json
             $bundleDiagnosticsText = Get-Content -LiteralPath $bundleDiagnosticsPath -Raw
             $bundleDiagnostics = $bundleDiagnosticsText | ConvertFrom-Json
+            $labRunDiagnosticsText = Get-Content -LiteralPath $labRunDiagnosticsPath -Raw
+            $labRunDiagnostics = $labRunDiagnosticsText | ConvertFrom-Json
             $redactionAudit = Import-Csv -LiteralPath $redactionAuditPath
             Assert-Equal $bundleManifest[0].RedactionMode 'StableToken' 'Support bundle manifest should record the redaction mode.'
             Assert-Equal $bundleManifest[0].ValidationIsValid 'True' 'Support bundle manifest should record validation status.'
             Assert-Equal $bundleManifest[0].ReportIncluded 'True' 'Support bundle manifest should record that the redacted report was included.'
+            Assert-Equal $bundleManifest[0].LabRunIncluded 'True' 'Support bundle manifest should record that lab-run evidence was included.'
             Assert-Equal $bundleManifest[0].RedactionLeakCount '0' 'Support bundle manifest should record zero redaction leaks.'
             Assert-Equal $bundleSummary.BundleType 'ShareSurferRedactedSupportBundle' 'Support bundle summary should identify the bundle type.'
             Assert-Equal ([string]$bundleSummary.Validation.IsValid) 'True' 'Support bundle summary should record validation status.'
+            Assert-Equal ([string]$bundleSummary.LabRunIncluded) 'True' 'Support bundle summary should record lab-run evidence inclusion.'
             Assert-Equal ([int]$bundleSummary.Redaction.LeakCount) 0 'Support bundle summary should record redaction leak count.'
             Assert-Equal $bundleSummary.Diagnostics.FileName 'support_bundle_diagnostics.json' 'Support bundle summary should reference diagnostics JSON.'
             Assert-Equal $bundleDiagnostics.BundleType 'ShareSurferRedactedSupportBundleDiagnostics' 'Support bundle diagnostics should identify the diagnostics type.'
             Assert-Equal ([string]$bundleDiagnostics.Validation.IsValid) 'True' 'Support bundle diagnostics should record validation status.'
+            Assert-Equal ([string]$bundleDiagnostics.LabRunEvidence.Included) 'True' 'Support bundle diagnostics should record lab-run evidence inclusion.'
+            Assert-True ([int]$bundleDiagnostics.LabRunEvidence.FileCount -gt 0) 'Support bundle diagnostics should summarize lab-run evidence files.'
+            Assert-Equal $labRunDiagnostics.BundleType 'ShareSurferRedactedLabRunDiagnostics' 'Lab-run diagnostics should identify the diagnostics type.'
+            Assert-Equal ([int]$labRunDiagnostics.Preflight.RowCount) 2 'Lab-run diagnostics should summarize redacted preflight evidence.'
+            Assert-Equal ([int]$labRunDiagnostics.Criteria.RowCount) 2 'Lab-run diagnostics should summarize redacted criteria evidence.'
+            Assert-Equal ([string]$labRunDiagnostics.Acceptance.IsValid) 'True' 'Lab-run diagnostics should summarize acceptance when an acceptance artifact exists.'
             Assert-True ([int]$bundleDiagnostics.Inventory.FindingCount -gt 0) 'Support bundle diagnostics should summarize finding counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.ConflictCount -gt 0) 'Support bundle diagnostics should summarize conflict counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.ScanEventCount -gt 0) 'Support bundle diagnostics should summarize scan events.'
@@ -1245,6 +1286,11 @@ $tests = @(
             Assert-True ($bundleDiagnosticsText -notlike '*CONTOSO*') 'Support bundle diagnostics must not contain source domain names.'
             Assert-True ($bundleDiagnosticsText -notlike '*FinanceEditors*') 'Support bundle diagnostics must not contain source group names.'
             Assert-True ($bundleDiagnosticsText -notlike '*unit-test*') 'Support bundle diagnostics must not expose the redaction salt.'
+            Assert-True ($labRunDiagnosticsText -notlike '*CONTOSO*') 'Lab-run diagnostics must not contain source domain names.'
+            Assert-True ($labRunDiagnosticsText -notlike '*FinanceEditors*') 'Lab-run diagnostics must not contain source group names.'
+            Assert-True ($labRunDiagnosticsText -notlike '*files01*') 'Lab-run diagnostics must not contain source server names.'
+            Assert-True ($labRunDiagnosticsText -notlike '*unit-test*') 'Lab-run diagnostics must not expose the redaction salt.'
+            Assert-True ($labRunDiagnosticsText -like '*ID-*') 'Lab-run diagnostics should preserve relationships with stable tokens.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'related_data_areas.csv') 'Support bundle file diagnostics should include related data areas.'
@@ -1253,6 +1299,12 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_diagnostics.json') 'Support bundle file diagnostics should include the redacted diagnostics JSON.'
+            Assert-True ($bundleFiles.FileName -contains 'lab_run_diagnostics.json') 'Support bundle file diagnostics should include redacted lab-run diagnostics.'
+            Assert-True ($bundleFiles.FileName -contains 'lab_preflight.csv') 'Support bundle file diagnostics should include redacted lab preflight evidence.'
+            Assert-True ($bundleFiles.FileName -contains 'lab_validation_criteria.csv') 'Support bundle file diagnostics should include redacted lab validation criteria.'
+            Assert-True ($bundleFiles.FileName -contains 'live_evidence_review.csv') 'Support bundle file diagnostics should include redacted live evidence review.'
+            Assert-True ($bundleFiles.FileName -contains 'live_evidence.json') 'Support bundle file diagnostics should include live evidence summary.'
+            Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Support bundle file diagnostics should include acceptance summary when present.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_redaction_audit.csv') 'Support bundle file diagnostics should include redaction audit diagnostics.'
             Assert-True ($redactionAudit.Count -gt 0) 'Redaction audit should include checked sensitive source values.'
             Assert-True (@($redactionAudit | Where-Object { $_.LeakDetected -eq 'True' }).Count -eq 0) 'Redaction audit should not detect leaked source values.'
@@ -1282,7 +1334,6 @@ $tests = @(
 
             Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
             ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
-            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport | Out-Null
             @(
                 [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users'; Passed = $true; EvidenceSource = 'ActiveDirectory'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Users' },
                 [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'shares'; Passed = $true; EvidenceSource = 'ScanExport:shares.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Shares' }
@@ -1301,6 +1352,7 @@ $tests = @(
                 [pscustomobject]@{ Name = 'WindowsCollectorHost'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'Synthetic acceptance proof'; NextAction = 'No action needed.' },
                 [pscustomobject]@{ Name = 'PlanCriteria'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'Synthetic acceptance proof'; NextAction = 'No action needed.' }
             ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-preflight.csv') -NoTypeInformation -Encoding UTF8
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
 
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
             $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
@@ -1310,6 +1362,7 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
             Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
             Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
+            Assert-True ($result.Checks.Name -contains 'LabRunSupportBundleEvidence') 'Acceptance checks should include redacted lab-run support bundle evidence.'
             Assert-True ($result.Checks.Name -contains 'LabPreflight') 'Acceptance checks should include lab preflight readiness evidence.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
@@ -1330,6 +1383,7 @@ $tests = @(
                     ExportFileCount = $goodBundleManifest[0].ExportFileCount
                     DiagnosticFileCount = $goodBundleManifest[0].DiagnosticFileCount
                     ReportIncluded = $goodBundleManifest[0].ReportIncluded
+                    LabRunIncluded = $goodBundleManifest[0].LabRunIncluded
                     RedactionAuditCount = $goodBundleManifest[0].RedactionAuditCount
                     RedactionLeakCount = '1'
                     ValidationIsValid = 'False'
@@ -1388,6 +1442,7 @@ $tests = @(
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
             Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'
             Assert-True ($labValidationScript -like '*LiveEvidenceReviewPath*') 'Lab validation output should include the live evidence review artifact path.'
+            Assert-True ($labValidationScript -like '*-RunRoot $runRoot*') 'Lab validation should include redacted lab-run evidence in generated support bundles.'
         }
     },
     @{

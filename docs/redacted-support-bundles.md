@@ -21,6 +21,17 @@ New-ShareSurferSupportBundle `
   -IncludeReport
 ```
 
+When the bundle is for a ShareSurfer lab validation run, include the run folder too. The lab validation script does this automatically.
+
+```powershell
+New-ShareSurferSupportBundle `
+  -ExportPath 'C:\ShareSurfer\lab-validation\20260604-193000\export' `
+  -OutputPath 'C:\ShareSurfer\lab-validation\20260604-193000\support-bundle-redacted' `
+  -RedactionMode StableToken `
+  -IncludeReport `
+  -RunRoot 'C:\ShareSurfer\lab-validation\20260604-193000'
+```
+
 Validate the bundle before sharing:
 
 ```powershell
@@ -80,6 +91,7 @@ A useful support bundle includes:
 - `support_bundle_summary.json` with a quick redacted bundle health summary, validation result, redaction status, and file inventory.
 - `support_bundle_diagnostics.json` with redacted scan settings, export counts, finding/conflict rollups, partial-share counts, and collection-error counts for support triage.
 - `support_bundle_redaction_audit.csv` with checked source-value tokens, leak status, and leak file names when any are found.
+- `lab_run_diagnostics.json`, `lab_preflight.csv`, `lab_validation_criteria.csv`, `live_evidence_review.csv`, and `live_evidence.json` when `-RunRoot` is used for a lab validation run.
 - Any validation result from `Test-ShareSurferExport`.
 - A regenerated redacted `report.html`, when `-IncludeReport` is used.
 
@@ -95,6 +107,7 @@ Before sending a support bundle outside the trusted team:
 4. Confirm `support_bundle_manifest.csv` shows `RedactionLeakCount` as `0`.
 5. Confirm `support_bundle_summary.json` shows `Validation.IsValid=True` and `Redaction.LeakCount=0`.
 6. Review `support_bundle_diagnostics.json` for safe scan settings, counts, and collection-health context.
-7. Confirm `support_bundle_redaction_audit.csv` has no rows with `LeakDetected=True`.
-8. Confirm the Azure path policy threshold and explicit ACE depth threshold are still visible.
-9. Share the smallest bundle that answers the support question.
+7. For lab validation bundles, review `lab_run_diagnostics.json` and the redacted lab evidence CSVs for pass/fail context.
+8. Confirm `support_bundle_redaction_audit.csv` has no rows with `LeakDetected=True`.
+9. Confirm the Azure path policy threshold and explicit ACE depth threshold are still visible.
+10. Share the smallest bundle that answers the support question.

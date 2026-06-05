@@ -12,7 +12,9 @@ function New-ShareSurferSupportBundle {
 
         [string] $RedactionSalt = '',
 
-        [switch] $IncludeReport
+        [switch] $IncludeReport,
+
+        [string] $RunRoot = ''
     )
 
     if ($RedactionSalt -eq '') {
@@ -65,6 +67,16 @@ function New-ShareSurferSupportBundle {
         })
     }
 
+    $labRunIncluded = $false
+    $labRunFileDiagnostics = @()
+    if (-not [string]::IsNullOrWhiteSpace($RunRoot)) {
+        $labRunFileDiagnostics = @(New-ShareSurferSupportBundleLabRunEvidence -RunRoot $RunRoot -BundlePath $OutputPath -GeneratedAt $generatedAt -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
+        foreach ($diagnostic in $labRunFileDiagnostics) {
+            [void]$fileDiagnostics.Add($diagnostic)
+        }
+        $labRunIncluded = ($labRunFileDiagnostics.Count -gt 0)
+    }
+
     $redactionAuditPath = Join-Path $OutputPath 'support_bundle_redaction_audit.csv'
     $redactionAudit = @(New-ShareSurferRedactionAudit -ExportPath $ExportPath -BundlePath $OutputPath -Schema $schema -RedactionSalt $RedactionSalt)
     $redactionAudit | Export-Csv -LiteralPath $redactionAuditPath -NoTypeInformation -Encoding UTF8
@@ -76,7 +88,7 @@ function New-ShareSurferSupportBundle {
     $redactionLeakCount = @($redactionAudit | Where-Object { $_.LeakDetected }).Count
 
     $diagnosticsPath = Join-Path $OutputPath 'support_bundle_diagnostics.json'
-    $diagnostics = New-ShareSurferSupportBundleDiagnostics -BundlePath $OutputPath -GeneratedAt $generatedAt -RedactionMode $RedactionMode -ReportIncluded:$reportIncluded -Validation $validation -RedactionLeakCount $redactionLeakCount -FileDiagnostics $fileDiagnostics
+    $diagnostics = New-ShareSurferSupportBundleDiagnostics -BundlePath $OutputPath -GeneratedAt $generatedAt -RedactionMode $RedactionMode -ReportIncluded:$reportIncluded -LabRunIncluded:$labRunIncluded -LabRunFileDiagnostics $labRunFileDiagnostics -Validation $validation -RedactionLeakCount $redactionLeakCount -FileDiagnostics $fileDiagnostics
     $diagnostics | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $diagnosticsPath -Encoding UTF8
     [void]$fileDiagnostics.Add([pscustomobject]@{
         FileName = 'support_bundle_diagnostics.json'
@@ -91,6 +103,7 @@ function New-ShareSurferSupportBundle {
         RedactionMode = $RedactionMode
         RelationshipPreserving = [bool]($RedactionMode -eq 'StableToken')
         ReportIncluded = [bool]$reportIncluded
+        LabRunIncluded = [bool]$labRunIncluded
         Validation = [ordered]@{
             IsValid = [bool]$validation.IsValid
             MissingFileCount = @($validation.MissingFiles).Count
@@ -137,6 +150,7 @@ function New-ShareSurferSupportBundle {
             ExportFileCount = @($schema.Keys).Count
             DiagnosticFileCount = @($fileDiagnostics).Count
             ReportIncluded = [bool]$reportIncluded
+            LabRunIncluded = [bool]$labRunIncluded
             RedactionAuditCount = @($redactionAudit).Count
             RedactionLeakCount = [int]$redactionLeakCount
             ValidationIsValid = [bool]$validation.IsValid
@@ -154,6 +168,7 @@ function New-ShareSurferSupportBundle {
         ('RedactionMode={0}' -f $RedactionMode),
         ('ValidationIsValid={0}' -f [bool]$validation.IsValid),
         ('ReportIncluded={0}' -f [bool]$reportIncluded),
+        ('LabRunIncluded={0}' -f [bool]$labRunIncluded),
         ('RedactionLeakCount={0}' -f [int]$redactionLeakCount),
         'Relationship-preserving StableToken mode uses salted synthetic IDs and does not include the salt in this bundle.',
         'support_bundle_manifest.csv records bundle-level diagnostics.',
@@ -161,7 +176,8 @@ function New-ShareSurferSupportBundle {
         'support_bundle_summary.json provides a quick redacted bundle health summary for support triage.',
         'support_bundle_diagnostics.json summarizes redacted scan settings, export counts, findings, conflicts, partial shares, and collection errors.',
         'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
-        'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.'
+        'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.',
+        'lab_run_diagnostics.json is included when a lab validation run root was supplied.'
     ) -Encoding UTF8
 
     [pscustomobject]@{
@@ -169,7 +185,198 @@ function New-ShareSurferSupportBundle {
         RedactionMode = $RedactionMode
         ValidationIsValid = [bool]$validation.IsValid
         ReportIncluded = [bool]$reportIncluded
+        LabRunIncluded = [bool]$labRunIncluded
         RedactionLeakCount = [int]$redactionLeakCount
+    }
+}
+
+function New-ShareSurferSupportBundleLabRunEvidence {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $RunRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string] $BundlePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $GeneratedAt,
+
+        [ValidateSet('StableToken', 'Strict')]
+        [string] $RedactionMode = 'StableToken',
+
+        [string] $RedactionSalt = 'ShareSurfer'
+    )
+
+    $fileDiagnostics = New-Object System.Collections.ArrayList
+    if (-not (Test-Path -LiteralPath $RunRoot)) {
+        return @()
+    }
+
+    $includedFiles = New-Object System.Collections.ArrayList
+    $preflightRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-preflight.csv') -DestinationPath (Join-Path $BundlePath 'lab_preflight.csv') -RedactColumns @('Evidence') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
+    if ($preflightRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_preflight.csv'))) {
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_preflight.csv') -FileName 'lab_preflight.csv' -RowCount $preflightRows.Count))
+        [void]$includedFiles.Add('lab_preflight.csv')
+    }
+
+    $criteriaRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-validation-criteria.csv') -DestinationPath (Join-Path $BundlePath 'lab_validation_criteria.csv') -RedactColumns @('EvidenceDetail') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
+    if ($criteriaRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_validation_criteria.csv'))) {
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_validation_criteria.csv') -FileName 'lab_validation_criteria.csv' -RowCount $criteriaRows.Count))
+        [void]$includedFiles.Add('lab_validation_criteria.csv')
+    }
+
+    $reviewRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'live-evidence-review.csv') -DestinationPath (Join-Path $BundlePath 'live_evidence_review.csv') -RedactColumns @('EvidenceDetail') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
+    if ($reviewRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'live_evidence_review.csv'))) {
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'live_evidence_review.csv') -FileName 'live_evidence_review.csv' -RowCount $reviewRows.Count))
+        [void]$includedFiles.Add('live_evidence_review.csv')
+    }
+
+    $liveEvidence = New-ShareSurferRedactedLabJsonSummary -SourcePath (Join-Path $RunRoot 'live-evidence.json') -Kind 'LiveEvidence' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+    if ($null -ne $liveEvidence) {
+        $liveEvidencePath = Join-Path $BundlePath 'live_evidence.json'
+        $liveEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $liveEvidencePath -Encoding UTF8
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $liveEvidencePath -FileName 'live_evidence.json' -RowCount 1))
+        [void]$includedFiles.Add('live_evidence.json')
+    }
+
+    $acceptance = New-ShareSurferRedactedLabJsonSummary -SourcePath (Join-Path $RunRoot 'v1-acceptance.json') -Kind 'Acceptance' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+    if ($null -ne $acceptance) {
+        $acceptancePath = Join-Path $BundlePath 'v1_acceptance.json'
+        $acceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptancePath -Encoding UTF8
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $acceptancePath -FileName 'v1_acceptance.json' -RowCount 1))
+        [void]$includedFiles.Add('v1_acceptance.json')
+    }
+
+    $labDiagnostics = [ordered]@{
+        BundleType = 'ShareSurferRedactedLabRunDiagnostics'
+        GeneratedAt = $GeneratedAt
+        RunRootToken = Protect-ShareSurferValue -Value $RunRoot -ColumnName 'FullPath' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+        IncludedFiles = @($includedFiles)
+        Preflight = [ordered]@{
+            RowCount = $preflightRows.Count
+            FailedRequiredCount = @($preflightRows | Where-Object { [string]$_.Required -eq 'True' -and [string]$_.Passed -ne 'True' }).Count
+        }
+        Criteria = [ordered]@{
+            RowCount = $criteriaRows.Count
+            FailedRequiredCount = @($criteriaRows | Where-Object { [string]$_.Required -eq 'True' -and [string]$_.Passed -ne 'True' }).Count
+        }
+        LiveEvidenceReview = [ordered]@{
+            RowCount = $reviewRows.Count
+            BlockingCount = @($reviewRows | Where-Object { [string]$_.Required -eq 'True' -and @('Failed', 'MissingEvidenceSource', 'PlanOnly', 'EvidenceUnavailable') -contains [string]$_.EvidenceStatus }).Count
+        }
+        LiveEvidence = if ($null -eq $liveEvidence) { $null } else { [ordered]@{ IsValid = $liveEvidence.IsValid; FallbackCount = $liveEvidence.FallbackCount } }
+        Acceptance = if ($null -eq $acceptance) { $null } else { [ordered]@{ IsValid = $acceptance.IsValid; FailedCheckCount = $acceptance.FailedCheckCount } }
+        Notes = @(
+            'This file summarizes lab validation evidence from redacted bundle artifacts.',
+            'Raw run paths and evidence details are replaced with redacted values or stable tokens.',
+            'Use the companion lab evidence files for row-level status review.'
+        )
+    }
+    $labDiagnosticsPath = Join-Path $BundlePath 'lab_run_diagnostics.json'
+    $labDiagnostics | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $labDiagnosticsPath -Encoding UTF8
+    [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $labDiagnosticsPath -FileName 'lab_run_diagnostics.json' -RowCount 1))
+
+    @($fileDiagnostics)
+}
+
+function New-ShareSurferRedactedLabCsv {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $DestinationPath,
+
+        [string[]] $RedactColumns = @(),
+
+        [ValidateSet('StableToken', 'Strict')]
+        [string] $RedactionMode = 'StableToken',
+
+        [string] $RedactionSalt = 'ShareSurfer'
+    )
+
+    if (-not (Test-Path -LiteralPath $SourcePath)) {
+        return @()
+    }
+
+    $rows = @(Import-Csv -LiteralPath $SourcePath)
+    $redactedRows = foreach ($row in $rows) {
+        $record = [ordered]@{}
+        foreach ($property in $row.PSObject.Properties) {
+            $columnName = [string]$property.Name
+            if ($RedactColumns -contains $columnName) {
+                $record[$columnName] = Protect-ShareSurferValue -Value $property.Value -ColumnName 'Detail' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+            }
+            else {
+                $record[$columnName] = [string]$property.Value
+            }
+        }
+        [pscustomobject]$record
+    }
+
+    @($redactedRows) | Export-Csv -LiteralPath $DestinationPath -NoTypeInformation -Encoding UTF8
+    @($redactedRows)
+}
+
+function New-ShareSurferRedactedLabJsonSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('LiveEvidence', 'Acceptance')]
+        [string] $Kind,
+
+        [ValidateSet('StableToken', 'Strict')]
+        [string] $RedactionMode = 'StableToken',
+
+        [string] $RedactionSalt = 'ShareSurfer'
+    )
+
+    if (-not (Test-Path -LiteralPath $SourcePath)) {
+        return $null
+    }
+
+    $source = Get-Content -LiteralPath $SourcePath -Raw | ConvertFrom-Json
+    if ($Kind -eq 'LiveEvidence') {
+        return [ordered]@{
+            IsValid = [bool]$source.IsValid
+            FallbackCount = [int]$source.FallbackCount
+            FallbackCriteria = @($source.FallbackCriteria | ForEach-Object { [string]$_ })
+            FallbackEvidenceSources = @($source.FallbackEvidenceSources | ForEach-Object { [string]$_ })
+        }
+    }
+
+    [ordered]@{
+        IsValid = [bool]$source.IsValid
+        RequireLiveEvidence = [bool]$source.RequireLiveEvidence
+        FailedCheckCount = [int]$source.FailedCheckCount
+        Checks = @($source.Checks | ForEach-Object {
+            [ordered]@{
+                Name = [string]$_.Name
+                Passed = [bool]$_.Passed
+                Detail = Protect-ShareSurferValue -Value $_.Detail -ColumnName 'Detail' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+            }
+        })
+    }
+}
+
+function New-ShareSurferSupportBundleFileDiagnostic {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $FileName,
+
+        [Parameter(Mandatory = $true)]
+        [int] $RowCount
+    )
+
+    [pscustomobject]@{
+        FileName = $FileName
+        RowCount = $RowCount
+        Sha256 = Get-ShareSurferFileSha256 -Path $Path
     }
 }
 
@@ -185,6 +392,10 @@ function New-ShareSurferSupportBundleDiagnostics {
         [string] $RedactionMode,
 
         [switch] $ReportIncluded,
+
+        [switch] $LabRunIncluded,
+
+        $LabRunFileDiagnostics = @(),
 
         [Parameter(Mandatory = $true)]
         $Validation,
@@ -232,6 +443,17 @@ function New-ShareSurferSupportBundleDiagnostics {
         RedactionMode = $RedactionMode
         RelationshipPreserving = [bool]($RedactionMode -eq 'StableToken')
         ReportIncluded = [bool]$ReportIncluded
+        LabRunEvidence = [ordered]@{
+            Included = [bool]$LabRunIncluded
+            FileCount = @($LabRunFileDiagnostics).Count
+            Files = @($LabRunFileDiagnostics | ForEach-Object {
+                [ordered]@{
+                    FileName = [string]$_.FileName
+                    RowCount = [int]$_.RowCount
+                    Sha256 = [string]$_.Sha256
+                }
+            })
+        }
         Validation = [ordered]@{
             IsValid = [bool]$Validation.IsValid
             MissingFileCount = @($Validation.MissingFiles).Count
