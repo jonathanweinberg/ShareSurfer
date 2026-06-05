@@ -104,6 +104,9 @@ function New-ShareSurferLabFixture {
                 if ($null -eq $existing) {
                     New-SmbShare -Name $share.ShareName -Path $share.LocalPath -Description $share.Description -FullAccess 'Administrators' | Out-Null
                 }
+                else {
+                    Assert-ShareSurferLabSmbSharePath -ShareName $share.ShareName -ExistingShare $existing -PlannedPath $share.LocalPath
+                }
                 foreach ($permission in $share.SharePermissions) {
                     $accessRight = switch ($permission.Rights) {
                         'Full' { 'Full' }
@@ -205,4 +208,38 @@ function New-ShareSurferLabFileContent {
 
     $remaining = [int]($SizeBytes - $prefix.Length)
     $prefix + ('x' * $remaining)
+}
+
+function Assert-ShareSurferLabSmbSharePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ShareName,
+
+        [Parameter(Mandatory = $true)]
+        $ExistingShare,
+
+        [Parameter(Mandatory = $true)]
+        [string] $PlannedPath
+    )
+
+    $existingPath = ''
+    if ($ExistingShare.PSObject.Properties['Path']) {
+        $existingPath = [string]$ExistingShare.Path
+    }
+
+    $normalizedExistingPath = ConvertTo-ShareSurferLabComparablePath -Path $existingPath
+    $normalizedPlannedPath = ConvertTo-ShareSurferLabComparablePath -Path $PlannedPath
+    if ($normalizedExistingPath -eq $normalizedPlannedPath) {
+        return
+    }
+
+    throw ("ShareSurfer lab SMB share '{0}' already exists at '{1}', but the lab plan expects '{2}'. Rename or remove the conflicting share before creating the lab fixture." -f $ShareName, $existingPath, $PlannedPath)
+}
+
+function ConvertTo-ShareSurferLabComparablePath {
+    param(
+        [string] $Path = ''
+    )
+
+    ([string]$Path).Trim().TrimEnd('\', '/').ToUpperInvariant()
 }
