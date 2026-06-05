@@ -171,7 +171,7 @@ New-ShareSurferSupportBundle `
 
 Use the report dashboard as a triage guide, not as the only source of truth.
 
-- `shares` and `items` show the collected scope and whether data was partial. A partial share can mean missing share-level permission proof, failed folder enumeration, or ACL read errors; check `PartialReason` and the `CollectionError` findings before treating the scan as complete.
+- `shares` and `items` show the collected scope and whether data was partial. A partial share can mean an unresolved target path, missing share-level permission proof, failed folder enumeration, or ACL read errors; check `PartialReason` and the `CollectionError` findings before treating the scan as complete.
 - `share_permissions` and `acl_entries` show the two permission layers that determine effective access.
 - `conflicts` highlight mismatches such as NTFS identities that are not granted through the share gate.
 - `findings` highlight migration and governance risks such as broken inheritance, deep explicit ACEs, and long paths.
