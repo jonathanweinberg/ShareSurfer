@@ -10,6 +10,7 @@ param(
     [string] $CriteriaPath = '',
     [string] $LiveEvidencePath = '',
     [string] $LiveEvidenceReviewPath = '',
+    [string] $SummaryPath = '',
 
     [switch] $AllowMissingBundledAcceptance,
 
@@ -61,6 +62,35 @@ function New-ShareSurferAcceptanceCheck {
         Name = $Name
         Passed = $Passed
         Detail = $Detail
+    }
+}
+
+function New-ShareSurferAcceptanceSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object] $AcceptanceResult
+    )
+
+    $passedChecks = @($AcceptanceResult.Checks | Where-Object { $_.Passed })
+    $failedChecks = @($AcceptanceResult.Checks | Where-Object { -not $_.Passed })
+    $checkSummary = @($AcceptanceResult.Checks | ForEach-Object {
+            [pscustomobject]@{
+                Name = [string]$_.Name
+                Passed = [bool]$_.Passed
+            }
+        })
+
+    [pscustomobject]@{
+        SummaryType = 'ShareSurferV1AcceptanceSummary'
+        GeneratedAt = (Get-Date).ToUniversalTime().ToString('o')
+        IsValid = [bool]$AcceptanceResult.IsValid
+        RequireLiveEvidence = [bool]$AcceptanceResult.RequireLiveEvidence
+        CheckCount = @($AcceptanceResult.Checks).Count
+        PassedCheckCount = $passedChecks.Count
+        FailedCheckCount = $failedChecks.Count
+        FailedChecks = @($failedChecks | ForEach-Object { [string]$_.Name })
+        Checks = $checkSummary
+        DetailPolicy = 'Detailed evidence remains in v1-acceptance.json; this summary intentionally omits raw check detail values.'
     }
 }
 
@@ -213,7 +243,7 @@ else {
 }
 
 $failedChecks = @($checks | Where-Object { -not $_.Passed })
-[pscustomobject]@{
+$result = [pscustomobject]@{
     IsValid = ($failedChecks.Count -eq 0)
     RunRoot = $RunRoot
     ExportPath = $ExportPath
@@ -227,3 +257,13 @@ $failedChecks = @($checks | Where-Object { -not $_.Passed })
     FailedCheckCount = $failedChecks.Count
     Checks = @($checks)
 }
+
+if (-not [string]::IsNullOrWhiteSpace($SummaryPath)) {
+    $summaryDirectory = Split-Path -Parent $SummaryPath
+    if (-not [string]::IsNullOrWhiteSpace($summaryDirectory)) {
+        New-Item -ItemType Directory -Path $summaryDirectory -Force | Out-Null
+    }
+    New-ShareSurferAcceptanceSummary -AcceptanceResult $result | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $SummaryPath -Encoding UTF8
+}
+
+$result
