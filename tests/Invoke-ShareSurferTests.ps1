@@ -635,6 +635,7 @@ $tests = @(
                 'acl_entries.csv',
                 'identities.csv',
                 'group_edges.csv',
+                'permissioned_groups.csv',
                 'org_chains.csv',
                 'owner_mappings.csv',
                 'owner_risk_pivots.csv',
@@ -683,6 +684,15 @@ $tests = @(
             Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'SuggestedNextAction') 'Related data area CSV should include suggested next actions.'
             Assert-True ([int]$relatedDataAreas[0].ReviewItemCount -ge 1) 'Related data areas should count findings and conflicts that need migration review.'
             Assert-True ([int]$relatedDataAreas[0].DirectGroupCount -ge 1) 'Related data areas should count permissioned groups.'
+
+            $permissionedGroups = Import-Csv -LiteralPath (Join-Path $outputPath 'permissioned_groups.csv')
+            Assert-True ($permissionedGroups.Group -contains 'CONTOSO\FinanceEditors') 'Permissioned group export should include NTFS-assigned groups.'
+            Assert-True ($permissionedGroups.Group -contains 'CONTOSO\FinanceReaders') 'Permissioned group export should include share-assigned groups.'
+            $financeEditorsGroup = @($permissionedGroups | Where-Object { $_.Group -eq 'CONTOSO\FinanceEditors' })[0]
+            Assert-True ([int]$financeEditorsGroup.NtfsAssignments -gt 0) 'Permissioned group export should count NTFS assignments.'
+            Assert-True ([int]$financeEditorsGroup.ExpandedMembers -gt 0) 'Permissioned group export should count expanded members.'
+            Assert-True ($financeEditorsGroup.Rights -like '*Modify*') 'Permissioned group export should preserve observed rights.'
+            Assert-True ($financeEditorsGroup.ExamplePath -like '*Finance*') 'Permissioned group export should include example path context.'
 
             $ownerReviewPackets = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_review_packets.csv')
             Assert-True ($ownerReviewPackets.BusinessUnit -contains 'Finance') 'Owner review packets should expose business-unit review packets as CSV.'
@@ -1077,6 +1087,7 @@ $tests = @(
             Assert-True ($report -like '*Permissioned Group Review*') 'Report should include a group-centric review queue for assigned security groups.'
             Assert-True ($report -like '*permissioned-groups*') 'Report should render permissioned group review rows.'
             Assert-True ($report -like '*buildPermissionedGroupRows*') 'Report should dynamically build permissioned group rows from permissions and group edges.'
+            Assert-True ($report -like '*permissioned_groups.csv*') 'Raw evidence view should expose permissioned groups.'
             Assert-True ($report -like '*focusGroupExpansion*') 'Report should focus the group browser from permissioned group rows.'
             Assert-True ($report -like '*clickable-row*') 'Report should make drilldown rows visibly interactive.'
             Assert-True ($report -like '*Share Gate vs File/Folder Permissions*') 'Report should explain the two-gate access model.'
@@ -1444,6 +1455,7 @@ $tests = @(
             Assert-True ($redactedConflicts -like '*ID-*') 'Conflicts should retain stable tokens for cross-file identity correlation.'
 
             $redactedIdentities = Get-Content -LiteralPath (Join-Path $bundlePath 'identities.csv') -Raw
+            $redactedPermissionedGroups = Get-Content -LiteralPath (Join-Path $bundlePath 'permissioned_groups.csv') -Raw
             $redactedOwners = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_mappings.csv') -Raw
             $redactedOwnerRiskPivots = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_risk_pivots.csv') -Raw
             $redactedRelatedDataAreas = Get-Content -LiteralPath (Join-Path $bundlePath 'related_data_areas.csv') -Raw
@@ -1454,6 +1466,9 @@ $tests = @(
             Assert-True ($redactedIdentities -notlike '*Accounts Payable*') 'Identity department values must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*Contoso Finance*') 'Identity company values must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*CN=Finance Editors Group*') 'Identity distinguished names must be anonymized.'
+            Assert-True ($redactedPermissionedGroups -notlike '*FinanceEditors*') 'Permissioned group export must anonymize group names.'
+            Assert-True ($redactedPermissionedGroups -notlike '*\\files01\Finance*') 'Permissioned group export must anonymize example paths.'
+            Assert-True ($redactedPermissionedGroups -like '*ID-*') 'Permissioned group export should preserve relationships with stable tokens.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
             Assert-True ($redactedOwnerRiskPivots -notlike '*Finance*') 'Owner risk pivot business-unit names must be anonymized.'
             Assert-True ($redactedOwnerRiskPivots -like '*ID-*') 'Owner risk pivots should preserve review relationships with stable tokens.'
@@ -1516,6 +1531,7 @@ $tests = @(
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
             Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.OwnerReviewPacketCount -gt 0) 'Support bundle diagnostics should summarize owner review packet counts.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.PermissionedGroupCount -gt 0) 'Support bundle diagnostics should summarize permissioned group counts.'
             Assert-True (@($bundleSummary.Files | Where-Object { $_.FileName -eq 'acl_entries.csv' }).Count -eq 1) 'Support bundle summary should include redacted file diagnostics.'
             Assert-True ($bundleSummaryText -notlike '*CONTOSO*') 'Support bundle summary must not contain source domain names.'
             Assert-True ($bundleSummaryText -notlike '*FinanceEditors*') 'Support bundle summary must not contain source group names.'
@@ -1539,6 +1555,7 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'related_data_areas.csv') 'Support bundle file diagnostics should include related data areas.'
             Assert-True ($bundleFiles.FileName -contains 'owner_review_packets.csv') 'Support bundle file diagnostics should include owner review packets.'
+            Assert-True ($bundleFiles.FileName -contains 'permissioned_groups.csv') 'Support bundle file diagnostics should include permissioned groups.'
             Assert-True ($bundleFiles.FileName -contains 'collection_errors.csv') 'Support bundle file diagnostics should include redacted collection errors.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'

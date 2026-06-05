@@ -25,6 +25,7 @@ function Protect-ShareSurferValue {
 
     $alwaysSensitiveColumns = @(
         'Identity',
+        'Group',
         'SamAccountName',
         'DisplayName',
         'EmployeeId',
@@ -45,6 +46,7 @@ function Protect-ShareSurferValue {
         'UNCPath',
         'LocalPath',
         'FullPath',
+        'ExamplePath',
         'RelativePath',
         'InheritanceBrokenAt',
         'ParentGroup',
@@ -61,6 +63,7 @@ function Protect-ShareSurferValue {
         'AccessControlType',
         'Rights',
         'Source',
+        'Sources',
         'ItemType',
         'Depth',
         'IsInherited',

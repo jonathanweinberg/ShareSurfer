@@ -647,6 +647,7 @@ function New-ShareSurferSupportBundleDiagnostics {
     $aclEntries = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'acl_entries.csv'))
     $identities = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'identities.csv'))
     $groupEdges = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'group_edges.csv'))
+    $permissionedGroups = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'permissioned_groups.csv'))
     $ownerPivots = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_risk_pivots.csv'))
     $relatedDataAreas = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'related_data_areas.csv'))
     $ownerReviewPackets = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_review_packets.csv'))
@@ -723,6 +724,7 @@ function New-ShareSurferSupportBundleDiagnostics {
             AclEntryCount = $aclEntries.Count
             IdentityCount = $identities.Count
             GroupEdgeCount = $groupEdges.Count
+            PermissionedGroupCount = $permissionedGroups.Count
             OwnerRiskPivotCount = $ownerPivots.Count
             RelatedDataAreaCount = $relatedDataAreas.Count
             OwnerReviewPacketCount = $ownerReviewPackets.Count
@@ -1007,6 +1009,7 @@ function Test-ShareSurferRedactionAuditValue {
         'AccessControlType',
         'Rights',
         'Source',
+        'Sources',
         'ItemType',
         'Depth',
         'IsInherited',
@@ -1039,6 +1042,7 @@ function Test-ShareSurferRedactionAuditValue {
         'ChildObjectClass',
         'IsCycle',
         'IsTruncated',
+        'HasCycle',
         'ConflictType',
         'FindingType',
         'ErrorType',

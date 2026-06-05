@@ -31,6 +31,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `acl_entries.csv` | One row per NTFS ACL ACE | Captures item-level filesystem permissions. |
 | `identities.csv` | One row per enriched identity | Normalizes user, group, and service identity metadata, including extra directory fields that help correlate owners and business units. |
 | `group_edges.csv` | One row per group membership edge | Represents nested group expansion. |
+| `permissioned_groups.csv` | One row per permission-bearing group | Lists groups that directly grant share or NTFS access, with assignment counts, expansion health, rights, and example path context. |
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
@@ -83,6 +84,12 @@ Use the extra directory fields as correlation clues, not as approval by themselv
 Expected columns: `ParentGroup`, `ChildIdentity`, `ChildObjectClass`, `Depth`, `IsCycle`, `IsTruncated`.
 
 Use `IsCycle=True` for detected group loops. Use `IsTruncated=True` when expansion stops before the full graph is known.
+
+### `permissioned_groups.csv`
+
+Expected columns: `Group`, `DisplayName`, `ObjectClass`, `ObsPath`, `ManagerLevel1`, `ShareAssignments`, `NtfsAssignments`, `ExpandedMembers`, `MaxDepth`, `HasCycle`, `IsTruncated`, `Rights`, `ShareId`, `ShareIds`, `Sources`, `FullPath`, `ExamplePath`.
+
+Use this file to start group access review from groups that actually grant access. It summarizes where a group was assigned, whether the assignment was at the share gate or folder/file layer, which rights were observed, how many members were expanded, and whether expansion hit a cycle or truncation limit.
 
 ### `org_chains.csv`
 
@@ -163,6 +170,7 @@ Use the manifest to reproduce scan settings and explain incomplete data.
 - `items.ItemId` joins to `acl_entries.ItemId`, `conflicts.ItemId`, and `findings.ItemId`.
 - `identities.Identity` joins to identity fields in permissions, ACL entries, group edges, org chains, conflicts, and findings.
 - `group_edges` expands access from groups to child identities.
+- `permissioned_groups.Group` joins to `identities.Identity`, `group_edges.ParentGroup`, `share_permissions.Identity`, and `acl_entries.Identity` for group access review.
 - `owner_mappings` adds business context to paths and shares.
 - `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.

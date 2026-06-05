@@ -117,6 +117,7 @@ function Export-ShareSurferInventory {
 
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
     $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
+    $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges)
     $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts)
     $relatedDataAreas = @(Get-ShareSurferRelatedDataAreas -OwnerRiskPivots $ownerRiskPivots -Items $items -Shares $shares)
     $ownerReviewPackets = @(Get-ShareSurferOwnerReviewPackets -OwnerRiskPivots $ownerRiskPivots -RelatedDataAreas $relatedDataAreas)
@@ -144,6 +145,7 @@ function Export-ShareSurferInventory {
         'acl_entries.csv' = $aclEntries
         'identities.csv' = $identities
         'group_edges.csv' = $groupEdges
+        'permissioned_groups.csv' = $permissionedGroups
         'org_chains.csv' = $orgChains
         'owner_mappings.csv' = $ownerMappings
         'owner_risk_pivots.csv' = $ownerRiskPivots
@@ -174,6 +176,7 @@ function Export-ShareSurferInventory {
         Findings = $findings.Count
         Conflicts = $conflicts.Count
         CollectionErrors = @($collectionErrors).Count
+        PermissionedGroups = $permissionedGroups.Count
         RelatedDataAreas = $relatedDataAreas.Count
         OwnerReviewPackets = $ownerReviewPackets.Count
     }
