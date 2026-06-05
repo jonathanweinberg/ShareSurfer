@@ -75,6 +75,43 @@ function New-ShareSurferSupportBundle {
     })
     $redactionLeakCount = @($redactionAudit | Where-Object { $_.LeakDetected }).Count
 
+    $summaryPath = Join-Path $OutputPath 'support_bundle_summary.json'
+    $summary = [ordered]@{
+        BundleType = 'ShareSurferRedactedSupportBundle'
+        GeneratedAt = $generatedAt
+        RedactionMode = $RedactionMode
+        RelationshipPreserving = [bool]($RedactionMode -eq 'StableToken')
+        ReportIncluded = [bool]$reportIncluded
+        Validation = [ordered]@{
+            IsValid = [bool]$validation.IsValid
+            MissingFileCount = @($validation.MissingFiles).Count
+            SchemaErrorCount = @($validation.SchemaErrors).Count
+        }
+        Redaction = [ordered]@{
+            AuditCount = @($redactionAudit).Count
+            LeakCount = [int]$redactionLeakCount
+            LeakDetected = ([int]$redactionLeakCount -gt 0)
+        }
+        Files = @($fileDiagnostics | ForEach-Object {
+            [ordered]@{
+                FileName = [string]$_.FileName
+                RowCount = [int]$_.RowCount
+                Sha256 = [string]$_.Sha256
+            }
+        })
+        Notes = @(
+            'This summary is safe to share with the redacted bundle.',
+            'The redaction salt and any reversal map are not included.',
+            'Use support_bundle_redaction_audit.csv to review checked value tokens and leak status.'
+        )
+    }
+    $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+    [void]$fileDiagnostics.Add([pscustomobject]@{
+        FileName = 'support_bundle_summary.json'
+        RowCount = 1
+        Sha256 = Get-ShareSurferFileSha256 -Path $summaryPath
+    })
+
     $manifest = @(
         [pscustomobject]@{
             GeneratedAt = $generatedAt
@@ -104,6 +141,7 @@ function New-ShareSurferSupportBundle {
         'Relationship-preserving StableToken mode uses salted synthetic IDs and does not include the salt in this bundle.',
         'support_bundle_manifest.csv records bundle-level diagnostics.',
         'support_bundle_files.csv records redacted file row counts and hashes.',
+        'support_bundle_summary.json provides a quick redacted bundle health summary for support triage.',
         'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.'
     ) -Encoding UTF8
