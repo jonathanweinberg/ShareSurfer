@@ -108,11 +108,19 @@ function New-TestInventory {
                 ObjectClass = 'group'
                 EmployeeId = ''
                 EmployeeNumber = ''
+                UserPrincipalName = ''
+                Mail = 'finance.readers@example.test'
+                Department = 'Finance Shared Data'
+                Title = ''
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = ''
                 Manager = ''
                 ManagerLevel1 = ''
                 ManagerLevel2 = ''
                 ObsPath = 'CORP.FIN'
                 ObsAttribute = 'extensionAttribute10'
+                DistinguishedName = 'CN=Finance Readers Group,OU=Groups,DC=example,DC=test'
             },
             [pscustomobject]@{
                 Identity = 'CONTOSO\FinanceEditors'
@@ -122,6 +130,13 @@ function New-TestInventory {
                 ObjectClass = 'group'
                 EmployeeId = ''
                 EmployeeNumber = ''
+                UserPrincipalName = ''
+                Mail = 'finance.editors@example.test'
+                Department = 'Accounts Payable'
+                Title = ''
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = ''
                 Manager = ''
                 ManagerLevel1 = ''
                 ManagerLevel2 = ''
@@ -195,6 +210,13 @@ function New-TestInventory {
                 ObjectClass = 'user'
                 EmployeeId = 'E1001'
                 EmployeeNumber = '1001'
+                UserPrincipalName = 'ava.accounting@example.test'
+                Mail = 'ava.accounting@example.test'
+                Department = 'Accounts Payable'
+                Title = 'Accounting Analyst'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
                 Manager = 'CONTOSO\Morgan.Manager'
                 ManagerLevel1 = 'CONTOSO\Morgan.Manager'
                 ManagerLevel2 = 'CONTOSO\Riley.Director'
@@ -756,8 +778,19 @@ $tests = @(
             $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
 
             Assert-True ($identities.Identity -contains 'CONTOSO\Ava.Accounting') 'Identity enrichment should include user members discovered through group expansion.'
+            $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
+            Assert-Equal $avaIdentity.UserPrincipalName 'ava.accounting@example.test' 'Identity enrichment should export user principal names for correlation.'
+            Assert-Equal $avaIdentity.Mail 'ava.accounting@example.test' 'Identity enrichment should export mail for correlation.'
+            Assert-Equal $avaIdentity.Department 'Accounts Payable' 'Identity enrichment should export department for owner correlation.'
+            Assert-Equal $avaIdentity.Title 'Accounting Analyst' 'Identity enrichment should export job title for owner correlation.'
+            Assert-Equal $avaIdentity.Company 'Contoso Finance' 'Identity enrichment should export company for owner correlation.'
+            Assert-Equal $avaIdentity.Office 'HQ-4' 'Identity enrichment should export office for owner correlation.'
+            Assert-Equal $avaIdentity.AccountEnabled 'True' 'Identity enrichment should export account enabled status when known.'
+            Assert-True ($avaIdentity.DistinguishedName -like 'CN=Ava Human Name*') 'Identity enrichment should export distinguished names for directory correlation.'
             Assert-True ($groupEdges.ParentGroup -contains 'CONTOSO\FinanceEditors') 'Group expansion should include the top-level permission group.'
             Assert-True ($orgChains.Identity -contains 'CONTOSO\Ava.Accounting') 'Org chains should include enriched user manager and OBS data.'
+            $avaOrgChain = @($orgChains | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
+            Assert-Equal $avaOrgChain.Department 'Accounts Payable' 'Org chains should carry department for manager and OBS rollups.'
         }
     },
     @{
@@ -788,6 +821,14 @@ $tests = @(
                 objectclass = @('top', 'person', 'organizationalPerson', 'user')
                 employeeid = @('E1001')
                 employeenumber = @('1001')
+                userprincipalname = @('ava.accounting@example.test')
+                mail = @('ava.accounting@example.test')
+                department = @('Accounts Payable')
+                title = @('Accounting Analyst')
+                company = @('Contoso Finance')
+                physicaldeliveryofficename = @('HQ-4')
+                useraccountcontrol = @('512')
+                distinguishedname = @('CN=Ava Accounting,OU=Users,DC=example,DC=test')
                 manager = @('CN=Morgan Manager,OU=Users,DC=example,DC=test')
                 extensionattribute10 = @('CORP.FIN.AP')
             }
@@ -798,6 +839,14 @@ $tests = @(
             Assert-Equal $user.ManagerLevel2 'CN=Taylor Director,OU=Users,DC=example,DC=test' 'LDAP user record should preserve manager manager DN.'
             Assert-Equal $user.ObsPath 'CORP.FIN.AP' 'LDAP user record should read the configured OBS attribute.'
             Assert-Equal $user.EmployeeId 'E1001' 'LDAP user record should preserve employee ID.'
+            Assert-Equal $user.UserPrincipalName 'ava.accounting@example.test' 'LDAP user record should preserve UPN.'
+            Assert-Equal $user.Mail 'ava.accounting@example.test' 'LDAP user record should preserve mail.'
+            Assert-Equal $user.Department 'Accounts Payable' 'LDAP user record should preserve department.'
+            Assert-Equal $user.Title 'Accounting Analyst' 'LDAP user record should preserve title.'
+            Assert-Equal $user.Company 'Contoso Finance' 'LDAP user record should preserve company.'
+            Assert-Equal $user.Office 'HQ-4' 'LDAP user record should preserve office.'
+            Assert-Equal $user.AccountEnabled 'True' 'LDAP user record should derive account enabled status from userAccountControl.'
+            Assert-True ($user.DistinguishedName -like 'CN=Ava Accounting*') 'LDAP user record should preserve distinguished name.'
 
             $groupProperties = @{
                 samaccountname = @('FinanceEditors')
@@ -1401,6 +1450,10 @@ $tests = @(
             $redactedOwnerReviewPackets = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_review_packets.csv') -Raw
             Assert-True ($redactedIdentities -notlike '*E1001*') 'Employee IDs must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
+            Assert-True ($redactedIdentities -notlike '*finance.editors@example.test*') 'Identity mail values must be anonymized.'
+            Assert-True ($redactedIdentities -notlike '*Accounts Payable*') 'Identity department values must be anonymized.'
+            Assert-True ($redactedIdentities -notlike '*Contoso Finance*') 'Identity company values must be anonymized.'
+            Assert-True ($redactedIdentities -notlike '*CN=Finance Editors Group*') 'Identity distinguished names must be anonymized.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
             Assert-True ($redactedOwnerRiskPivots -notlike '*Finance*') 'Owner risk pivot business-unit names must be anonymized.'
             Assert-True ($redactedOwnerRiskPivots -like '*ID-*') 'Owner risk pivots should preserve review relationships with stable tokens.'

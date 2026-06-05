@@ -68,10 +68,18 @@ function Resolve-ShareSurferIdentityInventory {
         $objectClass = 'unknown'
         $employeeId = ''
         $employeeNumber = ''
+        $userPrincipalName = ''
+        $mail = ''
+        $department = ''
+        $title = ''
+        $company = ''
+        $office = ''
+        $accountEnabled = ''
         $manager = ''
         $managerLevel1 = ''
         $managerLevel2 = ''
         $obsPath = ''
+        $distinguishedName = ''
         if ($null -ne $entry) {
             foreach ($pair in @(
                 @('SamAccountName', 'sam'),
@@ -79,10 +87,18 @@ function Resolve-ShareSurferIdentityInventory {
                 @('ObjectClass', 'objectClass'),
                 @('EmployeeId', 'employeeId'),
                 @('EmployeeNumber', 'employeeNumber'),
+                @('UserPrincipalName', 'userPrincipalName'),
+                @('Mail', 'mail'),
+                @('Department', 'department'),
+                @('Title', 'title'),
+                @('Company', 'company'),
+                @('Office', 'office'),
+                @('AccountEnabled', 'accountEnabled'),
                 @('Manager', 'manager'),
                 @('ManagerLevel1', 'managerLevel1'),
                 @('ManagerLevel2', 'managerLevel2'),
-                @('ObsPath', 'obsPath')
+                @('ObsPath', 'obsPath'),
+                @('DistinguishedName', 'distinguishedName')
             )) {
                 $prop = $entry.PSObject.Properties[$pair[0]]
                 if ($null -ne $prop -and $null -ne $prop.Value) {
@@ -98,11 +114,19 @@ function Resolve-ShareSurferIdentityInventory {
             ObjectClass = $objectClass
             EmployeeId = $employeeId
             EmployeeNumber = $employeeNumber
+            UserPrincipalName = $userPrincipalName
+            Mail = $mail
+            Department = $department
+            Title = $title
+            Company = $company
+            Office = $office
+            AccountEnabled = $accountEnabled
             Manager = $manager
             ManagerLevel1 = $managerLevel1
             ManagerLevel2 = $managerLevel2
             ObsPath = $obsPath
             ObsAttribute = $ObsAttribute
+            DistinguishedName = $distinguishedName
         }
         $identityRows[$key] = $row
 
@@ -110,6 +134,10 @@ function Resolve-ShareSurferIdentityInventory {
             $orgRows[$key] = [pscustomobject]@{
                 Identity = $Identity
                 EmployeeId = $employeeId
+                EmployeeNumber = $employeeNumber
+                Department = $department
+                Title = $title
+                Company = $company
                 ManagerLevel1 = $managerLevel1
                 ManagerLevel2 = $managerLevel2
                 ObsPath = $obsPath

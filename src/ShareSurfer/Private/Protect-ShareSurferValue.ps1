@@ -29,6 +29,12 @@ function Protect-ShareSurferValue {
         'DisplayName',
         'EmployeeId',
         'EmployeeNumber',
+        'UserPrincipalName',
+        'Mail',
+        'Department',
+        'Title',
+        'Company',
+        'Office',
         'Manager',
         'ManagerLevel1',
         'ManagerLevel2',
@@ -46,6 +52,7 @@ function Protect-ShareSurferValue {
         'ComputerName',
         'ShareName',
         'Description',
+        'DistinguishedName',
         'Message',
         'Detail'
     )
@@ -62,6 +69,7 @@ function Protect-ShareSurferValue {
         'InheritanceEnabled',
         'PartialData',
         'PartialReason',
+        'AccountEnabled',
         'RelatedAreaId',
         'ErrorId',
         'MigrationReadiness',
