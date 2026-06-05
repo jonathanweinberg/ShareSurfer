@@ -38,6 +38,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
+| `collection_errors.csv` | One row per collection error | Preserves scanner error evidence for support, reruns, and partial-data review without forcing operators to infer errors from findings. |
 | `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
 | `scan_manifest.csv` | One row per scan | Records scan settings, versions, and collection health. |
 
@@ -134,8 +135,13 @@ Common V1 finding types include:
 - `LongPathOperationalPolicy`
 - `DeepExplicitAce`
 - `BrokenInheritance`
+- `CollectionError`
 
-### `scan_manifest.csv`
+### `collection_errors.csv`
+
+Expected columns: `ErrorId`, `ShareId`, `ItemId`, `FullPath`, `ErrorType`, `Severity`, `Source`, `Message`, `Detail`.
+
+Use this file when a scan has partial data, failed folder enumeration, ACL read failures, unresolved target paths, or best-effort SMB/Samba gaps. `ErrorType` is preserved as a troubleshooting category, while paths, messages, and details are redacted in support bundles.
 
 ### `scan_events.csv`
 

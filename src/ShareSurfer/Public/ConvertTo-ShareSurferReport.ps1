@@ -1081,6 +1081,7 @@ function ConvertTo-ShareSurferReport {
       owner_review_packets: 'owner_review_packets.csv',
       conflicts: 'conflicts.csv',
       findings: 'findings.csv',
+      collection_errors: 'collection_errors.csv',
       scan_events: 'scan_events.jsonl',
       scan_manifest: 'scan_manifest.csv'
     };
@@ -1643,7 +1644,14 @@ function ConvertTo-ShareSurferReport {
     }
     const owner_pivots = buildOwnerPivots();
     const owner_review_packets = buildOwnerReviewPackets();
-    const collection_errors = data.findings.filter(row => row.FindingType === 'CollectionError');
+    const collection_errors = Array.isArray(data.collection_errors) && data.collection_errors.length > 0
+      ? data.collection_errors.map(row => Object.assign({}, row, {
+          FindingType: 'CollectionError',
+          ObservedValue: row.ErrorType || row.ObservedValue || '',
+          PolicyValue: 'Complete inventory',
+          Severity: row.Severity || 'High'
+        }))
+      : data.findings.filter(row => row.FindingType === 'CollectionError');
     const finding_rollups = buildRollups(data.findings, ['FindingType', 'Severity']);
     const conflict_rollups = buildRollups(data.conflicts, ['ConflictType', 'Severity']);
     const collection_error_rollups = buildRollups(collection_errors, ['ObservedValue', 'ShareId']);

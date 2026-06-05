@@ -35,6 +35,35 @@ function Export-ShareSurferInventory {
     if ($null -ne $Inventory.PSObject.Properties['ScanErrors']) {
         $scanErrors = @(ConvertTo-ShareSurferArray $Inventory.ScanErrors)
     }
+    $collectionErrors = New-Object System.Collections.ArrayList
+    $scanErrorIndex = 0
+    foreach ($scanError in $scanErrors) {
+        $scanErrorIndex++
+        $severity = 'High'
+        if ($null -ne $scanError.PSObject.Properties['Severity'] -and -not [string]::IsNullOrWhiteSpace([string]$scanError.Severity)) {
+            $severity = [string]$scanError.Severity
+        }
+        $source = $SourceMode
+        if ($null -ne $scanError.PSObject.Properties['Source'] -and -not [string]::IsNullOrWhiteSpace([string]$scanError.Source)) {
+            $source = [string]$scanError.Source
+        }
+        $detail = ''
+        if ($null -ne $scanError.PSObject.Properties['Detail']) {
+            $detail = [string]$scanError.Detail
+        }
+
+        [void]$collectionErrors.Add([pscustomobject]@{
+            ErrorId = 'error-{0}' -f $scanErrorIndex
+            ShareId = if ($null -ne $scanError.PSObject.Properties['ShareId']) { [string]$scanError.ShareId } else { '' }
+            ItemId = if ($null -ne $scanError.PSObject.Properties['ItemId']) { [string]$scanError.ItemId } else { '' }
+            FullPath = if ($null -ne $scanError.PSObject.Properties['FullPath']) { [string]$scanError.FullPath } else { '' }
+            ErrorType = if ($null -ne $scanError.PSObject.Properties['ErrorType']) { [string]$scanError.ErrorType } else { 'CollectionError' }
+            Severity = $severity
+            Source = $source
+            Message = if ($null -ne $scanError.PSObject.Properties['Message']) { [string]$scanError.Message } else { '' }
+            Detail = $detail
+        })
+    }
     $scanEvents = New-Object System.Collections.ArrayList
     if ($null -ne $Inventory.PSObject.Properties['ScanEvents']) {
         foreach ($event in @(ConvertTo-ShareSurferArray $Inventory.ScanEvents)) {
@@ -122,6 +151,7 @@ function Export-ShareSurferInventory {
         'owner_review_packets.csv' = $ownerReviewPackets
         'conflicts.csv' = $conflicts
         'findings.csv' = $findings
+        'collection_errors.csv' = @($collectionErrors)
         'scan_events.csv' = @($scanEvents)
         'scan_manifest.csv' = $manifest
     }
@@ -143,6 +173,7 @@ function Export-ShareSurferInventory {
         AclEntries = $aclEntries.Count
         Findings = $findings.Count
         Conflicts = $conflicts.Count
+        CollectionErrors = @($collectionErrors).Count
         RelatedDataAreas = $relatedDataAreas.Count
         OwnerReviewPackets = $ownerReviewPackets.Count
     }
