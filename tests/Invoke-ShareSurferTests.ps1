@@ -1744,7 +1744,12 @@ $tests = @(
             & $collectorEnvironmentScript -OutputPath $collectorEnvironmentPath | Out-Null
             @(
                 [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users'; Passed = $true; EvidenceSource = 'ActiveDirectory'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Users' },
-                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'shares'; Passed = $true; EvidenceSource = 'ScanExport:shares.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Shares' }
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'shares'; Passed = $true; EvidenceSource = 'ScanExport:shares.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Shares' },
+                [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users with employee identifiers'; Passed = $true; EvidenceSource = 'ScanExport:identities.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Employee identifiers' },
+                [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'two-level manager chains'; Passed = $true; EvidenceSource = 'ScanExport:org_chains.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Manager chains' },
+                [pscustomobject]@{ Name = 'EnterpriseUserObsCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users with OBS'; Passed = $true; EvidenceSource = 'ScanExport:identities.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'User OBS coverage' },
+                [pscustomobject]@{ Name = 'EnterpriseGroupExpansion'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'group edges'; Passed = $true; EvidenceSource = 'ScanExport:group_edges.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Group expansion' },
+                [pscustomobject]@{ Name = 'EnterprisePermissionGroupObsCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'groups with OBS'; Passed = $true; EvidenceSource = 'ScanExport:identities.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Permission group OBS coverage' }
             ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-validation-criteria.csv') -NoTypeInformation -Encoding UTF8
             [pscustomobject]@{
                 IsValid = $true
@@ -1754,7 +1759,12 @@ $tests = @(
             } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $runRoot 'live-evidence.json') -Encoding UTF8
             @(
                 [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ActiveDirectory'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
-                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:shares.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' }
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:shares.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:identities.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:org_chains.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseUserObsCoverage'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:identities.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseGroupExpansion'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:group_edges.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterprisePermissionGroupObsCoverage'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:identities.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' }
             ) | Export-Csv -LiteralPath (Join-Path $runRoot 'live-evidence-review.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ Name = 'WindowsCollectorHost'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'Synthetic acceptance proof'; NextAction = 'No action needed.' },
@@ -1856,6 +1866,8 @@ $tests = @(
             Assert-True ($closeoutChecklistText -like '*Scan manifest proves file-object scanning*') 'Closeout checklist should summarize scan manifest file-object evidence.'
             Assert-True ($closeoutChecklistText -like '*Collector environment evidence exists*') 'Closeout checklist should summarize collector environment evidence.'
             Assert-True ($closeoutChecklistText -like '*Dashboard review evidence exists*') 'Closeout checklist should summarize dashboard review evidence.'
+            Assert-True ($closeoutChecklistText -like '*Identity enrichment criteria prove employee identifiers*') 'Closeout checklist should summarize identity enrichment proof gates.'
+            Assert-True ($closeoutChecklistText -like '*Security group criteria prove recursive group expansion*') 'Closeout checklist should summarize security group expansion proof gates.'
             Assert-True ($closeoutChecklistText -like '*Issue comment publish preview is dry-run only*') 'Closeout checklist should summarize publish preview readiness.'
             Assert-True ($closeoutChecklistText -notlike '*Synthetic acceptance proof*') 'Closeout checklist should not include raw evidence detail values.'
             Assert-True ($closeoutChecklistText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Closeout checklist should not include raw lab-run detail values.'
