@@ -391,6 +391,9 @@ $tests = @(
             @(
                 [pscustomobject]@{ ReviewPacketId = 'owner-review-0001'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; ReviewStatus = 'High priority review'; WhyReview = 'high-priority access or migration risk; permission-bearing security groups'; WhatToReviewFirst = 'access conflicts; findings; permissioned groups'; SuggestedNextAction = 'Confirm ownership, review assigned groups, and document the remediation decision.'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; MigrationReadiness = 'Review'; RelatedDataAreaCount = '1' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
                 MaxLabBytes = [int64]8589934592
@@ -496,6 +499,7 @@ $tests = @(
             Assert-Equal $shareCriterion.EvidenceSource 'ScanExport:shares.csv' 'Share validation should identify scan export evidence.'
             Assert-Equal ([int]$fileCriterion.ActualValue) 3 'File validation should use scanned file item rows.'
             Assert-Equal $fileCriterion.EvidenceSource 'ScanExport:items.csv' 'File validation should identify scanned item evidence.'
+            Assert-True ([string]$fileCriterion.EvidenceDetail -like '*ManifestIncludeFiles=True*') 'File validation should record the scan manifest IncludeFiles setting.'
             Assert-Equal ([int]$deepCriterion.ActualValue) 1 'Deep path validation should use scanned item depth.'
             Assert-Equal $deepCriterion.EvidenceSource 'ScanExport:items.csv' 'Deep path validation should identify scanned item evidence.'
             Assert-Equal ([int]$longPathCriterion.ActualValue) 1 'Long-path validation should use generated findings.'
@@ -539,6 +543,18 @@ $tests = @(
             $existingLabDiskCriterion = @($existingLabCriteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
             Assert-Equal $existingLabDiskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should use filesystem evidence for an existing lab root even when -CreateLab is not set.'
             Assert-True ([string]$existingLabDiskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Existing lab disk-budget evidence should include measured bytes.'
+
+            @(
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'False' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
+            $mismatchedManifestCriteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
+            $mismatchedManifestFileCriterion = @($mismatchedManifestCriteria | Where-Object { $_.Name -eq 'EnterpriseRealFiles' })[0]
+            Assert-True (-not [bool]$mismatchedManifestFileCriterion.Passed) 'File validation should fail when scanned file rows disagree with the IncludeFiles manifest setting.'
+            Assert-Equal $mismatchedManifestFileCriterion.EvidenceSource 'ScanExportMismatch:scan_manifest.csv' 'File validation should identify mismatched scan manifest evidence.'
+            Assert-True ([string]$mismatchedManifestFileCriterion.EvidenceDetail -like '*ManifestIncludeFiles=False*') 'Mismatched file evidence should show the manifest IncludeFiles value.'
+            @(
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
 
             $liveEvidence = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $criteria
             Assert-True $liveEvidence.IsValid 'Live evidence gate should pass when all required criteria have live evidence.'

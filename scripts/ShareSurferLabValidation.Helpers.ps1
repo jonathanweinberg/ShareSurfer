@@ -233,6 +233,19 @@ function ConvertTo-ShareSurferLabValidationAdFilterValue {
     $Value -replace "'", "''"
 }
 
+function ConvertTo-ShareSurferLabValidationBool {
+    param(
+        $Value
+    )
+
+    if ($null -eq $Value) {
+        return $false
+    }
+
+    $text = ([string]$Value).Trim()
+    $text -eq 'True' -or $text -eq 'true' -or $text -eq '1' -or $text -eq 'Yes' -or $text -eq 'yes'
+}
+
 function Test-ShareSurferLabValidationTargetVolumeFreeSpace {
     param(
         [Parameter(Mandatory = $true)]
@@ -409,6 +422,11 @@ function Measure-ShareSurferLabValidationEvidence {
     $ownerRiskPivots = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_risk_pivots.csv'))
     $relatedDataAreas = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'related_data_areas.csv'))
     $ownerReviewPackets = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_review_packets.csv'))
+    $manifestRows = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'scan_manifest.csv'))
+    $manifestIncludeFiles = $null
+    if ($manifestRows.Count -gt 0 -and $manifestRows[0].PSObject.Properties['IncludeFiles']) {
+        $manifestIncludeFiles = ConvertTo-ShareSurferLabValidationBool $manifestRows[0].IncludeFiles
+    }
     $scannedFiles = @($items | Where-Object { $_.ItemType -eq 'File' })
     $ownedItems = @($items | Where-Object { [string]$_.Owner -ne '' })
     $scannedDeepItems = @($items | Where-Object {
@@ -529,6 +547,7 @@ function Measure-ShareSurferLabValidationEvidence {
         ActualDeepFileCount = $actualDeepFileCount
         ActualLabBytes = $actualBytes
         IncludeFiles = [bool]$IncludeFiles
+        ManifestIncludeFiles = $manifestIncludeFiles
         CreateLab = [bool]$CreateLab
     }
 }
@@ -656,9 +675,13 @@ function New-ShareSurferLabValidationCriteriaRows {
                 $detail = 'ScannedShares={0}; PlannedShares={1}' -f $evidence.ScannedShareCount, $evidence.PlannedShareCount
             }
             'EnterpriseRealFiles' {
-                if ([int64]$evidence.ScannedFileItemCount -gt 0) {
+                if ([int64]$evidence.ScannedFileItemCount -gt 0 -and $true -eq $evidence.ManifestIncludeFiles) {
                     $actual = [int64]$evidence.ScannedFileItemCount
                     $source = 'ScanExport:items.csv'
+                }
+                elseif ([int64]$evidence.ScannedFileItemCount -gt 0 -and $true -ne $evidence.ManifestIncludeFiles) {
+                    $actual = 0
+                    $source = 'ScanExportMismatch:scan_manifest.csv'
                 }
                 elseif ($null -ne $evidence.ActualFileCount) {
                     $actual = [int64]$evidence.ActualFileCount
@@ -668,7 +691,7 @@ function New-ShareSurferLabValidationCriteriaRows {
                     $actual = [int64]$evidence.PlannedFileFixtureCount
                     $source = 'LabPlan'
                 }
-                $detail = 'ScannedFileItems={0}; ActualFiles={1}; PlannedFileFixtures={2}; IncludeFiles={3}' -f $evidence.ScannedFileItemCount, $evidence.ActualFileCount, $evidence.PlannedFileFixtureCount, $evidence.IncludeFiles
+                $detail = 'ScannedFileItems={0}; ActualFiles={1}; PlannedFileFixtures={2}; IncludeFiles={3}; ManifestIncludeFiles={4}' -f $evidence.ScannedFileItemCount, $evidence.ActualFileCount, $evidence.PlannedFileFixtureCount, $evidence.IncludeFiles, $evidence.ManifestIncludeFiles
             }
             'EnterpriseDeepPaths' {
                 if ([int64]$evidence.ScannedDeepItemCount -gt 0) {
