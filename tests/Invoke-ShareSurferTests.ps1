@@ -1355,6 +1355,10 @@ $tests = @(
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
 
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
+            $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance
+            Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
+            $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
             Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
@@ -1374,6 +1378,9 @@ $tests = @(
             ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
 
             $bundleManifestPath = Join-Path $bundlePath 'support_bundle_manifest.csv'
+            $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
+            $bundleFiles = @(Import-Csv -LiteralPath $bundleFilesPath)
+            Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Final lab support bundle should include the redacted acceptance summary.'
             $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
             $badBundleManifest = @(
                 [pscustomobject]@{
@@ -1434,6 +1441,7 @@ $tests = @(
 
             $labValidationScript = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-ShareSurferLabValidation.ps1') -Raw
             Assert-True ($labValidationScript -like '*Test-ShareSurferV1Acceptance.ps1*') 'Lab validation should run the V1 acceptance checker automatically.'
+            Assert-True ($labValidationScript -like '*-AllowMissingBundledAcceptance*') 'Lab validation should allow bundled acceptance to be pending only for the first acceptance pass.'
             Assert-True ($labValidationScript -like '*lab-preflight.csv*') 'Lab validation should write a preflight readiness CSV.'
             Assert-True ($labValidationScript -like '*PreflightPath*') 'Lab validation output should include the preflight artifact path.'
             Assert-True ($labValidationScript -like '*v1-acceptance.json*') 'Lab validation should write an acceptance result artifact.'
