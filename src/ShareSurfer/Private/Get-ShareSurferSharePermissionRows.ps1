@@ -6,7 +6,11 @@ function Get-ShareSurferSharePermissionRows {
         [Parameter(Mandatory = $true)]
         [string] $ShareName,
 
-        [string] $ComputerName = ''
+        [string] $ComputerName = '',
+
+        $CimSession = $null,
+
+        [switch] $SkipRemoteCimSessionCreation
     )
 
     $command = Get-Command Get-SmbShareAccess -ErrorAction SilentlyContinue
@@ -14,9 +18,22 @@ function Get-ShareSurferSharePermissionRows {
         return @()
     }
 
+    $createdCimSession = $null
     try {
-        if ($ComputerName -ne '' -and $ComputerName -ne [System.Environment]::MachineName -and $ComputerName -ne $env:COMPUTERNAME) {
-            $accessRows = @(Get-SmbShareAccess -Name $ShareName -CimSession $ComputerName)
+        if (Test-ShareSurferRemoteComputerName -ComputerName $ComputerName) {
+            if ($null -eq $CimSession -and -not $SkipRemoteCimSessionCreation) {
+                $newCimSession = Get-Command New-CimSession -ErrorAction SilentlyContinue
+                if ($null -ne $newCimSession) {
+                    $createdCimSession = New-CimSession -ComputerName $ComputerName
+                    $CimSession = $createdCimSession
+                }
+            }
+
+            if ($null -eq $CimSession) {
+                return @()
+            }
+
+            $accessRows = @(Get-SmbShareAccess -Name $ShareName -CimSession $CimSession)
         }
         else {
             $accessRows = @(Get-SmbShareAccess -Name $ShareName)
@@ -33,5 +50,10 @@ function Get-ShareSurferSharePermissionRows {
     }
     catch {
         @()
+    }
+    finally {
+        if ($null -ne $createdCimSession) {
+            Remove-CimSession -CimSession $createdCimSession -ErrorAction SilentlyContinue
+        }
     }
 }
