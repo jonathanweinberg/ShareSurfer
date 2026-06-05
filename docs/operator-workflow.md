@@ -153,6 +153,18 @@ This checks the normalized CSV export set, `scan_manifest.csv` file-scan evidenc
 
 If a `-RequireLiveEvidence` run is not ready for proof review, the lab validation script continues far enough to build the report, issue summary, issue comment drafts, and closeout checklist before returning the final failure. If `-IncludeRedactedSupportBundle` was selected, it also attempts the redacted lab-run support bundle. Open `validation-closeout-checklist.md` first, then `live-evidence-review.csv`, to see which rows need a rerun or lab fix.
 
+If you need to reassess an archived lab run after ShareSurfer's verifier logic changes, create a separate refreshed review instead of editing the historical run files:
+
+```powershell
+.\scripts\New-ShareSurferArchivedEvidenceRefresh.ps1 `
+  -RunRoot 'C:\ShareSurfer\lab-validation\20260604-193000' `
+  -RequireLiveEvidence `
+  -AllowMissingSupportBundle `
+  -AllowMissingIssueComments
+```
+
+This writes a `refreshed-evidence` folder under the archived run. It preserves the original criteria rows and only strengthens criteria that the existing CSV export can prove with current logic. Use it for archived proof review; rerun live validation when AD, filesystem, collector, or scan evidence itself is missing.
+
 ## Scan Workflow
 
 Use a dated export path for each run.

@@ -2396,6 +2396,29 @@ $tests = @(
         }
     },
     @{
+        Name = 'Archived enterprise lab evidence refresh proves stale ACL scenario metadata from CSV exports'
+        Body = {
+            $refreshScript = Join-Path $repoRoot 'scripts/New-ShareSurferArchivedEvidenceRefresh.ps1'
+            $archivedRunRoot = Join-Path $repoRoot 'docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639'
+            $refreshOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferArchivedEvidenceRefresh-' + [guid]::NewGuid().ToString('N'))
+
+            Assert-True (Test-Path -LiteralPath $refreshScript) 'Repository should include a script to create derived archived lab evidence refresh artifacts.'
+            Assert-True (Test-Path -LiteralPath $archivedRunRoot) 'Archived enterprise lab evidence should be present for refresh validation.'
+
+            $refreshResult = & $refreshScript -RunRoot $archivedRunRoot -OutputPath $refreshOutput -RequireLiveEvidence -AllowMissingSupportBundle -AllowMissingIssueComments
+            Assert-True ([bool]$refreshResult.AcceptanceIsValid) 'Refreshed archived enterprise evidence should pass V1 acceptance with live evidence required.'
+            Assert-Equal ([int]$refreshResult.AcceptanceFailedCheckCount) 0 'Refreshed archived enterprise evidence should have no failed acceptance checks.'
+            Assert-True ([bool]$refreshResult.LiveEvidenceIsValid) 'Refreshed archived enterprise evidence should pass the live evidence gate.'
+            Assert-Equal ([int]$refreshResult.LiveEvidenceFallbackCount) 0 'Refreshed archived enterprise evidence should have no fallback criteria.'
+            Assert-True (@($refreshResult.StrengthenedCriteria | Where-Object { [string]$_.Name -eq 'FocusedAclScenarios' }).Count -eq 1) 'Refresh should strengthen the stale FocusedAclScenarios row.'
+            Assert-True (Test-Path -LiteralPath ([string]$refreshResult.SummaryPath)) 'Refresh should write a human-readable summary.'
+
+            $refreshedFocused = @(Import-Csv -LiteralPath ([string]$refreshResult.CriteriaPath) | Where-Object { [string]$_.Name -eq 'FocusedAclScenarios' })[0]
+            Assert-Equal ([string]$refreshedFocused.EvidenceSource) 'ScanExport:acl_entries.csv;findings.csv;conflicts.csv;items.csv' 'Focused ACL scenario refresh should use scan/export evidence.'
+            Assert-True ([string]$refreshedFocused.EvidenceDetail -like '*DeepExplicitAceFindings=251*') 'Focused ACL scenario refresh should preserve deep explicit ACE evidence counts from the archived export.'
+        }
+    },
+    @{
         Name = 'Documentation includes workflow visuals for operator review'
         Body = {
             $pesterWrapper = Join-Path $repoRoot 'tests/ShareSurfer.Tests.ps1'
