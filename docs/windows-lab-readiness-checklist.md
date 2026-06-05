@@ -149,6 +149,9 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `lab-validation-criteria.csv` shows passing lab population criteria for enterprise users, security groups, and SMB shares.
 - `lab-validation-criteria.csv` shows passing lab fixture criteria for real files, deep paths, long-path policy fixtures, and the configured disk budget.
 - `export\scan_manifest.csv` has `IncludeFiles=True` for enterprise runs, and the real-file criteria detail agrees with that setting.
+- `lab-validation-criteria.csv` shows passing scanner permission criteria for share permissions, folder ACL entries, and file ACL entries.
+- `lab-validation-criteria.csv` shows passing scanner finding criteria for ownership evidence, deep explicit ACE findings, and inheritance-break findings.
+- `lab-validation-criteria.csv` shows passing scanner conflict criteria for share-vs-NTFS conflicts and collection-error evidence.
 - `lab-validation-criteria.csv` shows passing identity criteria for employee identifiers, two-level manager chains, and the runtime OBS/OID attribute.
 - `lab-validation-criteria.csv` shows passing security group criteria for recursive group expansion and OBS/OID coverage on permission-bearing groups.
 - `collector-environment.json` exists so reviewers can confirm the collector host, PowerShell version, module availability, and command availability used for the run.

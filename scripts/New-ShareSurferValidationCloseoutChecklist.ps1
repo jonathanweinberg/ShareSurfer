@@ -188,10 +188,16 @@ $identityDirectoryCriteria = @('EnterpriseEmployeeIdentifierCoverage', 'Enterpri
 $groupExpansionCriteria = @('EnterpriseGroupExpansion', 'EnterprisePermissionGroupObsCoverage')
 $labPopulationCriteria = @('EnterpriseUserPopulation', 'EnterpriseGroupPopulation', 'EnterpriseSharePopulation')
 $labFixtureCriteria = @('EnterpriseRealFiles', 'EnterpriseDeepPaths', 'EnterpriseLongPathPolicy', 'EnterpriseDiskBudget')
+$scannerPermissionCriteria = @('EnterpriseSharePermissions', 'EnterpriseAclEntries', 'EnterpriseFileAclEntries')
+$scannerFindingCriteria = @('EnterpriseOwnershipEvidence', 'EnterpriseDeepExplicitAceFindings', 'EnterpriseBrokenInheritanceFindings')
+$scannerConflictCriteria = @('EnterpriseConflictFindings', 'EnterpriseCollectionErrors')
 $identityDirectoryCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $identityDirectoryCriteria
 $groupExpansionCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $groupExpansionCriteria
 $labPopulationCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $labPopulationCriteria
 $labFixtureCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $labFixtureCriteria
+$scannerPermissionCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $scannerPermissionCriteria
+$scannerFindingCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $scannerFindingCriteria
+$scannerConflictCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $scannerConflictCriteria
 
 $expectedIssueNumbers = @('1', '3', '5', '6')
 $issueNumbers = @($issueCommentRows | ForEach-Object { [string]$_.IssueNumber } | Sort-Object -Unique)
@@ -213,6 +219,9 @@ $readyForProofReview = (
     $dashboardReviewPassed -and
     $labPopulationCriteriaPassed -and
     $labFixtureCriteriaPassed -and
+    $scannerPermissionCriteriaPassed -and
+    $scannerFindingCriteriaPassed -and
+    $scannerConflictCriteriaPassed -and
     $identityDirectoryCriteriaPassed -and
     $groupExpansionCriteriaPassed -and
     $liveEvidenceValid -and
@@ -229,6 +238,9 @@ $collectorEnvironmentLabel = if ($collectorEnvironmentPassed) { 'Passed' } else 
 $dashboardReviewLabel = if ($dashboardReviewPassed) { 'Passed' } else { 'Review DashboardReviewEvidence' }
 $labPopulationCriteriaLabel = if ($labPopulationCriteriaPassed) { 'Passed' } else { 'Review lab population criteria' }
 $labFixtureCriteriaLabel = if ($labFixtureCriteriaPassed) { 'Passed' } else { 'Review lab fixture criteria' }
+$scannerPermissionCriteriaLabel = if ($scannerPermissionCriteriaPassed) { 'Passed' } else { 'Review scanner permission criteria' }
+$scannerFindingCriteriaLabel = if ($scannerFindingCriteriaPassed) { 'Passed' } else { 'Review scanner finding criteria' }
+$scannerConflictCriteriaLabel = if ($scannerConflictCriteriaPassed) { 'Passed' } else { 'Review scanner conflict and collection-error criteria' }
 $identityDirectoryCriteriaLabel = if ($identityDirectoryCriteriaPassed) { 'Passed' } else { 'Review identity directory criteria' }
 $groupExpansionCriteriaLabel = if ($groupExpansionCriteriaPassed) { 'Passed' } else { 'Review group expansion criteria' }
 
@@ -246,6 +258,9 @@ Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Collector environment ev
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Dashboard review evidence exists so reviewers can confirm the offline report rendered and was operator-reviewed.' -f (Get-ShareSurferCloseoutStatus -Passed $dashboardReviewPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Lab population criteria prove the enterprise user, group, and share counts requested for validation.' -f (Get-ShareSurferCloseoutStatus -Passed $labPopulationCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Lab fixture criteria prove real files, deep paths, long-path policy fixtures, and the configured disk budget.' -f (Get-ShareSurferCloseoutStatus -Passed $labFixtureCriteriaPassed))
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Scanner permission criteria prove share permissions, folder ACLs, and file ACL entries were collected.' -f (Get-ShareSurferCloseoutStatus -Passed $scannerPermissionCriteriaPassed))
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Scanner finding criteria prove ownership evidence, deep explicit ACE findings, and inheritance-break findings.' -f (Get-ShareSurferCloseoutStatus -Passed $scannerFindingCriteriaPassed))
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Scanner conflict criteria prove share-vs-NTFS conflicts and collection-error evidence were recorded.' -f (Get-ShareSurferCloseoutStatus -Passed $scannerConflictCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Identity enrichment criteria prove employee identifiers, two-level manager chains, and the selected OBS/OID attribute.' -f (Get-ShareSurferCloseoutStatus -Passed $identityDirectoryCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Security group criteria prove recursive group expansion and OBS/OID coverage for permission-bearing groups.' -f (Get-ShareSurferCloseoutStatus -Passed $groupExpansionCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Live evidence gate passed with `{1}` fallback criteria.' -f (Get-ShareSurferCloseoutStatus -Passed $liveEvidenceValid), $fallbackCount)
@@ -264,6 +279,9 @@ Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Collector environment check:
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Dashboard review check: `{0}`' -f $dashboardReviewLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Lab population criteria check: `{0}`' -f $labPopulationCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Lab fixture criteria check: `{0}`' -f $labFixtureCriteriaLabel)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Scanner permission criteria check: `{0}`' -f $scannerPermissionCriteriaLabel)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Scanner finding criteria check: `{0}`' -f $scannerFindingCriteriaLabel)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Scanner conflict and collection-error criteria check: `{0}`' -f $scannerConflictCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Identity enrichment criteria check: `{0}`' -f $identityDirectoryCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Security group expansion criteria check: `{0}`' -f $groupExpansionCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Blocking live-evidence criteria: `{0}`' -f (Join-ShareSurferCloseoutNames -Rows $blockingReviewRows))
