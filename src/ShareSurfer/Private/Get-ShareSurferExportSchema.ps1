@@ -161,6 +161,17 @@ function Get-ShareSurferExportSchema {
             'PolicyValue',
             'Message'
         )
+        'collection_errors.csv' = @(
+            'ErrorId',
+            'ShareId',
+            'ItemId',
+            'FullPath',
+            'ErrorType',
+            'Severity',
+            'Source',
+            'Message',
+            'Detail'
+        )
         'scan_events.csv' = @(
             'EventId',
             'Timestamp',

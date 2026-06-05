@@ -620,6 +620,7 @@ $tests = @(
                 'owner_review_packets.csv',
                 'conflicts.csv',
                 'findings.csv',
+                'collection_errors.csv',
                 'scan_events.csv',
                 'scan_manifest.csv'
             )
@@ -699,11 +700,15 @@ $tests = @(
 
             $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
             $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
+            $collectionErrors = Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv')
 
             Assert-Equal $shares[0].PartialData 'True' 'Share rows should be partial when collection errors were recorded for the share.'
             Assert-True ($shares[0].PartialReason -like '*AclReadError=1*') 'Partial reason should summarize ACL read errors.'
             Assert-True ($shares[0].PartialReason -like '*EnumerationError=1*') 'Partial reason should summarize enumeration errors.'
             Assert-True ($findings.FindingType -contains 'CollectionError') 'Findings should preserve collection errors for troubleshooting.'
+            Assert-True ($collectionErrors.ErrorType -contains 'AclReadError') 'Collection error export should preserve ACL read error rows.'
+            Assert-True ($collectionErrors.ErrorType -contains 'EnumerationError') 'Collection error export should preserve enumeration error rows.'
+            Assert-True ($collectionErrors[0].PSObject.Properties.Name -contains 'ErrorId') 'Collection error export should include stable row IDs.'
             Assert-True ($findings.FindingType -contains 'PartialSharePermissionData') 'Findings should include a partial-share row for business review.'
         }
     },
@@ -723,6 +728,7 @@ $tests = @(
             $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
             $items = @(Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv'))
             $findings = @(Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv'))
+            $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
             $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
 
             Assert-Equal $shares.Count 2 'Mixed TargetPath scan should export both valid and failed target rows.'
@@ -733,6 +739,7 @@ $tests = @(
             Assert-True ($failedShare.PartialReason -like '*TargetPathResolveError=1*') 'Failed TargetPath row should summarize the resolution error count.'
             Assert-True (@($items | Where-Object { $_.FullPath -like "$validTarget*" }).Count -gt 0) 'Valid TargetPath should still export item evidence.'
             Assert-True (@($findings | Where-Object { $_.FindingType -eq 'CollectionError' -and $_.ObservedValue -eq 'TargetPathResolveError' }).Count -gt 0) 'Findings should include the failed TargetPath collection error.'
+            Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'TargetPathResolveError' -and $_.ShareId -eq $failedShare.ShareId }).Count -gt 0) 'Collection error export should preserve failed TargetPath evidence.'
             Assert-True (@($events | Where-Object { $_.EventType -eq 'TargetPathResolveError' }).Count -gt 0) 'Scan events should record the failed TargetPath resolution.'
         }
     },
@@ -1258,6 +1265,15 @@ $tests = @(
             $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBundle-' + [guid]::NewGuid().ToString('N'))
             $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRun-' + [guid]::NewGuid().ToString('N'))
             $inventory = New-TestInventory
+            $inventory | Add-Member -MemberType NoteProperty -Name ScanErrors -Value @(
+                [pscustomobject]@{
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Delegated'
+                    ErrorType = 'AclReadError'
+                    Message = 'Access denied while reading CONTOSO\FinanceEditors ACL.'
+                    Detail = '\\files01\Finance\Delegated'
+                }
+            )
             $inventory | Add-Member -MemberType NoteProperty -Name ScanEvents -Value @(
                 [pscustomobject]@{
                     EventId = 'event-sensitive'
@@ -1350,6 +1366,7 @@ $tests = @(
             $redactedLabRunEventLog = Get-Content -LiteralPath $redactedLabRunEventLogPath -Raw
             $redactedAcl = Get-Content -LiteralPath (Join-Path $bundlePath 'acl_entries.csv') -Raw
             $redactedFindings = Get-Content -LiteralPath (Join-Path $bundlePath 'findings.csv') -Raw
+            $redactedCollectionErrors = Get-Content -LiteralPath (Join-Path $bundlePath 'collection_errors.csv') -Raw
             $redactedConflicts = Get-Content -LiteralPath (Join-Path $bundlePath 'conflicts.csv') -Raw
             $redactedEvents = Get-Content -LiteralPath (Join-Path $bundlePath 'scan_events.csv') -Raw
             $redactedManifest = Get-Content -LiteralPath (Join-Path $bundlePath 'scan_manifest.csv') -Raw
@@ -1440,7 +1457,9 @@ $tests = @(
             Assert-True ([int]$bundleDiagnostics.Inventory.FindingCount -gt 0) 'Support bundle diagnostics should summarize finding counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.ConflictCount -gt 0) 'Support bundle diagnostics should summarize conflict counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.ScanEventCount -gt 0) 'Support bundle diagnostics should summarize scan events.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.CollectionErrorCount -gt 0) 'Support bundle diagnostics should summarize collection error counts.'
             Assert-True (@($bundleDiagnostics.Rollups.FindingsByType | Where-Object { $_.Name -eq 'DeepExplicitAce' }).Count -gt 0) 'Support bundle diagnostics should include finding type rollups.'
+            Assert-True (@($bundleDiagnostics.Rollups.CollectionErrorsByType | Where-Object { $_.Name -eq 'AclReadError' }).Count -gt 0) 'Support bundle diagnostics should include collection error type rollups.'
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
             Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.OwnerReviewPacketCount -gt 0) 'Support bundle diagnostics should summarize owner review packet counts.'
@@ -1451,6 +1470,9 @@ $tests = @(
             Assert-True ($bundleDiagnosticsText -notlike '*CONTOSO*') 'Support bundle diagnostics must not contain source domain names.'
             Assert-True ($bundleDiagnosticsText -notlike '*FinanceEditors*') 'Support bundle diagnostics must not contain source group names.'
             Assert-True ($bundleDiagnosticsText -notlike '*unit-test*') 'Support bundle diagnostics must not expose the redaction salt.'
+            Assert-True ($redactedCollectionErrors -notlike '*CONTOSO*') 'Redacted collection errors must not contain source domain names.'
+            Assert-True ($redactedCollectionErrors -notlike '*files01*') 'Redacted collection errors must not contain source server names.'
+            Assert-True ($redactedCollectionErrors -like '*AclReadError*') 'Redacted collection errors should preserve safe error types.'
             Assert-True ($labRunDiagnosticsText -notlike '*CONTOSO*') 'Lab-run diagnostics must not contain source domain names.'
             Assert-True ($labRunDiagnosticsText -notlike '*FinanceEditors*') 'Lab-run diagnostics must not contain source group names.'
             Assert-True ($labRunDiagnosticsText -notlike '*files01*') 'Lab-run diagnostics must not contain source server names.'
@@ -1464,6 +1486,7 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'related_data_areas.csv') 'Support bundle file diagnostics should include related data areas.'
             Assert-True ($bundleFiles.FileName -contains 'owner_review_packets.csv') 'Support bundle file diagnostics should include owner review packets.'
+            Assert-True ($bundleFiles.FileName -contains 'collection_errors.csv') 'Support bundle file diagnostics should include redacted collection errors.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'

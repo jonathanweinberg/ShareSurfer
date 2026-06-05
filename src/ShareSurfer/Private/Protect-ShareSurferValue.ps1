@@ -63,6 +63,7 @@ function Protect-ShareSurferValue {
         'PartialData',
         'PartialReason',
         'RelatedAreaId',
+        'ErrorId',
         'MigrationReadiness',
         'MatchingShares',
         'MatchingItems',
@@ -89,6 +90,7 @@ function Protect-ShareSurferValue {
         'IsTruncated',
         'ConflictType',
         'FindingType',
+        'ErrorType',
         'Severity',
         'PolicyValue',
         'ExportVersion',
@@ -108,7 +110,9 @@ function Protect-ShareSurferValue {
         'AzureFullPathLimit',
         'AzurePathComponentLimit',
         'DeepExplicitAce',
-        'GroupExpansionTruncated'
+        'GroupExpansionTruncated',
+        'PartialSharePermissionData',
+        'CollectionError'
     )
 
     if ($RedactionMode -eq 'Strict') {

@@ -651,6 +651,7 @@ function New-ShareSurferSupportBundleDiagnostics {
     $relatedDataAreas = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'related_data_areas.csv'))
     $ownerReviewPackets = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_review_packets.csv'))
     $findings = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'findings.csv'))
+    $collectionErrors = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'collection_errors.csv'))
     $conflicts = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'conflicts.csv'))
     $events = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'scan_events.csv'))
     $manifestRows = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'scan_manifest.csv'))
@@ -667,7 +668,21 @@ function New-ShareSurferSupportBundleDiagnostics {
     }
 
     $partialShares = @($shares | Where-Object { [string]$_.PartialData -eq 'True' })
-    $collectionErrors = @($findings | Where-Object { [string]$_.FindingType -eq 'CollectionError' })
+    if ($collectionErrors.Count -eq 0) {
+        $collectionErrors = @($findings | Where-Object { [string]$_.FindingType -eq 'CollectionError' } | ForEach-Object {
+            [pscustomobject]@{
+                ErrorId = [string]$_.FindingId
+                ShareId = [string]$_.ShareId
+                ItemId = [string]$_.ItemId
+                FullPath = [string]$_.FullPath
+                ErrorType = [string]$_.ObservedValue
+                Severity = [string]$_.Severity
+                Source = 'findings.csv'
+                Message = [string]$_.Message
+                Detail = ''
+            }
+        })
+    }
     $highFindings = @($findings | Where-Object { @('Critical', 'High') -contains [string]$_.Severity })
     $highConflicts = @($conflicts | Where-Object { @('Critical', 'High') -contains [string]$_.Severity })
 
@@ -723,7 +738,7 @@ function New-ShareSurferSupportBundleDiagnostics {
             FindingsBySeverity = @(Group-ShareSurferSupportBundleRows -Rows $findings -Field 'Severity')
             ConflictsByType = @(Group-ShareSurferSupportBundleRows -Rows $conflicts -Field 'ConflictType')
             ConflictsBySeverity = @(Group-ShareSurferSupportBundleRows -Rows $conflicts -Field 'Severity')
-            CollectionErrorsByType = @(Group-ShareSurferSupportBundleRows -Rows $collectionErrors -Field 'ObservedValue')
+            CollectionErrorsByType = @(Group-ShareSurferSupportBundleRows -Rows $collectionErrors -Field 'ErrorType')
             ScanEventsByType = @(Group-ShareSurferSupportBundleRows -Rows $events -Field 'EventType')
         }
         Files = @($FileDiagnostics | ForEach-Object {
@@ -1025,6 +1040,7 @@ function Test-ShareSurferRedactionAuditValue {
         'IsTruncated',
         'ConflictType',
         'FindingType',
+        'ErrorType',
         'Severity',
         'PolicyValue',
         'ExportVersion',
@@ -1043,6 +1059,7 @@ function Test-ShareSurferRedactionAuditValue {
         'ItemId',
         'FindingId',
         'ConflictId',
+        'ErrorId',
         'RelatedAreaId',
         'ReviewPacketId',
         'EventId',
@@ -1054,7 +1071,9 @@ function Test-ShareSurferRedactionAuditValue {
         'AzureFullPathLimit',
         'AzurePathComponentLimit',
         'DeepExplicitAce',
-        'GroupExpansionTruncated'
+        'GroupExpansionTruncated',
+        'PartialSharePermissionData',
+        'CollectionError'
     )
 
     if ($preserveColumns -contains $ColumnName -or $structuralColumns -contains $ColumnName) {
