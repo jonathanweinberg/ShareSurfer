@@ -630,9 +630,16 @@ function Measure-ShareSurferLabValidationEvidence {
     $longPathFindings = @($findings | Where-Object { $_.FindingType -eq 'LongPathOperationalPolicy' })
     $deepExplicitAceFindings = @($findings | Where-Object { $_.FindingType -eq 'DeepExplicitAce' })
     $brokenInheritanceFindings = @($findings | Where-Object { $_.FindingType -eq 'BrokenInheritance' })
+    $scannedFileItemIds = @{}
+    foreach ($file in @($scannedFiles)) {
+        $fileItemId = [string]$file.ItemId
+        if (-not [string]::IsNullOrWhiteSpace($fileItemId)) {
+            $scannedFileItemIds[$fileItemId] = $true
+        }
+    }
     $fileAclEntries = @($aclEntries | Where-Object {
         $entryItemId = [string]$_.ItemId
-        (@($scannedFiles | Where-Object { [string]$_.ItemId -eq $entryItemId }).Count -gt 0) -and
+        $scannedFileItemIds.ContainsKey($entryItemId) -and
         ([string]$_.InheritanceFlags -eq 'None')
     })
     $expectedPermissionGroupNames = @(Get-ShareSurferLabValidationPermissionGroupNames -Plan $Plan)

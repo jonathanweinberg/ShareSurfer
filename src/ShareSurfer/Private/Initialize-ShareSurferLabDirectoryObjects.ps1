@@ -12,6 +12,7 @@ function Initialize-ShareSurferLabDirectoryObjects {
 
     Import-Module ActiveDirectory -ErrorAction Stop
     $domain = Get-ADDomain -ErrorAction Stop
+    $canWriteEmployeeNumber = Test-ShareSurferLabUserAttributeAllowed -AttributeName 'employeeNumber'
     $ouName = 'ShareSurferLab'
     $ouDn = 'OU={0},{1}' -f $ouName, $domain.DistinguishedName
     if ($null -eq (Get-ShareSurferLabOrganizationalUnit -DistinguishedName $ouDn)) {
@@ -22,8 +23,9 @@ function Initialize-ShareSurferLabDirectoryObjects {
     foreach ($user in $Plan.Users) {
         $samAccountName = [string]$user.SamAccountName
         $existingUser = Get-ShareSurferLabAdUser -SamAccountName $samAccountName -SearchBase $ouDn
-        $otherAttributes = @{
-            employeeNumber = [string]$user.EmployeeNumber
+        $otherAttributes = @{}
+        if ($canWriteEmployeeNumber) {
+            $otherAttributes.employeeNumber = [string]$user.EmployeeNumber
         }
         $otherAttributes[$Plan.ObsAttribute] = [string]$user.PSObject.Properties[$Plan.ObsAttribute].Value
 
@@ -83,6 +85,77 @@ function Initialize-ShareSurferLabDirectoryObjects {
 function New-ShareSurferLabDefaultPassword {
     $suffix = ([guid]::NewGuid().ToString('N')).Substring(0, 16)
     ConvertTo-SecureString ('Ssf-Lab-2026-{0}!aZ9' -f $suffix) -AsPlainText -Force
+}
+
+function Test-ShareSurferLabUserAttributeAllowed {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $AttributeName
+    )
+
+    try {
+        $rootDse = Get-ADRootDSE -ErrorAction Stop
+        $schemaNamingContext = [string]$rootDse.schemaNamingContext
+        $attribute = Get-ADObject -SearchBase $schemaNamingContext -LDAPFilter "(&(objectClass=attributeSchema)(lDAPDisplayName=$AttributeName))" -Properties lDAPDisplayName -ErrorAction Stop
+        if ($null -eq $attribute) {
+            return $false
+        }
+
+        Test-ShareSurferLabClassAllowsAttribute -ClassName 'user' -AttributeName $AttributeName -SchemaNamingContext $schemaNamingContext
+    }
+    catch {
+        $false
+    }
+}
+
+function Test-ShareSurferLabClassAllowsAttribute {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ClassName,
+
+        [Parameter(Mandatory = $true)]
+        [string] $AttributeName,
+
+        [Parameter(Mandatory = $true)]
+        [string] $SchemaNamingContext,
+
+        [hashtable] $Visited = @{}
+    )
+
+    $key = $ClassName.ToLowerInvariant()
+    if ($Visited.ContainsKey($key)) {
+        return $false
+    }
+    $Visited[$key] = $true
+
+    $class = Get-ADObject -SearchBase $SchemaNamingContext -LDAPFilter "(&(objectClass=classSchema)(lDAPDisplayName=$ClassName))" -Properties mayContain,systemMayContain,subClassOf,auxiliaryClass,systemAuxiliaryClass -ErrorAction SilentlyContinue
+    if ($null -eq $class) {
+        return $false
+    }
+
+    $allowedAttributes = @()
+    foreach ($propertyName in @('mayContain', 'systemMayContain')) {
+        if ($class.PSObject.Properties[$propertyName]) {
+            $allowedAttributes += @($class.$propertyName | ForEach-Object { [string]$_ })
+        }
+    }
+    if ($allowedAttributes -contains $AttributeName) {
+        return $true
+    }
+
+    $relatedClasses = @()
+    foreach ($propertyName in @('subClassOf', 'auxiliaryClass', 'systemAuxiliaryClass')) {
+        if ($class.PSObject.Properties[$propertyName]) {
+            $relatedClasses += @($class.$propertyName | ForEach-Object { [string]$_ } | Where-Object { $_ -ne '' })
+        }
+    }
+    foreach ($relatedClass in $relatedClasses) {
+        if (Test-ShareSurferLabClassAllowsAttribute -ClassName $relatedClass -AttributeName $AttributeName -SchemaNamingContext $SchemaNamingContext -Visited $Visited) {
+            return $true
+        }
+    }
+
+    $false
 }
 
 function Get-ShareSurferLabOrganizationalUnit {
