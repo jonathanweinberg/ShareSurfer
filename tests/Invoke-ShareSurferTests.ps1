@@ -785,6 +785,38 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan records share-permission collection gaps as collection errors'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBestEffort-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $targetPath 'readme.txt') -Value 'best effort evidence' -Encoding UTF8
+            function global:Get-SmbShareAccess {
+                param([string] $Name)
+                @()
+            }
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -TargetPath $targetPath -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $findings = @(Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal $shares[0].PartialData 'True' 'Best-effort target path share should be marked partial when share permissions cannot be proven.'
+                Assert-True ($shares[0].PartialReason -like '*Share-level permissions were not collected*') 'Partial reason should explain the missing share-level permission proof.'
+                Assert-True ($shares[0].PartialReason -like '*SharePermissionCollectionUnavailable=1*') 'Partial reason should summarize the share-permission collection gap.'
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' -and $_.Source -eq 'Get-SmbShareAccess' }).Count -eq 1) 'Collection errors should preserve missing share-permission proof as first-class evidence.'
+                Assert-True (@($findings | Where-Object { $_.FindingType -eq 'CollectionError' -and $_.ObservedValue -eq 'SharePermissionCollectionUnavailable' }).Count -eq 1) 'Findings should include the share-permission collection gap for business review.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 1) 'Scan events should record the missing share-permission proof.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan enriches identities and recursive group edges from an inventory directory graph'
         Body = {
             Import-Module $moduleManifest -Force
@@ -1202,6 +1234,7 @@ $tests = @(
                 Invoke-ShareSurferScan -ComputerName ([System.Environment]::MachineName) -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
                 $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
                 $permissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
                 $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
 
                 Assert-Equal $shares[0].ComputerName ([System.Environment]::MachineName) 'SMB share scans should preserve the requested computer name.'
@@ -1209,6 +1242,7 @@ $tests = @(
                 Assert-Equal $shares[0].PartialData 'False' 'SMB share scans should not remain partial when share-level permissions were collected for the requested share.'
                 Assert-Equal $shares[0].PartialReason '' 'SMB share scans should clear stale local-path permission partial reasons after share-level permissions are proven.'
                 Assert-True ($permissions.Identity -contains 'CONTOSO\ShareModeReaders') 'SMB share scans should collect share-level permissions.'
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 0) 'SMB share scans should clear stale share-permission collection errors after share-level permissions are proven.'
                 Assert-True ($events.EventType -contains 'ShareTargetResolved') 'SMB share scans should log share target resolution.'
             }
             finally {

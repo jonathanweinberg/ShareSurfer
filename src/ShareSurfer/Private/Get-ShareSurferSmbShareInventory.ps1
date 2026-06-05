@@ -152,6 +152,18 @@ function Get-ShareSurferSmbShareInventory {
                     $shareRow[0].PartialData = $false
                     $shareRow[0].PartialReason = ''
                 }
+                for ($scanErrorIndex = $scanErrors.Count - 1; $scanErrorIndex -ge 0; $scanErrorIndex--) {
+                    $scanError = $scanErrors[$scanErrorIndex]
+                    if ([string]$scanError.ShareId -eq $shareId -and [string]$scanError.ErrorType -eq 'SharePermissionCollectionUnavailable') {
+                        $scanErrors.RemoveAt($scanErrorIndex)
+                    }
+                }
+                for ($scanEventIndex = $scanEvents.Count - 1; $scanEventIndex -ge 0; $scanEventIndex--) {
+                    $scanEvent = $scanEvents[$scanEventIndex]
+                    if ([string]$scanEvent.ShareId -eq $shareId -and [string]$scanEvent.EventType -eq 'SharePermissionCollectionUnavailable') {
+                        $scanEvents.RemoveAt($scanEventIndex)
+                    }
+                }
             }
             if ($permissionRows.Count -eq 0) {
                 $shareRow = @($shares | Where-Object { $_.ShareId -eq $shareId } | Select-Object -First 1)
