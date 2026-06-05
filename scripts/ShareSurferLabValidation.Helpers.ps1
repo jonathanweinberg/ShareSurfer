@@ -87,6 +87,63 @@ function Test-ShareSurferLabValidationWindowsPathComponents {
     }
 }
 
+function ConvertTo-ShareSurferLabValidationComparablePath {
+    param(
+        [string] $Path = ''
+    )
+
+    ([string]$Path).Trim().TrimEnd('\', '/').ToUpperInvariant()
+}
+
+function Test-ShareSurferLabValidationSmbSharePaths {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan
+    )
+
+    $command = Get-Command Get-SmbShare -ErrorAction SilentlyContinue
+    if ($null -eq $command) {
+        return [pscustomobject]@{
+            Passed = $false
+            CheckedShareCount = 0
+            CollisionCount = 0
+            Evidence = 'Get-SmbShare command is unavailable.'
+        }
+    }
+
+    $collisions = New-Object System.Collections.ArrayList
+    $checkedShareCount = 0
+    foreach ($share in @($Plan.Shares)) {
+        $existing = Get-SmbShare -Name $share.ShareName -ErrorAction SilentlyContinue
+        if ($null -eq $existing) {
+            continue
+        }
+
+        $checkedShareCount++
+        $existingPath = ''
+        if ($existing.PSObject.Properties['Path']) {
+            $existingPath = [string]$existing.Path
+        }
+
+        $plannedPath = ''
+        if ($share.PSObject.Properties['LocalPath']) {
+            $plannedPath = [string]$share.LocalPath
+        }
+        $normalizedExistingPath = ConvertTo-ShareSurferLabValidationComparablePath -Path $existingPath
+        $normalizedPlannedPath = ConvertTo-ShareSurferLabValidationComparablePath -Path $plannedPath
+        if ($normalizedExistingPath -ne $normalizedPlannedPath) {
+            [void]$collisions.Add(('{0}: existing={1}; planned={2}' -f $share.ShareName, $existingPath, $plannedPath))
+        }
+    }
+
+    [pscustomobject]@{
+        Passed = ($collisions.Count -eq 0)
+        CheckedShareCount = $checkedShareCount
+        CollisionCount = $collisions.Count
+        Evidence = 'CheckedExistingShares={0}; Collisions={1}' -f $checkedShareCount, (@($collisions) -join ' | ')
+    }
+}
+
 function New-ShareSurferLabValidationPreflight {
     param(
         [Parameter(Mandatory = $true)]
@@ -133,6 +190,9 @@ function New-ShareSurferLabValidationPreflight {
     $missingSmbCommands = @($smbCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })
     $smbRequired = ($CreateLab -or $scaleProfile -eq 'Enterprise' -or $RequireLiveEvidence)
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'SmbShareCommands' -Required $smbRequired -Passed ($missingSmbCommands.Count -eq 0) -Evidence ('Missing={0}' -f ($missingSmbCommands -join ', ')) -NextAction 'Run from a Windows host with the SMBShare PowerShell module available.'))
+
+    $smbSharePathResult = Test-ShareSurferLabValidationSmbSharePaths -Plan $Plan
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'SmbSharePathCollisions' -Required ([bool]$CreateLab) -Passed ([bool]$smbSharePathResult.Passed) -Evidence $smbSharePathResult.Evidence -NextAction 'Rename or remove any existing SMB share whose name matches a planned ShareSurfer lab share but points at a different path.'))
 
     $runRootExists = Test-Path -LiteralPath $RunRoot
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'RunRootWritable' -Required $true -Passed $runRootExists -Evidence ('RunRoot={0}; Exists={1}' -f $RunRoot, $runRootExists) -NextAction 'Choose an output root that the collector account can create and write to.'))
