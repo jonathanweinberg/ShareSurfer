@@ -260,8 +260,8 @@ function Test-ShareSurferLabValidationObsAttributeSchema {
 
         $userClass = Get-ShareSurferLabValidationSchemaClass -SchemaNamingContext $schemaNamingContext -ClassName 'user'
         $groupClass = Get-ShareSurferLabValidationSchemaClass -SchemaNamingContext $schemaNamingContext -ClassName 'group'
-        $userAllows = Test-ShareSurferLabValidationSchemaClassAllowsAttribute -ClassSchema $userClass -AttributeName $obsAttribute
-        $groupAllows = Test-ShareSurferLabValidationSchemaClassAllowsAttribute -ClassSchema $groupClass -AttributeName $obsAttribute
+        $userAllows = Test-ShareSurferLabValidationSchemaClassAllowsAttribute -SchemaNamingContext $schemaNamingContext -ClassSchema $userClass -AttributeName $obsAttribute
+        $groupAllows = Test-ShareSurferLabValidationSchemaClassAllowsAttribute -SchemaNamingContext $schemaNamingContext -ClassSchema $groupClass -AttributeName $obsAttribute
 
         [pscustomobject]@{
             Passed = ($userAllows -and $groupAllows)
@@ -286,19 +286,36 @@ function Get-ShareSurferLabValidationSchemaClass {
     )
 
     $escapedClassName = ConvertTo-ShareSurferLabValidationLdapFilterValue -Value $ClassName
-    Get-ADObject -SearchBase $SchemaNamingContext -LDAPFilter "(&(objectClass=classSchema)(lDAPDisplayName=$escapedClassName))" -Properties mayContain, systemMayContain, mustContain, systemMustContain -ErrorAction SilentlyContinue
+    Get-ADObject -SearchBase $SchemaNamingContext -LDAPFilter "(&(objectClass=classSchema)(lDAPDisplayName=$escapedClassName))" -Properties lDAPDisplayName, mayContain, systemMayContain, mustContain, systemMustContain, subClassOf, auxiliaryClass, systemAuxiliaryClass -ErrorAction SilentlyContinue
 }
 
 function Test-ShareSurferLabValidationSchemaClassAllowsAttribute {
     param(
+        [Parameter(Mandatory = $true)]
+        [string] $SchemaNamingContext,
+
         $ClassSchema,
 
         [Parameter(Mandatory = $true)]
-        [string] $AttributeName
+        [string] $AttributeName,
+
+        [hashtable] $VisitedClass = @{}
     )
 
     if ($null -eq $ClassSchema) {
         return $false
+    }
+
+    $className = ''
+    if ($ClassSchema.PSObject.Properties['lDAPDisplayName']) {
+        $className = [string]$ClassSchema.lDAPDisplayName
+    }
+    if (-not [string]::IsNullOrWhiteSpace($className)) {
+        $classKey = $className.ToUpperInvariant()
+        if ($VisitedClass.ContainsKey($classKey)) {
+            return $false
+        }
+        $VisitedClass[$classKey] = $true
     }
 
     foreach ($propertyName in @('mayContain', 'systemMayContain', 'mustContain', 'systemMustContain')) {
@@ -307,6 +324,21 @@ function Test-ShareSurferLabValidationSchemaClassAllowsAttribute {
         }
         foreach ($value in @($ClassSchema.PSObject.Properties[$propertyName].Value)) {
             if ([string]::Equals([string]$value, $AttributeName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        }
+    }
+
+    foreach ($relatedClassProperty in @('subClassOf', 'auxiliaryClass', 'systemAuxiliaryClass')) {
+        if (-not $ClassSchema.PSObject.Properties[$relatedClassProperty]) {
+            continue
+        }
+        foreach ($relatedClassName in @($ClassSchema.PSObject.Properties[$relatedClassProperty].Value)) {
+            if ([string]::IsNullOrWhiteSpace([string]$relatedClassName)) {
+                continue
+            }
+            $relatedClass = Get-ShareSurferLabValidationSchemaClass -SchemaNamingContext $SchemaNamingContext -ClassName ([string]$relatedClassName)
+            if (Test-ShareSurferLabValidationSchemaClassAllowsAttribute -SchemaNamingContext $SchemaNamingContext -ClassSchema $relatedClass -AttributeName $AttributeName -VisitedClass $VisitedClass) {
                 return $true
             }
         }
