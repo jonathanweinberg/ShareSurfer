@@ -1001,6 +1001,10 @@ $tests = @(
 
             $ldapScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferDirectoryIdentity.ps1') -Raw
             Assert-True ($ldapScript -like '*Get-ShareSurferLdapManagerLevel2*') 'LDAP fallback should resolve manager manager for org-chain rollups.'
+            $dnResolverScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Resolve-ShareSurferDistinguishedNameIdentity.ps1') -Raw
+            foreach ($propertyName in @('userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'userAccountControl', 'distinguishedName')) {
+                Assert-True ($dnResolverScript -like ('*{0}*' -f $propertyName)) ('LDAP DN member resolution should load {0} for group-expanded identity correlation.' -f $propertyName)
+            }
         }
     },
     @{
