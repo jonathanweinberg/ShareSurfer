@@ -76,6 +76,7 @@ A useful support bundle includes:
 - `support_bundle_manifest.csv` with redaction mode, validation status, and bundle-level file counts.
 - `support_bundle_files.csv` with redacted CSV row counts and SHA256 hashes for support-case integrity checks.
 - `support_bundle_summary.json` with a quick redacted bundle health summary, validation result, redaction status, and file inventory.
+- `support_bundle_diagnostics.json` with redacted scan settings, export counts, finding/conflict rollups, partial-share counts, and collection-error counts for support triage.
 - `support_bundle_redaction_audit.csv` with checked source-value tokens, leak status, and leak file names when any are found.
 - Any validation result from `Test-ShareSurferExport`.
 - A regenerated redacted `report.html`, when `-IncludeReport` is used.
@@ -91,6 +92,7 @@ Before sending a support bundle outside the trusted team:
 3. Confirm relationships still work across CSV files.
 4. Confirm `support_bundle_manifest.csv` shows `RedactionLeakCount` as `0`.
 5. Confirm `support_bundle_summary.json` shows `Validation.IsValid=True` and `Redaction.LeakCount=0`.
-6. Confirm `support_bundle_redaction_audit.csv` has no rows with `LeakDetected=True`.
-7. Confirm the Azure path policy threshold and explicit ACE depth threshold are still visible.
-8. Share the smallest bundle that answers the support question.
+6. Review `support_bundle_diagnostics.json` for safe scan settings, counts, and collection-health context.
+7. Confirm `support_bundle_redaction_audit.csv` has no rows with `LeakDetected=True`.
+8. Confirm the Azure path policy threshold and explicit ACE depth threshold are still visible.
+9. Share the smallest bundle that answers the support question.

@@ -105,6 +105,7 @@ $requiredBundleFiles = @(
     'support_bundle_manifest.csv',
     'support_bundle_files.csv',
     'support_bundle_summary.json',
+    'support_bundle_diagnostics.json',
     'support_bundle_redaction_audit.csv',
     'scan_events.jsonl',
     'report.html'

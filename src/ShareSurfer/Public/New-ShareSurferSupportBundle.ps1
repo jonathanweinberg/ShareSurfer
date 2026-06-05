@@ -75,6 +75,15 @@ function New-ShareSurferSupportBundle {
     })
     $redactionLeakCount = @($redactionAudit | Where-Object { $_.LeakDetected }).Count
 
+    $diagnosticsPath = Join-Path $OutputPath 'support_bundle_diagnostics.json'
+    $diagnostics = New-ShareSurferSupportBundleDiagnostics -BundlePath $OutputPath -GeneratedAt $generatedAt -RedactionMode $RedactionMode -ReportIncluded:$reportIncluded -Validation $validation -RedactionLeakCount $redactionLeakCount -FileDiagnostics $fileDiagnostics
+    $diagnostics | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $diagnosticsPath -Encoding UTF8
+    [void]$fileDiagnostics.Add([pscustomobject]@{
+        FileName = 'support_bundle_diagnostics.json'
+        RowCount = 1
+        Sha256 = Get-ShareSurferFileSha256 -Path $diagnosticsPath
+    })
+
     $summaryPath = Join-Path $OutputPath 'support_bundle_summary.json'
     $summary = [ordered]@{
         BundleType = 'ShareSurferRedactedSupportBundle'
@@ -92,6 +101,13 @@ function New-ShareSurferSupportBundle {
             LeakCount = [int]$redactionLeakCount
             LeakDetected = ([int]$redactionLeakCount -gt 0)
         }
+        Diagnostics = [ordered]@{
+            FileName = 'support_bundle_diagnostics.json'
+            FindingCount = [int]$diagnostics.Inventory.FindingCount
+            ConflictCount = [int]$diagnostics.Inventory.ConflictCount
+            PartialShareCount = [int]$diagnostics.Inventory.PartialShareCount
+            CollectionErrorCount = [int]$diagnostics.Inventory.CollectionErrorCount
+        }
         Files = @($fileDiagnostics | ForEach-Object {
             [ordered]@{
                 FileName = [string]$_.FileName
@@ -102,6 +118,7 @@ function New-ShareSurferSupportBundle {
         Notes = @(
             'This summary is safe to share with the redacted bundle.',
             'The redaction salt and any reversal map are not included.',
+            'Use support_bundle_diagnostics.json for redacted scan settings, counts, and collection-health context.',
             'Use support_bundle_redaction_audit.csv to review checked value tokens and leak status.'
         )
     }
@@ -142,6 +159,7 @@ function New-ShareSurferSupportBundle {
         'support_bundle_manifest.csv records bundle-level diagnostics.',
         'support_bundle_files.csv records redacted file row counts and hashes.',
         'support_bundle_summary.json provides a quick redacted bundle health summary for support triage.',
+        'support_bundle_diagnostics.json summarizes redacted scan settings, export counts, findings, conflicts, partial shares, and collection errors.',
         'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.'
     ) -Encoding UTF8
@@ -153,6 +171,131 @@ function New-ShareSurferSupportBundle {
         ReportIncluded = [bool]$reportIncluded
         RedactionLeakCount = [int]$redactionLeakCount
     }
+}
+
+function New-ShareSurferSupportBundleDiagnostics {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $BundlePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $GeneratedAt,
+
+        [Parameter(Mandatory = $true)]
+        [string] $RedactionMode,
+
+        [switch] $ReportIncluded,
+
+        [Parameter(Mandatory = $true)]
+        $Validation,
+
+        [Parameter(Mandatory = $true)]
+        [int] $RedactionLeakCount,
+
+        [Parameter(Mandatory = $true)]
+        $FileDiagnostics
+    )
+
+    $shares = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'shares.csv'))
+    $items = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'items.csv'))
+    $sharePermissions = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'share_permissions.csv'))
+    $aclEntries = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'acl_entries.csv'))
+    $identities = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'identities.csv'))
+    $groupEdges = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'group_edges.csv'))
+    $ownerPivots = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_risk_pivots.csv'))
+    $findings = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'findings.csv'))
+    $conflicts = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'conflicts.csv'))
+    $events = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'scan_events.csv'))
+    $manifestRows = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'scan_manifest.csv'))
+    $manifest = $null
+    if ($manifestRows.Count -gt 0) {
+        $manifest = $manifestRows[0]
+    }
+
+    $scanSettings = [ordered]@{}
+    foreach ($column in @('ExportVersion', 'ObsAttribute', 'SourceMode', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode')) {
+        if ($null -ne $manifest -and $null -ne $manifest.PSObject.Properties[$column]) {
+            $scanSettings[$column] = [string]$manifest.$column
+        }
+    }
+
+    $partialShares = @($shares | Where-Object { [string]$_.PartialData -eq 'True' })
+    $collectionErrors = @($findings | Where-Object { [string]$_.FindingType -eq 'CollectionError' })
+    $highFindings = @($findings | Where-Object { @('Critical', 'High') -contains [string]$_.Severity })
+    $highConflicts = @($conflicts | Where-Object { @('Critical', 'High') -contains [string]$_.Severity })
+
+    [ordered]@{
+        BundleType = 'ShareSurferRedactedSupportBundleDiagnostics'
+        GeneratedAt = $GeneratedAt
+        RedactionMode = $RedactionMode
+        RelationshipPreserving = [bool]($RedactionMode -eq 'StableToken')
+        ReportIncluded = [bool]$ReportIncluded
+        Validation = [ordered]@{
+            IsValid = [bool]$Validation.IsValid
+            MissingFileCount = @($Validation.MissingFiles).Count
+            SchemaErrorCount = @($Validation.SchemaErrors).Count
+        }
+        Redaction = [ordered]@{
+            LeakCount = [int]$RedactionLeakCount
+            LeakDetected = ([int]$RedactionLeakCount -gt 0)
+        }
+        ScanSettings = $scanSettings
+        Inventory = [ordered]@{
+            ShareCount = $shares.Count
+            PartialShareCount = $partialShares.Count
+            ItemCount = $items.Count
+            FileCount = @($items | Where-Object { [string]$_.ItemType -eq 'File' }).Count
+            DirectoryCount = @($items | Where-Object { [string]$_.ItemType -eq 'Directory' }).Count
+            SharePermissionCount = $sharePermissions.Count
+            AclEntryCount = $aclEntries.Count
+            IdentityCount = $identities.Count
+            GroupEdgeCount = $groupEdges.Count
+            OwnerRiskPivotCount = $ownerPivots.Count
+            FindingCount = $findings.Count
+            HighFindingCount = $highFindings.Count
+            ConflictCount = $conflicts.Count
+            HighConflictCount = $highConflicts.Count
+            ScanEventCount = $events.Count
+            CollectionErrorCount = $collectionErrors.Count
+        }
+        Rollups = [ordered]@{
+            FindingsByType = @(Group-ShareSurferSupportBundleRows -Rows $findings -Field 'FindingType')
+            FindingsBySeverity = @(Group-ShareSurferSupportBundleRows -Rows $findings -Field 'Severity')
+            ConflictsByType = @(Group-ShareSurferSupportBundleRows -Rows $conflicts -Field 'ConflictType')
+            ConflictsBySeverity = @(Group-ShareSurferSupportBundleRows -Rows $conflicts -Field 'Severity')
+            CollectionErrorsByType = @(Group-ShareSurferSupportBundleRows -Rows $collectionErrors -Field 'ObservedValue')
+            ScanEventsByType = @(Group-ShareSurferSupportBundleRows -Rows $events -Field 'EventType')
+        }
+        Files = @($FileDiagnostics | ForEach-Object {
+            [ordered]@{
+                FileName = [string]$_.FileName
+                RowCount = [int]$_.RowCount
+                Sha256 = [string]$_.Sha256
+            }
+        })
+        Notes = @(
+            'This diagnostics file is generated from redacted bundle data only.',
+            'It is intended for support triage without opening every CSV file.',
+            'It does not include the redaction salt or any reversal map.'
+        )
+    }
+}
+
+function Group-ShareSurferSupportBundleRows {
+    param(
+        $Rows = @(),
+        [string] $Field
+    )
+
+    @($Rows |
+        Group-Object -Property $Field |
+        Sort-Object @{ Expression = 'Count'; Descending = $true }, Name |
+        ForEach-Object {
+            [ordered]@{
+                Name = if ([string]::IsNullOrWhiteSpace([string]$_.Name)) { 'Unspecified' } else { [string]$_.Name }
+                Count = [int]$_.Count
+            }
+        })
 }
 
 function Get-ShareSurferFileSha256 {

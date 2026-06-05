@@ -104,6 +104,10 @@ function Protect-ShareSurferValue {
         return '[redacted]'
     }
 
+    if ($preserveColumns -contains $ColumnName) {
+        return $text
+    }
+
     if ($ColumnName -eq 'ObservedValue' -and $observedValueSafeRows -notcontains $RowType) {
         return Get-ShareSurferStableToken -Value $text -Salt $RedactionSalt
     }

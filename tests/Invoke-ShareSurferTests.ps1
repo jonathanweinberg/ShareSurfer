@@ -975,6 +975,7 @@ $tests = @(
             $bundleManifestPath = Join-Path $bundlePath 'support_bundle_manifest.csv'
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
             $bundleSummaryPath = Join-Path $bundlePath 'support_bundle_summary.json'
+            $bundleDiagnosticsPath = Join-Path $bundlePath 'support_bundle_diagnostics.json'
             $redactionAuditPath = Join-Path $bundlePath 'support_bundle_redaction_audit.csv'
 
             Assert-True ($rawEventLog -like '*CONTOSO*') 'Raw JSONL event log should preserve source values for trusted internal debugging.'
@@ -1006,12 +1007,15 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $bundleManifestPath) 'Support bundle should include a machine-readable support bundle manifest.'
             Assert-True (Test-Path -LiteralPath $bundleFilesPath) 'Support bundle should include per-file diagnostics.'
             Assert-True (Test-Path -LiteralPath $bundleSummaryPath) 'Support bundle should include a redacted JSON summary for support triage.'
+            Assert-True (Test-Path -LiteralPath $bundleDiagnosticsPath) 'Support bundle should include redacted diagnostics for support triage.'
             Assert-True (Test-Path -LiteralPath $redactionAuditPath) 'Support bundle should include a redaction leak audit.'
 
             $bundleManifest = Import-Csv -LiteralPath $bundleManifestPath
             $bundleFiles = Import-Csv -LiteralPath $bundleFilesPath
             $bundleSummaryText = Get-Content -LiteralPath $bundleSummaryPath -Raw
             $bundleSummary = $bundleSummaryText | ConvertFrom-Json
+            $bundleDiagnosticsText = Get-Content -LiteralPath $bundleDiagnosticsPath -Raw
+            $bundleDiagnostics = $bundleDiagnosticsText | ConvertFrom-Json
             $redactionAudit = Import-Csv -LiteralPath $redactionAuditPath
             Assert-Equal $bundleManifest[0].RedactionMode 'StableToken' 'Support bundle manifest should record the redaction mode.'
             Assert-Equal $bundleManifest[0].ValidationIsValid 'True' 'Support bundle manifest should record validation status.'
@@ -1020,15 +1024,27 @@ $tests = @(
             Assert-Equal $bundleSummary.BundleType 'ShareSurferRedactedSupportBundle' 'Support bundle summary should identify the bundle type.'
             Assert-Equal ([string]$bundleSummary.Validation.IsValid) 'True' 'Support bundle summary should record validation status.'
             Assert-Equal ([int]$bundleSummary.Redaction.LeakCount) 0 'Support bundle summary should record redaction leak count.'
+            Assert-Equal $bundleSummary.Diagnostics.FileName 'support_bundle_diagnostics.json' 'Support bundle summary should reference diagnostics JSON.'
+            Assert-Equal $bundleDiagnostics.BundleType 'ShareSurferRedactedSupportBundleDiagnostics' 'Support bundle diagnostics should identify the diagnostics type.'
+            Assert-Equal ([string]$bundleDiagnostics.Validation.IsValid) 'True' 'Support bundle diagnostics should record validation status.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.FindingCount -gt 0) 'Support bundle diagnostics should summarize finding counts.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.ConflictCount -gt 0) 'Support bundle diagnostics should summarize conflict counts.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.ScanEventCount -gt 0) 'Support bundle diagnostics should summarize scan events.'
+            Assert-True (@($bundleDiagnostics.Rollups.FindingsByType | Where-Object { $_.Name -eq 'DeepExplicitAce' }).Count -gt 0) 'Support bundle diagnostics should include finding type rollups.'
+            Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
             Assert-True (@($bundleSummary.Files | Where-Object { $_.FileName -eq 'acl_entries.csv' }).Count -eq 1) 'Support bundle summary should include redacted file diagnostics.'
             Assert-True ($bundleSummaryText -notlike '*CONTOSO*') 'Support bundle summary must not contain source domain names.'
             Assert-True ($bundleSummaryText -notlike '*FinanceEditors*') 'Support bundle summary must not contain source group names.'
             Assert-True ($bundleSummaryText -notlike '*unit-test*') 'Support bundle summary must not expose the redaction salt.'
+            Assert-True ($bundleDiagnosticsText -notlike '*CONTOSO*') 'Support bundle diagnostics must not contain source domain names.'
+            Assert-True ($bundleDiagnosticsText -notlike '*FinanceEditors*') 'Support bundle diagnostics must not contain source group names.'
+            Assert-True ($bundleDiagnosticsText -notlike '*unit-test*') 'Support bundle diagnostics must not expose the redaction salt.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'
+            Assert-True ($bundleFiles.FileName -contains 'support_bundle_diagnostics.json') 'Support bundle file diagnostics should include the redacted diagnostics JSON.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_redaction_audit.csv') 'Support bundle file diagnostics should include redaction audit diagnostics.'
             Assert-True ($redactionAudit.Count -gt 0) 'Redaction audit should include checked sensitive source values.'
             Assert-True (@($redactionAudit | Where-Object { $_.LeakDetected -eq 'True' }).Count -eq 0) 'Redaction audit should not detect leaked source values.'
