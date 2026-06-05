@@ -48,6 +48,7 @@ if ($LiveEvidenceReviewPath -eq '') {
 }
 $IssueCommentPath = Join-Path $RunRoot 'issue-comments'
 $IssueCommentPublishPreviewPath = Join-Path $RunRoot 'issue-comment-publish-preview.csv'
+$CloseoutChecklistPath = Join-Path $RunRoot 'validation-closeout-checklist.md'
 
 function New-ShareSurferAcceptanceCheck {
     param(
@@ -162,6 +163,7 @@ $requiredBundleFiles = @(
     'live_evidence.json',
     'v1_acceptance.json',
     'v1_acceptance_summary.json',
+    'validation_closeout_checklist.md',
     'issue_comments/issue-1-lab-fixture-live-proof.md',
     'issue_comments/issue-3-scanner-live-proof.md',
     'issue_comments/issue-5-identity-group-live-proof.md',
@@ -175,6 +177,7 @@ if ($AllowMissingBundledAcceptance) {
 }
 if ($AllowMissingIssueComments) {
     $requiredBundleFiles = @($requiredBundleFiles | Where-Object { [string]$_ -notlike 'issue_comments/*' })
+    $requiredBundleFiles = @($requiredBundleFiles | Where-Object { $_ -ne 'validation_closeout_checklist.md' })
 }
 $missingBundleFiles = @($requiredBundleFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $SupportBundlePath $_)) })
 $bundleManifestPath = Join-Path $SupportBundlePath 'support_bundle_manifest.csv'
@@ -321,6 +324,46 @@ if ($AllowMissingIssueComments -and $missingBundledIssueCommentFiles.Count -gt 0
 }
 else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationIssueComments' -Passed $bundledIssueCommentsPassed -Detail $bundledIssueCommentDetail))
+}
+
+$closeoutChecklistPassed = $false
+$closeoutChecklistDetail = ''
+if (Test-Path -LiteralPath $CloseoutChecklistPath) {
+    $closeoutChecklistText = Get-Content -LiteralPath $CloseoutChecklistPath -Raw
+    $hasTitle = ($closeoutChecklistText -like '*ShareSurfer live validation closeout checklist*')
+    $hasReadyStatus = ($closeoutChecklistText -like '*Ready for proof review:*')
+    $hasRunRootLeak = ($closeoutChecklistText -like "*$RunRoot*")
+    $closeoutChecklistPassed = ($hasTitle -and $hasReadyStatus -and -not $hasRunRootLeak)
+    $closeoutChecklistDetail = 'CloseoutChecklist={0}; HasTitle={1}; HasReadyStatus={2}; HasRunRootLeak={3}' -f $CloseoutChecklistPath, $hasTitle, $hasReadyStatus, $hasRunRootLeak
+}
+else {
+    $closeoutChecklistDetail = 'Closeout checklist not found: {0}' -f $CloseoutChecklistPath
+}
+if ($AllowMissingIssueComments -and -not (Test-Path -LiteralPath $CloseoutChecklistPath)) {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationCloseoutChecklist' -Passed $true -Detail ('Closeout checklist pending for staged acceptance: {0}' -f $closeoutChecklistDetail)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationCloseoutChecklist' -Passed $closeoutChecklistPassed -Detail $closeoutChecklistDetail))
+}
+
+$bundledCloseoutChecklistPath = Join-Path $SupportBundlePath 'validation_closeout_checklist.md'
+$bundledCloseoutChecklistPassed = $false
+$bundledCloseoutChecklistDetail = ''
+if (Test-Path -LiteralPath $bundledCloseoutChecklistPath) {
+    $bundledCloseoutChecklistText = Get-Content -LiteralPath $bundledCloseoutChecklistPath -Raw
+    $hasBundledTitle = ($bundledCloseoutChecklistText -like '*ShareSurfer live validation closeout checklist*')
+    $hasBundledRunRootLeak = ($bundledCloseoutChecklistText -like "*$RunRoot*")
+    $bundledCloseoutChecklistPassed = ($hasBundledTitle -and -not $hasBundledRunRootLeak)
+    $bundledCloseoutChecklistDetail = 'BundledCloseoutChecklist={0}; HasTitle={1}; HasRunRootLeak={2}' -f $bundledCloseoutChecklistPath, $hasBundledTitle, $hasBundledRunRootLeak
+}
+else {
+    $bundledCloseoutChecklistDetail = 'Bundled closeout checklist not found: {0}' -f $bundledCloseoutChecklistPath
+}
+if ($AllowMissingIssueComments -and -not (Test-Path -LiteralPath $bundledCloseoutChecklistPath)) {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationCloseoutChecklist' -Passed $true -Detail ('Bundled closeout checklist pending for staged acceptance: {0}' -f $bundledCloseoutChecklistDetail)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationCloseoutChecklist' -Passed $bundledCloseoutChecklistPassed -Detail $bundledCloseoutChecklistDetail))
 }
 
 if (Test-Path -LiteralPath $PreflightPath) {
