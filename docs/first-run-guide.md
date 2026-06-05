@@ -212,6 +212,7 @@ Use the dashboard to review:
 - Executive summary cards.
 - What Needs Review First owner review queue for business-unit and data-owner review packets.
 - Review Workbench snapshot for the selected business unit, data owner, or risk level.
+- Access Model view showing share gate permissions beside file/folder permissions.
 - Migration Discovery rows showing related data areas that should be kept together during migration planning.
 - Direct Access Review table showing directly assigned identities, share-gate assignments, NTFS assignments, OBS context, and expanded group-member counts.
 - Priority actions.
