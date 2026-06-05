@@ -595,6 +595,35 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan continues when one TargetPath cannot be resolved'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $scanRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferTargetPath-' + [guid]::NewGuid().ToString('N'))
+            $validTarget = Join-Path $scanRoot 'ValidShare'
+            $missingTarget = Join-Path $scanRoot 'MissingShare'
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $validTarget -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $validTarget 'readme.txt') -Value 'valid target evidence' -Encoding UTF8
+
+            Invoke-ShareSurferScan -TargetPath @($validTarget, $missingTarget) -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+
+            $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+            $items = @(Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv'))
+            $findings = @(Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv'))
+            $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+            Assert-Equal $shares.Count 2 'Mixed TargetPath scan should export both valid and failed target rows.'
+            Assert-True (@($shares | Where-Object { $_.LocalPath -eq $validTarget }).Count -eq 1) 'Valid TargetPath should still be scanned and exported.'
+            $failedShare = @($shares | Where-Object { $_.LocalPath -eq $missingTarget })[0]
+            Assert-Equal $failedShare.PartialData 'True' 'Failed TargetPath row should be marked partial.'
+            Assert-True ($failedShare.PartialReason -like '*Target path could not be resolved*') 'Failed TargetPath row should explain resolution failure.'
+            Assert-True ($failedShare.PartialReason -like '*TargetPathResolveError=1*') 'Failed TargetPath row should summarize the resolution error count.'
+            Assert-True (@($items | Where-Object { $_.FullPath -like "$validTarget*" }).Count -gt 0) 'Valid TargetPath should still export item evidence.'
+            Assert-True (@($findings | Where-Object { $_.FindingType -eq 'CollectionError' -and $_.ObservedValue -eq 'TargetPathResolveError' }).Count -gt 0) 'Findings should include the failed TargetPath collection error.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'TargetPathResolveError' }).Count -gt 0) 'Scan events should record the failed TargetPath resolution.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan enriches identities and recursive group edges from an inventory directory graph'
         Body = {
             Import-Module $moduleManifest -Force

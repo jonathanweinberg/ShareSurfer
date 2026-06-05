@@ -18,7 +18,30 @@ function Get-ShareSurferLocalInventory {
     foreach ($target in $TargetPath) {
         $index++
         $shareId = 'target-{0}' -f $index
-        $targetItem = Get-Item -LiteralPath $target -ErrorAction Stop
+        try {
+            $targetItem = Get-Item -LiteralPath $target -ErrorAction Stop
+        }
+        catch {
+            [void]$shares.Add([pscustomobject]@{
+                ShareId = $shareId
+                Source = 'BestEffort'
+                ComputerName = ''
+                ShareName = Split-Path -Leaf $target
+                UNCPath = $target
+                LocalPath = $target
+                Description = 'Best-effort target path scan'
+                PartialData = $true
+                PartialReason = 'Target path could not be resolved.'
+            })
+            [void]$scanErrors.Add([pscustomobject]@{
+                ShareId = $shareId
+                FullPath = $target
+                ErrorType = 'TargetPathResolveError'
+                Message = [string]$_.Exception.Message
+            })
+            [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolveError' -Source 'TargetPath' -ShareId $shareId -Message ('Unable to resolve target path {0}' -f $target) -Detail ([string]$_.Exception.Message)))
+            continue
+        }
         $shareInfo = Get-ShareSurferTargetShareInfo -TargetPath $target -TargetItem $targetItem
         [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetItem.FullName))
         $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
