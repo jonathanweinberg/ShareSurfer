@@ -61,6 +61,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [First-run guide](docs/first-run-guide.md)
 - [Management overview](docs/management-overview.md)
 - [Offline management overview slide](docs/management-overview.html)
+- [V1 phase-1 acceptance audit](docs/v1-phase1-acceptance-audit.md)
 - [Export schema](docs/export-schema.md)
 - [Azure Files path policy](docs/azure-files-path-policy.md)
 - [Redacted support bundles](docs/redacted-support-bundles.md)
