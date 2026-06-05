@@ -66,6 +66,36 @@ FocusedAclScenarios, Required=True, Passed=True, EvidenceStatus=PlanOnly, Eviden
 
 All other required criteria in the live evidence review were backed by live evidence.
 
+## Current Verifier Refresh
+
+After the archived evidence was retrieved, ShareSurfer's validation helper was updated to prove `FocusedAclScenarios` from scan/export evidence instead of leaving it plan-only. The historical raw files above are preserved as captured.
+
+The derived review under `20260605-101639/refreshed-evidence/` was generated from the archived CSV export with:
+
+```powershell
+.\scripts\New-ShareSurferArchivedEvidenceRefresh.ps1 `
+  -RunRoot 'docs\lab-evidence\windows-ad-enterprise-20260605-101639\20260605-101639' `
+  -OutputPath 'docs\lab-evidence\windows-ad-enterprise-20260605-101639\20260605-101639\refreshed-evidence' `
+  -RequireLiveEvidence `
+  -AllowMissingSupportBundle `
+  -AllowMissingIssueComments
+```
+
+That refresh preserves the original AD, filesystem, and scan evidence rows, strengthens only the stale `FocusedAclScenarios` row when the archived CSV export proves it, then writes refreshed criteria, live-evidence, live-evidence-review, and V1 acceptance artifacts.
+
+`20260605-101639/refreshed-evidence/v1-acceptance-summary.json` reports:
+
+- `IsValid`: `true`
+- `RequireLiveEvidence`: `true`
+- `FailedCheckCount`: `0`
+
+`20260605-101639/refreshed-evidence/live-evidence.json` reports:
+
+- `IsValid`: `true`
+- `FallbackCount`: `0`
+
+The strengthened `FocusedAclScenarios` row is backed by `ScanExport:acl_entries.csv;findings.csv;conflicts.csv;items.csv` with `41,278` ACL rows, `11,244` file ACL rows, `251` deep explicit ACE findings, `4` broken inheritance findings, `2` long-path findings, and `32,309` conflict rows.
+
 ## Support Bundle Status
 
 `20260605-101639/support-bundle-redacted/` was retrieved as a partial redacted support bundle with `27` files. Bundle generation was stopped before these expected completion artifacts were produced:
@@ -74,7 +104,7 @@ All other required criteria in the live evidence review were backed by live evid
 - `support_bundle_redaction_audit.csv`
 - `support_bundle_summary.json`
 
-Because the support bundle did not complete, these final acceptance artifacts are not present:
+The richer redacted lab-run support bundle is now optional phase-1 troubleshooting output, not a live-evidence proof blocker. Because the original support bundle did not complete, these historical raw-run acceptance artifacts are not present in the captured run root:
 
 - `20260605-101639/v1-acceptance.json`
 - `20260605-101639/v1-acceptance-summary.json`
@@ -85,6 +115,6 @@ Because the support bundle did not complete, these final acceptance artifacts ar
 
 Preserve the live lab while the remaining acceptance blockers are fixed:
 
-1. Make `FocusedAclScenarios` prove itself from live scan/export evidence under `-RequireLiveEvidence`.
-2. Make redacted support-bundle generation scale on enterprise output.
-3. Rerun validation against the existing lab with `-ObsAttribute info`.
+1. Rerun validation against the existing lab with `-ObsAttribute info`, `-IncludeFiles`, and `-RequireLiveEvidence`.
+2. Leave `-IncludeRedactedSupportBundle` off unless troubleshooting specifically needs the richer redacted lab-run bundle.
+3. Use the refreshed evidence folder as the current archived-export proof, and use a fresh live rerun when reviewers need new host-side AD, filesystem, or collector evidence.

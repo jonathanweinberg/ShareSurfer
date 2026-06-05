@@ -1,0 +1,89 @@
+{
+  "SummaryType": "ShareSurferV1AcceptanceSummary",
+  "GeneratedAt": "2026-06-05T17:18:00.3750970Z",
+  "IsValid": true,
+  "RequireLiveEvidence": true,
+  "CheckCount": 19,
+  "PassedCheckCount": 19,
+  "FailedCheckCount": 0,
+  "FailedChecks": [],
+  "Checks": [
+    {
+      "Name": "RunRoot",
+      "Passed": true
+    },
+    {
+      "Name": "NormalizedCsvExport",
+      "Passed": true
+    },
+    {
+      "Name": "ScanManifestIncludeFiles",
+      "Passed": true
+    },
+    {
+      "Name": "OwnerReviewPackets",
+      "Passed": true
+    },
+    {
+      "Name": "RawEventLog",
+      "Passed": true
+    },
+    {
+      "Name": "OfflineReport",
+      "Passed": true
+    },
+    {
+      "Name": "DashboardReviewEvidence",
+      "Passed": true
+    },
+    {
+      "Name": "RedactedSupportBundle",
+      "Passed": true
+    },
+    {
+      "Name": "LabRunSupportBundleEvidence",
+      "Passed": true
+    },
+    {
+      "Name": "ValidationIssueComments",
+      "Passed": true
+    },
+    {
+      "Name": "ValidationIssueCommentPublishPreview",
+      "Passed": true
+    },
+    {
+      "Name": "BundledValidationIssueComments",
+      "Passed": true
+    },
+    {
+      "Name": "ValidationCloseoutChecklist",
+      "Passed": true
+    },
+    {
+      "Name": "BundledValidationCloseoutChecklist",
+      "Passed": true
+    },
+    {
+      "Name": "LabPreflight",
+      "Passed": true
+    },
+    {
+      "Name": "CollectorEnvironment",
+      "Passed": true
+    },
+    {
+      "Name": "LabValidationCriteria",
+      "Passed": true
+    },
+    {
+      "Name": "LiveEvidenceReview",
+      "Passed": true
+    },
+    {
+      "Name": "LiveEvidenceGate",
+      "Passed": true
+    }
+  ],
+  "DetailPolicy": "Detailed evidence remains in v1-acceptance.json; this summary intentionally omits raw check detail values."
+}

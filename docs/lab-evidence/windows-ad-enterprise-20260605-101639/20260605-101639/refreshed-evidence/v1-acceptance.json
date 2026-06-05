@@ -1,0 +1,112 @@
+{
+  "IsValid": true,
+  "RunRoot": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639",
+  "ExportPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/export",
+  "ReportPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/report.html",
+  "DashboardReviewPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/dashboard-review.md",
+  "SupportBundlePath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/support-bundle-redacted",
+  "PreflightPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/lab-preflight.csv",
+  "CollectorEnvironmentPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/collector-environment.json",
+  "CriteriaPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/lab-validation-criteria.csv",
+  "LiveEvidencePath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/live-evidence.json",
+  "LiveEvidenceReviewPath": "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/live-evidence-review.csv",
+  "RequireLiveEvidence": true,
+  "FailedCheckCount": 0,
+  "Checks": [
+    {
+      "Name": "RunRoot",
+      "Passed": true,
+      "Detail": "Run root found: docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639"
+    },
+    {
+      "Name": "NormalizedCsvExport",
+      "Passed": true,
+      "Detail": "ValidationIsValid=True; MissingFiles=0; SchemaErrors=0"
+    },
+    {
+      "Name": "ScanManifestIncludeFiles",
+      "Passed": true,
+      "Detail": "ManifestRows=1; IncludeFiles=True; RequireLiveEvidence=True; Manifest=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/export/scan_manifest.csv"
+    },
+    {
+      "Name": "OwnerReviewPackets",
+      "Passed": true,
+      "Detail": "OwnerReviewPacketRows=250; Path=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/export/owner_review_packets.csv"
+    },
+    {
+      "Name": "RawEventLog",
+      "Passed": true,
+      "Detail": "Raw event log: docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/export/scan_events.jsonl"
+    },
+    {
+      "Name": "OfflineReport",
+      "Passed": true,
+      "Detail": "Report=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/report.html; MissingMarkers="
+    },
+    {
+      "Name": "DashboardReviewEvidence",
+      "Passed": true,
+      "Detail": "DashboardReview=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/dashboard-review.md; ContainsRunRoot=False"
+    },
+    {
+      "Name": "RedactedSupportBundle",
+      "Passed": true,
+      "Detail": "Bundle=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/support-bundle-redacted; Missing=support_bundle_manifest.csv, support_bundle_files.csv, support_bundle_summary.json, support_bundle_diagnostics.json, support_bundle_redaction_audit.csv, v1_acceptance.json, v1_acceptance_summary.json; Optional lab support bundle was skipped for this acceptance run."
+    },
+    {
+      "Name": "LabRunSupportBundleEvidence",
+      "Passed": true,
+      "Detail": "LabRunDiagnostics=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/support-bundle-redacted/lab_run_diagnostics.json; IncludedFiles=7"
+    },
+    {
+      "Name": "ValidationIssueComments",
+      "Passed": true,
+      "Detail": "Issue comments pending for staged acceptance: IssueCommentPath=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/issue-comments; Missing=issue-1-lab-fixture-live-proof.md, issue-3-scanner-live-proof.md, issue-5-identity-group-live-proof.md, issue-6-dashboard-live-proof.md, issue-comment-manifest.csv, post-commands.txt"
+    },
+    {
+      "Name": "ValidationIssueCommentPublishPreview",
+      "Passed": true,
+      "Detail": "Issue comment publish preview pending for staged acceptance: Publish preview not found: docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/issue-comment-publish-preview.csv"
+    },
+    {
+      "Name": "BundledValidationIssueComments",
+      "Passed": true,
+      "Detail": "Bundled issue comments pending for staged acceptance: BundledIssueCommentPath=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/support-bundle-redacted/issue_comments; Missing=issue-1-lab-fixture-live-proof.md, issue-3-scanner-live-proof.md, issue-5-identity-group-live-proof.md, issue-6-dashboard-live-proof.md, issue_comment_manifest.csv, post_commands.txt, publish_preview.csv"
+    },
+    {
+      "Name": "ValidationCloseoutChecklist",
+      "Passed": true,
+      "Detail": "Closeout checklist pending for staged acceptance: Closeout checklist not found: docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/validation-closeout-checklist.md"
+    },
+    {
+      "Name": "BundledValidationCloseoutChecklist",
+      "Passed": true,
+      "Detail": "Bundled closeout checklist pending for staged acceptance: Bundled closeout checklist not found: docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/support-bundle-redacted/validation_closeout_checklist.md"
+    },
+    {
+      "Name": "LabPreflight",
+      "Passed": true,
+      "Detail": "PreflightRows=13; FailedRequired=0; Preflight=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/lab-preflight.csv"
+    },
+    {
+      "Name": "CollectorEnvironment",
+      "Passed": true,
+      "Detail": "CollectorEnvironment=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/collector-environment.json; HasPowerShell=True; CommandRows=8; ModuleRows=2"
+    },
+    {
+      "Name": "LabValidationCriteria",
+      "Passed": true,
+      "Detail": "CriteriaRows=24; FailedRequired=0"
+    },
+    {
+      "Name": "LiveEvidenceReview",
+      "Passed": true,
+      "Detail": "ReviewRows=24; BlockingRows=0; Review=docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/live-evidence-review.csv"
+    },
+    {
+      "Name": "LiveEvidenceGate",
+      "Passed": true,
+      "Detail": "LiveEvidenceIsValid=True; FallbackCount=0"
+    }
+  ]
+}
