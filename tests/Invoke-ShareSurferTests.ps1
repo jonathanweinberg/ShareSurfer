@@ -1519,6 +1519,7 @@ $tests = @(
             $acceptanceScript = Join-Path $repoRoot 'scripts/Test-ShareSurferV1Acceptance.ps1'
             $issueSummaryScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueSummary.ps1'
             $issueCommentScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueComments.ps1'
+            $issueCommentPublisherScript = Join-Path $repoRoot 'scripts/Publish-ShareSurferValidationIssueComments.ps1'
             $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferAcceptance-' + [guid]::NewGuid().ToString('N'))
             $exportPath = Join-Path $runRoot 'export'
             $reportPath = Join-Path $runRoot 'report.html'
@@ -1556,6 +1557,7 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
             Assert-True (Test-Path -LiteralPath $issueSummaryScript) 'Validation issue summary script should exist.'
             Assert-True (Test-Path -LiteralPath $issueCommentScript) 'Validation issue comment generator script should exist.'
+            Assert-True (Test-Path -LiteralPath $issueCommentPublisherScript) 'Validation issue comment publisher script should exist.'
             $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -AllowMissingIssueComments
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
@@ -1609,6 +1611,17 @@ $tests = @(
             $postCommands = Get-Content -LiteralPath (Join-Path $issueCommentDirectory 'post-commands.txt') -Raw
             Assert-True ($postCommands -like '*gh issue comment 1 --repo jonathanweinberg/ShareSurfer --body-file*') 'Post commands should use the body-file issue comment pattern.'
             Assert-True ($postCommands -like '*issue-6-dashboard-live-proof.md*') 'Post commands should include the dashboard proof issue body file.'
+            $publishPreview = @(& $issueCommentPublisherScript -RunRoot $runRoot -Repository 'jonathanweinberg/ShareSurfer')
+            Assert-Equal $publishPreview.Count 4 'Publisher dry run should plan all generated issue comments without posting.'
+            Assert-True (@($publishPreview | Where-Object { [int]$_.IssueNumber -eq 1 -and [string]$_.Status -eq 'DryRun' }).Count -eq 1) 'Publisher dry run should include issue #1.'
+            Assert-True (@($publishPreview | Where-Object { [int]$_.IssueNumber -eq 6 -and [string]$_.Command -like '*--body-file*issue-6-dashboard-live-proof.md*' }).Count -eq 1) 'Publisher dry run should use body-file commands for issue #6.'
+            Assert-True (@($publishPreview | Where-Object { [string]$_.PostedUrl -ne '' }).Count -eq 0) 'Publisher dry run should not post comments.'
+            $publishFilteredPreview = @(& $issueCommentPublisherScript -RunRoot $runRoot -Repository 'jonathanweinberg/ShareSurfer' -IssueNumber 3)
+            Assert-Equal $publishFilteredPreview.Count 1 'Publisher should filter to a requested issue number.'
+            Assert-Equal ([int]$publishFilteredPreview[0].IssueNumber) 3 'Publisher issue filter should select issue #3.'
+            $publisherScriptText = Get-Content -LiteralPath $issueCommentPublisherScript -Raw
+            Assert-True ($publisherScriptText -like '*gh issue comment*--body-file*') 'Publisher should post issue comments with the body-file pattern.'
+            Assert-True ($publisherScriptText -like '*gh api*issues/comments*') 'Publisher should read back posted comments by comment id.'
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
             Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'

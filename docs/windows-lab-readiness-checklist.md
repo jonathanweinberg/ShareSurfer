@@ -124,6 +124,7 @@ Use these files first:
 - `issue-summary.md`: public-safe Markdown starting point for GitHub issue updates.
 - `issue-comments\*.md`: public-safe targeted body-file comments for the remaining proof issues.
 - `issue-comments\post-commands.txt`: exact `gh issue comment --body-file` commands for posting those targeted comments after review.
+- `scripts\Publish-ShareSurferValidationIssueComments.ps1`: preview or post the generated issue comments after you review them.
 - `report.html`: offline business review dashboard.
 
 Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md` and a sanitized `issue_comments` folder as shareable copies of the public-safe issue update artifacts. Do not attach raw run folders outside the trusted lab environment.
