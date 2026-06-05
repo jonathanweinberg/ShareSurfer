@@ -101,6 +101,12 @@ if (-not $acceptance.IsValid) {
     throw ('ShareSurfer V1 acceptance validation failed. See {0}' -f $acceptancePath)
 }
 
+New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
+$finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence
+if (-not $finishedPackageAcceptance.IsValid) {
+    throw ('ShareSurfer finished support bundle validation failed. See {0}' -f $acceptancePath)
+}
+
 [pscustomobject]@{
     RunRoot = $runRoot
     ExportPath = $exportPath
