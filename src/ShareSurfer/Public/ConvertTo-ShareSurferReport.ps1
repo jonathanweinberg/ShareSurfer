@@ -1074,6 +1074,7 @@ function ConvertTo-ShareSurferReport {
       acl_entries: 'acl_entries.csv',
       identities: 'identities.csv',
       group_edges: 'group_edges.csv',
+      permissioned_groups: 'permissioned_groups.csv',
       org_chains: 'org_chains.csv',
       owner_mappings: 'owner_mappings.csv',
       owner_risk_pivots: 'owner_risk_pivots.csv',
@@ -1289,6 +1290,25 @@ function ConvertTo-ShareSurferReport {
       })).sort((a, b) => Number(b.ExpandedMembers || 0) - Number(a.ExpandedMembers || 0) || String(a.Identity).localeCompare(String(b.Identity))).slice(0, 20);
     }
     function buildPermissionedGroupRows(state) {
+      if (Array.isArray(data.permissioned_groups) && data.permissioned_groups.length > 0) {
+        return filterRows(data.permissioned_groups, state, true).map(row => ({
+          Group: row.Group || '',
+          DisplayName: row.DisplayName || '',
+          ObsPath: row.ObsPath || '',
+          ManagerLevel1: row.ManagerLevel1 || '',
+          ShareAssignments: row.ShareAssignments || '0',
+          NtfsAssignments: row.NtfsAssignments || '0',
+          ExpandedMembers: row.ExpandedMembers || '0',
+          MaxDepth: row.MaxDepth || '0',
+          HasCycle: row.HasCycle || '',
+          IsTruncated: row.IsTruncated || '',
+          Rights: row.Rights || '',
+          ShareIds: row.ShareIds || '',
+          Sources: row.Sources || '',
+          ExamplePath: row.ExamplePath || row.FullPath || ''
+        })).sort((a, b) => Number(b.ExpandedMembers || 0) - Number(a.ExpandedMembers || 0) || String(a.Group).localeCompare(String(b.Group)));
+      }
+
       const accessMap = new Map();
       filterRows(data.share_permissions, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'Share', row.Rights || ''));
       filterRows(data.acl_entries, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'NTFS', row.Rights || ''));

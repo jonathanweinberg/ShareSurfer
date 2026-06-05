@@ -70,6 +70,25 @@ function Get-ShareSurferExportSchema {
             'IsCycle',
             'IsTruncated'
         )
+        'permissioned_groups.csv' = @(
+            'Group',
+            'DisplayName',
+            'ObjectClass',
+            'ObsPath',
+            'ManagerLevel1',
+            'ShareAssignments',
+            'NtfsAssignments',
+            'ExpandedMembers',
+            'MaxDepth',
+            'HasCycle',
+            'IsTruncated',
+            'Rights',
+            'ShareId',
+            'ShareIds',
+            'Sources',
+            'FullPath',
+            'ExamplePath'
+        )
         'org_chains.csv' = @(
             'Identity',
             'EmployeeId',
