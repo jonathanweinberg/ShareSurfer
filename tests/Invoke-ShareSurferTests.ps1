@@ -1556,32 +1556,16 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
             Assert-True (Test-Path -LiteralPath $issueSummaryScript) 'Validation issue summary script should exist.'
             Assert-True (Test-Path -LiteralPath $issueCommentScript) 'Validation issue comment generator script should exist.'
-            $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance
+            $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -AllowMissingIssueComments
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
-            $summaryBuildResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -SummaryPath $acceptanceSummaryPath
+            $summaryBuildResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -AllowMissingIssueComments -SummaryPath $acceptanceSummaryPath
             Assert-True $summaryBuildResult.IsValid 'Acceptance summary build should pass while the refreshed bundle is pending.'
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
-            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
-            Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
-            Assert-True (Test-Path -LiteralPath $acceptanceSummaryPath) 'Acceptance checker should write the concise acceptance summary when requested.'
-            $acceptanceSummary = Get-Content -LiteralPath $acceptanceSummaryPath -Raw | ConvertFrom-Json
-            $acceptanceSummaryRaw = Get-Content -LiteralPath $acceptanceSummaryPath -Raw
-            Assert-Equal ([string]$acceptanceSummary.SummaryType) 'ShareSurferV1AcceptanceSummary' 'Acceptance summary should identify its schema.'
-            Assert-Equal ([string]$acceptanceSummary.IsValid) 'True' 'Acceptance summary should carry the overall pass/fail status.'
-            Assert-Equal ([int]$acceptanceSummary.FailedCheckCount) 0 'Acceptance summary should include failed check count.'
-            Assert-True (@($acceptanceSummary.Checks).Count -ge 1) 'Acceptance summary should include check names and pass/fail states.'
-            Assert-True ($acceptanceSummaryRaw -notlike '*Synthetic acceptance proof*') 'Acceptance summary should omit raw check detail values.'
-            Assert-True ($acceptanceSummaryRaw -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Acceptance summary should omit raw lab-run detail values.'
-            Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
-            Assert-True ($result.Checks.Name -contains 'OwnerReviewPackets') 'Acceptance checks should include owner review packet evidence.'
-            Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
-            Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
-            Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
-            Assert-True ($result.Checks.Name -contains 'LabRunSupportBundleEvidence') 'Acceptance checks should include redacted lab-run support bundle evidence.'
-            Assert-True ($result.Checks.Name -contains 'LabPreflight') 'Acceptance checks should include lab preflight readiness evidence.'
-            Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
-            Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
+            $stagedIssueCommentResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingIssueComments
+            Assert-True $stagedIssueCommentResult.IsValid 'Staged acceptance should allow issue-comment artifacts to be pending before the generator runs.'
+            Assert-True ($stagedIssueCommentResult.Checks.Name -contains 'ValidationIssueComments') 'Staged acceptance should include raw issue-comment artifact checks.'
+            Assert-True ($stagedIssueCommentResult.Checks.Name -contains 'BundledValidationIssueComments') 'Staged acceptance should include bundled issue-comment artifact checks.'
 
             $issueSummaryPath = Join-Path $runRoot 'issue-summary.md'
             $issueSummary = & $issueSummaryScript -RunRoot $runRoot -OutputPath $issueSummaryPath -PassThru
@@ -1626,6 +1610,28 @@ $tests = @(
             Assert-True ($postCommands -like '*gh issue comment 1 --repo jonathanweinberg/ShareSurfer --body-file*') 'Post commands should use the body-file issue comment pattern.'
             Assert-True ($postCommands -like '*issue-6-dashboard-live-proof.md*') 'Post commands should include the dashboard proof issue body file.'
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
+            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
+            Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
+            Assert-True (Test-Path -LiteralPath $acceptanceSummaryPath) 'Acceptance checker should write the concise acceptance summary when requested.'
+            $acceptanceSummary = Get-Content -LiteralPath $acceptanceSummaryPath -Raw | ConvertFrom-Json
+            $acceptanceSummaryRaw = Get-Content -LiteralPath $acceptanceSummaryPath -Raw
+            Assert-Equal ([string]$acceptanceSummary.SummaryType) 'ShareSurferV1AcceptanceSummary' 'Acceptance summary should identify its schema.'
+            Assert-Equal ([string]$acceptanceSummary.IsValid) 'True' 'Acceptance summary should carry the overall pass/fail status.'
+            Assert-Equal ([int]$acceptanceSummary.FailedCheckCount) 0 'Acceptance summary should include failed check count.'
+            Assert-True (@($acceptanceSummary.Checks).Count -ge 1) 'Acceptance summary should include check names and pass/fail states.'
+            Assert-True ($acceptanceSummaryRaw -notlike '*Synthetic acceptance proof*') 'Acceptance summary should omit raw check detail values.'
+            Assert-True ($acceptanceSummaryRaw -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Acceptance summary should omit raw lab-run detail values.'
+            Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
+            Assert-True ($result.Checks.Name -contains 'OwnerReviewPackets') 'Acceptance checks should include owner review packet evidence.'
+            Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
+            Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
+            Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
+            Assert-True ($result.Checks.Name -contains 'LabRunSupportBundleEvidence') 'Acceptance checks should include redacted lab-run support bundle evidence.'
+            Assert-True ($result.Checks.Name -contains 'ValidationIssueComments') 'Acceptance checks should include raw validation issue-comment artifacts.'
+            Assert-True ($result.Checks.Name -contains 'BundledValidationIssueComments') 'Acceptance checks should include bundled validation issue-comment artifacts.'
+            Assert-True ($result.Checks.Name -contains 'LabPreflight') 'Acceptance checks should include lab preflight readiness evidence.'
+            Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
+            Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
             $bundleFilesAfterIssueSummary = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'support_bundle_files.csv'))
             Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
             $bundledIssueSummaryPath = Join-Path $bundlePath 'issue_summary.md'
@@ -1708,6 +1714,20 @@ $tests = @(
                 [pscustomobject]@{ Name = 'PlanCriteria'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'Synthetic acceptance proof'; NextAction = 'No action needed.' }
             ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-preflight.csv') -NoTypeInformation -Encoding UTF8
 
+            $bundledIssueCommentsPath = Join-Path $bundlePath 'issue_comments'
+            Remove-Item -LiteralPath $bundledIssueCommentsPath -Recurse -Force
+            $badBundledIssueCommentResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badBundledIssueCommentResult.IsValid) 'Acceptance checker should fail when bundled issue-comment artifacts are missing.'
+            Assert-True (@($badBundledIssueCommentResult.Checks | Where-Object { $_.Name -eq 'BundledValidationIssueComments' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report missing bundled issue-comment artifacts.'
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
+
+            Remove-Item -LiteralPath (Join-Path $issueCommentDirectory 'issue-6-dashboard-live-proof.md') -Force
+            $badRawIssueCommentResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badRawIssueCommentResult.IsValid) 'Acceptance checker should fail when raw issue-comment artifacts are missing.'
+            Assert-True (@($badRawIssueCommentResult.Checks | Where-Object { $_.Name -eq 'ValidationIssueComments' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report missing raw issue-comment artifacts.'
+            & $issueCommentScript -RunRoot $runRoot -OutputDirectory $issueCommentDirectory -Repository 'jonathanweinberg/ShareSurfer' | Out-Null
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
+
             Remove-Item -LiteralPath (Join-Path $bundlePath 'scan_events.jsonl') -Force
             $failedResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True (-not $failedResult.IsValid) 'Acceptance checker should fail when a required support bundle artifact is missing.'
@@ -1716,8 +1736,10 @@ $tests = @(
             $labValidationScript = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-ShareSurferLabValidation.ps1') -Raw
             Assert-True ($labValidationScript -like '*Test-ShareSurferV1Acceptance.ps1*') 'Lab validation should run the V1 acceptance checker automatically.'
             Assert-True ($labValidationScript -like '*-AllowMissingBundledAcceptance*') 'Lab validation should allow bundled acceptance to be pending only for the first acceptance pass.'
+            Assert-True ($labValidationScript -like '*-AllowMissingIssueComments*') 'Lab validation should allow issue-comment evidence to be pending only for staged acceptance passes.'
             Assert-True ($labValidationScript -like '*$finishedPackageAcceptance = & $acceptanceScriptPath*') 'Lab validation should verify the finished bundle after strict acceptance is bundled.'
             Assert-True ($labValidationScript -like '*ShareSurfer finished support bundle validation failed*') 'Lab validation should fail clearly if the final refreshed support bundle is invalid.'
+            Assert-True ($labValidationScript -like '*final refreshed support bundle validation failed*') 'Lab validation should fail clearly if the final refreshed support bundle is invalid.'
             Assert-True ($labValidationScript -like '*PreflightOnly*') 'Lab validation should expose a non-mutating preflight-only mode.'
             Assert-True ($labValidationScript -like '*if ($PreflightOnly)*') 'Lab validation should return after preflight artifacts when preflight-only mode is used.'
             Assert-True ($labValidationScript -like '*PreflightPassed*') 'Lab validation preflight-only output should report preflight status.'
