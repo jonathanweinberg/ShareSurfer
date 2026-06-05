@@ -63,7 +63,8 @@ Stop and fix the issue before continuing if any required row is not passing, esp
 - `SmbShareCommands`
 - `EnterpriseIncludeFiles`
 - `WindowsPathComponents`
-- `DiskBudget`
+- `PlanDiskBudget`
+- `TargetVolumeFreeSpace`
 - `PlanCriteria`
 
 Preflight is safe to rerun. It should not create the lab.
