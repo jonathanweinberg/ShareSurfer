@@ -8,7 +8,7 @@ This audit maps the phase-1 plan to the current implementation evidence. It is i
 - V1 acceptance summary: `IsValid=True`, `PassedCheckCount=19`, `FailedCheckCount=0`.
 - Live evidence gate: `IsValid=True`, `FallbackCount=0`.
 - Optional rich enterprise support bundle: skipped by policy for phase 1, not a proof blocker.
-- Proof issues still open: #1, #3, #5, and #6.
+- Proof issues still open: #5. Issues #1, #3, and #6 were human-approved after the proof comments were reviewed.
 
 Close the proof issues only after a human reviewer accepts the posted proof comments and the evidence pack.
 
@@ -41,7 +41,7 @@ Posted proof comments:
 | Scanner collects share permissions, file and folder ACLs, ownership, inherited/explicit state, inheritance breaks, deep explicit ACE findings, long-path policy findings, conflicts, and collection errors | Implemented and live-proven | Issue #3 proof comment, `EnterpriseSharePermissions=500`, `EnterpriseAclEntries=41278`, `EnterpriseFileAclEntries=11244`, `EnterpriseOwnershipEvidence=5726`, `EnterpriseConflictFindings=32309` |
 | Samba-style or UNC-only scans are best effort with partial-data flags when share-level permissions cannot be proven | Implemented | `SharePermissionCollectionUnavailable` documentation in [Export schema](export-schema.md), partial-data tests, diagnostics dashboard coverage |
 | Identity enrichment uses AD module when present and LDAP fallback otherwise; group expansion is recursive with depth and cycle protection | Implemented and live-proven | Issue #5 proof comment, `EnterpriseGroupExpansion=1253`, `AdLookupMode` in [Export schema](export-schema.md), identity/group tests |
-| Employee identifiers, manager chains, manager's manager, runtime OBS/OID attribute, and additional correlation fields are exported | Implemented and live-proven | Issue #5 proof comment, `EnterpriseEmployeeIdentifierCoverage=255`, `EnterpriseManagerChainCoverage=252`, `EnterpriseUserObsCoverage=255`, `EnterprisePermissionGroupObsCoverage=498` |
+| Employee identifiers, manager chains through three levels when populated, runtime OBS/OID attribute, title, office, potential service-account flags, and additional correlation fields are exported | Implemented with updated issue #5 validation pending | Issue #5 proof comment plus refreshed issue #5 validation for the new manager-depth and service-account requirements |
 | Offline HTML report is dependency-free, embeds data safely, supports filters, owner/business-unit pivots, group browsing, org context, findings, conflicts, diagnostics, raw evidence, and Migration Discovery | Implemented and live-proven | Issue #6 proof comment, [Management overview](management-overview.md), [Dashboard screenshots](visuals/README.md), `OfflineReport` and `DashboardReviewEvidence` acceptance checks |
 | Migration discovery surfaces related shares, folders, owners, business units, path patterns, and review packets | Implemented and live-proven | Issue #6 proof comment, `EnterpriseRelatedDataAreas=250`, `EnterpriseOwnerReviewPackets=250`, `related_data_areas.csv`, `owner_review_packets.csv` |
 | Azure Files path policy distinguishes Microsoft hard limits from ShareSurfer's operational 256-character warning policy | Implemented | [Azure Files path policy](azure-files-path-policy.md), README Azure path policy note, report tests |

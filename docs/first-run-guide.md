@@ -30,7 +30,7 @@ Use a Windows collector machine with:
 - Directory read access if you want user, group, manager, employee, and OBS enrichment.
 - A local output folder with enough free space for CSVs, logs, reports, and support bundles.
 
-For AD enrichment, record the OBS attribute before scanning. The default is `extensionAttribute10`, but your environment may use another extension attribute. Some labs do not have Exchange-style extension attributes in the AD schema; in that case, choose an attribute that exists on both users and groups, such as `info`, and pass it with `-ObsAttribute`.
+For AD enrichment, record the OBS attribute before scanning. The default is `extensionAttribute10`, but your environment may use another extension attribute. Some labs do not have Exchange-style extension attributes in the AD schema; in that case, choose an attribute that exists on both users and groups, such as `info`, and pass it with `-ObsAttribute`. ShareSurfer records the selected attribute in `scan_manifest.csv` and in each enriched identity row so reviewers can see exactly which OBS source was used.
 
 For lab validation, use the designated Windows/AD lab host directly.
 
@@ -169,19 +169,21 @@ The most important CSVs for a first review are:
 | `items.csv` | Folders and files found under each share. |
 | `share_permissions.csv` | The share-level access gate. |
 | `acl_entries.csv` | Folder and file permissions. |
-| `findings.csv` | Long-path warnings, broken inheritance, and deep explicit ACEs. |
+| `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, and potential service account review flags. |
 | `conflicts.csv` | Share-vs-NTFS access mismatches. |
 | `identities.csv` | User and group details such as employee and OBS values. |
 | `group_edges.csv` | Expanded group membership paths. |
-| `org_chains.csv` | Manager and manager's manager context. |
+| `org_chains.csv` | Manager, manager's manager, and third-level manager context when populated. |
 | `owner_mappings.csv` | Business owner and business unit rules. |
 | `owner_risk_pivots.csv` | Owner/business-unit review queue with mapped item counts, direct identities, direct groups, expanded members, findings, conflicts, partial shares, and risk level. |
 | `related_data_areas.csv` | Migration discovery rows for like-owned shares, folders, and files that should be reviewed together before migration planning. |
 | `owner_review_packets.csv` | Plain-language owner review packets showing why review is needed, where to start, and the suggested next action. |
-| `identities.csv` | Users, groups, manager fields, OBS values, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
+| `identities.csv` | Users, groups, manager fields, OBS values, potential service-account flags, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
 | `permissioned_groups.csv` | Groups that directly grant share or folder/file access, including assignment counts, rights, expanded members, and expansion health. |
 
 Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
+
+If `PotentialServiceAccount=True` appears in `identities.csv` or a `PotentialServiceAccount` row appears in `findings.csv`, ask the owner or directory team to confirm the account purpose. It may be a real service account, or it may simply be a human account with missing OBS and employee identifier data.
 
 ## Step 7: Generate the Offline Report
 

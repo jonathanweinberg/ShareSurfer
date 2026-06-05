@@ -37,6 +37,20 @@ function Resolve-ShareSurferIdentityInventory {
     $groupEdges = New-Object System.Collections.ArrayList
     $orgRows = [ordered]@{}
 
+    function Test-ShareSurferPotentialServiceAccount {
+        param(
+            [string] $ObjectClass = '',
+            [string] $ObsPath = '',
+            [string] $EmployeeId = '',
+            [string] $EmployeeNumber = ''
+        )
+
+        $ObjectClass.ToLowerInvariant() -eq 'user' -and
+            [string]::IsNullOrWhiteSpace($ObsPath) -and
+            [string]::IsNullOrWhiteSpace($EmployeeId) -and
+            [string]::IsNullOrWhiteSpace($EmployeeNumber)
+    }
+
     foreach ($existing in @(ConvertTo-ShareSurferArray $Inventory.GroupEdges)) {
         [void]$groupEdges.Add($existing)
     }
@@ -78,6 +92,7 @@ function Resolve-ShareSurferIdentityInventory {
         $manager = ''
         $managerLevel1 = ''
         $managerLevel2 = ''
+        $managerLevel3 = ''
         $obsPath = ''
         $distinguishedName = ''
         if ($null -ne $entry) {
@@ -97,6 +112,7 @@ function Resolve-ShareSurferIdentityInventory {
                 @('Manager', 'manager'),
                 @('ManagerLevel1', 'managerLevel1'),
                 @('ManagerLevel2', 'managerLevel2'),
+                @('ManagerLevel3', 'managerLevel3'),
                 @('ObsPath', 'obsPath'),
                 @('DistinguishedName', 'distinguishedName')
             )) {
@@ -124,13 +140,15 @@ function Resolve-ShareSurferIdentityInventory {
             Manager = $manager
             ManagerLevel1 = $managerLevel1
             ManagerLevel2 = $managerLevel2
+            ManagerLevel3 = $managerLevel3
             ObsPath = $obsPath
             ObsAttribute = $ObsAttribute
+            PotentialServiceAccount = Test-ShareSurferPotentialServiceAccount -ObjectClass $objectClass -ObsPath $obsPath -EmployeeId $employeeId -EmployeeNumber $employeeNumber
             DistinguishedName = $distinguishedName
         }
         $identityRows[$key] = $row
 
-        if ($managerLevel1 -ne '' -or $managerLevel2 -ne '' -or $obsPath -ne '' -or $employeeId -ne '') {
+        if ($managerLevel1 -ne '' -or $managerLevel2 -ne '' -or $managerLevel3 -ne '' -or $obsPath -ne '' -or $employeeId -ne '' -or $employeeNumber -ne '' -or [bool]$row.PotentialServiceAccount) {
             $orgRows[$key] = [pscustomobject]@{
                 Identity = $Identity
                 EmployeeId = $employeeId
@@ -138,10 +156,13 @@ function Resolve-ShareSurferIdentityInventory {
                 Department = $department
                 Title = $title
                 Company = $company
+                Office = $office
                 ManagerLevel1 = $managerLevel1
                 ManagerLevel2 = $managerLevel2
+                ManagerLevel3 = $managerLevel3
                 ObsPath = $obsPath
                 ObsAttribute = $ObsAttribute
+                PotentialServiceAccount = $row.PotentialServiceAccount
             }
         }
     }

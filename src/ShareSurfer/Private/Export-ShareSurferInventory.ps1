@@ -117,7 +117,7 @@ function Export-ShareSurferInventory {
     }
 
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
-    $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
+    $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
     $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges)
     $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts)
     $relatedDataAreas = @(Get-ShareSurferRelatedDataAreas -OwnerRiskPivots $ownerRiskPivots -Items $items -Shares $shares)

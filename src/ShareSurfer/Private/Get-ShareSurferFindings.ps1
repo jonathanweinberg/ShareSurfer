@@ -12,6 +12,8 @@ function Get-ShareSurferFindings {
         [Parameter(Mandatory = $true)]
         $GroupEdges,
 
+        $Identities = @(),
+
         $ScanErrors = @(),
 
         [int] $OperationalPathLengthThreshold = 256,
@@ -94,6 +96,27 @@ function Get-ShareSurferFindings {
         if ($isTruncated) {
             [void]$findings.Add((New-ShareSurferFinding -FindingType 'GroupExpansionTruncated' -Severity 'Warning' -Identity $edge.ParentGroup -ObservedValue $edge.Depth -PolicyValue 'Configured max depth' -Message 'Group expansion stopped at the configured maximum depth.'))
         }
+    }
+
+    foreach ($identity in @(ConvertTo-ShareSurferArray $Identities)) {
+        $objectClass = ''
+        if ($null -ne $identity.PSObject.Properties['ObjectClass']) {
+            $objectClass = [string]$identity.ObjectClass
+        }
+        if ($objectClass.ToLowerInvariant() -ne 'user') {
+            continue
+        }
+
+        $obsPath = if ($null -ne $identity.PSObject.Properties['ObsPath']) { [string]$identity.ObsPath } else { '' }
+        $employeeId = if ($null -ne $identity.PSObject.Properties['EmployeeId']) { [string]$identity.EmployeeId } else { '' }
+        $employeeNumber = if ($null -ne $identity.PSObject.Properties['EmployeeNumber']) { [string]$identity.EmployeeNumber } else { '' }
+        $isPotentialServiceAccount = [string]::IsNullOrWhiteSpace($obsPath) -and [string]::IsNullOrWhiteSpace($employeeId) -and [string]::IsNullOrWhiteSpace($employeeNumber)
+        if (-not $isPotentialServiceAccount) {
+            continue
+        }
+
+        $identityText = if ($null -ne $identity.PSObject.Properties['Identity']) { [string]$identity.Identity } else { '' }
+        [void]$findings.Add((New-ShareSurferFinding -FindingType 'PotentialServiceAccount' -Severity 'Warning' -Identity $identityText -ObservedValue 'Missing OBS path and employee identifiers' -PolicyValue 'User account should have OBS, employeeID, or employeeNumber unless it is a service account' -Message 'User account has no OBS value and no employee identifier. Review whether this is a service account or an incomplete directory record.'))
     }
 
     foreach ($scanError in @(ConvertTo-ShareSurferArray $ScanErrors)) {

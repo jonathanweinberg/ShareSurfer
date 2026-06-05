@@ -24,14 +24,15 @@ function New-ShareSurferLabPlan {
     }
 
     $users = @(
-        @{ SamAccountName = 'Ava.Accounting'; DisplayName = 'Ava Accounting'; EmployeeId = 'E1001'; EmployeeNumber = '1001'; Manager = 'Morgan.Manager'; Obs = 'CORP.FIN.AP' },
-        @{ SamAccountName = 'Noah.Payroll'; DisplayName = 'Noah Payroll'; EmployeeId = 'E1002'; EmployeeNumber = '1002'; Manager = 'Morgan.Manager'; Obs = 'CORP.FIN.PAY' },
-        @{ SamAccountName = 'Mia.Engineering'; DisplayName = 'Mia Engineering'; EmployeeId = 'E2001'; EmployeeNumber = '2001'; Manager = 'Parker.Manager'; Obs = 'CORP.ENG.PLAT' },
-        @{ SamAccountName = 'Leo.Operations'; DisplayName = 'Leo Operations'; EmployeeId = 'E3001'; EmployeeNumber = '3001'; Manager = 'Quinn.Manager'; Obs = 'CORP.OPS.FILE' },
-        @{ SamAccountName = 'Morgan.Manager'; DisplayName = 'Morgan Manager'; EmployeeId = 'M1001'; EmployeeNumber = '9001'; Manager = 'Riley.Director'; Obs = 'CORP.FIN' },
-        @{ SamAccountName = 'Parker.Manager'; DisplayName = 'Parker Manager'; EmployeeId = 'M2001'; EmployeeNumber = '9002'; Manager = 'Riley.Director'; Obs = 'CORP.ENG' },
-        @{ SamAccountName = 'Quinn.Manager'; DisplayName = 'Quinn Manager'; EmployeeId = 'M3001'; EmployeeNumber = '9003'; Manager = 'Riley.Director'; Obs = 'CORP.OPS' },
-        @{ SamAccountName = 'Riley.Director'; DisplayName = 'Riley Director'; EmployeeId = 'D1001'; EmployeeNumber = '9901'; Manager = ''; Obs = 'CORP' }
+        @{ SamAccountName = 'Ava.Accounting'; DisplayName = 'Ava Accounting'; EmployeeId = 'E1001'; EmployeeNumber = '1001'; Manager = 'Morgan.Manager'; Title = 'Accounting Analyst'; Office = 'HQ-4'; Obs = 'CORP.FIN.AP' },
+        @{ SamAccountName = 'Noah.Payroll'; DisplayName = 'Noah Payroll'; EmployeeId = 'E1002'; EmployeeNumber = '1002'; Manager = 'Morgan.Manager'; Title = 'Payroll Specialist'; Office = 'HQ-4'; Obs = 'CORP.FIN.PAY' },
+        @{ SamAccountName = 'Mia.Engineering'; DisplayName = 'Mia Engineering'; EmployeeId = 'E2001'; EmployeeNumber = '2001'; Manager = 'Parker.Manager'; Title = 'Platform Engineer'; Office = 'HQ-7'; Obs = 'CORP.ENG.PLAT' },
+        @{ SamAccountName = 'Leo.Operations'; DisplayName = 'Leo Operations'; EmployeeId = 'E3001'; EmployeeNumber = '3001'; Manager = 'Quinn.Manager'; Title = 'Operations Lead'; Office = 'HQ-2'; Obs = 'CORP.OPS.FILE' },
+        @{ SamAccountName = 'Morgan.Manager'; DisplayName = 'Morgan Manager'; EmployeeId = 'M1001'; EmployeeNumber = '9001'; Manager = 'Riley.Director'; Title = 'Finance Manager'; Office = 'HQ-4'; Obs = 'CORP.FIN' },
+        @{ SamAccountName = 'Parker.Manager'; DisplayName = 'Parker Manager'; EmployeeId = 'M2001'; EmployeeNumber = '9002'; Manager = 'Riley.Director'; Title = 'Engineering Manager'; Office = 'HQ-7'; Obs = 'CORP.ENG' },
+        @{ SamAccountName = 'Quinn.Manager'; DisplayName = 'Quinn Manager'; EmployeeId = 'M3001'; EmployeeNumber = '9003'; Manager = 'Riley.Director'; Title = 'Operations Manager'; Office = 'HQ-2'; Obs = 'CORP.OPS' },
+        @{ SamAccountName = 'Riley.Director'; DisplayName = 'Riley Director'; EmployeeId = 'D1001'; EmployeeNumber = '9901'; Manager = 'Jordan.VP'; Title = 'Shared Services Director'; Office = 'HQ-1'; Obs = 'CORP' },
+        @{ SamAccountName = 'Jordan.VP'; DisplayName = 'Jordan VP'; EmployeeId = 'V1001'; EmployeeNumber = '9991'; Manager = ''; Title = 'Vice President'; Office = 'HQ-1'; Obs = 'CORP.EXEC' }
     ) | ForEach-Object {
         $record = [ordered]@{
             SamAccountName = $_.SamAccountName
@@ -40,6 +41,8 @@ function New-ShareSurferLabPlan {
             EmployeeId = $_.EmployeeId
             EmployeeNumber = $_.EmployeeNumber
             Manager = $_.Manager
+            Title = $_.Title
+            Office = $_.Office
             Enabled = $true
         }
         $record[$ObsAttribute] = $_.Obs
@@ -66,6 +69,8 @@ function New-ShareSurferLabPlan {
                 EmployeeId = ('E{0:D7}' -f $nextUserId)
                 EmployeeNumber = ('{0:D7}' -f $nextUserId)
                 Manager = $manager
+                Title = ('{0} Analyst' -f $department)
+                Office = ('Service{0:D2}' -f (($nextUserId % 70) + 1))
                 Enabled = $true
             }
             $record[$ObsAttribute] = ('CORP.{0}.UNIT{1:D2}' -f $department, (($nextUserId - 1) % 25) + 1)
@@ -261,17 +266,28 @@ function New-ShareSurferLabPlan {
         foreach ($user in @($users)) {
             $userManagerMap[[string]$user.SamAccountName] = [string]$user.Manager
         }
-        $plannedTwoLevelManagerChains = @($users | Where-Object {
-            $manager = [string]$_.Manager
-            $manager -ne '' -and $userManagerMap.ContainsKey($manager) -and [string]$userManagerMap[$manager] -ne ''
+        $plannedThreeLevelManagerChains = @($users | Where-Object {
+            $manager1 = [string]$_.Manager
+            if ($manager1 -eq '' -or -not $userManagerMap.ContainsKey($manager1)) {
+                $false
+            }
+            else {
+                $manager2 = [string]$userManagerMap[$manager1]
+                if ($manager2 -eq '' -or -not $userManagerMap.ContainsKey($manager2)) {
+                    $false
+                }
+                else {
+                    [string]$userManagerMap[$manager2] -ne ''
+                }
+            }
         })
         [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseManagerChainCoverage'
             MinimumValue = 1
-            ActualPlanValue = @($plannedTwoLevelManagerChains).Count
-            Unit = 'two-level manager chains'
+            ActualPlanValue = @($plannedThreeLevelManagerChains).Count
+            Unit = 'three-level manager chains'
             Required = $true
-            Description = 'Enterprise validation proves enriched user identities include manager and manager-manager context.'
+            Description = 'Enterprise validation proves enriched user identities include manager, manager-manager, and third-level manager context.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseUserObsCoverage'

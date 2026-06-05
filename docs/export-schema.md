@@ -73,9 +73,11 @@ Use `IsInherited=False` plus a high `Depth` to identify explicit ACEs buried dee
 
 ### `identities.csv`
 
-Expected columns: `Identity`, `SamAccountName`, `DisplayName`, `ObjectClass`, `EmployeeId`, `EmployeeNumber`, `UserPrincipalName`, `Mail`, `Department`, `Title`, `Company`, `Office`, `AccountEnabled`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ObsPath`, `ObsAttribute`, `DistinguishedName`.
+Expected columns: `Identity`, `SamAccountName`, `DisplayName`, `ObjectClass`, `EmployeeId`, `EmployeeNumber`, `UserPrincipalName`, `Mail`, `Department`, `Title`, `Company`, `Office`, `AccountEnabled`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ObsPath`, `ObsAttribute`, `PotentialServiceAccount`, `DistinguishedName`.
 
 `ObsAttribute` records which directory attribute supplied the OBS value, for example `extensionAttribute10`.
+
+`PotentialServiceAccount=True` means the identity is a user account with no OBS value and no `employeeID` or `employeeNumber` collected. Treat it as a review flag, not proof; some environments have incomplete directory data.
 
 Use the extra directory fields as correlation clues, not as approval by themselves. They help identify likely data owners, business units, manager chains, and related groups when path naming alone is not enough.
 
@@ -93,9 +95,9 @@ Use this file to start group access review from groups that actually grant acces
 
 ### `org_chains.csv`
 
-Expected columns: `Identity`, `EmployeeId`, `EmployeeNumber`, `Department`, `Title`, `Company`, `ManagerLevel1`, `ManagerLevel2`, `ObsPath`, `ObsAttribute`.
+Expected columns: `Identity`, `EmployeeId`, `EmployeeNumber`, `Department`, `Title`, `Company`, `Office`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ObsPath`, `ObsAttribute`, `PotentialServiceAccount`.
 
-Implementations may add more manager-level columns, but V1 reports should handle at least the first two levels.
+V1 follows the manager chain through three levels when the directory has the data. Blank manager, title, or office values are normal in many environments.
 
 ### `owner_mappings.csv`
 

@@ -58,8 +58,10 @@ function Get-ShareSurferExportSchema {
             'Manager',
             'ManagerLevel1',
             'ManagerLevel2',
+            'ManagerLevel3',
             'ObsPath',
             'ObsAttribute',
+            'PotentialServiceAccount',
             'DistinguishedName'
         )
         'group_edges.csv' = @(
@@ -96,10 +98,13 @@ function Get-ShareSurferExportSchema {
             'Department',
             'Title',
             'Company',
+            'Office',
             'ManagerLevel1',
             'ManagerLevel2',
+            'ManagerLevel3',
             'ObsPath',
-            'ObsAttribute'
+            'ObsAttribute',
+            'PotentialServiceAccount'
         )
         'owner_mappings.csv' = @(
             'Pattern',

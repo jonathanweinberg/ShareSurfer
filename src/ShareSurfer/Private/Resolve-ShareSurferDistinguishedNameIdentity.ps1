@@ -37,7 +37,8 @@ function Resolve-ShareSurferDistinguishedNameIdentity {
 
         $managerLevel1 = Get-ShareSurferLdapPropertyValue -Properties $props -Name 'manager'
         $managerLevel2 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel1
-        New-ShareSurferLdapIdentityRecord -Identity $identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2 -DistinguishedName $DistinguishedName
+        $managerLevel3 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel2
+        New-ShareSurferLdapIdentityRecord -Identity $identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2 -ManagerLevel3 $managerLevel3 -DistinguishedName $DistinguishedName
     }
     catch {
         $null

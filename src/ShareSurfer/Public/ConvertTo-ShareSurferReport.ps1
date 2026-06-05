@@ -728,6 +728,14 @@ function ConvertTo-ShareSurferReport {
     <section class="view-panel" id="view-org" data-panel="org">
       <div class="panel">
         <div class="table-header">
+          <h2>Potential Service Accounts</h2>
+          <span class="count" id="potential-service-accounts-count"></span>
+        </div>
+        <p class="note">User accounts with no OBS value and no employee identifier are flagged for review. This is a clue that the account may be service-style automation or that directory data is incomplete.</p>
+        <div class="scroll"><table id="potential-service-accounts"></table></div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
           <h2>Org Chain Rollups</h2>
           <span class="count" id="org-rollups-count"></span>
         </div>
@@ -1762,18 +1770,37 @@ function ConvertTo-ShareSurferReport {
     function buildOrgChainRollups() {
       const rollups = new Map();
       data.org_chains.forEach(chain => {
-        const key = [chain.ObsPath || '', chain.ManagerLevel1 || '', chain.ManagerLevel2 || ''].join('|');
+        const key = [chain.ObsPath || '', chain.ManagerLevel1 || '', chain.ManagerLevel2 || '', chain.ManagerLevel3 || ''].join('|');
         if (!rollups.has(key)) {
           rollups.set(key, {
             ObsPath: chain.ObsPath || '',
             ManagerLevel1: chain.ManagerLevel1 || '',
             ManagerLevel2: chain.ManagerLevel2 || '',
+            ManagerLevel3: chain.ManagerLevel3 || '',
             Identities: 0
           });
         }
         rollups.get(key).Identities += 1;
       });
       return Array.from(rollups.values()).sort((a, b) => String(a.ObsPath).localeCompare(String(b.ObsPath)) || String(a.ManagerLevel1).localeCompare(String(b.ManagerLevel1)));
+    }
+    function isTruthy(value) {
+      return ['true', '1', 'yes'].includes(String(value || '').trim().toLowerCase());
+    }
+    function buildPotentialServiceAccountRows() {
+      return data.identities
+        .filter(identity => isTruthy(identity.PotentialServiceAccount))
+        .map(identity => ({
+          Identity: identity.Identity || '',
+          DisplayName: identity.DisplayName || '',
+          SamAccountName: identity.SamAccountName || '',
+          Title: identity.Title || '',
+          Office: identity.Office || '',
+          Department: identity.Department || '',
+          AccountEnabled: identity.AccountEnabled || '',
+          ObsAttribute: identity.ObsAttribute || '',
+          ReviewReason: 'No OBS path, employeeID, or employeeNumber was collected'
+        }));
     }
     function buildGroupBrowserRows() {
       return data.group_edges.map(edge => ({
@@ -1863,6 +1890,7 @@ function ConvertTo-ShareSurferReport {
     const conflict_rollups = buildRollups(data.conflicts, ['ConflictType', 'Severity']);
     const collection_error_rollups = buildRollups(collection_errors, ['ObservedValue', 'ShareId']);
     const org_rollups = buildOrgChainRollups();
+    const potential_service_accounts = buildPotentialServiceAccountRows();
     const group_browser_rows = buildGroupBrowserRows();
     const identityByKey = new Map(data.identities.map(identity => [normalizeIdentity(identity.Identity || identity.SamAccountName || ''), identity]));
     const groupEdgesByParent = new Map();
@@ -1915,6 +1943,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('groups', filterRows(data.group_edges, state, false));
       renderTable('collection-errors', filterRows(collection_errors, state, true));
       renderTable('collection-error-rollups', filterRows(collection_error_rollups, state, false));
+      renderTable('potential-service-accounts', filterRows(potential_service_accounts, state, false));
       renderTable('org-rollups', filterRows(org_rollups, state, false));
       renderTable('events', filterRows(data.scan_events, state, false));
       renderReviewWorkbench(state);
