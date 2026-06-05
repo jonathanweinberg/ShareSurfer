@@ -78,12 +78,17 @@ function Get-ShareSurferLocalInventory {
         $childErrors = @()
         $children = Get-ChildItem -LiteralPath $targetItem.FullName -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable childErrors
         foreach ($childError in $childErrors) {
+            $errorPath = Get-ShareSurferCollectionErrorPath -ErrorRecord $childError -FallbackPath $targetItem.FullName
             [void]$scanErrors.Add([pscustomobject]@{
                 ShareId = $shareId
-                FullPath = $targetItem.FullName
+                FullPath = $errorPath
                 ErrorType = 'EnumerationError'
+                Severity = 'Warning'
+                Source = 'Get-ChildItem'
                 Message = [string]$childError.Exception.Message
+                Detail = ('FallbackPath={0}' -f $targetItem.FullName)
             })
+            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'EnumerationError' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Unable to enumerate child path {0}' -f $errorPath) -Detail ([string]$childError.Exception.Message)))
         }
         foreach ($child in $children) {
             if ($child.PSIsContainer -or $IncludeFiles) {

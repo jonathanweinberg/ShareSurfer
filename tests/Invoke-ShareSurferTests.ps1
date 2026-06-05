@@ -877,6 +877,34 @@ $tests = @(
         }
     },
     @{
+        Name = 'Scanner diagnostics preserve specific enumeration error targets when available'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $targetPath = 'C:\ShareSurferLab\Finance\Restricted'
+            $fallbackPath = 'C:\ShareSurferLab\Finance'
+            $exception = New-Object System.UnauthorizedAccessException('Access denied while enumerating children.')
+            $errorRecord = New-Object System.Management.Automation.ErrorRecord($exception, 'UnauthorizedAccess', [System.Management.Automation.ErrorCategory]::PermissionDenied, $targetPath)
+
+            $resolvedPath = & $module {
+                param($Record, $Fallback)
+                Get-ShareSurferCollectionErrorPath -ErrorRecord $Record -FallbackPath $Fallback
+            } $errorRecord $fallbackPath
+
+            Assert-Equal $resolvedPath $targetPath 'Enumeration diagnostics should prefer the specific failed child path when PowerShell provides it.'
+            $fallbackResolvedPath = & $module {
+                param($Fallback)
+                Get-ShareSurferCollectionErrorPath -FallbackPath $Fallback
+            } $fallbackPath
+            Assert-Equal $fallbackResolvedPath $fallbackPath 'Enumeration diagnostics should fall back to the scanned target root when no child target is available.'
+
+            $localScannerText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferLocalInventory.ps1') -Raw
+            Assert-True ($localScannerText -like '*Get-ShareSurferCollectionErrorPath -ErrorRecord $childError*') 'Local scanner should use the collection-error path resolver for enumeration errors.'
+            Assert-True ($localScannerText -like '*Source = ''Get-ChildItem''*') 'Local scanner should identify Get-ChildItem as the source for enumeration error rows.'
+            Assert-True ($localScannerText -like '*EventType ''EnumerationError''*') 'Local scanner should record enumeration errors as scan events for diagnostics.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan enriches identities and recursive group edges from an inventory directory graph'
         Body = {
             Import-Module $moduleManifest -Force
