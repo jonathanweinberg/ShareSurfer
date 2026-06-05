@@ -262,6 +262,7 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRealFiles') 'Enterprise lab plan should include a real-file validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include a disk-budget validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerRiskPivots') 'Enterprise lab plan should include owner risk pivot validation.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRelatedDataAreas') 'Enterprise lab plan should include related data area validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterprisePermissionGroupObsCoverage') 'Enterprise lab plan should include permission-group OBS coverage validation.'
             Assert-True (@($plan.Groups | Where-Object { $_.PSObject.Properties.Name -contains 'extensionAttribute10' -and [string]$_.extensionAttribute10 -ne '' }).Count -eq $plan.Groups.Count) 'Enterprise lab groups should all include OBS values for group review.'
             foreach ($criterion in @($plan.ValidationCriteria | Where-Object { [string]$_.Name -like 'Enterprise*' -and [bool]$_.Required })) {
@@ -377,6 +378,7 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterpriseGroupExpansion'; Required = $true; MinimumValue = 1; Unit = 'group edges'; Description = 'Group expansion' },
                     [pscustomobject]@{ Name = 'EnterprisePermissionGroupObsCoverage'; Required = $true; MinimumValue = 3; Unit = 'groups with OBS'; Description = 'Permission group OBS coverage' },
                     [pscustomobject]@{ Name = 'EnterpriseOwnerRiskPivots'; Required = $true; MinimumValue = 1; Unit = 'owner risk pivots'; Description = 'Owner risk pivots' },
+                    [pscustomobject]@{ Name = 'EnterpriseRelatedDataAreas'; Required = $true; MinimumValue = 1; Unit = 'related data areas'; Description = 'Related data areas' },
                     [pscustomobject]@{ Name = 'EnterpriseDiskBudget'; Required = $true; MinimumValue = 1; Unit = 'pass/fail'; Description = 'Disk budget' }
                 )
             }
@@ -405,6 +407,7 @@ $tests = @(
             $groupExpansionCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseGroupExpansion' })[0]
             $permissionGroupObsCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterprisePermissionGroupObsCoverage' })[0]
             $ownerRiskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseOwnerRiskPivots' })[0]
+            $relatedDataAreaCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseRelatedDataAreas' })[0]
             $diskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
 
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
@@ -436,6 +439,8 @@ $tests = @(
             Assert-True ([string]$permissionGroupObsCriterion.EvidenceDetail -like '*ObsAttribute=extensionAttribute10*') 'Permission group OBS evidence should record the runtime OBS attribute.'
             Assert-Equal ([int]$ownerRiskCriterion.ActualValue) 1 'Owner risk pivot validation should use owner risk pivot rows.'
             Assert-Equal $ownerRiskCriterion.EvidenceSource 'ScanExport:owner_risk_pivots.csv' 'Owner risk pivot validation should identify owner risk pivot export evidence.'
+            Assert-Equal ([int]$relatedDataAreaCriterion.ActualValue) 1 'Related data area validation should use related data area rows.'
+            Assert-Equal $relatedDataAreaCriterion.EvidenceSource 'ScanExport:related_data_areas.csv' 'Related data area validation should identify migration discovery export evidence.'
             Assert-Equal ([int]$diskCriterion.ActualValue) 1 'Disk budget validation should pass under the configured budget.'
             Assert-Equal $diskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should measure the lab root when available.'
             Assert-True ([string]$diskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Disk budget evidence should include measured bytes.'
