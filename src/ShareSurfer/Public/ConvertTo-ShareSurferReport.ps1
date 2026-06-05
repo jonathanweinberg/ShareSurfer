@@ -436,6 +436,7 @@ function ConvertTo-ShareSurferReport {
       <nav class="view-tabs" aria-label="Dashboard views">
         <button type="button" data-view="overview" aria-selected="true">Overview</button>
         <button type="button" data-view="migration" aria-selected="false">Migration</button>
+        <button type="button" data-view="access" aria-selected="false">Access Model</button>
         <button type="button" data-view="findings" aria-selected="false">Findings</button>
         <button type="button" data-view="conflicts" aria-selected="false">Conflicts</button>
         <button type="button" data-view="owners" aria-selected="false">Owners</button>
@@ -555,6 +556,17 @@ function ConvertTo-ShareSurferReport {
             <ul class="actions" id="migration-packet-actions"></ul>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-access" data-panel="access">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Share Gate vs File/Folder Permissions</h2>
+          <span class="count" id="access-model-count"></span>
+        </div>
+        <p class="note">A share-level permission is the front gate. Folder and file permissions decide what happens after someone gets through that gate. Use this view to find identities where one side of the access model needs review.</p>
+        <div class="scroll"><table id="access-model"></table></div>
       </div>
     </section>
 
@@ -1184,6 +1196,81 @@ function ConvertTo-ShareSurferReport {
       }
       if (rights) { row.Rights.add(String(rights)); }
     }
+    function getAccessModelRow(accessMap, identity) {
+      const key = normalizeIdentity(identity);
+      if (!key) { return null; }
+      if (!accessMap.has(key)) {
+        const details = getIdentityDetails(identity);
+        accessMap.set(key, {
+          Identity: identity || '',
+          ObjectClass: getObjectClass(identity),
+          DisplayName: details.DisplayName || '',
+          ObsPath: details.ObsPath || '',
+          ManagerLevel1: details.ManagerLevel1 || '',
+          ShareRights: new Set(),
+          ShareAccessTypes: new Set(),
+          NtfsRights: new Set(),
+          NtfsAccessTypes: new Set(),
+          ExamplePath: '',
+          ShareAssignments: 0,
+          NtfsAssignments: 0,
+          DenyAssignments: 0
+        });
+      }
+      return accessMap.get(key);
+    }
+    function summarizeAccessGate(rights, accessTypes, emptyText) {
+      const rightsText = Array.from(rights).filter(Boolean).sort().join('; ');
+      const typeText = Array.from(accessTypes).filter(Boolean).sort().join('; ');
+      if (!rightsText && !typeText) { return emptyText; }
+      const prefix = typeText ? typeText : 'Observed';
+      return prefix + (rightsText ? ': ' + rightsText : '');
+    }
+    function getAccessReviewSignal(row) {
+      if (row.DenyAssignments > 0) { return 'Deny/allow collision review'; }
+      if (row.ShareAssignments === 0 && row.NtfsAssignments > 0) { return 'Folder allows but share gate missing'; }
+      if (row.ShareAssignments > 0 && row.NtfsAssignments === 0) { return 'Share allows but folder evidence missing'; }
+      if (row.ShareAssignments > 0 && row.NtfsAssignments > 0) { return 'Share and folder evidence present'; }
+      return 'No direct assignment evidence';
+    }
+    function buildAccessModelRows(state) {
+      const accessMap = new Map();
+      filterRows(data.share_permissions, state, true).forEach(row => {
+        const modelRow = getAccessModelRow(accessMap, row.Identity || '');
+        if (!modelRow) { return; }
+        modelRow.ShareAssignments += 1;
+        if (row.Rights) { modelRow.ShareRights.add(String(row.Rights)); }
+        if (row.AccessControlType) { modelRow.ShareAccessTypes.add('Share ' + String(row.AccessControlType).toLowerCase()); }
+      });
+      filterRows(data.acl_entries, state, true).forEach(row => {
+        const modelRow = getAccessModelRow(accessMap, row.Identity || '');
+        if (!modelRow) { return; }
+        modelRow.NtfsAssignments += 1;
+        if (row.Rights) { modelRow.NtfsRights.add(String(row.Rights)); }
+        if (row.AccessControlType) {
+          const accessType = String(row.AccessControlType);
+          modelRow.NtfsAccessTypes.add('Folder/file ' + accessType.toLowerCase());
+          if (accessType.toLowerCase() === 'deny') { modelRow.DenyAssignments += 1; }
+        }
+        if (!modelRow.ExamplePath) {
+          modelRow.ExamplePath = getItemPath(row);
+        }
+      });
+      return Array.from(accessMap.values()).map(row => ({
+        Identity: row.Identity,
+        ObjectClass: row.ObjectClass,
+        DisplayName: row.DisplayName,
+        ObsPath: row.ObsPath,
+        ManagerLevel1: row.ManagerLevel1,
+        ShareGate: summarizeAccessGate(row.ShareRights, row.ShareAccessTypes, 'No share permission observed'),
+        FileFolderPermissions: summarizeAccessGate(row.NtfsRights, row.NtfsAccessTypes, 'No file/folder permission observed'),
+        ReviewSignal: getAccessReviewSignal(row),
+        ShareAssignments: row.ShareAssignments,
+        NtfsAssignments: row.NtfsAssignments,
+        ExpandedMembers: countExpandedMembers(row.Identity),
+        ExamplePath: row.ExamplePath
+      })).sort((a, b) => String(b.ReviewSignal).localeCompare(String(a.ReviewSignal)) || Number(b.NtfsAssignments || 0) - Number(a.NtfsAssignments || 0) || String(a.Identity).localeCompare(String(b.Identity)));
+    }
     function getWorkbenchAccessRows(state) {
       const accessMap = new Map();
       filterRows(data.share_permissions, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'Share', row.Rights || ''));
@@ -1597,6 +1684,14 @@ function ConvertTo-ShareSurferReport {
       renderTable('owners', filterRows(data.owner_mappings, state, true));
       renderTable('owner-pivots', filterOwnerPivots(owner_pivots, state));
       renderOwnerReviewQueue(state);
+      renderTable('access-model', buildAccessModelRows(state), {
+        rowAction: row => {
+          if (isGroupIdentity(row.Identity)) {
+            focusGroupExpansion(row.Identity);
+          }
+        },
+        rowTitle: row => isGroupIdentity(row.Identity) ? ('Show expanded membership for ' + String(row.Identity || 'this group')) : 'Review this direct identity'
+      });
       renderTable('permissioned-groups', buildPermissionedGroupRows(state), {
         rowAction: row => focusGroupExpansion(row.Group),
         rowTitle: row => 'Show expanded membership for ' + String(row.Group || 'this group')
