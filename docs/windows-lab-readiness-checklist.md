@@ -104,6 +104,7 @@ Keep these raw files inside the trusted lab environment:
 - `live-evidence-review.csv`
 - `v1-acceptance.json`
 - `v1-acceptance-summary.json`
+- `issue-summary.md`
 - `report.html`
 - `export\*.csv`
 - `export\scan_events.jsonl`
@@ -114,6 +115,7 @@ Use these files first:
 - `live-evidence-review.csv`: operator-friendly proof rows and next actions.
 - `v1-acceptance-summary.json`: quick pass/fail summary.
 - `v1-acceptance.json`: detailed acceptance evidence.
+- `issue-summary.md`: public-safe Markdown starting point for GitHub issue updates.
 - `report.html`: offline business review dashboard.
 
 Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. Do not attach raw run folders outside the trusted lab environment.
@@ -166,6 +168,8 @@ To generate a public-safe Markdown summary from a completed run folder, use:
 ```
 
 Review `issue-summary.md` before posting. It summarizes acceptance, live evidence, failed criteria, and redacted support bundle status while intentionally omitting raw paths, identities, employee identifiers, manager chains, and evidence detail values.
+
+The full validation script also writes `issue-summary.md` automatically after final acceptance passes. Use the command above when you need to regenerate the summary for an archived run folder.
 
 ## If The Run Fails
 

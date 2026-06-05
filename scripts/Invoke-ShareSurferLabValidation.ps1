@@ -71,6 +71,7 @@ $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
 $liveEvidenceReviewPath = Join-Path $runRoot 'live-evidence-review.csv'
 $acceptancePath = Join-Path $runRoot 'v1-acceptance.json'
 $acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
+$issueSummaryPath = Join-Path $runRoot 'issue-summary.md'
 $ownerMappingPath = Join-Path $runRoot 'owner-mapping.csv'
 $labRunEventPath = Join-Path $runRoot 'lab-run-events.jsonl'
 
@@ -181,6 +182,10 @@ $finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireL
 if (-not $finishedPackageAcceptance.IsValid) {
     throw ('ShareSurfer finished support bundle validation failed. See {0}' -f $acceptancePath)
 }
+$issueSummaryScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueSummary.ps1'
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueSummary' -Message 'Generating public-safe validation issue summary.' -Detail ('IssueSummaryPath={0}' -f $issueSummaryPath)
+& $issueSummaryScriptPath -RunRoot $runRoot -OutputPath $issueSummaryPath | Out-Null
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueSummary' -Message 'Public-safe validation issue summary generated.' -Detail ('IssueSummaryPath={0}' -f $issueSummaryPath)
 
 [pscustomobject]@{
     RunRoot = $runRoot
@@ -195,6 +200,7 @@ if (-not $finishedPackageAcceptance.IsValid) {
     LiveEvidenceReviewPath = $liveEvidenceReviewPath
     AcceptancePath = $acceptancePath
     AcceptanceSummaryPath = $acceptanceSummaryPath
+    IssueSummaryPath = $issueSummaryPath
     OwnerMappingPath = $ownerMappingPath
     AcceptanceIsValid = [bool]$finishedPackageAcceptance.IsValid
     AcceptanceFailedCheckCount = [int]$finishedPackageAcceptance.FailedCheckCount
