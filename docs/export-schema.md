@@ -33,7 +33,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `group_edges.csv` | One row per group membership edge | Represents nested group expansion. |
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
-| `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, findings, conflicts, partial shares, and review risk. |
+| `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
 | `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
@@ -95,9 +95,9 @@ When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV 
 
 ### `owner_risk_pivots.csv`
 
-Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `RiskLevel`.
+Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RiskLevel`.
 
-Use this file when business reviewers need a CSV-first view of which owner or business unit should review a share area. `RiskLevel` is `High` when mapped findings or conflicts include high-severity rows, `Review` when mapped findings, conflicts, or partial shares exist, and `Monitor` when the mapping has no current risk rows.
+Use this file when business reviewers need a CSV-first view of which owner or business unit should review a share area. The direct identity, direct group, and expanded member counts size the likely access-review queue before a reviewer opens the detailed identity and group exports. `RiskLevel` is `High` when mapped findings or conflicts include high-severity rows, `Review` when mapped findings, conflicts, or partial shares exist, and `Monitor` when the mapping has no current risk rows.
 
 ### `conflicts.csv`
 
@@ -142,4 +142,4 @@ Use the manifest to reproduce scan settings and explain incomplete data.
 - `identities.Identity` joins to identity fields in permissions, ACL entries, group edges, org chains, conflicts, and findings.
 - `group_edges` expands access from groups to child identities.
 - `owner_mappings` adds business context to paths and shares.
-- `owner_risk_pivots` joins owner mappings to collected items, shares, findings, and conflicts for owner/business-unit review queues.
+- `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.

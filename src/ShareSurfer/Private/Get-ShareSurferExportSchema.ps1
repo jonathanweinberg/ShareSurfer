@@ -87,6 +87,9 @@ function Get-ShareSurferExportSchema {
             'FindingCount',
             'ConflictCount',
             'PartialShareCount',
+            'DirectIdentityCount',
+            'DirectGroupCount',
+            'ExpandedMemberCount',
             'RiskLevel'
         )
         'conflicts.csv' = @(

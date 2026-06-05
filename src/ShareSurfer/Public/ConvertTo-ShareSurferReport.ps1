@@ -982,6 +982,8 @@ function ConvertTo-ShareSurferReport {
       const owners = distinctCount(pivots, 'Owner');
       const matchingItems = pivots.reduce((sum, pivot) => sum + Number(pivot.MatchingItems || 0), 0);
       const partialShares = pivots.reduce((sum, pivot) => sum + Number(pivot.PartialShareCount || 0), 0);
+      const directIdentities = pivots.reduce((sum, pivot) => sum + Number(pivot.DirectIdentityCount || 0), 0);
+      const expandedMembers = pivots.reduce((sum, pivot) => sum + Number(pivot.ExpandedMemberCount || 0), 0);
       const labels = [];
       if (state.businessUnit) { labels.push(state.businessUnit); }
       if (state.owner) { labels.push(state.owner); }
@@ -993,6 +995,8 @@ function ConvertTo-ShareSurferReport {
         { label: 'Business Units', value: businessUnits },
         { label: 'Data Owners', value: owners },
         { label: 'Matching Items', value: matchingItems },
+        { label: 'Direct Identities', value: directIdentities },
+        { label: 'Expanded Members', value: expandedMembers },
         { label: 'Top Risks', value: riskRows.length },
         { label: 'Related Groups', value: groupRows.length },
         { label: 'Partial Shares', value: partialShares }

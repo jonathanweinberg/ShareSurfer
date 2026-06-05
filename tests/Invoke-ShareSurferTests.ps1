@@ -320,7 +320,7 @@ $tests = @(
                 [pscustomobject]@{ Identity = 'CONTOSO\FileReaders'; SamAccountName = 'FileReaders'; DisplayName = 'File Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.FILE'; ObsAttribute = 'extensionAttribute10' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'identities.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; RiskLevel = 'High' }
+                [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RiskLevel = 'High' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_risk_pivots.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
@@ -520,6 +520,12 @@ $tests = @(
             Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'FindingCount') 'Owner risk pivot CSV should include finding counts.'
             Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'ConflictCount') 'Owner risk pivot CSV should include conflict counts.'
             Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'PartialShareCount') 'Owner risk pivot CSV should include partial-share counts.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'DirectIdentityCount') 'Owner risk pivot CSV should include direct identity counts.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'DirectGroupCount') 'Owner risk pivot CSV should include direct group counts.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'ExpandedMemberCount') 'Owner risk pivot CSV should include expanded member counts.'
+            Assert-True ([int]$ownerRiskPivots[0].DirectIdentityCount -ge 2) 'Owner risk pivot should count direct share and NTFS identities for access review sizing.'
+            Assert-True ([int]$ownerRiskPivots[0].DirectGroupCount -ge 2) 'Owner risk pivot should count direct groups for access review sizing.'
+            Assert-True ([int]$ownerRiskPivots[0].ExpandedMemberCount -ge 1) 'Owner risk pivot should count expanded group members for access review sizing.'
             Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'RiskLevel') 'Owner risk pivot CSV should include review risk levels.'
 
             $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
@@ -826,6 +832,8 @@ $tests = @(
             Assert-True ($report -like '*focusDashboardValue*') 'Report should support chart-driven drilldown filtering.'
             Assert-True ($report -like '*Review Workbench*') 'Report should include an owner/business-unit review workbench.'
             Assert-True ($report -like '*workbench-stats*') 'Report should include workbench context stats.'
+            Assert-True ($report -like '*Direct Identities*') 'Report should summarize direct identity counts in the workbench.'
+            Assert-True ($report -like '*Expanded Members*') 'Report should summarize expanded member counts in the workbench.'
             Assert-True ($report -like '*Related Groups*') 'Report should expose workbench-related group rows.'
             Assert-True ($report -like '*Top Findings and Conflicts*') 'Report should expose a ranked workbench risk list.'
             Assert-True ($report -like '*renderReviewWorkbench*') 'Report should dynamically update the review workbench from dashboard filters.'
