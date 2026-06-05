@@ -1738,7 +1738,7 @@ $tests = @(
             $issueCommentDirectory = Join-Path $runRoot 'issue-comments'
             New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment -IncludeFiles | Out-Null
             ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
             & $dashboardReviewScript -RunRoot $runRoot -ExportPath $exportPath -ReportPath $reportPath -OutputPath $dashboardReviewPath | Out-Null
             & $collectorEnvironmentScript -OutputPath $collectorEnvironmentPath | Out-Null
@@ -1833,6 +1833,7 @@ $tests = @(
             Assert-True ($issueOneComment -like '*CollectorEnvironment*') 'Issue #1 comment should summarize collector environment evidence.'
             Assert-True ($issueThreeComment -like '*EnterpriseAclEntries*') 'Issue #3 comment should summarize scanner ACL evidence.'
             Assert-True ($issueThreeComment -like '*EnterpriseOwnershipEvidence*') 'Issue #3 comment should summarize scanner ownership evidence.'
+            Assert-True ($issueThreeComment -like '*ScanManifestIncludeFiles*') 'Issue #3 comment should summarize scan manifest file-object evidence.'
             Assert-True ($issueFiveComment -like '*EnterpriseGroupExpansion*') 'Issue #5 comment should summarize group expansion evidence.'
             Assert-True ($issueSixComment -like '*OwnerReviewPackets*') 'Issue #6 comment should summarize dashboard and owner review evidence.'
             Assert-True ($issueSixComment -like '*DashboardReviewEvidence*') 'Issue #6 comment should summarize dashboard review evidence.'
@@ -1874,6 +1875,7 @@ $tests = @(
             Assert-True ($acceptanceSummaryRaw -notlike '*Synthetic acceptance proof*') 'Acceptance summary should omit raw check detail values.'
             Assert-True ($acceptanceSummaryRaw -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Acceptance summary should omit raw lab-run detail values.'
             Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
+            Assert-True ($result.Checks.Name -contains 'ScanManifestIncludeFiles') 'Acceptance checks should include scan manifest file-object evidence.'
             Assert-True ($result.Checks.Name -contains 'OwnerReviewPackets') 'Acceptance checks should include owner review packet evidence.'
             Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
             Assert-True ($result.Checks.Name -contains 'DashboardReviewEvidence') 'Acceptance checks should include dashboard review evidence.'
@@ -1904,6 +1906,16 @@ $tests = @(
             Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.DashboardReview.FileName) 'dashboard_review.md' 'Lab-run diagnostics should name the bundled dashboard review file.'
             Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.IssueSummary.Included) 'True' 'Lab-run diagnostics should record bundled issue summary inclusion.'
             Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.IssueSummary.FileName) 'issue_summary.md' 'Lab-run diagnostics should name the bundled issue summary file.'
+
+            $scanManifestPath = Join-Path $exportPath 'scan_manifest.csv'
+            $goodScanManifest = Get-Content -LiteralPath $scanManifestPath -Raw
+            $badScanManifestRows = @(Import-Csv -LiteralPath $scanManifestPath)
+            $badScanManifestRows[0].IncludeFiles = 'False'
+            $badScanManifestRows | Export-Csv -LiteralPath $scanManifestPath -NoTypeInformation -Encoding UTF8
+            $badScanManifestResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badScanManifestResult.IsValid) 'Acceptance checker should fail when live evidence requires file scans but the manifest has IncludeFiles=False.'
+            Assert-True (@($badScanManifestResult.Checks | Where-Object { $_.Name -eq 'ScanManifestIncludeFiles' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report scan manifest IncludeFiles failures.'
+            Set-Content -LiteralPath $scanManifestPath -Value $goodScanManifest -Encoding UTF8
 
             Set-Content -LiteralPath $reportPath -Value '<html><body>not a ShareSurfer dashboard</body></html>' -Encoding UTF8
             $badReportResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
