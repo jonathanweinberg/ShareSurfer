@@ -186,8 +186,12 @@ if ($bundleManifestRows.Count -gt 0) {
 
 $identityDirectoryCriteria = @('EnterpriseEmployeeIdentifierCoverage', 'EnterpriseManagerChainCoverage', 'EnterpriseUserObsCoverage')
 $groupExpansionCriteria = @('EnterpriseGroupExpansion', 'EnterprisePermissionGroupObsCoverage')
+$labPopulationCriteria = @('EnterpriseUserPopulation', 'EnterpriseGroupPopulation', 'EnterpriseSharePopulation')
+$labFixtureCriteria = @('EnterpriseRealFiles', 'EnterpriseDeepPaths', 'EnterpriseLongPathPolicy', 'EnterpriseDiskBudget')
 $identityDirectoryCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $identityDirectoryCriteria
 $groupExpansionCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $groupExpansionCriteria
+$labPopulationCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $labPopulationCriteria
+$labFixtureCriteriaPassed = Test-ShareSurferCloseoutCriteriaRows -Rows $criteriaRows -Names $labFixtureCriteria
 
 $expectedIssueNumbers = @('1', '3', '5', '6')
 $issueNumbers = @($issueCommentRows | ForEach-Object { [string]$_.IssueNumber } | Sort-Object -Unique)
@@ -207,6 +211,8 @@ $readyForProofReview = (
     $scanManifestIncludeFilesPassed -and
     $collectorEnvironmentPassed -and
     $dashboardReviewPassed -and
+    $labPopulationCriteriaPassed -and
+    $labFixtureCriteriaPassed -and
     $identityDirectoryCriteriaPassed -and
     $groupExpansionCriteriaPassed -and
     $liveEvidenceValid -and
@@ -221,6 +227,8 @@ $readyForProofReview = (
 $scanManifestIncludeFilesLabel = if ($scanManifestIncludeFilesPassed) { 'Passed' } else { 'Review ScanManifestIncludeFiles' }
 $collectorEnvironmentLabel = if ($collectorEnvironmentPassed) { 'Passed' } else { 'Review CollectorEnvironment' }
 $dashboardReviewLabel = if ($dashboardReviewPassed) { 'Passed' } else { 'Review DashboardReviewEvidence' }
+$labPopulationCriteriaLabel = if ($labPopulationCriteriaPassed) { 'Passed' } else { 'Review lab population criteria' }
+$labFixtureCriteriaLabel = if ($labFixtureCriteriaPassed) { 'Passed' } else { 'Review lab fixture criteria' }
 $identityDirectoryCriteriaLabel = if ($identityDirectoryCriteriaPassed) { 'Passed' } else { 'Review identity directory criteria' }
 $groupExpansionCriteriaLabel = if ($groupExpansionCriteriaPassed) { 'Passed' } else { 'Review group expansion criteria' }
 
@@ -236,6 +244,8 @@ Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} V1 acceptance passed wit
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Scan manifest proves file-object scanning when live evidence is required.' -f (Get-ShareSurferCloseoutStatus -Passed $scanManifestIncludeFilesPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Collector environment evidence exists so reviewers can see the host, PowerShell, module, and command context for the run.' -f (Get-ShareSurferCloseoutStatus -Passed $collectorEnvironmentPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Dashboard review evidence exists so reviewers can confirm the offline report rendered and was operator-reviewed.' -f (Get-ShareSurferCloseoutStatus -Passed $dashboardReviewPassed))
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Lab population criteria prove the enterprise user, group, and share counts requested for validation.' -f (Get-ShareSurferCloseoutStatus -Passed $labPopulationCriteriaPassed))
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Lab fixture criteria prove real files, deep paths, long-path policy fixtures, and the configured disk budget.' -f (Get-ShareSurferCloseoutStatus -Passed $labFixtureCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Identity enrichment criteria prove employee identifiers, two-level manager chains, and the selected OBS/OID attribute.' -f (Get-ShareSurferCloseoutStatus -Passed $identityDirectoryCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Security group criteria prove recursive group expansion and OBS/OID coverage for permission-bearing groups.' -f (Get-ShareSurferCloseoutStatus -Passed $groupExpansionCriteriaPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Live evidence gate passed with `{1}` fallback criteria.' -f (Get-ShareSurferCloseoutStatus -Passed $liveEvidenceValid), $fallbackCount)
@@ -252,6 +262,8 @@ Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Failed criteria: `{0}`' -f (
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Scan manifest file-object check: `{0}`' -f $scanManifestIncludeFilesLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Collector environment check: `{0}`' -f $collectorEnvironmentLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Dashboard review check: `{0}`' -f $dashboardReviewLabel)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Lab population criteria check: `{0}`' -f $labPopulationCriteriaLabel)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Lab fixture criteria check: `{0}`' -f $labFixtureCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Identity enrichment criteria check: `{0}`' -f $identityDirectoryCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Security group expansion criteria check: `{0}`' -f $groupExpansionCriteriaLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Blocking live-evidence criteria: `{0}`' -f (Join-ShareSurferCloseoutNames -Rows $blockingReviewRows))

@@ -146,6 +146,8 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `live-evidence.json` has `FallbackCount` set to `0`.
 - `lab-validation-criteria.csv` has no failed required criteria.
 - `live-evidence-review.csv` has no required rows marked `PlanOnly`, `EvidenceUnavailable`, `MissingEvidenceSource`, or `Failed`.
+- `lab-validation-criteria.csv` shows passing lab population criteria for enterprise users, security groups, and SMB shares.
+- `lab-validation-criteria.csv` shows passing lab fixture criteria for real files, deep paths, long-path policy fixtures, and the configured disk budget.
 - `export\scan_manifest.csv` has `IncludeFiles=True` for enterprise runs, and the real-file criteria detail agrees with that setting.
 - `lab-validation-criteria.csv` shows passing identity criteria for employee identifiers, two-level manager chains, and the runtime OBS/OID attribute.
 - `lab-validation-criteria.csv` shows passing security group criteria for recursive group expansion and OBS/OID coverage on permission-bearing groups.
