@@ -325,6 +325,12 @@ function ConvertTo-ShareSurferReport {
       top: 0;
       z-index: 1;
     }
+    tr.clickable-row {
+      cursor: pointer;
+    }
+    tr.clickable-row:hover td {
+      background: #eef7f6;
+    }
     .scroll {
       overflow: auto;
       max-height: 390px;
@@ -739,8 +745,9 @@ function ConvertTo-ShareSurferReport {
         addPriorityAction(list, 'good', 'No immediate high-priority actions', 'Review owner mappings and rerun after any cleanup or migration planning changes.');
       }
     }
-    function renderTable(id, rows) {
+    function renderTable(id, rows, options) {
       const table = document.getElementById(id);
+      const tableOptions = options || {};
       table.innerHTML = '';
       const safeRows = asRows(rows);
       setCount(id, safeRows);
@@ -765,6 +772,18 @@ function ConvertTo-ShareSurferReport {
       const tbody = document.createElement('tbody');
       safeRows.forEach(row => {
         const tr = document.createElement('tr');
+        if (typeof tableOptions.rowAction === 'function') {
+          tr.className = 'clickable-row';
+          tr.tabIndex = 0;
+          tr.title = typeof tableOptions.rowTitle === 'function' ? tableOptions.rowTitle(row) : 'Open related rows';
+          tr.addEventListener('click', () => tableOptions.rowAction(row));
+          tr.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              tableOptions.rowAction(row);
+            }
+          });
+        }
         columns.forEach(c => {
           const td = document.createElement('td');
           td.textContent = String(row[c] ?? '');
@@ -848,8 +867,11 @@ function ConvertTo-ShareSurferReport {
         (!state.owner || String(pivot.Owner || '') === state.owner) &&
         (!state.riskLevel || String(pivot.RiskLevel || '') === state.riskLevel);
     }
+    function getRowSearchText(row) {
+      return Object.keys(row || {}).map(key => String(row[key] ?? '')).join(' ').toLowerCase();
+    }
     function rowMatchesSearch(row, state) {
-      return JSON.stringify(row).toLowerCase().includes(state.query);
+      return getRowSearchText(row).includes(state.query);
     }
     function rowMatchesPivot(row, pivot) {
       const pattern = String(pivot.Pattern || '');
@@ -1232,8 +1254,15 @@ function ConvertTo-ShareSurferReport {
     const collection_error_chart_rows = buildRollups(collection_errors, ['ObservedValue']).map(row => ({ Label: row.ObservedValue || 'Unspecified', Count: row.Count, FilterValue: row.ObservedValue || '' }));
     function applyGroupBrowser() {
       const q = document.getElementById('group-filter').value.toLowerCase();
-      const match = row => JSON.stringify(row).toLowerCase().includes(q);
+      const match = row => getRowSearchText(row).includes(q);
       renderTable('group-browser', group_browser_rows.filter(match));
+    }
+    function focusGroupExpansion(groupName) {
+      const filter = document.getElementById('group-filter');
+      filter.value = String(groupName || '');
+      applyGroupBrowser();
+      showView('groups');
+      filter.focus();
     }
     function applyFilter() {
       const state = getDashboardFilterState();
@@ -1244,7 +1273,10 @@ function ConvertTo-ShareSurferReport {
       renderTable('conflict-rollups', filterRows(conflict_rollups, state, false));
       renderTable('owners', filterRows(data.owner_mappings, state, true));
       renderTable('owner-pivots', filterOwnerPivots(owner_pivots, state));
-      renderTable('permissioned-groups', buildPermissionedGroupRows(state));
+      renderTable('permissioned-groups', buildPermissionedGroupRows(state), {
+        rowAction: row => focusGroupExpansion(row.Group),
+        rowTitle: row => 'Show expanded membership for ' + String(row.Group || 'this group')
+      });
       renderTable('groups', filterRows(data.group_edges, state, false));
       renderTable('collection-errors', filterRows(collection_errors, state, true));
       renderTable('collection-error-rollups', filterRows(collection_error_rollups, state, false));

@@ -212,7 +212,7 @@ Use the dashboard to review:
 - Business-unit and owner pivots, including mapped item counts, finding counts, conflict counts, partial-share counts, and a simple review risk level.
 - Finding rollups.
 - Conflict rollups.
-- Permissioned Group Review rows showing assigned security groups, share and NTFS assignment counts, OBS context, rights, and expanded membership size.
+- Permissioned Group Review rows showing assigned security groups, share and NTFS assignment counts, OBS context, rights, and expanded membership size. Select a group row to focus the Group Browser on that expanded membership path.
 - Diagnostics view for partial shares, collection errors, and scan events.
 - Org-chain rollups.
 - Inheritance breaks.
