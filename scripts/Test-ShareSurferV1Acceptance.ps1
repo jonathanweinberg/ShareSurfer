@@ -13,6 +13,7 @@ param(
     [string] $SummaryPath = '',
 
     [switch] $AllowMissingBundledAcceptance,
+    [switch] $AllowMissingIssueComments,
 
     [switch] $RequireLiveEvidence
 )
@@ -45,6 +46,7 @@ if ($LiveEvidencePath -eq '') {
 if ($LiveEvidenceReviewPath -eq '') {
     $LiveEvidenceReviewPath = Join-Path $RunRoot 'live-evidence-review.csv'
 }
+$IssueCommentPath = Join-Path $RunRoot 'issue-comments'
 
 function New-ShareSurferAcceptanceCheck {
     param(
@@ -158,10 +160,19 @@ $requiredBundleFiles = @(
     'live_evidence_review.csv',
     'live_evidence.json',
     'v1_acceptance.json',
-    'v1_acceptance_summary.json'
+    'v1_acceptance_summary.json',
+    'issue_comments/issue-1-lab-fixture-live-proof.md',
+    'issue_comments/issue-3-scanner-live-proof.md',
+    'issue_comments/issue-5-identity-group-live-proof.md',
+    'issue_comments/issue-6-dashboard-live-proof.md',
+    'issue_comments/issue_comment_manifest.csv',
+    'issue_comments/post_commands.txt'
 )
 if ($AllowMissingBundledAcceptance) {
     $requiredBundleFiles = @($requiredBundleFiles | Where-Object { $_ -ne 'v1_acceptance.json' -and $_ -ne 'v1_acceptance_summary.json' })
+}
+if ($AllowMissingIssueComments) {
+    $requiredBundleFiles = @($requiredBundleFiles | Where-Object { [string]$_ -notlike 'issue_comments/*' })
 }
 $missingBundleFiles = @($requiredBundleFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $SupportBundlePath $_)) })
 $bundleManifestPath = Join-Path $SupportBundlePath 'support_bundle_manifest.csv'
@@ -194,6 +205,85 @@ if (Test-Path -LiteralPath $labRunDiagnosticsPath) {
 }
 else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $false -Detail ('Lab run diagnostics not found in support bundle: {0}' -f $labRunDiagnosticsPath)))
+}
+
+$requiredIssueCommentFiles = @(
+    'issue-1-lab-fixture-live-proof.md',
+    'issue-3-scanner-live-proof.md',
+    'issue-5-identity-group-live-proof.md',
+    'issue-6-dashboard-live-proof.md',
+    'issue-comment-manifest.csv',
+    'post-commands.txt'
+)
+$missingIssueCommentFiles = @($requiredIssueCommentFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $IssueCommentPath $_)) })
+$issueCommentManifestPath = Join-Path $IssueCommentPath 'issue-comment-manifest.csv'
+$issueCommentPassed = $false
+$issueCommentDetail = ''
+if ($missingIssueCommentFiles.Count -eq 0 -and (Test-Path -LiteralPath $issueCommentManifestPath)) {
+    $issueCommentManifest = @(Import-Csv -LiteralPath $issueCommentManifestPath)
+    $issueNumbers = @($issueCommentManifest | ForEach-Object { [string]$_.IssueNumber } | Sort-Object -Unique)
+    $missingIssueNumbers = @(@('1', '3', '5', '6') | Where-Object { $issueNumbers -notcontains $_ })
+    $issueCommentBodies = @(Get-ChildItem -LiteralPath $IssueCommentPath -Filter 'issue-*.md' -File -ErrorAction SilentlyContinue)
+    $issueCommentPassed = ($issueCommentManifest.Count -ge 4 -and $missingIssueNumbers.Count -eq 0 -and $issueCommentBodies.Count -ge 4)
+    $issueCommentDetail = 'IssueCommentPath={0}; ManifestRows={1}; BodyFiles={2}; MissingIssues={3}' -f $IssueCommentPath, $issueCommentManifest.Count, $issueCommentBodies.Count, ($missingIssueNumbers -join ', ')
+}
+else {
+    $issueCommentDetail = 'IssueCommentPath={0}; Missing={1}' -f $IssueCommentPath, ($missingIssueCommentFiles -join ', ')
+}
+if ($AllowMissingIssueComments -and $missingIssueCommentFiles.Count -gt 0) {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationIssueComments' -Passed $true -Detail ('Issue comments pending for staged acceptance: {0}' -f $issueCommentDetail)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationIssueComments' -Passed $issueCommentPassed -Detail $issueCommentDetail))
+}
+
+$bundledIssueCommentPath = Join-Path $SupportBundlePath 'issue_comments'
+$bundledIssueCommentManifestPath = Join-Path $bundledIssueCommentPath 'issue_comment_manifest.csv'
+$bundledIssueCommentPostCommandsPath = Join-Path $bundledIssueCommentPath 'post_commands.txt'
+$requiredBundledIssueCommentFiles = @(
+    'issue-1-lab-fixture-live-proof.md',
+    'issue-3-scanner-live-proof.md',
+    'issue-5-identity-group-live-proof.md',
+    'issue-6-dashboard-live-proof.md',
+    'issue_comment_manifest.csv',
+    'post_commands.txt'
+)
+$missingBundledIssueCommentFiles = @($requiredBundledIssueCommentFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $bundledIssueCommentPath $_)) })
+$bundledIssueCommentsPassed = $false
+$bundledIssueCommentDetail = ''
+if ($missingBundledIssueCommentFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundledIssueCommentManifestPath) -and (Test-Path -LiteralPath $bundledIssueCommentPostCommandsPath)) {
+    $bundledIssueCommentManifest = @(Import-Csv -LiteralPath $bundledIssueCommentManifestPath)
+    $bundledManifestText = Get-Content -LiteralPath $bundledIssueCommentManifestPath -Raw
+    $bundledPostCommandText = Get-Content -LiteralPath $bundledIssueCommentPostCommandsPath -Raw
+    $hasRawPathColumn = ($bundledManifestText -like '*OutputPath*')
+    $hasRunRootLeak = ($bundledManifestText -like "*$RunRoot*" -or $bundledPostCommandText -like "*$RunRoot*")
+    $hasRelativeBodyFiles = ($bundledPostCommandText -like '*--body-file "issue_comments/issue-1-lab-fixture-live-proof.md"*' -and $bundledPostCommandText -like '*--body-file "issue_comments/issue-6-dashboard-live-proof.md"*')
+    $diagnosticsIssueCommentCount = 0
+    $diagnosticsIssueCommentsIncluded = $false
+    if (Test-Path -LiteralPath $labRunDiagnosticsPath) {
+        try {
+            $diagnosticsForIssueComments = Get-Content -LiteralPath $labRunDiagnosticsPath -Raw | ConvertFrom-Json
+            if ($diagnosticsForIssueComments.PSObject.Properties['IssueComments']) {
+                $diagnosticsIssueCommentCount = [int]$diagnosticsForIssueComments.IssueComments.CommentCount
+                $diagnosticsIssueCommentsIncluded = ([string]$diagnosticsForIssueComments.IssueComments.Included -eq 'True')
+            }
+        }
+        catch {
+            $diagnosticsIssueCommentCount = 0
+            $diagnosticsIssueCommentsIncluded = $false
+        }
+    }
+    $bundledIssueCommentsPassed = ($bundledIssueCommentManifest.Count -ge 4 -and -not $hasRawPathColumn -and -not $hasRunRootLeak -and $hasRelativeBodyFiles -and $diagnosticsIssueCommentsIncluded -and $diagnosticsIssueCommentCount -ge 4)
+    $bundledIssueCommentDetail = 'BundledIssueCommentPath={0}; ManifestRows={1}; Missing={2}; HasRawPathColumn={3}; HasRunRootLeak={4}; DiagnosticsCount={5}' -f $bundledIssueCommentPath, $bundledIssueCommentManifest.Count, ($missingBundledIssueCommentFiles -join ', '), $hasRawPathColumn, $hasRunRootLeak, $diagnosticsIssueCommentCount
+}
+else {
+    $bundledIssueCommentDetail = 'BundledIssueCommentPath={0}; Missing={1}' -f $bundledIssueCommentPath, ($missingBundledIssueCommentFiles -join ', ')
+}
+if ($AllowMissingIssueComments -and $missingBundledIssueCommentFiles.Count -gt 0) {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationIssueComments' -Passed $true -Detail ('Bundled issue comments pending for staged acceptance: {0}' -f $bundledIssueCommentDetail)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationIssueComments' -Passed $bundledIssueCommentsPassed -Detail $bundledIssueCommentDetail))
 }
 
 if (Test-Path -LiteralPath $PreflightPath) {
