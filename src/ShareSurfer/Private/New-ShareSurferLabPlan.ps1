@@ -352,6 +352,14 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes owner/business-unit risk pivot evidence.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseRelatedDataAreas'
+            MinimumValue = 1
+            ActualPlanValue = @($ownerMappings).Count
+            Unit = 'related data areas'
+            Required = $true
+            Description = 'Enterprise validation includes migration discovery evidence for like-owned shares, folders, and files.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseDiskBudget'
             MinimumValue = 1
             ActualPlanValue = if ($estimatedLabBytes -le $MaxLabBytes) { 1 } else { 0 }
