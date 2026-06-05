@@ -1233,7 +1233,8 @@ $tests = @(
             $expectedScreenshots = @(
                 'report-dashboard-overview.png',
                 'report-dashboard-workbench.png',
-                'report-dashboard-findings.png'
+                'report-dashboard-findings.png',
+                'report-dashboard-migration.png'
             )
 
             Assert-True (Test-Path -LiteralPath $visualDoc) 'Workflow visual documentation should exist.'
@@ -1272,6 +1273,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*visuals/report-dashboard-overview.png*') 'First-run guide should show an example dashboard screenshot.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-workbench.png*') 'First-run guide should show an example review workbench screenshot.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-findings.png*') 'First-run guide should show an example findings screenshot.'
+            Assert-True ($firstRunText -like '*visuals/report-dashboard-migration.png*') 'First-run guide should show an example migration discovery screenshot.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -1283,6 +1285,7 @@ $tests = @(
             Assert-True ($managementText -like '*visuals/report-dashboard-overview.png*') 'Management overview should include an example dashboard screenshot.'
             Assert-True ($managementText -like '*visuals/report-dashboard-workbench.png*') 'Management overview should include an example review workbench screenshot.'
             Assert-True ($managementText -like '*visuals/report-dashboard-findings.png*') 'Management overview should include an example findings screenshot.'
+            Assert-True ($managementText -like '*visuals/report-dashboard-migration.png*') 'Management overview should include an example migration discovery screenshot.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
