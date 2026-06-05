@@ -1477,6 +1477,7 @@ $tests = @(
         Body = {
             Import-Module $moduleManifest -Force
             $acceptanceScript = Join-Path $repoRoot 'scripts/Test-ShareSurferV1Acceptance.ps1'
+            $issueSummaryScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueSummary.ps1'
             $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferAcceptance-' + [guid]::NewGuid().ToString('N'))
             $exportPath = Join-Path $runRoot 'export'
             $reportPath = Join-Path $runRoot 'report.html'
@@ -1511,6 +1512,7 @@ $tests = @(
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
 
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
+            Assert-True (Test-Path -LiteralPath $issueSummaryScript) 'Validation issue summary script should exist.'
             $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
@@ -1537,6 +1539,19 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'LabPreflight') 'Acceptance checks should include lab preflight readiness evidence.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
+
+            $issueSummaryPath = Join-Path $runRoot 'issue-summary.md'
+            $issueSummary = & $issueSummaryScript -RunRoot $runRoot -OutputPath $issueSummaryPath -PassThru
+            $issueSummaryText = [string]($issueSummary -join "`n")
+            Assert-True (Test-Path -LiteralPath $issueSummaryPath) 'Validation issue summary script should write Markdown when OutputPath is provided.'
+            Assert-True ($issueSummaryText -like '*ShareSurfer live validation evidence summary*') 'Validation issue summary should include a recognizable title.'
+            Assert-True ($issueSummaryText -like '*V1 acceptance valid:*True*') 'Validation issue summary should include acceptance status.'
+            Assert-True ($issueSummaryText -like '*Fallback criteria count:*0*') 'Validation issue summary should include live-evidence fallback count.'
+            Assert-True ($issueSummaryText -like '*Redaction leak count:*0*') 'Validation issue summary should include redaction leak count.'
+            Assert-True ($issueSummaryText -like '*issue #1*') 'Validation issue summary should point to the remaining lab proof issue.'
+            Assert-True ($issueSummaryText -like '*issue #6*') 'Validation issue summary should point to the remaining dashboard proof issue.'
+            Assert-True ($issueSummaryText -notlike '*Synthetic acceptance proof*') 'Validation issue summary should not include raw evidence detail values.'
+            Assert-True ($issueSummaryText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Validation issue summary should not include raw lab-run detail values.'
 
             Set-Content -LiteralPath $reportPath -Value '<html><body>not a ShareSurfer dashboard</body></html>' -Encoding UTF8
             $badReportResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
@@ -1635,6 +1650,7 @@ $tests = @(
             Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'
             Assert-True ($labValidationScript -like '*LiveEvidenceReviewPath*') 'Lab validation output should include the live evidence review artifact path.'
             Assert-True ($labValidationScript -like '*-RunRoot $runRoot*') 'Lab validation should include redacted lab-run evidence in generated support bundles.'
+            Assert-True ((Get-Content -LiteralPath (Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md') -Raw) -like '*New-ShareSurferValidationIssueSummary.ps1*') 'Lab readiness checklist should document the validation issue summary script.'
         }
     },
     @{

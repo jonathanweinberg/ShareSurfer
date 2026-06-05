@@ -157,6 +157,16 @@ For GitHub issue updates, prefer concise evidence:
 
 Do not paste raw paths, raw identities, employee identifiers, manager chains, or raw support-bundle contents into public comments. Use the redacted support bundle when external troubleshooting needs files.
 
+To generate a public-safe Markdown summary from a completed run folder, use:
+
+```powershell
+.\scripts\New-ShareSurferValidationIssueSummary.ps1 `
+  -RunRoot 'C:\ShareSurfer\lab-validation\20260605-120000' `
+  -OutputPath 'C:\ShareSurfer\lab-validation\20260605-120000\issue-summary.md'
+```
+
+Review `issue-summary.md` before posting. It summarizes acceptance, live evidence, failed criteria, and redacted support bundle status while intentionally omitting raw paths, identities, employee identifiers, manager chains, and evidence detail values.
+
 ## If The Run Fails
 
 Start with these files:
