@@ -292,8 +292,8 @@ $issueDefinitions = @(
         IssueNumber = 3
         Slug = 'scanner-live-proof'
         Title = 'scanner core for SMB shares, ACLs, ownership, and inheritance'
-        Focus = 'Prove the scanner collected share permissions, ACL entries, file ACLs, deep explicit ACE findings, inheritance breaks, conflicts, normalized exports, and raw event logs.'
-        Criteria = @('EnterpriseSharePermissions', 'EnterpriseAclEntries', 'EnterpriseFileAclEntries', 'EnterpriseDeepExplicitAceFindings', 'EnterpriseBrokenInheritanceFindings', 'EnterpriseConflictFindings')
+        Focus = 'Prove the scanner collected share permissions, ACL entries, file ACLs, deep explicit ACE findings, inheritance breaks, conflicts, collection-error evidence, normalized exports, and raw event logs.'
+        Criteria = @('EnterpriseSharePermissions', 'EnterpriseAclEntries', 'EnterpriseFileAclEntries', 'EnterpriseDeepExplicitAceFindings', 'EnterpriseBrokenInheritanceFindings', 'EnterpriseConflictFindings', 'EnterpriseCollectionErrors')
         Checks = @('NormalizedCsvExport', 'RawEventLog', 'LabValidationCriteria', 'LiveEvidenceGate')
     },
     [pscustomobject]@{

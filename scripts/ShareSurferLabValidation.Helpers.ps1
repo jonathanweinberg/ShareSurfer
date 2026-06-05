@@ -402,6 +402,7 @@ function Measure-ShareSurferLabValidationEvidence {
     $conflicts = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'conflicts.csv'))
     $sharePermissions = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'share_permissions.csv'))
     $aclEntries = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'acl_entries.csv'))
+    $collectionErrors = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'collection_errors.csv'))
     $identities = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'identities.csv'))
     $groupEdges = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'group_edges.csv'))
     $ownerRiskPivots = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_risk_pivots.csv'))
@@ -493,6 +494,7 @@ function Measure-ShareSurferLabValidationEvidence {
         ConflictCount = $conflicts.Count
         SharePermissionCount = $sharePermissions.Count
         AclEntryCount = $aclEntries.Count
+        CollectionErrorCount = $collectionErrors.Count
         FileAclEntryCount = $fileAclEntries.Count
         GroupEdgeCount = $groupEdges.Count
         OwnerRiskPivotCount = $ownerRiskPivots.Count
@@ -666,6 +668,11 @@ function New-ShareSurferLabValidationCriteriaRows {
                 $actual = [int64]$evidence.ConflictCount
                 $source = 'ScanExport:conflicts.csv'
                 $detail = 'ConflictRows={0}' -f $evidence.ConflictCount
+            }
+            'EnterpriseCollectionErrors' {
+                $actual = [int64]$evidence.CollectionErrorCount
+                $source = 'ScanExport:collection_errors.csv'
+                $detail = 'CollectionErrorRows={0}' -f $evidence.CollectionErrorCount
             }
             'EnterpriseGroupExpansion' {
                 $actual = [int64]$evidence.GroupEdgeCount

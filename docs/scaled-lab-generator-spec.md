@@ -337,7 +337,7 @@ Plan-only acceptance must pass without a Windows host:
 - at least one ACL scenario has a relative path longer than `256` characters.
 - no generated path component exceeds `255` characters.
 - every permission-bearing group has a non-empty runtime OBS attribute.
-- `ValidationCriteria` includes user population, share population, real files, deep paths, long-path policy, share permissions, ACL entries, file ACL entries, deep explicit ACE findings, broken inheritance, conflict findings, group expansion, permission-group OBS coverage, owner-risk pivots, related data areas, owner review packets, and disk budget.
+- `ValidationCriteria` includes user population, share population, real files, deep paths, long-path policy, share permissions, ACL entries, file ACL entries, deep explicit ACE findings, broken inheritance, conflict findings, collection-error evidence, group expansion, permission-group OBS coverage, owner-risk pivots, related data areas, owner review packets, and disk budget.
 
 Live acceptance on a disposable Windows/AD lab host must additionally prove:
 
@@ -346,7 +346,7 @@ Live acceptance on a disposable Windows/AD lab host must additionally prove:
 - SMB shares exist at the planned local paths.
 - share permissions are applied.
 - NTFS ACL scenarios are applied, including broken inheritance, deny collision, deep explicit ACE, owner examples, and file-specific ACLs.
-- scanning the generated shares produces CSV exports, report data, owner/business-unit pivots, related data area rows, group expansion rows, long-path findings, deep explicit ACE findings, and share-vs-NTFS conflict evidence.
+- scanning the generated shares produces CSV exports, report data, owner/business-unit pivots, related data area rows, group expansion rows, long-path findings, deep explicit ACE findings, share-vs-NTFS conflict evidence, and collection-error evidence. A clean Windows run may show `0` collection error rows; partial-data or best-effort paths should show the count in `lab-validation-criteria.csv`.
 - redacted support bundle generation succeeds against the enterprise export.
 
 ## Implementation Notes
