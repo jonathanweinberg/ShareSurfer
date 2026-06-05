@@ -27,3 +27,7 @@ Use this visual when explaining what can be shared outside the trusted team. Raw
 ## Management Overview
 
 Use [management-overview.html](management-overview.html) when briefing non-technical leaders. It is a high-level management overview slide that explains purpose, business value, migration-risk findings, owner/business-unit pivots, and expected outcomes without requiring Windows or AD expertise.
+
+## Dashboard Screenshots
+
+The dashboard screenshots in `docs/visuals` use synthetic CONTOSO-style demo data and show the current offline report, not future concept art. See [visual asset notes](visuals/README.md) for the screenshot list and refresh command.

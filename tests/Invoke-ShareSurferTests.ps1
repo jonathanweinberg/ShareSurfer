@@ -1994,6 +1994,8 @@ $tests = @(
             $pesterWrapper = Join-Path $repoRoot 'tests/ShareSurfer.Tests.ps1'
             $visualDoc = Join-Path $repoRoot 'docs/workflow-visuals.md'
             $visualRoot = Join-Path $repoRoot 'docs/visuals'
+            $visualReadme = Join-Path $visualRoot 'README.md'
+            $screenshotScript = Join-Path $repoRoot 'scripts/New-ShareSurferDashboardScreenshots.ps1'
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
@@ -2028,6 +2030,33 @@ $tests = @(
                 Assert-True (Test-Path -LiteralPath $path) ("Missing report screenshot {0}" -f $screenshot)
                 Assert-True ((Get-Item -LiteralPath $path).Length -gt 10000) ("Report screenshot {0} should be a real image asset." -f $screenshot)
             }
+            Assert-True (Test-Path -LiteralPath $visualReadme) 'Visual assets should include a README explaining screenshot provenance and refresh.'
+            $visualReadmeText = Get-Content -LiteralPath $visualReadme -Raw
+            Assert-True ($visualReadmeText -like '*synthetic CONTOSO-style demo data*') 'Visual README should explain screenshot data provenance.'
+            Assert-True ($visualReadmeText -like '*New-ShareSurferDashboardScreenshots.ps1*') 'Visual README should document the screenshot refresh script.'
+            Assert-True ($visualReadmeText -like '*-SkipBrowserCapture*') 'Visual README should document dry-run report generation.'
+            foreach ($screenshot in $expectedScreenshots) {
+                Assert-True ($visualReadmeText -like ("*{0}*" -f $screenshot)) ("Visual README should name screenshot {0}." -f $screenshot)
+            }
+
+            Assert-True (Test-Path -LiteralPath $screenshotScript) 'Repository should include a script to refresh dashboard screenshots from demo report output.'
+            $screenshotScriptText = Get-Content -LiteralPath $screenshotScript -Raw
+            Assert-True ($screenshotScriptText -like '*Invoke-ShareSurferScan*') 'Screenshot refresh script should route demo data through the collector export path.'
+            Assert-True ($screenshotScriptText -like '*ConvertTo-ShareSurferReport*') 'Screenshot refresh script should generate the offline report before capture.'
+            Assert-True ($screenshotScriptText -like '*playwright*') 'Screenshot refresh script should use Playwright for browser capture.'
+            Assert-True ($screenshotScriptText -like '*DirectoryOnly*') 'Screenshot refresh script should use deterministic directory-only enrichment.'
+            Assert-True ($screenshotScriptText -like '*CONTOSO*') 'Screenshot refresh script should use safe demo identity names.'
+            foreach ($screenshot in $expectedScreenshots) {
+                Assert-True ($screenshotScriptText -like ("*{0}*" -f $screenshot)) ("Screenshot refresh script should capture {0}." -f $screenshot)
+            }
+
+            $screenshotOutputRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferScreenshotDryRun-' + [guid]::NewGuid().ToString('N'))
+            $screenshotResult = & $screenshotScript -OutputRoot $screenshotOutputRoot -VisualOutputPath (Join-Path $screenshotOutputRoot 'visuals') -SkipBrowserCapture
+            Assert-True ([bool]$screenshotResult.CaptureSkipped) 'Screenshot refresh dry run should skip browser capture when requested.'
+            Assert-True (Test-Path -LiteralPath ([string]$screenshotResult.ReportPath)) 'Screenshot refresh dry run should generate report.html.'
+            Assert-True (Test-Path -LiteralPath ([string]$screenshotResult.CaptureScriptPath)) 'Screenshot refresh dry run should generate the capture helper script.'
+            Assert-True (@($screenshotResult.Screenshots).Count -eq 4) 'Screenshot refresh dry run should report four screenshot targets.'
+            Assert-True (@($screenshotResult.Screenshots | Where-Object { $_ -eq 'report-dashboard-migration.png' }).Count -eq 1) 'Screenshot refresh dry run should include the migration screenshot target.'
 
             Assert-True (Test-Path -LiteralPath $pesterWrapper) 'Tests should include a Pester-compatible entrypoint.'
             $pesterWrapperText = Get-Content -LiteralPath $pesterWrapper -Raw
@@ -2080,6 +2109,7 @@ $tests = @(
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
                 Get-Content -LiteralPath $visualDoc -Raw
+                Get-Content -LiteralPath $visualReadme -Raw
                 Get-Content -LiteralPath $firstRunGuide -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
