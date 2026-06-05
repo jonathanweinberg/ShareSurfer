@@ -1453,9 +1453,16 @@ $tests = @(
             Assert-True ($redactionAudit.Count -gt 0) 'Redaction audit should include checked sensitive source values.'
             Assert-True (@($redactionAudit | Where-Object { $_.LeakDetected -eq 'True' }).Count -eq 0) 'Redaction audit should not detect leaked source values.'
             Assert-True (($redactionAudit | Get-Member -MemberType NoteProperty).Name -contains 'ValueToken') 'Redaction audit should use synthetic tokens instead of raw source values.'
+            Assert-True ($redactionAudit.SourceFile -contains 'lab-preflight.csv') 'Redaction audit should include sensitive lab preflight evidence values.'
+            Assert-True ($redactionAudit.SourceFile -contains 'lab-validation-criteria.csv') 'Redaction audit should include sensitive lab validation criteria evidence values.'
+            Assert-True ($redactionAudit.SourceFile -contains 'live-evidence-review.csv') 'Redaction audit should include sensitive live evidence review values.'
+            Assert-True ($redactionAudit.SourceFile -contains 'lab-run-events.jsonl') 'Redaction audit should include sensitive raw lab-run event details.'
+            Assert-True ($redactionAudit.SourceFile -contains 'v1-acceptance.json') 'Redaction audit should include sensitive acceptance check detail values.'
+            Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'lab-run-events.jsonl' -and $_.ColumnName -eq 'Detail' -and $_.ValueToken -like 'ID-*' }).Count -gt 0) 'Lab-run event audit rows should use stable tokens instead of raw details.'
             $auditContent = Get-Content -LiteralPath $redactionAuditPath -Raw
             Assert-True ($auditContent -notlike '*CONTOSO*') 'Redaction audit must not contain source domain names.'
             Assert-True ($auditContent -notlike '*FinanceEditors*') 'Redaction audit must not contain source group names.'
+            Assert-True ($auditContent -notlike '*files01*') 'Redaction audit must not contain source server names from lab-run evidence.'
             $aclFile = @($bundleFiles | Where-Object { $_.FileName -eq 'acl_entries.csv' })[0]
             Assert-True ([int]$aclFile.RowCount -gt 0) 'Support bundle file diagnostics should record row counts.'
             Assert-True ($aclFile.Sha256 -match '^[0-9A-Fa-f]{64}$') 'Support bundle file diagnostics should record a SHA256 hash for redacted files.'
