@@ -205,6 +205,7 @@ Use the dashboard to review:
 - Business-unit and owner pivots.
 - Finding rollups.
 - Conflict rollups.
+- Diagnostics view for partial shares, collection errors, and scan events.
 - Org-chain rollups.
 - Inheritance breaks.
 - Explicit permissions deeper than level 2.

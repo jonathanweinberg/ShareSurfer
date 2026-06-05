@@ -689,7 +689,16 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
             $reportPath = Join-Path $outputPath 'report.html'
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+            $inventory = New-TestInventory
+            $inventory | Add-Member -MemberType NoteProperty -Name ScanErrors -Value @(
+                [pscustomobject]@{
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Denied'
+                    ErrorType = 'AclReadError'
+                    Message = 'Access denied while reading ACL.'
+                }
+            )
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
 
             ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath $reportPath | Out-Null
             $report = Get-Content -LiteralPath $reportPath -Raw
@@ -699,6 +708,7 @@ $tests = @(
             Assert-True ($report -like '*2,048-character full paths*') 'Report should document Azure Files full path limit.'
             Assert-True ($report -like '*operational migration policy*') 'Report should distinguish policy warning from hard Azure limit.'
             Assert-True ($report -like '*type="application/json"*') 'Report should embed scan data as application/json rather than executable JavaScript.'
+            Assert-True ($report -like '*rel="icon" href="data:,"*') 'Report should suppress missing favicon requests for offline review.'
             Assert-True ($report -notlike '*innerHTML = columns.map*') 'Report table rendering must not inject CSV-derived values with innerHTML.'
             Assert-True ($report -like '*Scan Events*') 'Report should expose scan event logs.'
             Assert-True ($report -like '*Business Unit Pivots*') 'Report should expose business-unit pivots.'
@@ -720,6 +730,12 @@ $tests = @(
             Assert-True ($report -like '*data-chart="finding"*') 'Report should expose a finding chart container.'
             Assert-True ($report -like '*data-chart="conflict"*') 'Report should expose a conflict chart container.'
             Assert-True ($report -like '*data-chart="owner"*') 'Report should expose an owner/business-unit chart container.'
+            Assert-True ($report -like '*data-view="diagnostics"*') 'Report should include a diagnostics dashboard view.'
+            Assert-True ($report -like '*Collection Error Drilldown*') 'Report should expose collection errors as a first-class diagnostic table.'
+            Assert-True ($report -like '*Collection Errors by Type*') 'Report should chart collection errors by error type.'
+            Assert-True ($report -like '*data-chart="collection-error"*') 'Report should expose a collection-error chart container.'
+            Assert-True ($report -like '*collection_error_rollups*') 'Report should build collection-error rollups from findings.'
+            Assert-True ($report -like '*collection-error-chart*') 'Report should render a collection-error chart.'
             Assert-True ($report -like '*renderBarChart*') 'Report should render offline native bar charts from embedded CSV data.'
             Assert-True ($report -like '*focusDashboardValue*') 'Report should support chart-driven drilldown filtering.'
             Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'

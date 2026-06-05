@@ -23,6 +23,7 @@ function ConvertTo-ShareSurferReport {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>ShareSurfer Business Review Dashboard</title>
   <style>
     :root {
@@ -367,6 +368,7 @@ function ConvertTo-ShareSurferReport {
         <button type="button" data-view="conflicts" aria-selected="false">Conflicts</button>
         <button type="button" data-view="owners" aria-selected="false">Owners</button>
         <button type="button" data-view="groups" aria-selected="false">Groups</button>
+        <button type="button" data-view="diagnostics" aria-selected="false">Diagnostics</button>
         <button type="button" data-view="org" aria-selected="false">Org & Logs</button>
       </nav>
     </section>
@@ -391,6 +393,10 @@ function ConvertTo-ShareSurferReport {
           <div class="chart" data-chart="owner">
             <h3>Business Units by Matching Items</h3>
             <div class="bar-list" id="owner-chart"></div>
+          </div>
+          <div class="chart" data-chart="collection-error">
+            <h3>Collection Errors by Type</h3>
+            <div class="bar-list" id="collection-error-chart"></div>
           </div>
         </div>
       </div>
@@ -475,13 +481,21 @@ function ConvertTo-ShareSurferReport {
       </div>
     </section>
 
-    <section class="view-panel" id="view-org" data-panel="org">
+    <section class="view-panel" id="view-diagnostics" data-panel="diagnostics">
       <div class="panel">
         <div class="table-header">
-          <h2>Org Chain Rollups</h2>
-          <span class="count" id="org-rollups-count"></span>
+          <h2>Collection Error Drilldown</h2>
+          <span class="count" id="collection-errors-count"></span>
         </div>
-        <div class="scroll"><table id="org-rollups"></table></div>
+        <p class="note">Use this view when a share is marked partial. Collection errors identify the share, path, error type, and message that prevented a complete inventory.</p>
+        <div class="scroll"><table id="collection-errors"></table></div>
+      </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>Collection Error Rollups</h2>
+          <span class="count" id="collection-error-rollups-count"></span>
+        </div>
+        <div class="scroll"><table id="collection-error-rollups"></table></div>
       </div>
       <div class="panel">
         <div class="table-header">
@@ -489,6 +503,16 @@ function ConvertTo-ShareSurferReport {
           <span class="count" id="events-count"></span>
         </div>
         <div class="scroll"><table id="events"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-org" data-panel="org">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Org Chain Rollups</h2>
+          <span class="count" id="org-rollups-count"></span>
+        </div>
+        <div class="scroll"><table id="org-rollups"></table></div>
       </div>
     </section>
   </main>
@@ -594,7 +618,7 @@ function ConvertTo-ShareSurferReport {
         addPriorityAction(list, 'warning', 'Confirm delegated folder access', String(deepAces) + ' deep explicit ACE(s) and ' + String(inheritanceBreaks) + ' inheritance break(s) need review.');
       }
       if (partialShares > 0) {
-        addPriorityAction(list, 'warning', 'Investigate partial collection', String(partialShares) + ' share(s) have incomplete metadata.');
+        addPriorityAction(list, 'warning', 'Investigate partial collection', String(partialShares) + ' share(s) have incomplete metadata. Open Diagnostics for collection-error detail.');
       }
       if (truncatedGroups > 0) {
         addPriorityAction(list, 'warning', 'Revisit group expansion depth', String(truncatedGroups) + ' group edge(s) were truncated.');
@@ -766,13 +790,16 @@ function ConvertTo-ShareSurferReport {
       });
     }
     const owner_pivots = buildOwnerPivots();
+    const collection_errors = data.findings.filter(row => row.FindingType === 'CollectionError');
     const finding_rollups = buildRollups(data.findings, ['FindingType', 'Severity']);
     const conflict_rollups = buildRollups(data.conflicts, ['ConflictType', 'Severity']);
+    const collection_error_rollups = buildRollups(collection_errors, ['ObservedValue', 'ShareId']);
     const org_rollups = buildOrgChainRollups();
     const group_browser_rows = buildGroupBrowserRows();
     const finding_chart_rows = buildRollups(data.findings, ['FindingType']).map(row => ({ Label: row.FindingType || 'Unspecified', Count: row.Count, FilterValue: row.FindingType || '' }));
     const conflict_chart_rows = buildRollups(data.conflicts, ['ConflictType']).map(row => ({ Label: row.ConflictType || 'Unspecified', Count: row.Count, FilterValue: row.ConflictType || '' }));
     const owner_chart_rows = buildOwnerChartRows();
+    const collection_error_chart_rows = buildRollups(collection_errors, ['ObservedValue']).map(row => ({ Label: row.ObservedValue || 'Unspecified', Count: row.Count, FilterValue: row.ObservedValue || '' }));
     function applyGroupBrowser() {
       const q = document.getElementById('group-filter').value.toLowerCase();
       const match = row => JSON.stringify(row).toLowerCase().includes(q);
@@ -788,6 +815,8 @@ function ConvertTo-ShareSurferReport {
       renderTable('owners', data.owner_mappings.filter(match));
       renderTable('owner-pivots', owner_pivots.filter(match));
       renderTable('groups', data.group_edges.filter(match));
+      renderTable('collection-errors', collection_errors.filter(match));
+      renderTable('collection-error-rollups', collection_error_rollups.filter(match));
       renderTable('org-rollups', org_rollups.filter(match));
       renderTable('events', data.scan_events.filter(match));
       applyGroupBrowser();
@@ -809,6 +838,7 @@ function ConvertTo-ShareSurferReport {
     renderBarChart('finding-chart', finding_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'warning', viewName: 'findings' });
     renderBarChart('conflict-chart', conflict_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'high', viewName: 'conflicts' });
     renderBarChart('owner-chart', owner_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'owner', viewName: 'owners' });
+    renderBarChart('collection-error-chart', collection_error_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'warning', viewName: 'diagnostics' });
     renderPriorityActions();
     updateOverallRisk();
     applyFilter();
