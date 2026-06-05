@@ -224,6 +224,7 @@ Use the dashboard to review:
 - Inheritance breaks.
 - Explicit permissions deeper than level 2.
 - Group expansion browsing.
+- Raw Evidence Tables when an operator needs to browse the underlying CSV-shaped rows inside the offline report. This is secondary evidence browsing, not the first place to send a business owner.
 
 Path note: Microsoft documents Azure Files limits of 255-character path components and 2,048-character full paths. ShareSurfer's default warning for full paths over 256 characters is an operational migration policy warning, not a claim that Azure Files cannot store the path.
 

@@ -852,6 +852,7 @@ $tests = @(
             Assert-True ($report -like '*data-chart="conflict"*') 'Report should expose a conflict chart container.'
             Assert-True ($report -like '*data-chart="owner"*') 'Report should expose an owner/business-unit chart container.'
             Assert-True ($report -like '*data-view="diagnostics"*') 'Report should include a diagnostics dashboard view.'
+            Assert-True ($report -like '*data-view="raw"*') 'Report should include a raw evidence dashboard view.'
             Assert-True ($report -like '*Collection Error Drilldown*') 'Report should expose collection errors as a first-class diagnostic table.'
             Assert-True ($report -like '*Collection Errors by Type*') 'Report should chart collection errors by error type.'
             Assert-True ($report -like '*data-chart="collection-error"*') 'Report should expose a collection-error chart container.'
@@ -885,6 +886,10 @@ $tests = @(
             Assert-True ($report -like '*buildMigrationDiscoveryRows*') 'Report should dynamically derive related data areas from existing CSV exports.'
             Assert-True ($report -like '*RelatedBecause*') 'Migration discovery should explain why rows were grouped.'
             Assert-True ($report -like '*focusMigrationArea*') 'Migration discovery rows should focus owner and business-unit review filters.'
+            Assert-True ($report -like '*Raw Evidence Tables*') 'Report should expose a secondary raw evidence table browser.'
+            Assert-True ($report -like '*raw-dataset-filter*') 'Raw evidence view should let operators choose a normalized dataset.'
+            Assert-True ($report -like '*renderRawEvidence*') 'Raw evidence view should dynamically render embedded CSV-shaped rows.'
+            Assert-True ($report -like '*rawDatasetLabels*') 'Raw evidence view should present friendly dataset labels.'
             Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'
             Assert-True ($report -like '*.summary, .visual-grid { grid-template-columns: 1fr; }*') 'Report summary and visual grids should collapse cleanly on mobile.'
         }
@@ -1274,6 +1279,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*visuals/report-dashboard-workbench.png*') 'First-run guide should show an example review workbench screenshot.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-findings.png*') 'First-run guide should show an example findings screenshot.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-migration.png*') 'First-run guide should show an example migration discovery screenshot.'
+            Assert-True ($firstRunText -like '*Raw Evidence Tables*') 'First-run guide should explain the raw evidence report view.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -1297,6 +1303,7 @@ $tests = @(
                 Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
             ) -join "`n"
             Assert-True ($publicText -like '*Test-ShareSurferV1Acceptance.ps1*') 'Operator documentation should include the final V1 acceptance checker.'
+            Assert-True ($publicText -like '*Raw Evidence Tables*') 'Operator documentation should mention the report raw evidence view.'
             $oldLabToolPattern = 'pr' + 'lctl'
             $internalVisualPattern = '(?i)' + 'image' + '-gen2'
             Assert-True ($publicText -notmatch $oldLabToolPattern) 'Public docs should not mention old internal test-environment tooling.'

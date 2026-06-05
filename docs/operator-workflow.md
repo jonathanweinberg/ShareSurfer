@@ -182,6 +182,7 @@ Use the report dashboard as a triage guide, not as the only source of truth.
 - Use the business-unit, data-owner, and review-risk filters to narrow mapped findings and conflicts before sending review queues to business owners.
 - Use the visual risk rollups to quickly filter the dashboard by finding type, conflict type, owner, or business unit before opening the detailed rows.
 - Use the Permissioned Group Review when a security group is assigned rights. Select a group row to focus the Group Browser on that expanded membership path.
+- Use Raw Evidence Tables when an operator needs to inspect the normalized CSV-shaped evidence inside `report.html`. Keep it secondary to the guided review views for business-owner conversations.
 
 Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards, for example `\\files01\Finance*`.
 
