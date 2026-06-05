@@ -14,7 +14,7 @@ function Initialize-ShareSurferLabDirectoryObjects {
     $domain = Get-ADDomain -ErrorAction Stop
     $ouName = 'ShareSurferLab'
     $ouDn = 'OU={0},{1}' -f $ouName, $domain.DistinguishedName
-    if ($null -eq (Get-ADOrganizationalUnit -Identity $ouDn -ErrorAction SilentlyContinue)) {
+    if ($null -eq (Get-ShareSurferLabOrganizationalUnit -DistinguishedName $ouDn)) {
         New-ADOrganizationalUnit -Name $ouName -Path $domain.DistinguishedName -ProtectedFromAccidentalDeletion:$false | Out-Null
     }
 
@@ -78,6 +78,15 @@ function Initialize-ShareSurferLabDirectoryObjects {
             Add-ADGroupMember -Identity $labGroup.DistinguishedName -Members $memberObject.DistinguishedName -ErrorAction SilentlyContinue
         }
     }
+}
+
+function Get-ShareSurferLabOrganizationalUnit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $DistinguishedName
+    )
+
+    Get-ADOrganizationalUnit -LDAPFilter "(distinguishedName=$DistinguishedName)" -ErrorAction SilentlyContinue
 }
 
 function Get-ShareSurferLabAdUser {

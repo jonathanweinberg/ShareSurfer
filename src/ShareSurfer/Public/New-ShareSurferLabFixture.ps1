@@ -61,9 +61,9 @@ function New-ShareSurferLabFixture {
     }
 
     if ($PSCmdlet.ShouldProcess($RootPath, 'Create ShareSurfer lab directories and Windows SMB shares')) {
-        New-Item -ItemType Directory -Path $RootPath -Force | Out-Null
+        New-ShareSurferLabDirectory -Path $RootPath | Out-Null
         foreach ($share in $plan.Shares) {
-            New-Item -ItemType Directory -Path $share.LocalPath -Force | Out-Null
+            New-ShareSurferLabDirectory -Path $share.LocalPath | Out-Null
         }
 
         foreach ($scenario in $plan.AclScenarios) {
@@ -72,12 +72,12 @@ function New-ShareSurferLabFixture {
             $targetType = Get-ShareSurferLabScenarioTargetType -Scenario $scenario
             if ($targetType -eq 'File') {
                 $parentPath = Split-Path -Parent $scenarioPath
-                New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
-                Set-Content -Path $scenarioPath -Value (New-ShareSurferLabFileContent -Tag $scenario.Name -SizeBytes 512) -Encoding ASCII -NoNewline
+                New-ShareSurferLabDirectory -Path $parentPath | Out-Null
+                Set-ShareSurferLabFileContent -Path $scenarioPath -Content (New-ShareSurferLabFileContent -Tag $scenario.Name -SizeBytes 512)
             }
             else {
-                New-Item -ItemType Directory -Path $scenarioPath -Force | Out-Null
-                Set-Content -Path (Join-Path $scenarioPath 'sample.txt') -Value (New-ShareSurferLabFileContent -Tag $scenario.Name -SizeBytes 512) -Encoding ASCII -NoNewline
+                New-ShareSurferLabDirectory -Path $scenarioPath | Out-Null
+                Set-ShareSurferLabFileContent -Path (Join-Path $scenarioPath 'sample.txt') -Content (New-ShareSurferLabFileContent -Tag $scenario.Name -SizeBytes 512)
             }
         }
 
@@ -89,9 +89,9 @@ function New-ShareSurferLabFixture {
                 }
                 $filePath = Join-Path $share.LocalPath $file.RelativePath
                 $parentPath = Split-Path -Parent $filePath
-                New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
+                New-ShareSurferLabDirectory -Path $parentPath | Out-Null
                 $content = New-ShareSurferLabFileContent -Tag $file.ContentTag -SizeBytes $file.SizeBytes
-                Set-Content -Path $filePath -Value $content -Encoding ASCII -NoNewline
+                Set-ShareSurferLabFileContent -Path $filePath -Content $content
             }
         }
 
@@ -157,6 +157,47 @@ function New-ShareSurferLabFixture {
     }
 
     $plan
+}
+
+function New-ShareSurferLabDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    [System.IO.Directory]::CreateDirectory((ConvertTo-ShareSurferLabFilesystemPath -Path $Path))
+}
+
+function Set-ShareSurferLabFileContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [string] $Content = ''
+    )
+
+    $bytes = [System.Text.Encoding]::ASCII.GetBytes($Content)
+    [System.IO.File]::WriteAllBytes((ConvertTo-ShareSurferLabFilesystemPath -Path $Path), $bytes)
+}
+
+function ConvertTo-ShareSurferLabFilesystemPath {
+    param(
+        [string] $Path = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or $Path.StartsWith('\\?\', [System.StringComparison]::Ordinal)) {
+        return $Path
+    }
+
+    if ($Path.StartsWith('\\', [System.StringComparison]::Ordinal)) {
+        return '\\?\UNC\{0}' -f $Path.TrimStart('\')
+    }
+
+    if ($Path -match '^[A-Za-z]:[\\/]' -or [System.IO.Path]::IsPathRooted($Path)) {
+        return '\\?\{0}' -f $Path
+    }
+
+    $Path
 }
 
 function Get-ShareSurferLabScenarioTargetType {

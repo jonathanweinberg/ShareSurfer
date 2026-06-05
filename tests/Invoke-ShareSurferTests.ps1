@@ -315,7 +315,8 @@ $tests = @(
             Assert-True ($initializerScript -like '*Set-ADGroup*') 'Lab directory initializer should update existing security group attributes.'
             Assert-True ($initializerScript -like '*-OtherAttributes $groupAttributes*') 'Lab directory initializer should create security groups with OBS extension attributes.'
             Assert-True ($initializerScript -like '*$Plan.ObsAttribute*') 'Lab directory initializer should use the runtime-selected OBS attribute for groups.'
-            Assert-True ($initializerScript -like '*Get-ADOrganizationalUnit -Identity $ouDn*') 'Lab directory initializer should resolve the dedicated OU by identity.'
+            Assert-True ($initializerScript -like '*Get-ShareSurferLabOrganizationalUnit -DistinguishedName $ouDn*') 'Lab directory initializer should resolve the dedicated OU through the lab OU helper.'
+            Assert-True ($initializerScript -like '*Get-ADOrganizationalUnit -LDAPFilter "(distinguishedName=$DistinguishedName)"*') 'Lab directory initializer should look up the dedicated OU by distinguished name.'
             Assert-True ($initializerScript -like '*Get-ADUser -Filter $filter -SearchBase $SearchBase*') 'Lab directory initializer should search users inside the lab OU.'
             Assert-True ($initializerScript -like '*Get-ADGroup -Filter $filter -SearchBase $SearchBase*') 'Lab directory initializer should search groups inside the lab OU.'
             Assert-True ($initializerScript -like '*already exists outside the ShareSurferLab OU*') 'Lab directory initializer should fail clearly on same-name objects outside the lab OU.'
@@ -326,6 +327,13 @@ $tests = @(
             Assert-True ($fixtureScript -like '*Assert-ShareSurferLabSmbSharePath -ShareName $share.ShareName -ExistingShare $existing -PlannedPath $share.LocalPath*') 'Lab fixture should validate existing SMB share paths before reusing share names.'
             Assert-True ($fixtureScript -like '*already exists at*but the lab plan expects*') 'Lab fixture should fail clearly when a planned SMB share name points at another path.'
             Assert-True ($fixtureScript -like '*ConvertTo-ShareSurferLabComparablePath*') 'Lab fixture should normalize paths before comparing existing and planned SMB share paths.'
+            Assert-True ($fixtureScript.Contains('[System.IO.Directory]::CreateDirectory((ConvertTo-ShareSurferLabFilesystemPath -Path $Path))')) 'Lab fixture should create directories through .NET extended-length path handling.'
+            Assert-True ($fixtureScript.Contains('[System.IO.File]::WriteAllBytes((ConvertTo-ShareSurferLabFilesystemPath -Path $Path), $bytes)')) 'Lab fixture should create file fixtures through .NET extended-length path handling.'
+            Assert-True ($fixtureScript.Contains('return ''\\?\UNC\{0}'' -f $Path.TrimStart(''\'')')) 'Lab fixture should convert UNC paths to extended-length UNC paths.'
+            Assert-True ($fixtureScript.Contains('$Path -match ''^[A-Za-z]:[\\/]''')) 'Lab fixture should recognize Windows drive-letter paths without relying on the local test OS path rules.'
+            Assert-True ($fixtureScript.Contains('return ''\\?\{0}'' -f $Path')) 'Lab fixture should convert rooted Windows paths to extended-length local paths.'
+            Assert-True ($fixtureScript -notlike '*Set-Content -Path $scenarioPath*') 'Long-path scenario file creation should not use normal Set-Content path handling.'
+            Assert-True ($fixtureScript -notlike '*New-Item -ItemType Directory -Path $scenarioPath*') 'Long-path scenario directory creation should not use normal New-Item path handling.'
         }
     },
     @{
