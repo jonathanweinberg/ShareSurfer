@@ -287,6 +287,12 @@ $tests = @(
             Assert-True ($initializerScript -like '*Set-ADGroup*') 'Lab directory initializer should update existing security group attributes.'
             Assert-True ($initializerScript -like '*-OtherAttributes $groupAttributes*') 'Lab directory initializer should create security groups with OBS extension attributes.'
             Assert-True ($initializerScript -like '*$Plan.ObsAttribute*') 'Lab directory initializer should use the runtime-selected OBS attribute for groups.'
+            Assert-True ($initializerScript -like '*Get-ADOrganizationalUnit -Identity $ouDn*') 'Lab directory initializer should resolve the dedicated OU by identity.'
+            Assert-True ($initializerScript -like '*Get-ADUser -Filter $filter -SearchBase $SearchBase*') 'Lab directory initializer should search users inside the lab OU.'
+            Assert-True ($initializerScript -like '*Get-ADGroup -Filter $filter -SearchBase $SearchBase*') 'Lab directory initializer should search groups inside the lab OU.'
+            Assert-True ($initializerScript -like '*already exists outside the ShareSurferLab OU*') 'Lab directory initializer should fail clearly on same-name objects outside the lab OU.'
+            Assert-True ($initializerScript -like '*Set-ADUser -Identity $managedUser.DistinguishedName -Manager $manager.DistinguishedName*') 'Lab directory initializer should set managers using lab OU distinguished names.'
+            Assert-True ($initializerScript -like '*Add-ADGroupMember -Identity $labGroup.DistinguishedName -Members $memberObject.DistinguishedName*') 'Lab directory initializer should add group members using lab OU distinguished names.'
         }
     },
     @{
