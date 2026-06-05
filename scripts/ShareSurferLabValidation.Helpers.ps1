@@ -191,6 +191,7 @@ function Measure-ShareSurferLabValidationEvidence {
     $conflicts = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'conflicts.csv'))
     $sharePermissions = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'share_permissions.csv'))
     $aclEntries = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'acl_entries.csv'))
+    $identities = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'identities.csv'))
     $groupEdges = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'group_edges.csv'))
     $ownerRiskPivots = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_risk_pivots.csv'))
     $scannedFiles = @($items | Where-Object { $_.ItemType -eq 'File' })
@@ -207,6 +208,37 @@ function Measure-ShareSurferLabValidationEvidence {
         (@($scannedFiles | Where-Object { [string]$_.ItemId -eq $entryItemId }).Count -gt 0) -and
         ([string]$_.InheritanceFlags -eq 'None')
     })
+    $expectedPermissionGroupNames = @(Get-ShareSurferLabValidationPermissionGroupNames -Plan $Plan)
+    $expectedPermissionGroupMap = @{}
+    foreach ($groupName in @($expectedPermissionGroupNames)) {
+        $expectedPermissionGroupMap[$groupName.ToUpperInvariant()] = $true
+    }
+    $plannedPermissionGroupsWithObs = @($Plan.Groups | Where-Object {
+        $name = [string]$_.Name
+        $expectedPermissionGroupMap.ContainsKey($name.ToUpperInvariant()) -and
+        $_.PSObject.Properties[$Plan.ObsAttribute] -and
+        [string]$_.PSObject.Properties[$Plan.ObsAttribute].Value -ne ''
+    })
+    $identityPermissionGroupObsMap = @{}
+    foreach ($identity in @($identities)) {
+        if ([string]$identity.ObjectClass -ne 'group') {
+            continue
+        }
+        $sam = [string]$identity.SamAccountName
+        if ([string]::IsNullOrWhiteSpace($sam)) {
+            $sam = Get-ShareSurferLabValidationSamName -Identity ([string]$identity.Identity)
+        }
+        if (-not $expectedPermissionGroupMap.ContainsKey($sam.ToUpperInvariant())) {
+            continue
+        }
+        if ([string]$identity.ObsPath -eq '') {
+            continue
+        }
+        if ([string]$identity.ObsAttribute -ne '' -and [string]$identity.ObsAttribute -ne [string]$Plan.ObsAttribute) {
+            continue
+        }
+        $identityPermissionGroupObsMap[$sam.ToUpperInvariant()] = $true
+    }
     $directoryCounts = Get-ShareSurferLabValidationDirectoryCounts -Plan $Plan
 
     $actualFileCount = $null
@@ -235,6 +267,9 @@ function Measure-ShareSurferLabValidationEvidence {
         DirectoryGroupCount = $directoryCounts.GroupCount
         DirectoryEvidenceSource = $directoryCounts.EvidenceSource
         DirectoryEvidenceDetail = $directoryCounts.EvidenceDetail
+        ExpectedPermissionGroupCount = $expectedPermissionGroupNames.Count
+        PlannedPermissionGroupObsCount = $plannedPermissionGroupsWithObs.Count
+        IdentityPermissionGroupObsCount = $identityPermissionGroupObsMap.Count
         ScannedShareCount = $shares.Count
         ScannedItemCount = $items.Count
         ScannedFileItemCount = $scannedFiles.Count
@@ -422,6 +457,17 @@ function New-ShareSurferLabValidationCriteriaRows {
                 $source = 'ScanExport:group_edges.csv'
                 $detail = 'GroupEdgeRows={0}' -f $evidence.GroupEdgeCount
             }
+            'EnterprisePermissionGroupObsCoverage' {
+                if ([int64]$evidence.IdentityPermissionGroupObsCount -gt 0) {
+                    $actual = [int64]$evidence.IdentityPermissionGroupObsCount
+                    $source = 'ScanExport:identities.csv'
+                }
+                else {
+                    $actual = [int64]$evidence.PlannedPermissionGroupObsCount
+                    $source = 'LabPlan'
+                }
+                $detail = 'IdentityGroupsWithObs={0}; PlannedGroupsWithObs={1}; ExpectedPermissionGroups={2}; ObsAttribute={3}' -f $evidence.IdentityPermissionGroupObsCount, $evidence.PlannedPermissionGroupObsCount, $evidence.ExpectedPermissionGroupCount, $Plan.ObsAttribute
+            }
             'EnterpriseOwnerRiskPivots' {
                 $actual = [int64]$evidence.OwnerRiskPivotCount
                 $source = 'ScanExport:owner_risk_pivots.csv'
@@ -456,6 +502,49 @@ function New-ShareSurferLabValidationCriteriaRows {
             Description = [string]$criterion.Description
         }
     }
+}
+
+function Get-ShareSurferLabValidationPermissionGroupNames {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan
+    )
+
+    $knownGroups = @{}
+    foreach ($group in @($Plan.Groups)) {
+        $knownGroups[[string]$group.Name] = $true
+    }
+
+    $permissionGroups = [ordered]@{}
+    foreach ($share in @($Plan.Shares)) {
+        foreach ($permission in @($share.SharePermissions)) {
+            $name = Get-ShareSurferLabValidationSamName -Identity ([string]$permission.Identity)
+            if ($knownGroups.ContainsKey($name)) {
+                $permissionGroups[$name] = $true
+            }
+        }
+    }
+    foreach ($scenario in @($Plan.AclScenarios)) {
+        $name = Get-ShareSurferLabValidationSamName -Identity ([string]$scenario.Identity)
+        if ($knownGroups.ContainsKey($name)) {
+            $permissionGroups[$name] = $true
+        }
+    }
+
+    @($permissionGroups.Keys)
+}
+
+function Get-ShareSurferLabValidationSamName {
+    param(
+        [string] $Identity = ''
+    )
+
+    $value = $Identity.Trim()
+    if ($value -like '*\*') {
+        return ($value -split '\\')[-1]
+    }
+
+    $value
 }
 
 function Test-ShareSurferLabValidationLiveEvidence {

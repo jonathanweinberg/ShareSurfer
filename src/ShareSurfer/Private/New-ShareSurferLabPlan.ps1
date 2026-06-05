@@ -321,6 +321,20 @@ function New-ShareSurferLabPlan {
             Required = $true
             Description = 'Enterprise validation includes expandable security group membership evidence.'
         })
+        $permissionGroupNames = @(Get-ShareSurferLabPlanPermissionGroupNames -Shares $shares -AclScenarios $aclScenarios -Groups $groups)
+        $permissionGroupsWithObs = @($groups | Where-Object {
+            $permissionGroupNames -contains [string]$_.Name -and
+            $_.PSObject.Properties[$ObsAttribute] -and
+            [string]$_.PSObject.Properties[$ObsAttribute].Value -ne ''
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterprisePermissionGroupObsCoverage'
+            MinimumValue = @($permissionGroupNames).Count
+            ActualPlanValue = @($permissionGroupsWithObs).Count
+            Unit = 'groups with OBS'
+            Required = $true
+            Description = 'Enterprise validation proves permission-bearing security groups carry the runtime-selected OBS/OID extension attribute into identity exports.'
+        })
         [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseOwnerRiskPivots'
             MinimumValue = 1
@@ -399,4 +413,53 @@ function New-ShareSurferLabGroupRecord {
     }
     $record[$ObsAttribute] = $Obs
     [pscustomobject]$record
+}
+
+function Get-ShareSurferLabPlanPermissionGroupNames {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Shares,
+
+        [Parameter(Mandatory = $true)]
+        $AclScenarios,
+
+        [Parameter(Mandatory = $true)]
+        $Groups
+    )
+
+    $knownGroups = @{}
+    foreach ($group in @($Groups)) {
+        $knownGroups[[string]$group.Name] = $true
+    }
+
+    $permissionGroups = [ordered]@{}
+    foreach ($share in @($Shares)) {
+        foreach ($permission in @($share.SharePermissions)) {
+            $name = Get-ShareSurferLabPlanSamName -Identity ([string]$permission.Identity)
+            if ($knownGroups.ContainsKey($name)) {
+                $permissionGroups[$name] = $true
+            }
+        }
+    }
+    foreach ($scenario in @($AclScenarios)) {
+        $name = Get-ShareSurferLabPlanSamName -Identity ([string]$scenario.Identity)
+        if ($knownGroups.ContainsKey($name)) {
+            $permissionGroups[$name] = $true
+        }
+    }
+
+    @($permissionGroups.Keys)
+}
+
+function Get-ShareSurferLabPlanSamName {
+    param(
+        [string] $Identity = ''
+    )
+
+    $value = $Identity.Trim()
+    if ($value -like '*\*') {
+        return ($value -split '\\')[-1]
+    }
+
+    $value
 }
