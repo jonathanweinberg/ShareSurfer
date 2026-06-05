@@ -429,6 +429,13 @@ $tests = @(
             Assert-Equal ([int]$fallbackResult.FallbackCount) 2 'Live evidence gate should count required fallback criteria.'
             Assert-True ($fallbackResult.FallbackCriteria -contains 'EnterprisePlanOnlyProof') 'Live evidence gate should identify plan-only criteria.'
             Assert-True ($fallbackResult.FallbackCriteria -contains 'EnterpriseUnavailableProof') 'Live evidence gate should identify unavailable evidence criteria.'
+
+            $reviewRows = @(New-ShareSurferLabValidationEvidenceReview -CriteriaRows $fallbackCriteria)
+            $planOnlyReview = @($reviewRows | Where-Object { $_.Name -eq 'EnterprisePlanOnlyProof' })[0]
+            $unavailableReview = @($reviewRows | Where-Object { $_.Name -eq 'EnterpriseUnavailableProof' })[0]
+            Assert-Equal $planOnlyReview.EvidenceStatus 'PlanOnly' 'Evidence review should classify plan-only required criteria.'
+            Assert-Equal $unavailableReview.EvidenceStatus 'EvidenceUnavailable' 'Evidence review should classify unavailable required criteria.'
+            Assert-True ([string]$planOnlyReview.NextAction -like '*Create or scan the lab*') 'Evidence review should give an operator next action for plan-only criteria.'
         }
     },
     @{
@@ -983,6 +990,10 @@ $tests = @(
                 FallbackCriteria = @()
                 FallbackEvidenceSources = @()
             } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $runRoot 'live-evidence.json') -Encoding UTF8
+            @(
+                [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ActiveDirectory'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:shares.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'live-evidence-review.csv') -NoTypeInformation -Encoding UTF8
 
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
             $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
@@ -992,6 +1003,7 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
             Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
+            Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
 
             Set-Content -LiteralPath $reportPath -Value '<html><body>not a ShareSurfer dashboard</body></html>' -Encoding UTF8
             $badReportResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
@@ -1022,6 +1034,17 @@ $tests = @(
             Assert-True (@($badBundleResult.Checks | Where-Object { $_.Name -eq 'RedactedSupportBundle' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report redacted support bundle manifest failures.'
             $goodBundleManifest | Export-Csv -LiteralPath $bundleManifestPath -NoTypeInformation -Encoding UTF8
 
+            @(
+                [pscustomobject]@{ Name = 'EnterprisePlanOnlyProof'; Required = $true; Passed = $true; EvidenceStatus = 'PlanOnly'; EvidenceSource = 'LabPlan'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Planned only'; NextAction = 'Create or scan the lab.' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'live-evidence-review.csv') -NoTypeInformation -Encoding UTF8
+            $badReviewResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badReviewResult.IsValid) 'Acceptance checker should fail when the live evidence review contains required blocking statuses.'
+            Assert-True (@($badReviewResult.Checks | Where-Object { $_.Name -eq 'LiveEvidenceReview' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report live evidence review failures.'
+            @(
+                [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ActiveDirectory'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' },
+                [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; Passed = $true; EvidenceStatus = 'LiveEvidence'; EvidenceSource = 'ScanExport:shares.csv'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Synthetic acceptance proof'; NextAction = 'No action needed for this criterion.' }
+            ) | Export-Csv -LiteralPath (Join-Path $runRoot 'live-evidence-review.csv') -NoTypeInformation -Encoding UTF8
+
             Remove-Item -LiteralPath (Join-Path $bundlePath 'scan_events.jsonl') -Force
             $failedResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True (-not $failedResult.IsValid) 'Acceptance checker should fail when a required support bundle artifact is missing.'
@@ -1033,6 +1056,8 @@ $tests = @(
             Assert-True ($labValidationScript -like '*AcceptancePath*') 'Lab validation output should include the acceptance artifact path.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
+            Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'
+            Assert-True ($labValidationScript -like '*LiveEvidenceReviewPath*') 'Lab validation output should include the live evidence review artifact path.'
         }
     },
     @{

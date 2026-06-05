@@ -8,6 +8,7 @@ param(
     [string] $SupportBundlePath = '',
     [string] $CriteriaPath = '',
     [string] $LiveEvidencePath = '',
+    [string] $LiveEvidenceReviewPath = '',
 
     [switch] $RequireLiveEvidence
 )
@@ -33,6 +34,9 @@ if ($CriteriaPath -eq '') {
 }
 if ($LiveEvidencePath -eq '') {
     $LiveEvidencePath = Join-Path $RunRoot 'live-evidence.json'
+}
+if ($LiveEvidenceReviewPath -eq '') {
+    $LiveEvidenceReviewPath = Join-Path $RunRoot 'live-evidence-review.csv'
 }
 
 function New-ShareSurferAcceptanceCheck {
@@ -132,6 +136,17 @@ else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabValidationCriteria' -Passed $false -Detail ('Criteria file not found: {0}' -f $CriteriaPath)))
 }
 
+if (Test-Path -LiteralPath $LiveEvidenceReviewPath) {
+    $reviewRows = @(Import-Csv -LiteralPath $LiveEvidenceReviewPath)
+    $blockingStatuses = @('Failed', 'MissingEvidenceSource', 'PlanOnly', 'EvidenceUnavailable')
+    $blockingRows = @($reviewRows | Where-Object { [string]$_.Required -eq 'True' -and $blockingStatuses -contains [string]$_.EvidenceStatus })
+    $reviewPassed = ($reviewRows.Count -gt 0 -and ((-not $RequireLiveEvidence) -or $blockingRows.Count -eq 0))
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LiveEvidenceReview' -Passed $reviewPassed -Detail ('ReviewRows={0}; BlockingRows={1}; Review={2}' -f $reviewRows.Count, $blockingRows.Count, $LiveEvidenceReviewPath)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LiveEvidenceReview' -Passed $false -Detail ('Live evidence review file not found: {0}' -f $LiveEvidenceReviewPath)))
+}
+
 if ($RequireLiveEvidence) {
     if (Test-Path -LiteralPath $LiveEvidencePath) {
         $liveEvidence = Get-Content -LiteralPath $LiveEvidencePath -Raw | ConvertFrom-Json
@@ -159,6 +174,7 @@ $failedChecks = @($checks | Where-Object { -not $_.Passed })
     SupportBundlePath = $SupportBundlePath
     CriteriaPath = $CriteriaPath
     LiveEvidencePath = $LiveEvidencePath
+    LiveEvidenceReviewPath = $LiveEvidenceReviewPath
     RequireLiveEvidence = [bool]$RequireLiveEvidence
     FailedCheckCount = $failedChecks.Count
     Checks = @($checks)

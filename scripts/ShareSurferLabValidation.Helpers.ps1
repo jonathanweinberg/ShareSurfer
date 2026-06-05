@@ -326,3 +326,53 @@ function Test-ShareSurferLabValidationLiveEvidence {
         FallbackEvidenceSources = @($fallbackRows | ForEach-Object { [string]$_.EvidenceSource } | Sort-Object -Unique)
     }
 }
+
+function New-ShareSurferLabValidationEvidenceReview {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]] $CriteriaRows
+    )
+
+    foreach ($row in @($CriteriaRows)) {
+        $source = [string]$row.EvidenceSource
+        $required = [bool]$row.Required
+        $passed = $true
+        if ($row.PSObject.Properties['Passed']) {
+            $passed = [bool]$row.Passed
+        }
+        $status = 'LiveEvidence'
+        $nextAction = 'No action needed for this criterion.'
+
+        if (-not $passed) {
+            $status = 'Failed'
+            $nextAction = 'Fix the lab, scan, or validation inputs until this criterion meets its minimum value.'
+        }
+        elseif ([string]::IsNullOrWhiteSpace($source)) {
+            $status = 'MissingEvidenceSource'
+            $nextAction = 'Rerun validation so this criterion records a concrete evidence source.'
+        }
+        elseif ($source -eq 'LabPlan') {
+            $status = 'PlanOnly'
+            $nextAction = 'Create or scan the lab so this criterion is backed by live directory, filesystem, or export evidence.'
+        }
+        elseif ($source -like '*Unavailable*') {
+            $status = 'EvidenceUnavailable'
+            $nextAction = 'Run validation from a host with the required module, share, directory, or filesystem access.'
+        }
+        elseif (-not $required) {
+            $status = 'Optional'
+        }
+
+        [pscustomobject]@{
+            Name = [string]$row.Name
+            Required = $required
+            Passed = $passed
+            EvidenceStatus = $status
+            EvidenceSource = $source
+            ActualValue = if ($row.PSObject.Properties['ActualValue']) { [string]$row.ActualValue } else { '' }
+            MinimumValue = if ($row.PSObject.Properties['MinimumValue']) { [string]$row.MinimumValue } else { '' }
+            EvidenceDetail = if ($row.PSObject.Properties['EvidenceDetail']) { [string]$row.EvidenceDetail } else { '' }
+            NextAction = $nextAction
+        }
+    }
+}

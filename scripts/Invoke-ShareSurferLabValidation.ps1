@@ -35,6 +35,7 @@ $reportPath = Join-Path $runRoot 'report.html'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
+$liveEvidenceReviewPath = Join-Path $runRoot 'live-evidence-review.csv'
 $acceptancePath = Join-Path $runRoot 'v1-acceptance.json'
 $ownerMappingPath = Join-Path $runRoot 'owner-mapping.csv'
 
@@ -63,6 +64,8 @@ $criteriaRows = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPa
 @($criteriaRows) | Export-Csv -LiteralPath $criteriaPath -NoTypeInformation -Encoding UTF8
 $liveEvidence = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $criteriaRows
 $liveEvidence | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $liveEvidencePath -Encoding UTF8
+$liveEvidenceReview = @(New-ShareSurferLabValidationEvidenceReview -CriteriaRows $criteriaRows)
+$liveEvidenceReview | Export-Csv -LiteralPath $liveEvidenceReviewPath -NoTypeInformation -Encoding UTF8
 $failedRequiredCriteria = @($criteriaRows | Where-Object { $_.Required -and -not $_.Passed })
 if ($failedRequiredCriteria.Count -gt 0) {
     throw ('ShareSurfer lab validation criteria failed. See {0}' -f $criteriaPath)
@@ -88,6 +91,7 @@ if (-not $acceptance.IsValid) {
     ValidationPath = Join-Path $runRoot 'validation.json'
     CriteriaPath = $criteriaPath
     LiveEvidencePath = $liveEvidencePath
+    LiveEvidenceReviewPath = $liveEvidenceReviewPath
     AcceptancePath = $acceptancePath
     OwnerMappingPath = $ownerMappingPath
     AcceptanceIsValid = [bool]$acceptance.IsValid
