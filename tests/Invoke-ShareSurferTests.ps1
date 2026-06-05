@@ -609,6 +609,7 @@ $tests = @(
             Assert-True ($preflightRows.Name -contains 'AdObjectNameCollisions') 'Preflight should report AD object name collision readiness.'
             Assert-True ($preflightRows.Name -contains 'SmbSharePathCollisions') 'Preflight should report SMB share path collision readiness.'
             Assert-True ($preflightRows.Name -contains 'ObsAttributeSchema') 'Preflight should report whether the runtime OBS attribute is writable in the AD schema.'
+            Assert-True ($preflightRows.Name -contains 'LabPasswordPolicy') 'Preflight should report domain password policy readiness for lab user creation.'
             $includeFilesPreflight = @($preflightRows | Where-Object { $_.Name -eq 'EnterpriseIncludeFiles' })[0]
             Assert-True ([bool]$includeFilesPreflight.Passed) 'Enterprise IncludeFiles preflight should pass when IncludeFiles is set.'
             $targetVolumePreflight = @($preflightRows | Where-Object { $_.Name -eq 'TargetVolumeFreeSpace' })[0]
@@ -619,6 +620,37 @@ $tests = @(
             $targetVolumeResult = Test-ShareSurferLabValidationTargetVolumeFreeSpace -Plan $tinyVolumePlan -LabRoot $labRoot
             Assert-True ([bool]$targetVolumeResult.Passed) 'Target volume helper should pass when available free space is greater than the configured byte budget.'
             Assert-True ([string]$targetVolumeResult.Evidence -like '*RequiredBytes=1*') 'Target volume helper should record the configured byte requirement.'
+
+            try {
+                function global:Get-ADDefaultDomainPasswordPolicy {
+                    [pscustomobject]@{
+                        MinPasswordLength = 14
+                        ComplexityEnabled = $true
+                        PasswordHistoryCount = 24
+                    }
+                }
+
+                $passwordPolicyResult = Test-ShareSurferLabValidationPasswordPolicy
+                Assert-True ([bool]$passwordPolicyResult.Passed) 'Lab password policy helper should pass when the generated password pattern satisfies the default domain policy.'
+                Assert-True ([string]$passwordPolicyResult.Evidence -like '*GeneratedPasswordLength=33*MinPasswordLength=14*ComplexityEnabled=True*') 'Lab password policy evidence should record generated password shape and domain policy without revealing the password.'
+
+                function global:Get-ADDefaultDomainPasswordPolicy {
+                    [pscustomobject]@{
+                        MinPasswordLength = 64
+                        ComplexityEnabled = $true
+                        PasswordHistoryCount = 24
+                    }
+                }
+
+                $strictPasswordPolicyResult = Test-ShareSurferLabValidationPasswordPolicy
+                Assert-True (-not [bool]$strictPasswordPolicyResult.Passed) 'Lab password policy helper should fail when the domain minimum length is stricter than the generated password pattern.'
+                $passwordPolicyPreflight = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $labRoot -RunRoot $exportPath -CreateLab -IncludeFiles | Where-Object { $_.Name -eq 'LabPasswordPolicy' })[0]
+                Assert-True (-not [bool]$passwordPolicyPreflight.Passed) 'CreateLab preflight should block when the generated lab password pattern cannot satisfy the default domain policy.'
+                Assert-True ([bool]$passwordPolicyPreflight.Required) 'CreateLab preflight should make lab password policy readiness required evidence.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-ADDefaultDomainPasswordPolicy -ErrorAction SilentlyContinue
+            }
 
             try {
                 function global:Get-ADRootDSE {
@@ -2366,6 +2398,7 @@ $tests = @(
             Assert-True ($labReadinessText -like '*-CreateLab*') 'Lab readiness checklist should run preflight in lab-creation mode.'
             Assert-True ($labReadinessText -like '*checks the same creation blockers*') 'Lab readiness checklist should explain why preflight includes CreateLab.'
             Assert-True ($labReadinessText -like '*ObsAttributeSchema*') 'Lab readiness checklist should include the OBS attribute schema preflight row.'
+            Assert-True ($labReadinessText -like '*LabPasswordPolicy*') 'Lab readiness checklist should include the lab password policy preflight row.'
             Assert-True ($labReadinessText -like '*-Scale Enterprise*') 'Lab readiness checklist should include the enterprise validation command.'
             Assert-True ($labReadinessText -like '*v1-acceptance-summary.json*') 'Lab readiness checklist should explain the concise acceptance artifact.'
             Assert-True ($labReadinessText -like '*issue-summary.md*') 'Lab readiness checklist should explain the public-safe issue summary artifact.'
@@ -2376,6 +2409,7 @@ $tests = @(
             Assert-True ($operatorWorkflowText -like '*-PreflightOnly -CreateLab*') 'Operator workflow should tell lab operators to run creation-mode preflight before creating enterprise fixtures.'
             Assert-True ($operatorWorkflowText -like '*target-volume free space*') 'Operator workflow should explain creation-mode preflight blockers.'
             Assert-True ($operatorWorkflowText.Contains('selected `-ObsAttribute` exists and is allowed on both users and groups')) 'Operator workflow should explain the OBS attribute schema preflight check.'
+            Assert-True ($operatorWorkflowText -like '*generated lab user password pattern fits the default domain password policy*') 'Operator workflow should explain the lab password policy preflight check.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw

@@ -276,6 +276,51 @@ function Test-ShareSurferLabValidationObsAttributeSchema {
     }
 }
 
+function Test-ShareSurferLabValidationPasswordPolicy {
+    $plannedPasswordLength = 33
+    $plannedPasswordCategories = 4
+
+    $command = Get-Command Get-ADDefaultDomainPasswordPolicy -ErrorAction SilentlyContinue
+    if ($null -eq $command) {
+        return [pscustomobject]@{
+            Passed = $false
+            Evidence = 'Get-ADDefaultDomainPasswordPolicy command is unavailable.'
+        }
+    }
+
+    try {
+        $policy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
+        $minimumLength = 0
+        if ($policy.PSObject.Properties['MinPasswordLength']) {
+            [void][int]::TryParse([string]$policy.MinPasswordLength, [ref]$minimumLength)
+        }
+
+        $complexityEnabled = $false
+        if ($policy.PSObject.Properties['ComplexityEnabled']) {
+            $complexityEnabled = ConvertTo-ShareSurferLabValidationBool $policy.ComplexityEnabled
+        }
+
+        $historyCount = ''
+        if ($policy.PSObject.Properties['PasswordHistoryCount']) {
+            $historyCount = [string]$policy.PasswordHistoryCount
+        }
+
+        $lengthPassed = ($plannedPasswordLength -ge $minimumLength)
+        $complexityPassed = ((-not $complexityEnabled) -or $plannedPasswordCategories -ge 3)
+
+        [pscustomobject]@{
+            Passed = ($lengthPassed -and $complexityPassed)
+            Evidence = 'GeneratedPasswordLength={0}; GeneratedPasswordCategories={1}; MinPasswordLength={2}; ComplexityEnabled={3}; PasswordHistoryCount={4}' -f $plannedPasswordLength, $plannedPasswordCategories, $minimumLength, $complexityEnabled, $historyCount
+        }
+    }
+    catch {
+        [pscustomobject]@{
+            Passed = $false
+            Evidence = 'Unable to read default domain password policy: {0}' -f $_.Exception.Message
+        }
+    }
+}
+
 function Get-ShareSurferLabValidationSchemaClass {
     param(
         [Parameter(Mandatory = $true)]
@@ -488,6 +533,9 @@ function New-ShareSurferLabValidationPreflight {
 
     $obsAttributeSchemaResult = Test-ShareSurferLabValidationObsAttributeSchema -Plan $Plan
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'ObsAttributeSchema' -Required ([bool]$CreateLab) -Passed ((-not [bool]$CreateLab) -or [bool]$obsAttributeSchemaResult.Passed) -Evidence $obsAttributeSchemaResult.Evidence -NextAction 'Choose an AD attribute that exists and is allowed on both user and group objects, then rerun with -ObsAttribute using that attribute name.'))
+
+    $passwordPolicyResult = Test-ShareSurferLabValidationPasswordPolicy
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'LabPasswordPolicy' -Required ([bool]$CreateLab) -Passed ((-not [bool]$CreateLab) -or [bool]$passwordPolicyResult.Passed) -Evidence $passwordPolicyResult.Evidence -NextAction 'Review the default domain password policy before creating lab users, or update the generated lab password pattern if the configured policy is stricter.'))
 
     $adObjectCollisionResult = Test-ShareSurferLabValidationAdObjectCollisions -Plan $Plan
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'AdObjectNameCollisions' -Required ([bool]$CreateLab) -Passed ([bool]$adObjectCollisionResult.Passed) -Evidence $adObjectCollisionResult.Evidence -NextAction 'Rename or remove any existing AD user or group whose name matches a planned ShareSurfer lab object but is outside the ShareSurferLab OU.'))
