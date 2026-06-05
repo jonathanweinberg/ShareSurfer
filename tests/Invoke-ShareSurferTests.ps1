@@ -1089,20 +1089,20 @@ $tests = @(
             function global:Get-SmbShare {
                 param(
                     [string] $Name,
-                    [string] $CimSession
+                    $CimSession
                 )
                 [pscustomobject]@{
                     Name = $Name
                     Path = $shareRoot
                     Description = 'Mocked SMB share'
-                    PSComputerName = $CimSession
+                    PSComputerName = if ($null -eq $CimSession) { '' } else { [string]$CimSession.ComputerName }
                 }
             }
 
             function global:Get-SmbShareAccess {
                 param(
                     [string] $Name,
-                    [string] $CimSession
+                    $CimSession
                 )
                 if ($Name -eq 'Finance') {
                     [pscustomobject]@{
@@ -1116,12 +1116,12 @@ $tests = @(
 
             try {
                 $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
-                Invoke-ShareSurferScan -ComputerName 'files01' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                Invoke-ShareSurferScan -ComputerName ([System.Environment]::MachineName) -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
                 $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
                 $permissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
                 $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
 
-                Assert-Equal $shares[0].ComputerName 'files01' 'SMB share scans should preserve the requested computer name.'
+                Assert-Equal $shares[0].ComputerName ([System.Environment]::MachineName) 'SMB share scans should preserve the requested computer name.'
                 Assert-Equal $shares[0].ShareName 'Finance' 'SMB share scans should preserve the requested share name.'
                 Assert-Equal $shares[0].PartialData 'False' 'SMB share scans should not remain partial when share-level permissions were collected for the requested share.'
                 Assert-Equal $shares[0].PartialReason '' 'SMB share scans should clear stale local-path permission partial reasons after share-level permissions are proven.'
@@ -1129,6 +1129,122 @@ $tests = @(
                 Assert-True ($events.EventType -contains 'ShareTargetResolved') 'SMB share scans should log share target resolution.'
             }
             finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan uses real CIM session objects for remote SMB share targets'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRemoteSmbShare-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shareRoot 'remote-file.txt') -Value 'remote share mode'
+            $script:newCimSessionCount = 0
+            $script:removeCimSessionCount = 0
+            $script:getSmbShareSawSession = $false
+            $script:getSmbShareAccessSawSession = $false
+
+            function global:New-CimSession {
+                param([string] $ComputerName)
+                $script:newCimSessionCount++
+                [pscustomobject]@{
+                    ComputerName = $ComputerName
+                    SessionId = 'mock-session-001'
+                }
+            }
+
+            function global:Remove-CimSession {
+                param($CimSession)
+                if ($null -ne $CimSession -and $CimSession.SessionId -eq 'mock-session-001') {
+                    $script:removeCimSessionCount++
+                }
+            }
+
+            function global:Get-SmbShare {
+                param(
+                    [string] $Name,
+                    $CimSession
+                )
+                Assert-True ($null -ne $CimSession -and $CimSession.SessionId -eq 'mock-session-001') 'Remote Get-SmbShare should receive a CIM session object.'
+                $script:getSmbShareSawSession = $true
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = $shareRoot
+                    Description = 'Mocked remote SMB share'
+                }
+            }
+
+            function global:Get-SmbShareAccess {
+                param(
+                    [string] $Name,
+                    $CimSession
+                )
+                Assert-True ($null -ne $CimSession -and $CimSession.SessionId -eq 'mock-session-001') 'Remote Get-SmbShareAccess should receive the same CIM session object.'
+                $script:getSmbShareAccessSawSession = $true
+                [pscustomobject]@{
+                    Name = $Name
+                    AccountName = 'CONTOSO\RemoteShareReaders'
+                    AccessRight = 'Read'
+                    AccessControlType = 'Allow'
+                }
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRemoteExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'remote-files01' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+                $permissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
+                $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+
+                Assert-Equal $script:newCimSessionCount 1 'Remote SMB scans should create one CIM session for the target computer.'
+                Assert-Equal $script:removeCimSessionCount 1 'Remote SMB scans should dispose the created CIM session.'
+                Assert-True $script:getSmbShareSawSession 'Remote SMB share lookup should use the CIM session.'
+                Assert-True $script:getSmbShareAccessSawSession 'Remote SMB permission lookup should reuse the CIM session.'
+                Assert-Equal $shares[0].PartialData 'False' 'Remote SMB share data should not be partial when share-level permissions were collected.'
+                Assert-True ($permissions.Identity -contains 'CONTOSO\RemoteShareReaders') 'Remote SMB scans should collect share-level permissions through the CIM session.'
+                Assert-True ($events.EventType -contains 'RemoteCimSessionCreated') 'Remote SMB scans should log CIM session creation.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Remove-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan marks remote SMB shares partial when CIM session setup fails'
+        Body = {
+            Import-Module $moduleManifest -Force
+            function global:New-CimSession {
+                throw 'mock CIM session failure'
+            }
+            function global:Get-SmbShare {
+                throw 'Get-SmbShare should not be called without a remote CIM session.'
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called without a remote CIM session.'
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRemotePartialExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'remote-files02' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+                $permissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
+                $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
+                $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+
+                Assert-Equal $shares[0].ComputerName 'remote-files02' 'Remote partial scans should preserve the requested computer name.'
+                Assert-Equal $shares[0].PartialData 'True' 'Remote SMB share should be partial when remote CIM setup and share permissions fail.'
+                Assert-True ([string]$shares[0].PartialReason -like '*Share-level permissions were not collected*') 'Remote partial scans should explain missing share-level permissions.'
+                Assert-Equal @($permissions).Count 0 'Remote partial scans should not fabricate share-level permissions.'
+                Assert-True ($findings.FindingType -contains 'CollectionError') 'Remote CIM session setup failures should be exported as collection-error findings.'
+                Assert-True ($events.EventType -contains 'RemoteCimSessionError') 'Remote CIM session setup failures should be logged as scan events.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
             }
