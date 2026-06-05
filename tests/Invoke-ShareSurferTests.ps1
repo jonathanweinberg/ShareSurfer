@@ -2440,6 +2440,7 @@ $tests = @(
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
+            $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
             $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
             $readme = Join-Path $repoRoot 'README.md'
             $expectedVisuals = @(
@@ -2506,6 +2507,18 @@ $tests = @(
             $readmeText = Get-Content -LiteralPath $readme -Raw
             Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
+            Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
+
+            Assert-True (Test-Path -LiteralPath $acceptanceAudit) 'Documentation should include a V1 phase-1 acceptance audit.'
+            $acceptanceAuditText = Get-Content -LiteralPath $acceptanceAudit -Raw
+            Assert-True ($acceptanceAuditText -like '*Requirement Matrix*') 'Acceptance audit should include a requirement matrix.'
+            Assert-True ($acceptanceAuditText -like '*Issue #1 lab fixture proof*') 'Acceptance audit should link issue #1 proof.'
+            Assert-True ($acceptanceAuditText -like '*Issue #3 scanner proof*') 'Acceptance audit should link issue #3 proof.'
+            Assert-True ($acceptanceAuditText -like '*Issue #5 identity and group proof*') 'Acceptance audit should link issue #5 proof.'
+            Assert-True ($acceptanceAuditText -like '*Issue #6 dashboard proof*') 'Acceptance audit should link issue #6 proof.'
+            Assert-True ($acceptanceAuditText -like '*FallbackCount=0*') 'Acceptance audit should summarize the live evidence fallback status.'
+            Assert-True ($acceptanceAuditText -like '*Optional rich enterprise support bundle*') 'Acceptance audit should explain optional rich support-bundle scope.'
+            Assert-True ($acceptanceAuditText -like '*Close the proof issues only after a human reviewer accepts*') 'Acceptance audit should keep issue closure as a human-review gate.'
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
