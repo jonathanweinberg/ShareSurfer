@@ -887,20 +887,11 @@ function New-ShareSurferRedactionAudit {
         [string] $RunRoot = ''
     )
 
-    $bundleFiles = @(Get-ChildItem -LiteralPath $BundlePath -File -ErrorAction SilentlyContinue | Where-Object {
+    $bundleFiles = @(Get-ChildItem -LiteralPath $BundlePath -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -ne 'support_bundle_redaction_audit.csv'
     })
-    $bundleContents = @{}
-    foreach ($file in $bundleFiles) {
-        try {
-            $bundleContents[$file.Name] = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop
-        }
-        catch {
-            $bundleContents[$file.Name] = ''
-        }
-    }
-
     $seen = @{}
+    $auditCandidates = New-Object System.Collections.ArrayList
     foreach ($fileName in $Schema.Keys) {
         $rows = @(Read-ShareSurferCsv -Path (Join-Path $ExportPath $fileName))
         foreach ($row in $rows) {
@@ -929,7 +920,11 @@ function New-ShareSurferRedactionAudit {
                 }
                 $seen[$key] = $true
 
-                New-ShareSurferRedactionAuditRow -SourceFile $fileName -ColumnName $column -Value $value -BundleFiles $bundleFiles -BundleContents $bundleContents -RedactionSalt $RedactionSalt
+                [void]$auditCandidates.Add([pscustomobject]@{
+                    SourceFile = $fileName
+                    ColumnName = $column
+                    Value = $value
+                })
             }
         }
     }
@@ -947,8 +942,26 @@ function New-ShareSurferRedactionAudit {
             }
             $seen[$key] = $true
 
-            New-ShareSurferRedactionAuditRow -SourceFile ([string]$sourceValue.SourceFile) -ColumnName ([string]$sourceValue.ColumnName) -Value $value -BundleFiles $bundleFiles -BundleContents $bundleContents -RedactionSalt $RedactionSalt
+            [void]$auditCandidates.Add([pscustomobject]@{
+                SourceFile = [string]$sourceValue.SourceFile
+                ColumnName = [string]$sourceValue.ColumnName
+                Value = $value
+            })
         }
+    }
+
+    $candidateValues = [ordered]@{}
+    foreach ($candidate in @($auditCandidates)) {
+        $candidateValues[[string]$candidate.Value] = $true
+    }
+    $leakMap = Find-ShareSurferRedactionLeaks -Values @($candidateValues.Keys) -BundleFiles $bundleFiles -BundleRoot $BundlePath
+    foreach ($candidate in @($auditCandidates)) {
+        $value = [string]$candidate.Value
+        $leakFiles = @()
+        if ($leakMap.ContainsKey($value)) {
+            $leakFiles = @($leakMap[$value])
+        }
+        New-ShareSurferRedactionAuditRow -SourceFile ([string]$candidate.SourceFile) -ColumnName ([string]$candidate.ColumnName) -Value $value -CheckedFileCount $bundleFiles.Count -LeakFiles $leakFiles -RedactionSalt $RedactionSalt
     }
 }
 
@@ -964,32 +977,99 @@ function New-ShareSurferRedactionAuditRow {
         [string] $Value,
 
         [Parameter(Mandatory = $true)]
-        $BundleFiles,
+        [int] $CheckedFileCount,
 
-        [Parameter(Mandatory = $true)]
-        [hashtable] $BundleContents,
+        [AllowEmptyCollection()]
+        [string[]] $LeakFiles = @(),
 
         [Parameter(Mandatory = $true)]
         [string] $RedactionSalt
     )
-
-    $leakFiles = New-Object System.Collections.ArrayList
-    foreach ($bundleFile in $BundleFiles) {
-        $content = [string]$BundleContents[$bundleFile.Name]
-        if ($content -ne '' -and $content.IndexOf($Value, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            [void]$leakFiles.Add($bundleFile.Name)
-        }
-    }
 
     [pscustomobject]@{
         SourceFile = $SourceFile
         ColumnName = $ColumnName
         ValueToken = Get-ShareSurferStableToken -Value $Value -Salt $RedactionSalt
         ValueLength = $Value.Length
-        CheckedFileCount = $BundleFiles.Count
-        LeakDetected = ($leakFiles.Count -gt 0)
-        LeakFiles = (@($leakFiles) -join ';')
+        CheckedFileCount = $CheckedFileCount
+        LeakDetected = (@($LeakFiles).Count -gt 0)
+        LeakFiles = (@($LeakFiles) -join ';')
     }
+}
+
+function Find-ShareSurferRedactionLeaks {
+    param(
+        [string[]] $Values = @(),
+        $BundleFiles = @(),
+        [string] $BundleRoot = ''
+    )
+
+    $leaks = @{}
+    $valueLookup = New-Object 'System.Collections.Generic.Dictionary[string,string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($value in @($Values | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object Length -Descending -Unique)) {
+        if (-not $valueLookup.ContainsKey([string]$value)) {
+            $valueLookup.Add([string]$value, [string]$value)
+        }
+    }
+    if ($valueLookup.Count -eq 0 -or @($BundleFiles).Count -eq 0) {
+        return $leaks
+    }
+
+    $regexChunks = New-Object System.Collections.ArrayList
+    $currentChunk = New-Object System.Collections.ArrayList
+    $currentLength = 0
+    $maxPatternLength = 120000
+    foreach ($value in @($valueLookup.Values | Sort-Object Length -Descending)) {
+        $escaped = [System.Text.RegularExpressions.Regex]::Escape([string]$value)
+        if ($currentChunk.Count -gt 0 -and (($currentLength + $escaped.Length + 1) -gt $maxPatternLength)) {
+            [void]$regexChunks.Add((New-Object System.Text.RegularExpressions.Regex(('(?:{0})' -f (@($currentChunk) -join '|')), ([System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::CultureInvariant))))
+            $currentChunk = New-Object System.Collections.ArrayList
+            $currentLength = 0
+        }
+        [void]$currentChunk.Add($escaped)
+        $currentLength += $escaped.Length + 1
+    }
+    if ($currentChunk.Count -gt 0) {
+        [void]$regexChunks.Add((New-Object System.Text.RegularExpressions.Regex(('(?:{0})' -f (@($currentChunk) -join '|')), ([System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::CultureInvariant))))
+    }
+
+    foreach ($file in @($BundleFiles)) {
+        try {
+            $content = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop
+        }
+        catch {
+            continue
+        }
+        if ([string]::IsNullOrEmpty($content)) {
+            continue
+        }
+
+        $relativeName = [string]$file.Name
+        if (-not [string]::IsNullOrWhiteSpace($BundleRoot)) {
+            $root = $BundleRoot.TrimEnd('\', '/')
+            if ([string]$file.FullName.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $relativeName = ([string]$file.FullName).Substring($root.Length).TrimStart('\', '/').Replace('\', '/')
+            }
+        }
+
+        foreach ($regex in @($regexChunks)) {
+            foreach ($match in $regex.Matches($content)) {
+                $matchedValue = [string]$match.Value
+                if (-not $valueLookup.ContainsKey($matchedValue)) {
+                    continue
+                }
+                $canonicalValue = [string]$valueLookup[$matchedValue]
+                if (-not $leaks.ContainsKey($canonicalValue)) {
+                    $leaks[$canonicalValue] = New-Object System.Collections.ArrayList
+                }
+                if (@($leaks[$canonicalValue]) -notcontains $relativeName) {
+                    [void]$leaks[$canonicalValue].Add($relativeName)
+                }
+            }
+        }
+    }
+
+    $leaks
 }
 
 function Get-ShareSurferLabRunRedactionAuditValues {

@@ -642,6 +642,14 @@ function Measure-ShareSurferLabValidationEvidence {
         $scannedFileItemIds.ContainsKey($entryItemId) -and
         ([string]$_.InheritanceFlags -eq 'None')
     })
+    $focusedAclEvidenceCount = 0
+    if ($aclEntries.Count -gt 0) { $focusedAclEvidenceCount++ }
+    if ($fileAclEntries.Count -gt 0) { $focusedAclEvidenceCount++ }
+    if ($ownedItems.Count -gt 0) { $focusedAclEvidenceCount++ }
+    if ($deepExplicitAceFindings.Count -gt 0) { $focusedAclEvidenceCount++ }
+    if ($brokenInheritanceFindings.Count -gt 0) { $focusedAclEvidenceCount++ }
+    if ($longPathFindings.Count -gt 0) { $focusedAclEvidenceCount++ }
+    if ($conflicts.Count -gt 0) { $focusedAclEvidenceCount++ }
     $expectedPermissionGroupNames = @(Get-ShareSurferLabValidationPermissionGroupNames -Plan $Plan)
     $expectedPermissionGroupMap = @{}
     foreach ($groupName in @($expectedPermissionGroupNames)) {
@@ -729,6 +737,7 @@ function Measure-ShareSurferLabValidationEvidence {
         DeepExplicitAceFindingCount = $deepExplicitAceFindings.Count
         BrokenInheritanceFindingCount = $brokenInheritanceFindings.Count
         ConflictCount = $conflicts.Count
+        FocusedAclEvidenceCount = $focusedAclEvidenceCount
         SharePermissionCount = $sharePermissions.Count
         AclEntryCount = $aclEntries.Count
         CollectionErrorCount = $collectionErrors.Count
@@ -897,6 +906,13 @@ function New-ShareSurferLabValidationCriteriaRows {
         $detail = ''
 
         switch ($criterion.Name) {
+            'FocusedAclScenarios' {
+                if ([int64]$evidence.FocusedAclEvidenceCount -gt 0) {
+                    $actual = [int64]$evidence.FocusedAclEvidenceCount
+                    $source = 'ScanExport:acl_entries.csv;findings.csv;conflicts.csv;items.csv'
+                }
+                $detail = 'AclRows={0}; FileAclRows={1}; OwnedItemRows={2}; DeepExplicitAceFindings={3}; BrokenInheritanceFindings={4}; LongPathFindings={5}; ConflictRows={6}; PlanAclScenarios={7}' -f $evidence.AclEntryCount, $evidence.FileAclEntryCount, $evidence.OwnedItemCount, $evidence.DeepExplicitAceFindingCount, $evidence.BrokenInheritanceFindingCount, $evidence.LongPathFindingCount, $evidence.ConflictCount, @($Plan.AclScenarios).Count
+            }
             'EnterpriseUserPopulation' {
                 if ($null -ne $evidence.DirectoryUserCount) {
                     $actual = [int64]$evidence.DirectoryUserCount
