@@ -62,6 +62,7 @@ Stop and fix the issue before continuing if any required row is not passing, esp
 - `PowerShell51`
 - `ActiveDirectoryModule`
 - `ObsAttributeSchema`
+- `LabPasswordPolicy`
 - `SmbShareCommands`
 - `EnterpriseIncludeFiles`
 - `WindowsPathComponents`
