@@ -98,7 +98,7 @@ After the run finishes, validate the complete evidence package. Use the timestam
   -RequireLiveEvidence
 ```
 
-This checks the normalized CSV export set, raw `scan_events.jsonl`, offline `report.html`, redacted support bundle, lab validation criteria, and live-evidence gate. The lab validation script runs this acceptance check automatically and saves the result to `v1-acceptance.json`; rerun the command manually when you want to re-check an archived run folder.
+This checks the normalized CSV export set, raw `scan_events.jsonl`, offline `report.html`, redacted support bundle, lab validation criteria, and live-evidence gate. The redacted support bundle check reads `support_bundle_manifest.csv` and fails if bundle validation failed or if redaction leaks were reported. The lab validation script runs this acceptance check automatically and saves the result to `v1-acceptance.json`; rerun the command manually when you want to re-check an archived run folder.
 
 ## Scan Workflow
 

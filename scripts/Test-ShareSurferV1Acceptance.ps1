@@ -87,7 +87,27 @@ $requiredBundleFiles = @(
     'report.html'
 )
 $missingBundleFiles = @($requiredBundleFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $SupportBundlePath $_)) })
-[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RedactedSupportBundle' -Passed ($missingBundleFiles.Count -eq 0) -Detail ('Bundle={0}; Missing={1}' -f $SupportBundlePath, ($missingBundleFiles -join ', '))))
+$bundleManifestPath = Join-Path $SupportBundlePath 'support_bundle_manifest.csv'
+$bundleManifestPassed = $false
+$bundleManifestDetail = ''
+if ($missingBundleFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundleManifestPath)) {
+    $bundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
+    if ($bundleManifest.Count -gt 0) {
+        $validationIsValid = [string]$bundleManifest[0].ValidationIsValid
+        $redactionLeakCount = 0
+        [void][int]::TryParse([string]$bundleManifest[0].RedactionLeakCount, [ref]$redactionLeakCount)
+        $bundleManifestPassed = ($validationIsValid -eq 'True' -and $redactionLeakCount -eq 0)
+        $bundleManifestDetail = 'ValidationIsValid={0}; RedactionLeakCount={1}' -f $validationIsValid, $redactionLeakCount
+    }
+    else {
+        $bundleManifestDetail = 'support_bundle_manifest.csv has no rows.'
+    }
+}
+else {
+    $bundleManifestDetail = 'Required bundle files missing.'
+}
+$redactedSupportPassed = ($missingBundleFiles.Count -eq 0 -and $bundleManifestPassed)
+[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RedactedSupportBundle' -Passed $redactedSupportPassed -Detail ('Bundle={0}; Missing={1}; {2}' -f $SupportBundlePath, ($missingBundleFiles -join ', '), $bundleManifestDetail)))
 
 if (Test-Path -LiteralPath $CriteriaPath) {
     $criteriaRows = @(Import-Csv -LiteralPath $CriteriaPath)

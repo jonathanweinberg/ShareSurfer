@@ -974,6 +974,29 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
 
+            $bundleManifestPath = Join-Path $bundlePath 'support_bundle_manifest.csv'
+            $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
+            $badBundleManifest = @(
+                [pscustomobject]@{
+                    GeneratedAt = $goodBundleManifest[0].GeneratedAt
+                    RedactionMode = $goodBundleManifest[0].RedactionMode
+                    RelationshipPreserving = $goodBundleManifest[0].RelationshipPreserving
+                    ExportFileCount = $goodBundleManifest[0].ExportFileCount
+                    DiagnosticFileCount = $goodBundleManifest[0].DiagnosticFileCount
+                    ReportIncluded = $goodBundleManifest[0].ReportIncluded
+                    RedactionAuditCount = $goodBundleManifest[0].RedactionAuditCount
+                    RedactionLeakCount = '1'
+                    ValidationIsValid = 'False'
+                    MissingFileCount = '0'
+                    SchemaErrorCount = '0'
+                }
+            )
+            $badBundleManifest | Export-Csv -LiteralPath $bundleManifestPath -NoTypeInformation -Encoding UTF8
+            $badBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badBundleResult.IsValid) 'Acceptance checker should fail when the redacted support bundle manifest reports validation failure or redaction leaks.'
+            Assert-True (@($badBundleResult.Checks | Where-Object { $_.Name -eq 'RedactedSupportBundle' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report redacted support bundle manifest failures.'
+            $goodBundleManifest | Export-Csv -LiteralPath $bundleManifestPath -NoTypeInformation -Encoding UTF8
+
             Remove-Item -LiteralPath (Join-Path $bundlePath 'scan_events.jsonl') -Force
             $failedResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True (-not $failedResult.IsValid) 'Acceptance checker should fail when a required support bundle artifact is missing.'
