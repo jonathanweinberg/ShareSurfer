@@ -16,7 +16,8 @@ param(
     [int64] $AbsoluteMaxLabBytes = 8589934592,
     [switch] $CreateLab,
     [switch] $IncludeFiles,
-    [switch] $RequireLiveEvidence
+    [switch] $RequireLiveEvidence,
+    [switch] $PreflightOnly
 )
 
 Set-StrictMode -Version 2.0
@@ -52,6 +53,24 @@ $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot '
 $preflightRows = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $LabRoot -RunRoot $runRoot -CreateLab:$CreateLab -IncludeFiles:$IncludeFiles -RequireLiveEvidence:$RequireLiveEvidence)
 $preflightRows | Export-Csv -LiteralPath $preflightPath -NoTypeInformation -Encoding UTF8
 $failedPreflightRows = @($preflightRows | Where-Object { $_.Required -and -not $_.Passed })
+if ($PreflightOnly) {
+    return [pscustomobject]@{
+        RunRoot = $runRoot
+        PreflightOnly = $true
+        PreflightPath = $preflightPath
+        PreflightPassed = ($failedPreflightRows.Count -eq 0)
+        PreflightFailedCount = $failedPreflightRows.Count
+        PlanPath = Join-Path $runRoot 'lab-plan.json'
+        OwnerMappingPath = $ownerMappingPath
+        LabRoot = $LabRoot
+        Scale = $Scale
+        EstimatedLabBytes = $plan.EstimatedLabBytes
+        MaxLabBytes = $plan.MaxLabBytes
+        ShareCount = @($plan.Shares).Count
+        UserCount = @($plan.Users).Count
+        FileFixtureCount = @($plan.FileFixtures).Count
+    }
+}
 if ($failedPreflightRows.Count -gt 0) {
     throw ('ShareSurfer lab validation preflight failed. See {0}' -f $preflightPath)
 }
