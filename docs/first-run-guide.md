@@ -202,6 +202,10 @@ Example findings drilldown:
 
 ![ShareSurfer findings drilldown](visuals/report-dashboard-findings.png)
 
+Example migration discovery view:
+
+![ShareSurfer migration discovery view](visuals/report-dashboard-migration.png)
+
 Use the dashboard to review:
 
 - Executive summary cards.

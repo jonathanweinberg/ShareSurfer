@@ -74,6 +74,10 @@ Findings drilldown:
 
 ![ShareSurfer findings drilldown](visuals/report-dashboard-findings.png)
 
+Migration discovery:
+
+![ShareSurfer migration discovery view](visuals/report-dashboard-migration.png)
+
 ## Suggested Leadership Message
 
 ShareSurfer is not changing permissions. It is creating understandable evidence so business owners can decide what should be cleaned up before migration or audit work. The expected result is fewer surprises, clearer ownership, and a prioritized remediation list.
