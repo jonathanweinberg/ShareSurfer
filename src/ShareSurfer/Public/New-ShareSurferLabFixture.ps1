@@ -125,7 +125,8 @@ function New-ShareSurferLabFixture {
             try {
                 $targetType = Get-ShareSurferLabScenarioTargetType -Scenario $scenario
                 $aclTargetPath = if ($scenario.IsInherited) { $share.LocalPath } else { $scenarioPath }
-                $acl = Get-Acl -LiteralPath $aclTargetPath -ErrorAction Stop
+                $aclFilesystemPath = ConvertTo-ShareSurferLabFilesystemPath -Path $aclTargetPath
+                $acl = Get-Acl -LiteralPath $aclFilesystemPath -ErrorAction Stop
                 if ($scenario.Name -eq 'BrokenInheritance') {
                     $acl.SetAccessRuleProtection($true, $true)
                 }
@@ -148,7 +149,7 @@ function New-ShareSurferLabFixture {
                 if ($ownerIdentity -ne '') {
                     $acl.SetOwner((New-Object System.Security.Principal.NTAccount($ownerIdentity)))
                 }
-                Set-Acl -LiteralPath $aclTargetPath -AclObject $acl -ErrorAction Stop
+                Set-Acl -LiteralPath $aclFilesystemPath -AclObject $acl -ErrorAction Stop
             }
             catch {
                 Write-Warning ("Unable to apply ACL scenario {0} to {1}: {2}" -f $scenario.Name, $scenarioPath, $_.Exception.Message)
