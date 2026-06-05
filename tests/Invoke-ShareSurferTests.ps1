@@ -436,6 +436,7 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterpriseFileAce'; RelativePath = 'file02.txt'; Identity = 'CONTOSO\FileReaders' }
                 )
                 ValidationCriteria = @(
+                    [pscustomobject]@{ Name = 'FocusedAclScenarios'; Required = $true; MinimumValue = 1; Unit = 'acl scenarios'; Description = 'Focused ACL scenarios' },
                     [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 3; Unit = 'users'; Description = 'Users' },
                     [pscustomobject]@{ Name = 'EnterpriseGroupPopulation'; Required = $true; MinimumValue = 2; Unit = 'groups'; Description = 'Groups' },
                     [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with employee identifiers'; Description = 'Employee identifiers' },
@@ -481,6 +482,7 @@ $tests = @(
             Assert-Equal (ConvertFrom-ShareSurferLabValidationFilesystemPath -Path '\\?\UNC\files01\Finance') '\\files01\Finance' 'Validation helper should restore display UNC paths.'
 
             $criteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
+            $focusedAclCriterion = @($criteria | Where-Object { $_.Name -eq 'FocusedAclScenarios' })[0]
             $userCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserPopulation' })[0]
             $groupPopulationCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseGroupPopulation' })[0]
             $employeeIdentifierCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseEmployeeIdentifierCoverage' })[0]
@@ -505,6 +507,9 @@ $tests = @(
             $ownerReviewPacketCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseOwnerReviewPackets' })[0]
             $diskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
 
+            Assert-True ([int]$focusedAclCriterion.ActualValue -ge 1) 'Focused ACL validation should use scan/export evidence when ACL, finding, conflict, or ownership evidence exists.'
+            Assert-Equal $focusedAclCriterion.EvidenceSource 'ScanExport:acl_entries.csv;findings.csv;conflicts.csv;items.csv' 'Focused ACL validation should not remain plan-only when live scan/export evidence proves ACL scenarios.'
+            Assert-True ([string]$focusedAclCriterion.EvidenceDetail -like '*PlanAclScenarios=2*') 'Focused ACL validation should retain the planned ACL scenario count in detail.'
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
             Assert-Equal $userCriterion.EvidenceSource 'ActiveDirectory' 'User validation should identify directory evidence.'
             Assert-Equal ([int]$groupPopulationCriterion.ActualValue) 2 'Group validation should prefer directory counts when available.'
