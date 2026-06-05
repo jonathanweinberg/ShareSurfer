@@ -97,6 +97,7 @@ Keep these raw files inside the trusted lab environment:
 
 - `lab-plan.json`
 - `owner-mapping.csv`
+- `collector-environment.json`
 - `lab-preflight.csv`
 - `lab-run-events.jsonl`
 - `validation.json`
@@ -120,6 +121,7 @@ Keep these raw files inside the trusted lab environment:
 Use these files first:
 
 - `lab-preflight.csv`: readiness checks before and during the run.
+- `collector-environment.json`: collector host, PowerShell, module, and command availability evidence for troubleshooting failed live runs.
 - `live-evidence-review.csv`: operator-friendly proof rows and next actions.
 - `v1-acceptance-summary.json`: quick pass/fail summary.
 - `v1-acceptance.json`: detailed acceptance evidence.
@@ -147,6 +149,7 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `support-bundle-redacted\support_bundle_manifest.csv` has `ValidationIsValid=True`.
 - `support-bundle-redacted\support_bundle_manifest.csv` has `RedactionLeakCount=0`.
 - `support-bundle-redacted\v1_acceptance_summary.json` exists.
+- `support-bundle-redacted\collector_environment.json` exists and contains only redacted host/user/path values.
 - `report.html` opens locally and shows the ShareSurfer Business Review Dashboard.
 - `dashboard-review.md` has `Dashboard review status: Pass`, then the operator confirms the live dashboard views render and respond to filters.
 
@@ -156,6 +159,7 @@ Stop and review before sharing evidence if any of these happen:
 
 - Preflight has a required blocker.
 - The run stops before writing `v1-acceptance-summary.json`.
+- `collector-environment.json` is missing from the raw run folder or redacted support bundle.
 - V1 acceptance fails.
 - Live evidence falls back to `LabPlan` for a required enterprise criterion.
 - The redacted support bundle reports a redaction leak.

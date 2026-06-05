@@ -8,6 +8,7 @@ param(
     [string] $DashboardReviewPath = '',
     [string] $SupportBundlePath = '',
     [string] $PreflightPath = '',
+    [string] $CollectorEnvironmentPath = '',
     [string] $CriteriaPath = '',
     [string] $LiveEvidencePath = '',
     [string] $LiveEvidenceReviewPath = '',
@@ -40,6 +41,9 @@ if ($SupportBundlePath -eq '') {
 }
 if ($PreflightPath -eq '') {
     $PreflightPath = Join-Path $RunRoot 'lab-preflight.csv'
+}
+if ($CollectorEnvironmentPath -eq '') {
+    $CollectorEnvironmentPath = Join-Path $RunRoot 'collector-environment.json'
 }
 if ($CriteriaPath -eq '') {
     $CriteriaPath = Join-Path $RunRoot 'lab-validation-criteria.csv'
@@ -175,6 +179,7 @@ $requiredBundleFiles = @(
     'scan_events.jsonl',
     'report.html',
     'dashboard_review.md',
+    'collector_environment.json',
     'lab_run_diagnostics.json',
     'lab_run_events.jsonl',
     'lab_preflight.csv',
@@ -395,6 +400,18 @@ else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabPreflight' -Passed $false -Detail ('Preflight file not found: {0}' -f $PreflightPath)))
 }
 
+if (Test-Path -LiteralPath $CollectorEnvironmentPath) {
+    $collectorEnvironment = Get-Content -LiteralPath $CollectorEnvironmentPath -Raw | ConvertFrom-Json
+    $hasPowerShell = ($null -ne $collectorEnvironment.PSObject.Properties['PowerShell'])
+    $hasCommands = ($null -ne $collectorEnvironment.PSObject.Properties['Commands'] -and @($collectorEnvironment.Commands).Count -gt 0)
+    $hasModules = ($null -ne $collectorEnvironment.PSObject.Properties['Modules'] -and @($collectorEnvironment.Modules).Count -gt 0)
+    $collectorEnvironmentPassed = ([string]$collectorEnvironment.ArtifactType -eq 'ShareSurferCollectorEnvironment' -and $hasPowerShell -and $hasCommands -and $hasModules)
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'CollectorEnvironment' -Passed $collectorEnvironmentPassed -Detail ('CollectorEnvironment={0}; HasPowerShell={1}; CommandRows={2}; ModuleRows={3}' -f $CollectorEnvironmentPath, $hasPowerShell, @($collectorEnvironment.Commands).Count, @($collectorEnvironment.Modules).Count)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'CollectorEnvironment' -Passed $false -Detail ('Collector environment file not found: {0}' -f $CollectorEnvironmentPath)))
+}
+
 if (Test-Path -LiteralPath $CriteriaPath) {
     $criteriaRows = @(Import-Csv -LiteralPath $CriteriaPath)
     $failedRequiredCriteria = @($criteriaRows | Where-Object { [string]$_.Required -eq 'True' -and [string]$_.Passed -ne 'True' })
@@ -442,6 +459,7 @@ $result = [pscustomobject]@{
     DashboardReviewPath = $DashboardReviewPath
     SupportBundlePath = $SupportBundlePath
     PreflightPath = $PreflightPath
+    CollectorEnvironmentPath = $CollectorEnvironmentPath
     CriteriaPath = $CriteriaPath
     LiveEvidencePath = $LiveEvidencePath
     LiveEvidenceReviewPath = $LiveEvidenceReviewPath
