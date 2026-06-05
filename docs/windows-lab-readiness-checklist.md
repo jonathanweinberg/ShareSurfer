@@ -147,6 +147,7 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `lab-validation-criteria.csv` has no failed required criteria.
 - `live-evidence-review.csv` has no required rows marked `PlanOnly`, `EvidenceUnavailable`, `MissingEvidenceSource`, or `Failed`.
 - `export\scan_manifest.csv` has `IncludeFiles=True` for enterprise runs, and the real-file criteria detail agrees with that setting.
+- `collector-environment.json` exists so reviewers can confirm the collector host, PowerShell version, module availability, and command availability used for the run.
 - `support-bundle-redacted\support_bundle_manifest.csv` has `ValidationIsValid=True`.
 - `support-bundle-redacted\support_bundle_manifest.csv` has `RedactionLeakCount=0`.
 - `support-bundle-redacted\v1_acceptance_summary.json` exists.

@@ -1854,6 +1854,8 @@ $tests = @(
             Assert-True ($closeoutChecklistText -like '*ShareSurfer live validation closeout checklist*') 'Closeout checklist should include a recognizable title.'
             Assert-True ($closeoutChecklistText -like '*Ready for proof review:*') 'Closeout checklist should include ready-for-proof-review status.'
             Assert-True ($closeoutChecklistText -like '*Scan manifest proves file-object scanning*') 'Closeout checklist should summarize scan manifest file-object evidence.'
+            Assert-True ($closeoutChecklistText -like '*Collector environment evidence exists*') 'Closeout checklist should summarize collector environment evidence.'
+            Assert-True ($closeoutChecklistText -like '*Dashboard review evidence exists*') 'Closeout checklist should summarize dashboard review evidence.'
             Assert-True ($closeoutChecklistText -like '*Issue comment publish preview is dry-run only*') 'Closeout checklist should summarize publish preview readiness.'
             Assert-True ($closeoutChecklistText -notlike '*Synthetic acceptance proof*') 'Closeout checklist should not include raw evidence detail values.'
             Assert-True ($closeoutChecklistText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Closeout checklist should not include raw lab-run detail values.'
