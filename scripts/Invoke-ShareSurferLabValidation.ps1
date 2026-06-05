@@ -36,11 +36,13 @@ $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
 $acceptancePath = Join-Path $runRoot 'v1-acceptance.json'
+$ownerMappingPath = Join-Path $runRoot 'owner-mapping.csv'
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
 $plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes
 $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'lab-plan.json') -Encoding UTF8
+@($plan.OwnerMappings) | Export-Csv -LiteralPath $ownerMappingPath -NoTypeInformation -Encoding UTF8
 
 if ($CreateLab) {
     if ($PSCmdlet.ShouldProcess($LabRoot, 'Create or update ShareSurfer Windows/AD lab fixtures')) {
@@ -49,7 +51,7 @@ if ($CreateLab) {
 }
 
 $shareNames = @($plan.Shares | ForEach-Object { $_.ShareName })
-Invoke-ShareSurferScan -ComputerName $env:COMPUTERNAME -ShareName $shareNames -OutputPath $exportPath -ObsAttribute $ObsAttribute -IncludeFiles:$IncludeFiles | Out-Null
+Invoke-ShareSurferScan -ComputerName $env:COMPUTERNAME -ShareName $shareNames -OutputPath $exportPath -ObsAttribute $ObsAttribute -OwnerMappingPath $ownerMappingPath -IncludeFiles:$IncludeFiles | Out-Null
 
 $validation = Test-ShareSurferExport -ExportPath $exportPath
 $validation | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $runRoot 'validation.json') -Encoding UTF8
@@ -87,6 +89,7 @@ if (-not $acceptance.IsValid) {
     CriteriaPath = $criteriaPath
     LiveEvidencePath = $liveEvidencePath
     AcceptancePath = $acceptancePath
+    OwnerMappingPath = $ownerMappingPath
     AcceptanceIsValid = [bool]$acceptance.IsValid
     AcceptanceFailedCheckCount = [int]$acceptance.FailedCheckCount
     LiveEvidenceRequired = [bool]$RequireLiveEvidence

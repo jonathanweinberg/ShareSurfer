@@ -184,6 +184,23 @@ function New-ShareSurferLabPlan {
         throw ('Lab plan estimates {0} bytes, which exceeds MaxLabBytes {1}.' -f $estimatedLabBytes, $MaxLabBytes)
     }
 
+    $ownerMappings = foreach ($share in @($shares)) {
+        $businessUnit = switch -Regex ([string]$share.ShareName) {
+            'Finance' { 'Finance'; break }
+            'Engineering' { 'Engineering'; break }
+            'Operations' { 'Operations'; break }
+            '^SSEnt' { 'Enterprise'; break }
+            default { 'Shared Services' }
+        }
+
+        [pscustomobject]@{
+            Pattern = ('{0}*' -f [string]$share.LocalPath)
+            Owner = ('{0} Data Owners' -f $businessUnit)
+            BusinessUnit = $businessUnit
+            Source = 'LabPlan'
+        }
+    }
+
     $validationCriteria = New-Object System.Collections.ArrayList
     [void]$validationCriteria.Add([pscustomobject]@{
         Name = 'FocusedAclScenarios'
@@ -292,6 +309,14 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes expandable security group membership evidence.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseOwnerRiskPivots'
+            MinimumValue = 1
+            ActualPlanValue = @($ownerMappings).Count
+            Unit = 'owner risk pivots'
+            Required = $true
+            Description = 'Enterprise validation includes owner/business-unit risk pivot evidence.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseDiskBudget'
             MinimumValue = 1
             ActualPlanValue = if ($estimatedLabBytes -le $MaxLabBytes) { 1 } else { 0 }
@@ -315,6 +340,7 @@ function New-ShareSurferLabPlan {
         Shares = @($shares)
         AclScenarios = @($aclScenarios)
         FileFixtures = @($fileFixtures)
+        OwnerMappings = @($ownerMappings)
         ValidationCriteria = @($validationCriteria)
     }
 }

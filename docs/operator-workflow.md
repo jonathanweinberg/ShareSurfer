@@ -60,6 +60,7 @@ The enterprise profile must additionally prove:
 - Hundreds of SMB shares.
 - Deep share trees and intricate folder paths.
 - Real file objects throughout the trees, using small file contents.
+- Owner/business-unit mappings and generated owner-risk pivot rows.
 - Estimated generated lab data under 8 GB.
 
 For a repeatable Windows Server validation run, use the script from the repository root:
@@ -85,9 +86,9 @@ For the enterprise profile, add:
   -RequireLiveEvidence
 ```
 
-The script writes `lab-plan.json`, `validation.json`, `lab-validation-criteria.csv`, `live-evidence.json`, `v1-acceptance.json`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run. For enterprise validation, `lab-validation-criteria.csv` is the pass/fail evidence for user population, share population, real file fixtures, deep paths, long-path policy fixtures, and the 8 GB disk budget.
+The script writes `lab-plan.json`, `owner-mapping.csv`, `validation.json`, `lab-validation-criteria.csv`, `live-evidence.json`, `v1-acceptance.json`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run. For enterprise validation, `lab-validation-criteria.csv` is the pass/fail evidence for user population, share population, real file fixtures, deep paths, long-path policy fixtures, owner-risk pivots, and the 8 GB disk budget.
 
-Each criteria row includes `EvidenceSource` and `EvidenceDetail`. Prefer rows backed by live evidence such as `ActiveDirectory`, `ScanExport:shares.csv`, `ScanExport:share_permissions.csv`, `ScanExport:items.csv`, `ScanExport:acl_entries.csv`, `ScanExport:findings.csv`, `ScanExport:conflicts.csv`, `ScanExport:group_edges.csv`, or `FileSystem`. `LabPlan` rows are useful for planning, but they are not enough by themselves for final enterprise-scale proof. `-RequireLiveEvidence` makes this strict: the run fails if any required enterprise criterion is still backed only by the lab plan, blank evidence, or unavailable directory evidence. Open `live-evidence.json` to see which proof points need another scan or lab correction.
+Each criteria row includes `EvidenceSource` and `EvidenceDetail`. Prefer rows backed by live evidence such as `ActiveDirectory`, `ScanExport:shares.csv`, `ScanExport:share_permissions.csv`, `ScanExport:items.csv`, `ScanExport:acl_entries.csv`, `ScanExport:findings.csv`, `ScanExport:conflicts.csv`, `ScanExport:group_edges.csv`, `ScanExport:owner_risk_pivots.csv`, or `FileSystem`. `LabPlan` rows are useful for planning, but they are not enough by themselves for final enterprise-scale proof. `-RequireLiveEvidence` makes this strict: the run fails if any required enterprise criterion is still backed only by the lab plan, blank evidence, or unavailable directory evidence. Open `live-evidence.json` to see which proof points need another scan or lab correction.
 
 After the run finishes, validate the complete evidence package. Use the timestamped run folder created under `-OutputRoot`:
 

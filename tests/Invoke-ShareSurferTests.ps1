@@ -251,6 +251,8 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseSharePopulation') 'Enterprise lab plan should include a share-population validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRealFiles') 'Enterprise lab plan should include a real-file validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include an 8 GB disk-budget validation criterion.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerRiskPivots') 'Enterprise lab plan should include owner risk pivot validation.'
+            Assert-True ($plan.OwnerMappings.Count -ge $plan.Shares.Count) 'Enterprise lab plan should include owner mappings for generated shares.'
             Assert-True (-not (Test-Path -LiteralPath $labRoot)) 'OutputPlanOnly enterprise planning must not create the lab root.'
         }
     },
@@ -295,6 +297,9 @@ $tests = @(
             @(
                 [pscustomobject]@{ ParentGroup = 'CONTOSO\Readers'; ChildIdentity = 'CONTOSO\SSUser00001'; ChildObjectClass = 'user'; Depth = '1'; IsCycle = 'False'; IsTruncated = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'group_edges.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; RiskLevel = 'High' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_risk_pivots.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
                 MaxLabBytes = [int64]8589934592
@@ -326,6 +331,7 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterpriseBrokenInheritanceFindings'; Required = $true; MinimumValue = 1; Unit = 'findings'; Description = 'Broken inheritance findings' },
                     [pscustomobject]@{ Name = 'EnterpriseConflictFindings'; Required = $true; MinimumValue = 1; Unit = 'conflicts'; Description = 'Conflicts' },
                     [pscustomobject]@{ Name = 'EnterpriseGroupExpansion'; Required = $true; MinimumValue = 1; Unit = 'group edges'; Description = 'Group expansion' },
+                    [pscustomobject]@{ Name = 'EnterpriseOwnerRiskPivots'; Required = $true; MinimumValue = 1; Unit = 'owner risk pivots'; Description = 'Owner risk pivots' },
                     [pscustomobject]@{ Name = 'EnterpriseDiskBudget'; Required = $true; MinimumValue = 1; Unit = 'pass/fail'; Description = 'Disk budget' }
                 )
             }
@@ -352,6 +358,7 @@ $tests = @(
             $brokenInheritanceCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseBrokenInheritanceFindings' })[0]
             $conflictCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseConflictFindings' })[0]
             $groupExpansionCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseGroupExpansion' })[0]
+            $ownerRiskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseOwnerRiskPivots' })[0]
             $diskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
 
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
@@ -378,6 +385,8 @@ $tests = @(
             Assert-Equal $conflictCriterion.EvidenceSource 'ScanExport:conflicts.csv' 'Conflict validation should identify conflicts evidence.'
             Assert-Equal ([int]$groupExpansionCriterion.ActualValue) 1 'Group expansion validation should use group edge rows.'
             Assert-Equal $groupExpansionCriterion.EvidenceSource 'ScanExport:group_edges.csv' 'Group expansion validation should identify group expansion evidence.'
+            Assert-Equal ([int]$ownerRiskCriterion.ActualValue) 1 'Owner risk pivot validation should use owner risk pivot rows.'
+            Assert-Equal $ownerRiskCriterion.EvidenceSource 'ScanExport:owner_risk_pivots.csv' 'Owner risk pivot validation should identify owner risk pivot export evidence.'
             Assert-Equal ([int]$diskCriterion.ActualValue) 1 'Disk budget validation should pass under the configured budget.'
             Assert-Equal $diskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should measure the lab root when available.'
             Assert-True ([string]$diskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Disk budget evidence should include measured bytes.'
@@ -974,6 +983,8 @@ $tests = @(
             Assert-True ($labValidationScript -like '*Test-ShareSurferV1Acceptance.ps1*') 'Lab validation should run the V1 acceptance checker automatically.'
             Assert-True ($labValidationScript -like '*v1-acceptance.json*') 'Lab validation should write an acceptance result artifact.'
             Assert-True ($labValidationScript -like '*AcceptancePath*') 'Lab validation output should include the acceptance artifact path.'
+            Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
+            Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
         }
     },
     @{
