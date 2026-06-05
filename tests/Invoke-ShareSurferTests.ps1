@@ -2595,7 +2595,8 @@ $tests = @(
             Assert-True ($acceptanceAuditText -like '*Issue #6 dashboard proof*') 'Acceptance audit should link issue #6 proof.'
             Assert-True ($acceptanceAuditText -like '*FallbackCount=0*') 'Acceptance audit should summarize the live evidence fallback status.'
             Assert-True ($acceptanceAuditText -like '*Optional rich enterprise support bundle*') 'Acceptance audit should explain optional rich support-bundle scope.'
-            Assert-True ($acceptanceAuditText -like '*Close the proof issues only after a human reviewer accepts*') 'Acceptance audit should keep issue closure as a human-review gate.'
+            Assert-True ($acceptanceAuditText -like '*Proof issues: #1, #3, #5, and #6 are closed after human review*') 'Acceptance audit should record the accepted phase-1 proof issue state.'
+            Assert-True ($acceptanceAuditText -like '*issuecomment-4635064013*') 'Acceptance audit should link the issue #5 human-review closeout comment.'
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
