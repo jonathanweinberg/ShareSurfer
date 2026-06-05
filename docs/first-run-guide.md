@@ -205,6 +205,7 @@ Use the dashboard to review:
 
 - Executive summary cards.
 - Review Workbench snapshot for the selected business unit, data owner, or risk level.
+- Direct Access Review table showing directly assigned identities, share-gate assignments, NTFS assignments, OBS context, and expanded group-member counts.
 - Priority actions.
 - Visual risk rollups. Click a bar to filter the dashboard to that finding type, conflict type, owner, or business unit.
 - Dashboard-level search, business-unit filters, data-owner filters, review-risk filters, and view tabs.

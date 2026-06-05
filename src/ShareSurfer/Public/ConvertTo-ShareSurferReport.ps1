@@ -450,6 +450,10 @@ function ConvertTo-ShareSurferReport {
             <ul class="actions" id="workbench-actions"></ul>
           </div>
         </div>
+        <div>
+          <h3>Direct Access Review</h3>
+          <div class="scroll compact-scroll"><table id="workbench-access"></table></div>
+        </div>
         <div class="workbench-grid">
           <div>
             <h3>Related Groups</h3>
@@ -903,9 +907,80 @@ function ConvertTo-ShareSurferReport {
       const key = normalizeIdentity(value);
       if (key) { identitySet.add(key); }
     }
+    function getIdentityDetails(identity) {
+      return identityByKey.get(normalizeIdentity(identity)) || {};
+    }
+    function getObjectClass(identity) {
+      const details = getIdentityDetails(identity);
+      if (details.ObjectClass) { return String(details.ObjectClass); }
+      if (groupParentKeys.has(normalizeIdentity(identity))) { return 'group'; }
+      return '';
+    }
+    function countExpandedMembers(identity) {
+      const start = normalizeIdentity(identity);
+      if (!start || !groupParentKeys.has(start)) { return 0; }
+      const queue = [start];
+      const visitedGroups = new Set();
+      const members = new Set();
+      while (queue.length > 0) {
+        const parent = queue.shift();
+        if (visitedGroups.has(parent)) { continue; }
+        visitedGroups.add(parent);
+        const edges = groupEdgesByParent.get(parent) || [];
+        edges.forEach(edge => {
+          const child = normalizeIdentity(edge.ChildIdentity);
+          if (!child) { return; }
+          members.add(child);
+          if (String(edge.ChildObjectClass || '').toLowerCase() === 'group' || groupParentKeys.has(child)) {
+            queue.push(child);
+          }
+        });
+      }
+      return members.size;
+    }
     function getItemPath(row) {
       const item = itemById.get(String(row.ItemId || ''));
       return String(row.FullPath || (item ? item.FullPath : '') || '');
+    }
+    function addAccessAssignment(accessMap, identity, source, rights) {
+      const key = normalizeIdentity(identity);
+      if (!key) { return; }
+      if (!accessMap.has(key)) {
+        const details = getIdentityDetails(identity);
+        accessMap.set(key, {
+          Identity: identity || '',
+          ObjectClass: getObjectClass(identity),
+          DisplayName: details.DisplayName || '',
+          ObsPath: details.ObsPath || '',
+          ManagerLevel1: details.ManagerLevel1 || '',
+          ShareAssignments: 0,
+          NtfsAssignments: 0,
+          Rights: new Set()
+        });
+      }
+      const row = accessMap.get(key);
+      if (source === 'Share') {
+        row.ShareAssignments += 1;
+      } else {
+        row.NtfsAssignments += 1;
+      }
+      if (rights) { row.Rights.add(String(rights)); }
+    }
+    function getWorkbenchAccessRows(state) {
+      const accessMap = new Map();
+      filterRows(data.share_permissions, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'Share', row.Rights || ''));
+      filterRows(data.acl_entries, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'NTFS', row.Rights || ''));
+      return Array.from(accessMap.values()).map(row => ({
+        Identity: row.Identity,
+        ObjectClass: row.ObjectClass,
+        DisplayName: row.DisplayName,
+        ObsPath: row.ObsPath,
+        ManagerLevel1: row.ManagerLevel1,
+        ShareAssignments: row.ShareAssignments,
+        NtfsAssignments: row.NtfsAssignments,
+        ExpandedMembers: countExpandedMembers(row.Identity),
+        Rights: Array.from(row.Rights).sort().join('; ')
+      })).sort((a, b) => Number(b.ExpandedMembers || 0) - Number(a.ExpandedMembers || 0) || String(a.Identity).localeCompare(String(b.Identity))).slice(0, 20);
     }
     function getWorkbenchRiskRows(state) {
       const findings = filterRows(data.findings, state, true).map(row => ({
@@ -976,14 +1051,15 @@ function ConvertTo-ShareSurferReport {
     }
     function renderReviewWorkbench(state) {
       const pivots = filterOwnerPivots(owner_pivots, state);
+      const accessRows = getWorkbenchAccessRows(state);
       const riskRows = getWorkbenchRiskRows(state);
       const groupRows = getWorkbenchGroupRows(state, riskRows);
       const businessUnits = distinctCount(pivots, 'BusinessUnit');
       const owners = distinctCount(pivots, 'Owner');
       const matchingItems = pivots.reduce((sum, pivot) => sum + Number(pivot.MatchingItems || 0), 0);
       const partialShares = pivots.reduce((sum, pivot) => sum + Number(pivot.PartialShareCount || 0), 0);
-      const directIdentities = pivots.reduce((sum, pivot) => sum + Number(pivot.DirectIdentityCount || 0), 0);
-      const expandedMembers = pivots.reduce((sum, pivot) => sum + Number(pivot.ExpandedMemberCount || 0), 0);
+      const directIdentities = accessRows.length || pivots.reduce((sum, pivot) => sum + Number(pivot.DirectIdentityCount || 0), 0);
+      const expandedMembers = accessRows.reduce((sum, row) => sum + Number(row.ExpandedMembers || 0), 0) || pivots.reduce((sum, pivot) => sum + Number(pivot.ExpandedMemberCount || 0), 0);
       const labels = [];
       if (state.businessUnit) { labels.push(state.businessUnit); }
       if (state.owner) { labels.push(state.owner); }
@@ -1002,6 +1078,7 @@ function ConvertTo-ShareSurferReport {
         { label: 'Partial Shares', value: partialShares }
       ]);
       renderWorkbenchActions(state, pivots, riskRows, groupRows);
+      renderTable('workbench-access', accessRows);
       renderTable('workbench-risks', riskRows);
       renderTable('workbench-groups', groupRows);
     }
@@ -1117,6 +1194,15 @@ function ConvertTo-ShareSurferReport {
     const collection_error_rollups = buildRollups(collection_errors, ['ObservedValue', 'ShareId']);
     const org_rollups = buildOrgChainRollups();
     const group_browser_rows = buildGroupBrowserRows();
+    const identityByKey = new Map(data.identities.map(identity => [normalizeIdentity(identity.Identity || identity.SamAccountName || ''), identity]));
+    const groupEdgesByParent = new Map();
+    data.group_edges.forEach(edge => {
+      const parent = normalizeIdentity(edge.ParentGroup);
+      if (!parent) { return; }
+      if (!groupEdgesByParent.has(parent)) { groupEdgesByParent.set(parent, []); }
+      groupEdgesByParent.get(parent).push(edge);
+    });
+    const groupParentKeys = new Set(groupEdgesByParent.keys());
     const finding_chart_rows = buildRollups(data.findings, ['FindingType']).map(row => ({ Label: row.FindingType || 'Unspecified', Count: row.Count, FilterValue: row.FindingType || '' }));
     const conflict_chart_rows = buildRollups(data.conflicts, ['ConflictType']).map(row => ({ Label: row.ConflictType || 'Unspecified', Count: row.Count, FilterValue: row.ConflictType || '' }));
     const owner_chart_rows = buildOwnerChartRows();
