@@ -890,11 +890,13 @@ $tests = @(
                     [string] $Name,
                     [string] $CimSession
                 )
-                [pscustomobject]@{
-                    Name = $Name
-                    AccountName = 'CONTOSO\ShareModeReaders'
-                    AccessRight = 'Read'
-                    AccessControlType = 'Allow'
+                if ($Name -eq 'Finance') {
+                    [pscustomobject]@{
+                        Name = $Name
+                        AccountName = 'CONTOSO\ShareModeReaders'
+                        AccessRight = 'Read'
+                        AccessControlType = 'Allow'
+                    }
                 }
             }
 
@@ -907,6 +909,8 @@ $tests = @(
 
                 Assert-Equal $shares[0].ComputerName 'files01' 'SMB share scans should preserve the requested computer name.'
                 Assert-Equal $shares[0].ShareName 'Finance' 'SMB share scans should preserve the requested share name.'
+                Assert-Equal $shares[0].PartialData 'False' 'SMB share scans should not remain partial when share-level permissions were collected for the requested share.'
+                Assert-Equal $shares[0].PartialReason '' 'SMB share scans should clear stale local-path permission partial reasons after share-level permissions are proven.'
                 Assert-True ($permissions.Identity -contains 'CONTOSO\ShareModeReaders') 'SMB share scans should collect share-level permissions.'
                 Assert-True ($events.EventType -contains 'ShareTargetResolved') 'SMB share scans should log share target resolution.'
             }

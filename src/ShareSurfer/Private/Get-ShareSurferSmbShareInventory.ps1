@@ -109,6 +109,13 @@ function Get-ShareSurferSmbShareInventory {
         foreach ($permission in $permissionRows) {
             [void]$sharePermissions.Add($permission)
         }
+        if ($permissionRows.Count -gt 0) {
+            $shareRow = @($shares | Where-Object { $_.ShareId -eq $shareId } | Select-Object -First 1)
+            if ($shareRow.Count -gt 0 -and [string]$shareRow[0].PartialReason -eq 'Share-level permissions were not collected through Get-SmbShareAccess.') {
+                $shareRow[0].PartialData = $false
+                $shareRow[0].PartialReason = ''
+            }
+        }
         if ($permissionRows.Count -eq 0) {
             $shareRow = @($shares | Where-Object { $_.ShareId -eq $shareId } | Select-Object -First 1)
             if ($shareRow.Count -gt 0) {
