@@ -144,6 +144,95 @@ function Test-ShareSurferLabValidationSmbSharePaths {
     }
 }
 
+function Test-ShareSurferLabValidationAdObjectCollisions {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan
+    )
+
+    $requiredCommands = @('Get-ADDomain', 'Get-ADUser', 'Get-ADGroup')
+    $missingCommands = @($requiredCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })
+    if ($missingCommands.Count -gt 0) {
+        return [pscustomobject]@{
+            Passed = $false
+            CheckedObjectCount = 0
+            CollisionCount = 0
+            Evidence = 'Missing AD commands: {0}' -f ($missingCommands -join ', ')
+        }
+    }
+
+    try {
+        $domain = Get-ADDomain -ErrorAction Stop
+    }
+    catch {
+        return [pscustomobject]@{
+            Passed = $false
+            CheckedObjectCount = 0
+            CollisionCount = 0
+            Evidence = 'Unable to resolve AD domain: {0}' -f $_.Exception.Message
+        }
+    }
+
+    $ouDn = 'OU=ShareSurferLab,{0}' -f $domain.DistinguishedName
+    $collisions = New-Object System.Collections.ArrayList
+    $checkedObjectCount = 0
+
+    foreach ($user in @($Plan.Users)) {
+        $sam = [string]$user.SamAccountName
+        if ([string]::IsNullOrWhiteSpace($sam)) {
+            continue
+        }
+        $matches = @(Get-ADUser -Filter ("SamAccountName -eq '{0}'" -f (ConvertTo-ShareSurferLabValidationAdFilterValue -Value $sam)) -ErrorAction SilentlyContinue | Where-Object { $null -ne $_ })
+        foreach ($match in $matches) {
+            $checkedObjectCount++
+            if (-not (Test-ShareSurferLabValidationObjectInOu -DistinguishedName ([string]$match.DistinguishedName) -OuDn $ouDn)) {
+                [void]$collisions.Add(('user {0}: {1}' -f $sam, [string]$match.DistinguishedName))
+            }
+        }
+    }
+
+    foreach ($group in @($Plan.Groups)) {
+        $sam = [string]$group.Name
+        if ([string]::IsNullOrWhiteSpace($sam)) {
+            continue
+        }
+        $matches = @(Get-ADGroup -Filter ("SamAccountName -eq '{0}'" -f (ConvertTo-ShareSurferLabValidationAdFilterValue -Value $sam)) -ErrorAction SilentlyContinue | Where-Object { $null -ne $_ })
+        foreach ($match in $matches) {
+            $checkedObjectCount++
+            if (-not (Test-ShareSurferLabValidationObjectInOu -DistinguishedName ([string]$match.DistinguishedName) -OuDn $ouDn)) {
+                [void]$collisions.Add(('group {0}: {1}' -f $sam, [string]$match.DistinguishedName))
+            }
+        }
+    }
+
+    [pscustomobject]@{
+        Passed = ($collisions.Count -eq 0)
+        CheckedObjectCount = $checkedObjectCount
+        CollisionCount = $collisions.Count
+        Evidence = 'LabOu={0}; CheckedExistingObjects={1}; Collisions={2}' -f $ouDn, $checkedObjectCount, (@($collisions) -join ' | ')
+    }
+}
+
+function Test-ShareSurferLabValidationObjectInOu {
+    param(
+        [string] $DistinguishedName = '',
+
+        [Parameter(Mandatory = $true)]
+        [string] $OuDn
+    )
+
+    $expectedSuffix = ',{0}' -f $OuDn
+    ([string]$DistinguishedName).EndsWith($expectedSuffix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function ConvertTo-ShareSurferLabValidationAdFilterValue {
+    param(
+        [string] $Value = ''
+    )
+
+    $Value -replace "'", "''"
+}
+
 function New-ShareSurferLabValidationPreflight {
     param(
         [Parameter(Mandatory = $true)]
@@ -185,6 +274,9 @@ function New-ShareSurferLabValidationPreflight {
         $adEvidence = 'Module={0}' -f $adModule.Path
     }
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'ActiveDirectoryModule' -Required $adRequired -Passed ($null -ne $adModule) -Evidence $adEvidence -NextAction 'Install or enable RSAT Active Directory PowerShell tools on the collector host.'))
+
+    $adObjectCollisionResult = Test-ShareSurferLabValidationAdObjectCollisions -Plan $Plan
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'AdObjectNameCollisions' -Required ([bool]$CreateLab) -Passed ([bool]$adObjectCollisionResult.Passed) -Evidence $adObjectCollisionResult.Evidence -NextAction 'Rename or remove any existing AD user or group whose name matches a planned ShareSurfer lab object but is outside the ShareSurferLab OU.'))
 
     $smbCommands = @('Get-SmbShare', 'Get-SmbShareAccess', 'New-SmbShare', 'Grant-SmbShareAccess')
     $missingSmbCommands = @($smbCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })

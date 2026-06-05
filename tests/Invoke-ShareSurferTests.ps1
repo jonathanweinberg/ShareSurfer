@@ -513,6 +513,7 @@ $tests = @(
             Assert-True ($preflightRows.Name -contains 'PlanDiskBudget') 'Preflight should report plan disk budget readiness.'
             Assert-True ($preflightRows.Name -contains 'WindowsPathComponents') 'Preflight should report Windows path component safety.'
             Assert-True ($preflightRows.Name -contains 'EnterpriseIncludeFiles') 'Preflight should report enterprise IncludeFiles readiness.'
+            Assert-True ($preflightRows.Name -contains 'AdObjectNameCollisions') 'Preflight should report AD object name collision readiness.'
             Assert-True ($preflightRows.Name -contains 'SmbSharePathCollisions') 'Preflight should report SMB share path collision readiness.'
             $includeFilesPreflight = @($preflightRows | Where-Object { $_.Name -eq 'EnterpriseIncludeFiles' })[0]
             Assert-True ([bool]$includeFilesPreflight.Passed) 'Enterprise IncludeFiles preflight should pass when IncludeFiles is set.'
@@ -545,6 +546,55 @@ $tests = @(
             }
             finally {
                 Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+            }
+
+            try {
+                function global:Get-ADDomain {
+                    [pscustomobject]@{ DistinguishedName = 'DC=example,DC=test' }
+                }
+                function global:Get-ADUser {
+                    param(
+                        [string] $Filter
+                    )
+
+                    if ($Filter -like '*SSUser00001*') {
+                        return [pscustomobject]@{ SamAccountName = 'SSUser00001'; DistinguishedName = 'CN=SSUser00001,OU=ShareSurferLab,DC=example,DC=test' }
+                    }
+                    if ($Filter -like '*SSUser00002*') {
+                        return [pscustomobject]@{ SamAccountName = 'SSUser00002'; DistinguishedName = 'CN=SSUser00002,OU=ExistingUsers,DC=example,DC=test' }
+                    }
+                    $null
+                }
+                function global:Get-ADGroup {
+                    param(
+                        [string] $Filter
+                    )
+
+                    if ($Filter -like "*'Readers'*") {
+                        return [pscustomobject]@{ SamAccountName = 'Readers'; DistinguishedName = 'CN=Readers,OU=ShareSurferLab,DC=example,DC=test' }
+                    }
+                    if ($Filter -like "*'Editors'*") {
+                        return [pscustomobject]@{ SamAccountName = 'Editors'; DistinguishedName = 'CN=Editors,OU=ExistingGroups,DC=example,DC=test' }
+                    }
+                    $null
+                }
+
+                $adCollisionResult = Test-ShareSurferLabValidationAdObjectCollisions -Plan $plan
+                Assert-True (-not $adCollisionResult.Passed) 'AD object preflight should fail when planned lab names exist outside the lab OU.'
+                Assert-Equal ([int]$adCollisionResult.CheckedObjectCount) 4 'AD object preflight should count existing planned users and groups it checked.'
+                Assert-Equal ([int]$adCollisionResult.CollisionCount) 2 'AD object preflight should count planned names that collide outside the lab OU.'
+                Assert-True ([string]$adCollisionResult.Evidence -like '*SSUser00002*ExistingUsers*') 'AD object preflight evidence should identify the colliding user.'
+                Assert-True ([string]$adCollisionResult.Evidence -like '*Editors*ExistingGroups*') 'AD object preflight evidence should identify the colliding group.'
+
+                $adCollisionPreflight = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $labRoot -RunRoot $exportPath -CreateLab -IncludeFiles | Where-Object { $_.Name -eq 'AdObjectNameCollisions' })[0]
+                Assert-True (-not [bool]$adCollisionPreflight.Passed) 'CreateLab preflight should fail on AD object name collisions.'
+                Assert-True ([bool]$adCollisionPreflight.Required) 'CreateLab preflight should make AD object name collisions required evidence.'
+                Assert-True ([string]$adCollisionPreflight.NextAction -like '*Rename or remove*') 'AD object collision preflight should give a clear operator next action.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-ADDomain -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ADUser -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ADGroup -ErrorAction SilentlyContinue
             }
         }
     },
