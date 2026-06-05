@@ -87,6 +87,25 @@ For the enterprise profile, add:
   -RequireLiveEvidence
 ```
 
+Before creating an enterprise lab, run the same command with `-PreflightOnly`. This writes `lab-plan.json`, `owner-mapping.csv`, and `lab-preflight.csv`, then stops before creating AD objects, SMB shares, files, reports, scans, or support bundles.
+
+```powershell
+.\scripts\Invoke-ShareSurferLabValidation.ps1 `
+  -PreflightOnly `
+  -LabRoot 'C:\ShareSurferLab' `
+  -OutputRoot 'C:\ShareSurfer\lab-validation' `
+  -DomainNetBiosName 'CONTOSO' `
+  -ObsAttribute 'extensionAttribute10' `
+  -Scale Enterprise `
+  -EnterpriseUserCount 2500 `
+  -EnterpriseShareCount 250 `
+  -EnterpriseFilesPerShare 8 `
+  -IncludeFiles `
+  -RequireLiveEvidence
+```
+
+Use the returned `PreflightPath` to open `lab-preflight.csv`. Fix any `Blocker` rows before rerunning with `-CreateLab`.
+
 The script writes `lab-plan.json`, `owner-mapping.csv`, `lab-preflight.csv`, `validation.json`, `lab-validation-criteria.csv`, `live-evidence.json`, `live-evidence-review.csv`, `v1-acceptance.json`, normalized CSVs, `report.html`, and a redacted support bundle for the lab run. The redacted bundle includes redacted lab-run diagnostics such as `lab_run_diagnostics.json`, `lab_preflight.csv`, `lab_validation_criteria.csv`, `live_evidence_review.csv`, `live_evidence.json`, and `v1_acceptance.json` so support cases can include lab status without exposing raw paths or identities. For enterprise validation, `lab-validation-criteria.csv` is the pass/fail evidence for user population, share population, real file fixtures, deep paths, long-path policy fixtures, permission-bearing group OBS/OID coverage, owner-risk pivots, related data areas, owner review packets, and the configured disk budget. The default generated file-data budget is 2 GiB; use `-MaxLabBytes 8589934592` only for an explicit 8 GiB stress run.
 
 Open `lab-preflight.csv` first if validation stops early. It checks whether the run appears to be on a Windows collector host, whether PowerShell 5.1 and the required Active Directory and SMB cmdlets are available, whether planned AD user or group names already exist outside the ShareSurferLab OU, whether any planned SMB share name already points at another local path, whether the output path exists, whether an existing lab root is present when `-CreateLab` is not used, whether planned data stays under the disk budget, whether plan criteria are satisfiable, whether Windows path components are safe, and whether enterprise validation is scanning files.
