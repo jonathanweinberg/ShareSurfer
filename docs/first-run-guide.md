@@ -205,6 +205,7 @@ Use the dashboard to review:
 
 - Executive summary cards.
 - Review Workbench snapshot for the selected business unit, data owner, or risk level.
+- Migration Discovery rows showing related data areas that should be kept together during migration planning.
 - Direct Access Review table showing directly assigned identities, share-gate assignments, NTFS assignments, OBS context, and expanded group-member counts.
 - Priority actions.
 - Visual risk rollups. Click a bar to filter the dashboard to that finding type, conflict type, owner, or business unit.

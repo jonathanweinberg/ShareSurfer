@@ -384,6 +384,15 @@ function ConvertTo-ShareSurferReport {
     .compact-scroll {
       max-height: 245px;
     }
+    .packet-note {
+      border-left: 4px solid var(--blue);
+      background: #eff6ff;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #1e3a8a;
+      line-height: 1.45;
+      margin: 0 0 12px;
+    }
     @media (max-width: 940px) {
       header { padding: 26px 20px 18px; }
       main { padding: 18px 20px 28px; }
@@ -426,6 +435,7 @@ function ConvertTo-ShareSurferReport {
       </div>
       <nav class="view-tabs" aria-label="Dashboard views">
         <button type="button" data-view="overview" aria-selected="true">Overview</button>
+        <button type="button" data-view="migration" aria-selected="false">Migration</button>
         <button type="button" data-view="findings" aria-selected="false">Findings</button>
         <button type="button" data-view="conflicts" aria-selected="false">Conflicts</button>
         <button type="button" data-view="owners" aria-selected="false">Owners</button>
@@ -511,6 +521,31 @@ function ConvertTo-ShareSurferReport {
         <p class="note" id="active-filter-note"></p>
         <p class="note">Owner Risk Pivots combine mapped paths with item, finding, conflict, and partial-share counts so each business unit can see why it is being asked to review access.</p>
         <div class="scroll"><table id="owner-pivots"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-migration" data-panel="migration">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Migration Discovery</h2>
+          <span class="count" id="migration-areas-count"></span>
+        </div>
+        <p class="note">Use this view before migration planning to avoid splitting related data across waves. These shares and folders appear to belong to the same business area because the scan found shared ownership, business-unit, path, permission-group, or review-risk signals.</p>
+        <div class="scroll"><table id="migration-areas"></table></div>
+      </div>
+      <div class="panel">
+        <h2>Migration Candidate Packet</h2>
+        <p class="packet-note" id="migration-packet-context">Select a related data area to review its migration packet.</p>
+        <div class="workbench-grid">
+          <div>
+            <h3>Packet Snapshot</h3>
+            <dl class="workbench-stats" id="migration-packet-stats"></dl>
+          </div>
+          <div>
+            <h3>What To Do Next</h3>
+            <ul class="actions" id="migration-packet-actions"></ul>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -925,8 +960,8 @@ function ConvertTo-ShareSurferReport {
       wrapper.appendChild(dd);
       target.appendChild(wrapper);
     }
-    function renderWorkbenchStats(stats) {
-      const target = document.getElementById('workbench-stats');
+    function renderWorkbenchStats(stats, targetElement) {
+      const target = targetElement || document.getElementById('workbench-stats');
       target.textContent = '';
       stats.forEach(stat => setWorkbenchStat(target, stat.label, stat.value));
     }
@@ -945,6 +980,9 @@ function ConvertTo-ShareSurferReport {
       if (details.ObjectClass) { return String(details.ObjectClass); }
       if (groupParentKeys.has(normalizeIdentity(identity))) { return 'group'; }
       return '';
+    }
+    function isGroupIdentity(identity) {
+      return String(getObjectClass(identity) || '').toLowerCase() === 'group' || groupParentKeys.has(normalizeIdentity(identity));
     }
     function countExpandedMembers(identity) {
       const start = normalizeIdentity(identity);
@@ -1064,6 +1102,110 @@ function ConvertTo-ShareSurferReport {
       return rows
         .sort((a, b) => String(a.ParentGroup).localeCompare(String(b.ParentGroup)) || Number(a.Depth || 0) - Number(b.Depth || 0) || String(a.ChildIdentity).localeCompare(String(b.ChildIdentity)))
         .slice(0, 12);
+    }
+    function getMigrationGroupsForPivot(pivot) {
+      const groups = new Set();
+      data.share_permissions.filter(row => rowMatchesPivot(row, pivot)).forEach(row => {
+        if (isGroupIdentity(row.Identity)) { groups.add(String(row.Identity || '')); }
+      });
+      data.acl_entries.filter(row => rowMatchesPivot(row, pivot)).forEach(row => {
+        if (isGroupIdentity(row.Identity)) { groups.add(String(row.Identity || '')); }
+      });
+      return Array.from(groups).sort((a, b) => a.localeCompare(b));
+    }
+    function getMigrationReadiness(pivot) {
+      const partialShares = Number(pivot.PartialShareCount || 0);
+      const findings = Number(pivot.FindingCount || 0);
+      const conflicts = Number(pivot.ConflictCount || 0);
+      if (partialShares > 0) { return 'Blocked by scan gaps'; }
+      if (String(pivot.RiskLevel || '') === 'High' || conflicts > 0 || findings > 0) { return 'Review'; }
+      return 'Candidate';
+    }
+    function getMigrationNextAction(readiness) {
+      if (readiness === 'Blocked by scan gaps') { return 'Review collection errors and rerun the scan before final migration planning.'; }
+      if (readiness === 'Review') { return 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.'; }
+      return 'Confirm ownership and mark as migration-ready when the business owner agrees.';
+    }
+    function buildMigrationDiscoveryRows(state) {
+      return filterOwnerPivots(owner_pivots, state).map(pivot => {
+        const permissionGroups = getMigrationGroupsForPivot(pivot);
+        const matchedShareIds = new Set();
+        data.shares.filter(share => rowMatchesPivot(share, pivot)).forEach(share => {
+          const shareId = String(share.ShareId || '');
+          if (shareId) { matchedShareIds.add(shareId); }
+        });
+        data.items.filter(item => rowMatchesPivot(item, pivot)).forEach(item => {
+          const shareId = String(item.ShareId || '');
+          if (shareId) { matchedShareIds.add(shareId); }
+        });
+        const readiness = getMigrationReadiness(pivot);
+        const reasons = ['same owner mapping', 'same business unit', 'matching path pattern'];
+        if (permissionGroups.length > 0) { reasons.push('shared permission group'); }
+        if (Number(pivot.FindingCount || 0) + Number(pivot.ConflictCount || 0) > 0) { reasons.push('shared review risk'); }
+        if (Number(pivot.PartialShareCount || 0) > 0) { reasons.push('partial collection gap'); }
+        return {
+          RelatedDataArea: [pivot.BusinessUnit || 'Unmapped', pivot.Owner || 'Unassigned owner'].filter(Boolean).join(' / '),
+          BusinessUnit: pivot.BusinessUnit || '',
+          Owner: pivot.Owner || '',
+          MigrationReadiness: readiness,
+          Shares: Math.max(Number(pivot.PartialShareCount || 0), matchedShareIds.size),
+          Folders: Number(pivot.Directories || 0),
+          Files: Number(pivot.Files || 0),
+          ReviewItems: Number(pivot.FindingCount || 0) + Number(pivot.ConflictCount || 0),
+          PermissionedGroups: permissionGroups.length,
+          RelatedBecause: reasons.join('; '),
+          SuggestedNextAction: getMigrationNextAction(readiness),
+          Pattern: pivot.Pattern || ''
+        };
+      }).sort((a, b) => String(a.MigrationReadiness).localeCompare(String(b.MigrationReadiness)) || Number(b.ReviewItems || 0) - Number(a.ReviewItems || 0) || String(a.RelatedDataArea).localeCompare(String(b.RelatedDataArea)));
+    }
+    function setSelectValueIfPresent(id, value) {
+      const select = document.getElementById(id);
+      const target = String(value || '');
+      if (Array.from(select.options).some(option => option.value === target)) {
+        select.value = target;
+      }
+    }
+    function focusMigrationArea(row) {
+      setSelectValueIfPresent('business-unit-filter', row.BusinessUnit);
+      setSelectValueIfPresent('owner-filter', row.Owner);
+      document.getElementById('risk-filter').value = '';
+      document.getElementById('filter').value = '';
+      applyFilter();
+      showView('migration');
+    }
+    function renderMigrationPacket(rows) {
+      const context = document.getElementById('migration-packet-context');
+      const stats = document.getElementById('migration-packet-stats');
+      const actions = document.getElementById('migration-packet-actions');
+      stats.textContent = '';
+      actions.textContent = '';
+      if (rows.length === 0) {
+        context.textContent = 'No related data areas match the active dashboard filters.';
+        addPriorityAction(actions, 'warning', 'Adjust discovery filters', 'Clear a filter or broaden the owner/business-unit selection to find related data areas.');
+        return;
+      }
+      const row = rows[0];
+      context.textContent = 'Migration readiness is not approval. It shows whether ShareSurfer found blockers that should be reviewed before planning this related data area: ' + row.RelatedDataArea + '.';
+      renderWorkbenchStats([
+        { label: 'Shares', value: row.Shares },
+        { label: 'Folders', value: row.Folders },
+        { label: 'Files', value: row.Files },
+        { label: 'Review Items', value: row.ReviewItems },
+        { label: 'Permissioned Groups', value: row.PermissionedGroups },
+        { label: 'Readiness', value: row.MigrationReadiness }
+      ], stats);
+      addPriorityAction(actions, row.MigrationReadiness === 'Candidate' ? 'good' : 'warning', 'Why these are related', row.RelatedBecause + '.');
+      addPriorityAction(actions, row.MigrationReadiness === 'Blocked by scan gaps' ? 'high' : 'warning', 'Suggested next action', row.SuggestedNextAction);
+      addPriorityAction(actions, 'good', 'Use with migration waves', 'Keep this related data area together until ownership, access groups, and scan gaps are confirmed.');
+    }
+    function renderMigrationDiscovery(state) {
+      const rows = buildMigrationDiscoveryRows(state);
+      renderTable('migration-areas', rows, {
+        rowAction: row => focusMigrationArea(row),
+        rowTitle: row => 'Focus owner review for ' + String(row.RelatedDataArea || 'this related data area')
+      });
+      renderMigrationPacket(rows);
     }
     function renderWorkbenchActions(state, pivots, riskRows, groupRows) {
       const list = document.getElementById('workbench-actions');
@@ -1283,6 +1425,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('org-rollups', filterRows(org_rollups, state, false));
       renderTable('events', filterRows(data.scan_events, state, false));
       renderReviewWorkbench(state);
+      renderMigrationDiscovery(state);
       applyGroupBrowser();
     }
     function showView(viewName) {
