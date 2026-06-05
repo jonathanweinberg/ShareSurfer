@@ -106,6 +106,17 @@ function New-ShareSurferAcceptanceSummary {
     }
 }
 
+function ConvertTo-ShareSurferAcceptanceBool {
+    param($Value)
+
+    if ($null -eq $Value) {
+        return $false
+    }
+
+    $text = ([string]$Value).Trim()
+    $text -eq 'True' -or $text -eq 'true' -or $text -eq '1' -or $text -eq 'Yes' -or $text -eq 'yes'
+}
+
 $checks = New-Object System.Collections.ArrayList
 
 if (-not (Test-Path -LiteralPath $RunRoot)) {
@@ -123,6 +134,20 @@ if (Test-Path -LiteralPath $ExportPath) {
 else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'NormalizedCsvExport' -Passed $false -Detail ('Export path not found: {0}' -f $ExportPath)))
 }
+
+$scanManifestPath = Join-Path $ExportPath 'scan_manifest.csv'
+$scanManifestIncludeFilesPassed = $false
+$scanManifestIncludeFilesDetail = 'scan_manifest.csv not found.'
+if (Test-Path -LiteralPath $scanManifestPath) {
+    $scanManifestRows = @(Import-Csv -LiteralPath $scanManifestPath)
+    $manifestIncludeFiles = $false
+    if ($scanManifestRows.Count -gt 0 -and $scanManifestRows[0].PSObject.Properties['IncludeFiles']) {
+        $manifestIncludeFiles = ConvertTo-ShareSurferAcceptanceBool $scanManifestRows[0].IncludeFiles
+    }
+    $scanManifestIncludeFilesPassed = ((-not $RequireLiveEvidence) -or $manifestIncludeFiles)
+    $scanManifestIncludeFilesDetail = 'ManifestRows={0}; IncludeFiles={1}; RequireLiveEvidence={2}; Manifest={3}' -f $scanManifestRows.Count, $manifestIncludeFiles, [bool]$RequireLiveEvidence, $scanManifestPath
+}
+[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ScanManifestIncludeFiles' -Passed $scanManifestIncludeFilesPassed -Detail $scanManifestIncludeFilesDetail))
 
 $ownerReviewPacketsPath = Join-Path $ExportPath 'owner_review_packets.csv'
 $ownerReviewPacketsPassed = $false

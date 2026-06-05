@@ -294,7 +294,7 @@ $issueDefinitions = @(
         Title = 'scanner core for SMB shares, ACLs, ownership, and inheritance'
         Focus = 'Prove the scanner collected share permissions, ACL entries, file ACLs, ownership evidence, deep explicit ACE findings, inheritance breaks, conflicts, collection-error evidence, normalized exports, and raw event logs.'
         Criteria = @('EnterpriseSharePermissions', 'EnterpriseAclEntries', 'EnterpriseFileAclEntries', 'EnterpriseOwnershipEvidence', 'EnterpriseDeepExplicitAceFindings', 'EnterpriseBrokenInheritanceFindings', 'EnterpriseConflictFindings', 'EnterpriseCollectionErrors')
-        Checks = @('NormalizedCsvExport', 'RawEventLog', 'LabValidationCriteria', 'LiveEvidenceGate')
+        Checks = @('NormalizedCsvExport', 'ScanManifestIncludeFiles', 'RawEventLog', 'LabValidationCriteria', 'LiveEvidenceGate')
     },
     [pscustomobject]@{
         IssueNumber = 5
