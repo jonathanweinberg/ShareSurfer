@@ -117,7 +117,7 @@ function Test-ShareSurferProofReviewReady {
     }
 
     $closeoutText = Get-Content -LiteralPath $closeoutPath -Raw
-    if ($closeoutText -notlike '*Ready for proof review: `True`*') {
+    if (-not $closeoutText.Contains('Ready for proof review: `True`')) {
         throw ('Validation closeout checklist is not ready for proof review. Review validation-closeout-checklist.md and rerun validation before posting, or use -SkipReadyCheck only for a deliberate manual override: {0}' -f $closeoutPath)
     }
 
