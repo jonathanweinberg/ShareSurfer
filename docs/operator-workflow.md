@@ -42,7 +42,7 @@ New-ShareSurferLabFixture `
   -EnterpriseUserCount 2500 `
   -EnterpriseShareCount 250 `
   -EnterpriseFilesPerShare 8 `
-  -MaxLabBytes 8589934592
+  -MaxLabBytes 2147483648
 ```
 
 The V1 fixture is expected to create:
@@ -61,7 +61,9 @@ The enterprise profile must additionally prove:
 - Deep share trees and intricate folder paths.
 - Real file objects throughout the trees, using small file contents.
 - Owner/business-unit mappings and generated owner-risk pivot rows.
-- Estimated generated lab data under 8 GB.
+- Estimated generated lab data under the default 2 GiB file-data budget. The 8 GiB ceiling is reserved for explicit stress runs.
+
+See [Scaled lab generator spec](scaled-lab-generator-spec.md) for the enterprise defaults, count formulas, disk-budget math, and plan/live acceptance criteria.
 
 For a repeatable Windows Server validation run, use the script from the repository root:
 
