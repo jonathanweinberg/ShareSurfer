@@ -894,12 +894,13 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
 
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles | Out-Null
 
             $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
 
             Assert-Equal $manifest[0].AdLookupMode 'DirectoryOnly' 'Scan manifest should record the requested AD lookup mode.'
+            Assert-Equal $manifest[0].IncludeFiles 'True' 'Scan manifest should record whether file objects were requested.'
             Assert-True (@($groupEdges | Where-Object { $_.ParentGroup -eq 'CONTOSO\FinanceEditors' -and $_.IsTruncated -eq 'True' }).Count -gt 0) 'Group expansion should mark edges truncated at the configured max depth.'
         }
     },

@@ -160,9 +160,9 @@ Use this file to troubleshoot collection behavior without scraping console outpu
 
 ### `scan_manifest.csv`
 
-Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `SourceMode`, `OperationalPathLengthThreshold`, `AzurePathComponentLimit`, `AzureFullPathLimit`, `ExplicitAceDepthThreshold`, `GroupExpansionMaxDepth`, `AdLookupMode`.
+Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `SourceMode`, `OperationalPathLengthThreshold`, `AzurePathComponentLimit`, `AzureFullPathLimit`, `ExplicitAceDepthThreshold`, `GroupExpansionMaxDepth`, `AdLookupMode`, `IncludeFiles`.
 
-Use the manifest to reproduce scan settings and explain incomplete data.
+Use the manifest to reproduce scan settings and explain incomplete data. `IncludeFiles` records whether file objects were included in addition to folders, which matters for enterprise validation and migration-readiness evidence.
 
 ## Relationship Map
 
