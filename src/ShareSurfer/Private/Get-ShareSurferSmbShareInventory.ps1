@@ -73,7 +73,7 @@ function Get-ShareSurferSmbShareInventory {
                     if ($null -ne $share) {
                         $localPath = [string]$share.Path
                         $description = [string]$share.Description
-                        if ($localPath -ne '' -and (Test-Path -LiteralPath $localPath)) {
+                        if ($localPath -ne '' -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
                             $scanPath = $localPath
                         }
                         $source = 'Get-SmbShare'
