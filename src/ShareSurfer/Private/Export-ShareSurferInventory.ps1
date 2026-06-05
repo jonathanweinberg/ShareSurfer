@@ -15,7 +15,8 @@ function Export-ShareSurferInventory {
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
         [string] $AdLookupMode = 'Auto',
         [string] $SourceMode = 'InputObject',
-        [switch] $SkipIdentityEnrichment
+        [switch] $SkipIdentityEnrichment,
+        [switch] $IncludeFiles
     )
 
     if (-not (Test-Path -LiteralPath $OutputPath)) {
@@ -134,6 +135,7 @@ function Export-ShareSurferInventory {
             ExplicitAceDepthThreshold = $ExplicitAceDepthThreshold
             GroupExpansionMaxDepth = $GroupExpansionMaxDepth
             AdLookupMode = $AdLookupMode
+            IncludeFiles = [bool]$IncludeFiles
         }
     )
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportCompleted' -Source 'Export' -Message ('Export completed at {0}' -f $OutputPath) -Detail ('Findings={0}; Conflicts={1}' -f $findings.Count, $conflicts.Count)))

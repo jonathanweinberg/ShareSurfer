@@ -225,7 +225,8 @@ function Get-ShareSurferExportSchema {
             'AzureFullPathLimit',
             'ExplicitAceDepthThreshold',
             'GroupExpansionMaxDepth',
-            'AdLookupMode'
+            'AdLookupMode',
+            'IncludeFiles'
         )
     }
 }
