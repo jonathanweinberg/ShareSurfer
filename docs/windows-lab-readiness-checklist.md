@@ -131,7 +131,7 @@ Use these files first:
 - `issue-comments\*.md`: public-safe targeted body-file comments for the remaining proof issues.
 - `issue-comments\post-commands.txt`: exact `gh issue comment --body-file` commands for posting those targeted comments after review.
 - `issue-comment-publish-preview.csv`: dry-run preview proving which issue comments would be posted and that no comment was posted during validation.
-- `scripts\Publish-ShareSurferValidationIssueComments.ps1`: preview or post the generated issue comments after you review them.
+- `scripts\Publish-ShareSurferValidationIssueComments.ps1`: preview or post the generated issue comments after you review them. Posting from a run folder requires `validation-closeout-checklist.md` to say `Ready for proof review: True` unless you deliberately use `-SkipReadyCheck`.
 - `report.html`: offline business review dashboard.
 
 Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md`, `validation_closeout_checklist.md`, and a sanitized `issue_comments` folder as shareable copies of the public-safe issue update artifacts. Do not attach raw run folders outside the trusted lab environment.

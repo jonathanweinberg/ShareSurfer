@@ -126,7 +126,7 @@ Preview the generated issue updates before posting:
   -RunRoot 'C:\ShareSurfer\lab-validation\20260604-193000'
 ```
 
-Post only after you have reviewed the generated Markdown files:
+Post only after you have reviewed the generated Markdown files and `validation-closeout-checklist.md` says `Ready for proof review: True`:
 
 ```powershell
 .\scripts\Publish-ShareSurferValidationIssueComments.ps1 `
@@ -134,7 +134,7 @@ Post only after you have reviewed the generated Markdown files:
   -Post
 ```
 
-Use `-IssueNumber 1,3` when you only want to post selected proof comments. The publisher uses `gh issue comment --body-file` and reads back posted comments for verification.
+Use `-IssueNumber 1,3` when you only want to post selected proof comments. The publisher uses `gh issue comment --body-file` and reads back posted comments for verification. When `-Post` is used with `-RunRoot`, the publisher refuses to post unless the closeout checklist is ready for proof review; use `-SkipReadyCheck` only for a deliberate manual override after documenting why the run is still safe to publish.
 
 Open `lab-preflight.csv` first if validation stops early. It checks whether the run appears to be on a Windows collector host, whether PowerShell 5.1 and the required Active Directory and SMB cmdlets are available, whether planned AD user or group names already exist outside the ShareSurferLab OU, whether any planned SMB share name already points at another local path, whether the output path exists, whether an existing lab root is present when `-CreateLab` is not used, whether planned data stays under the disk budget, whether the target lab volume has enough free space for the configured byte budget before live creation, whether plan criteria are satisfiable, whether Windows path components are safe, and whether enterprise validation is scanning files.
 
