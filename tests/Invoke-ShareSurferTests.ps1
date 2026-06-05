@@ -1185,12 +1185,31 @@ $tests = @(
                     [pscustomobject]@{ Name = 'RedactedSupportBundle'; Passed = $true; Detail = 'Bundle=C:\ShareSurfer\lab-validation\CONTOSO\support-bundle-redacted' }
                 )
             } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
+            @(
+                [pscustomobject]@{
+                    Timestamp = '2026-06-04T00:00:00.0000000Z'
+                    Phase = 'Start'
+                    Level = 'Info'
+                    Message = 'ShareSurfer lab validation run started.'
+                    Detail = 'RunRoot=C:\ShareSurfer\lab-validation\CONTOSO; Computer=files01; Group=CONTOSO\FinanceEditors'
+                },
+                [pscustomobject]@{
+                    Timestamp = '2026-06-04T00:00:01.0000000Z'
+                    Phase = 'Preflight'
+                    Level = 'Warning'
+                    Message = 'Lab validation preflight completed.'
+                    Detail = 'PreflightPath=C:\ShareSurfer\lab-validation\CONTOSO\lab-preflight.csv; FailedRequiredCount=1'
+                }
+            ) | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 4 } | Set-Content -LiteralPath (Join-Path $runRoot 'lab-run-events.jsonl') -Encoding UTF8
 
             New-ShareSurferSupportBundle -ExportPath $outputPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'unit-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $rawEventLogPath = Join-Path $outputPath 'scan_events.jsonl'
             $redactedEventLogPath = Join-Path $bundlePath 'scan_events.jsonl'
+            $redactedLabRunEventLogPath = Join-Path $bundlePath 'lab_run_events.jsonl'
             $rawEventLog = Get-Content -LiteralPath $rawEventLogPath -Raw
             $redactedEventLog = Get-Content -LiteralPath $redactedEventLogPath -Raw
+            $rawLabRunEventLog = Get-Content -LiteralPath (Join-Path $runRoot 'lab-run-events.jsonl') -Raw
+            $redactedLabRunEventLog = Get-Content -LiteralPath $redactedLabRunEventLogPath -Raw
             $redactedAcl = Get-Content -LiteralPath (Join-Path $bundlePath 'acl_entries.csv') -Raw
             $redactedFindings = Get-Content -LiteralPath (Join-Path $bundlePath 'findings.csv') -Raw
             $redactedConflicts = Get-Content -LiteralPath (Join-Path $bundlePath 'conflicts.csv') -Raw
@@ -1208,6 +1227,12 @@ $tests = @(
             Assert-True ($redactedEventLog -notlike '*CONTOSO*') 'Redacted JSONL event log must not contain source domain names.'
             Assert-True ($redactedEventLog -notlike '*files01*') 'Redacted JSONL event log must not contain source server names.'
             Assert-True ($redactedEventLog -like '*ID-*') 'Redacted JSONL event log should preserve relationships with stable tokens.'
+            Assert-True ($rawLabRunEventLog -like '*CONTOSO*') 'Raw lab-run event log should preserve source values for trusted internal debugging.'
+            Assert-True ($redactedLabRunEventLog -notlike '*CONTOSO*') 'Redacted lab-run event log must not contain source domain names.'
+            Assert-True ($redactedLabRunEventLog -notlike '*files01*') 'Redacted lab-run event log must not contain source server names.'
+            Assert-True ($redactedLabRunEventLog -like '*Preflight*') 'Redacted lab-run event log should preserve phase names.'
+            Assert-True ($redactedLabRunEventLog -like '*Warning*') 'Redacted lab-run event log should preserve event levels.'
+            Assert-True ($redactedLabRunEventLog -like '*ID-*') 'Redacted lab-run event log should preserve sensitive detail relationships with stable tokens.'
             Assert-True ($redactedAcl -notlike '*CONTOSO*') 'Redacted bundle must not contain the source domain name.'
             Assert-True ($redactedAcl -notlike '*FinanceEditors*') 'Redacted bundle must not contain source group names.'
             Assert-True ($redactedAcl -like '*ID-*') 'Stable token redaction should preserve relationships with synthetic IDs.'
@@ -1269,6 +1294,8 @@ $tests = @(
             Assert-Equal ([string]$bundleDiagnostics.LabRunEvidence.Included) 'True' 'Support bundle diagnostics should record lab-run evidence inclusion.'
             Assert-True ([int]$bundleDiagnostics.LabRunEvidence.FileCount -gt 0) 'Support bundle diagnostics should summarize lab-run evidence files.'
             Assert-Equal $labRunDiagnostics.BundleType 'ShareSurferRedactedLabRunDiagnostics' 'Lab-run diagnostics should identify the diagnostics type.'
+            Assert-Equal ([int]$labRunDiagnostics.RunEvents.RowCount) 2 'Lab-run diagnostics should summarize redacted lab-run event rows.'
+            Assert-Equal ([int]$labRunDiagnostics.RunEvents.WarningCount) 1 'Lab-run diagnostics should summarize warning event rows.'
             Assert-Equal ([int]$labRunDiagnostics.Preflight.RowCount) 2 'Lab-run diagnostics should summarize redacted preflight evidence.'
             Assert-Equal ([int]$labRunDiagnostics.Criteria.RowCount) 2 'Lab-run diagnostics should summarize redacted criteria evidence.'
             Assert-Equal ([string]$labRunDiagnostics.Acceptance.IsValid) 'True' 'Lab-run diagnostics should summarize acceptance when an acceptance artifact exists.'
@@ -1300,6 +1327,7 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_diagnostics.json') 'Support bundle file diagnostics should include the redacted diagnostics JSON.'
             Assert-True ($bundleFiles.FileName -contains 'lab_run_diagnostics.json') 'Support bundle file diagnostics should include redacted lab-run diagnostics.'
+            Assert-True ($bundleFiles.FileName -contains 'lab_run_events.jsonl') 'Support bundle file diagnostics should include the redacted lab-run event log.'
             Assert-True ($bundleFiles.FileName -contains 'lab_preflight.csv') 'Support bundle file diagnostics should include redacted lab preflight evidence.'
             Assert-True ($bundleFiles.FileName -contains 'lab_validation_criteria.csv') 'Support bundle file diagnostics should include redacted lab validation criteria.'
             Assert-True ($bundleFiles.FileName -contains 'live_evidence_review.csv') 'Support bundle file diagnostics should include redacted live evidence review.'
@@ -1352,6 +1380,10 @@ $tests = @(
                 [pscustomobject]@{ Name = 'WindowsCollectorHost'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'Synthetic acceptance proof'; NextAction = 'No action needed.' },
                 [pscustomobject]@{ Name = 'PlanCriteria'; Required = $true; Passed = $true; Status = 'Pass'; Evidence = 'Synthetic acceptance proof'; NextAction = 'No action needed.' }
             ) | Export-Csv -LiteralPath (Join-Path $runRoot 'lab-preflight.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ Timestamp = '2026-06-04T00:00:00.0000000Z'; Phase = 'Start'; Level = 'Info'; Message = 'ShareSurfer lab validation run started.'; Detail = 'RunRoot=C:\ShareSurfer\acceptance' },
+                [pscustomobject]@{ Timestamp = '2026-06-04T00:00:01.0000000Z'; Phase = 'Complete'; Level = 'Info'; Message = 'ShareSurfer lab validation run completed.'; Detail = 'AcceptanceIsValid=True' }
+            ) | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 4 } | Set-Content -LiteralPath (Join-Path $runRoot 'lab-run-events.jsonl') -Encoding UTF8
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
 
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
@@ -1381,6 +1413,7 @@ $tests = @(
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
             $bundleFiles = @(Import-Csv -LiteralPath $bundleFilesPath)
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Final lab support bundle should include the redacted acceptance summary.'
+            Assert-True ($bundleFiles.FileName -contains 'lab_run_events.jsonl') 'Final lab support bundle should include the redacted lab-run event log.'
             $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
             $badBundleManifest = @(
                 [pscustomobject]@{
@@ -1447,6 +1480,9 @@ $tests = @(
             Assert-True ($labValidationScript -like '*PreflightOnly*') 'Lab validation should expose a non-mutating preflight-only mode.'
             Assert-True ($labValidationScript -like '*if ($PreflightOnly)*') 'Lab validation should return after preflight artifacts when preflight-only mode is used.'
             Assert-True ($labValidationScript -like '*PreflightPassed*') 'Lab validation preflight-only output should report preflight status.'
+            Assert-True ($labValidationScript -like '*lab-run-events.jsonl*') 'Lab validation should write a raw lab-run event log.'
+            Assert-True ($labValidationScript -like '*Add-ShareSurferLabRunEvent*') 'Lab validation should record phase events for run diagnostics.'
+            Assert-True ($labValidationScript -like '*LabRunEventPath*') 'Lab validation output should include the lab-run event artifact path.'
             Assert-True ($labValidationScript -like '*lab-preflight.csv*') 'Lab validation should write a preflight readiness CSV.'
             Assert-True ($labValidationScript -like '*PreflightPath*') 'Lab validation output should include the preflight artifact path.'
             Assert-True ($labValidationScript -like '*v1-acceptance.json*') 'Lab validation should write an acceptance result artifact.'

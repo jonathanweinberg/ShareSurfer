@@ -122,6 +122,7 @@ $requiredBundleFiles = @(
     'scan_events.jsonl',
     'report.html',
     'lab_run_diagnostics.json',
+    'lab_run_events.jsonl',
     'lab_preflight.csv',
     'lab_validation_criteria.csv',
     'live_evidence_review.csv',
@@ -157,7 +158,7 @@ $redactedSupportPassed = ($missingBundleFiles.Count -eq 0 -and $bundleManifestPa
 $labRunDiagnosticsPath = Join-Path $SupportBundlePath 'lab_run_diagnostics.json'
 if (Test-Path -LiteralPath $labRunDiagnosticsPath) {
     $labRunDiagnostics = Get-Content -LiteralPath $labRunDiagnosticsPath -Raw | ConvertFrom-Json
-    $labRunEvidencePassed = ([string]$labRunDiagnostics.BundleType -eq 'ShareSurferRedactedLabRunDiagnostics' -and [int]$labRunDiagnostics.Preflight.RowCount -gt 0 -and [int]$labRunDiagnostics.Criteria.RowCount -gt 0)
+    $labRunEvidencePassed = ([string]$labRunDiagnostics.BundleType -eq 'ShareSurferRedactedLabRunDiagnostics' -and [int]$labRunDiagnostics.RunEvents.RowCount -gt 0 -and [int]$labRunDiagnostics.Preflight.RowCount -gt 0 -and [int]$labRunDiagnostics.Criteria.RowCount -gt 0)
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $labRunEvidencePassed -Detail ('LabRunDiagnostics={0}; IncludedFiles={1}' -f $labRunDiagnosticsPath, @($labRunDiagnostics.IncludedFiles).Count)))
 }
 else {

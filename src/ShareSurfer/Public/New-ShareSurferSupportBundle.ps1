@@ -177,6 +177,7 @@ function New-ShareSurferSupportBundle {
         'support_bundle_diagnostics.json summarizes redacted scan settings, export counts, findings, conflicts, partial shares, and collection errors.',
         'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.',
+        'lab_run_events.jsonl is included when a lab validation run root was supplied and records redacted lab-validation phase events.',
         'lab_run_diagnostics.json is included when a lab validation run root was supplied.'
     ) -Encoding UTF8
 
@@ -247,11 +248,22 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         [void]$includedFiles.Add('v1_acceptance.json')
     }
 
+    $labRunEvents = @(New-ShareSurferRedactedLabRunEvents -SourcePath (Join-Path $RunRoot 'lab-run-events.jsonl') -DestinationPath (Join-Path $BundlePath 'lab_run_events.jsonl') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
+    if ($labRunEvents.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_run_events.jsonl'))) {
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_run_events.jsonl') -FileName 'lab_run_events.jsonl' -RowCount $labRunEvents.Count))
+        [void]$includedFiles.Add('lab_run_events.jsonl')
+    }
+
     $labDiagnostics = [ordered]@{
         BundleType = 'ShareSurferRedactedLabRunDiagnostics'
         GeneratedAt = $GeneratedAt
         RunRootToken = Protect-ShareSurferValue -Value $RunRoot -ColumnName 'FullPath' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
         IncludedFiles = @($includedFiles)
+        RunEvents = [ordered]@{
+            RowCount = $labRunEvents.Count
+            ErrorCount = @($labRunEvents | Where-Object { [string]$_.Level -eq 'Error' }).Count
+            WarningCount = @($labRunEvents | Where-Object { [string]$_.Level -eq 'Warning' }).Count
+        }
         Preflight = [ordered]@{
             RowCount = $preflightRows.Count
             FailedRequiredCount = @($preflightRows | Where-Object { [string]$_.Required -eq 'True' -and [string]$_.Passed -ne 'True' }).Count
@@ -316,6 +328,57 @@ function New-ShareSurferRedactedLabCsv {
 
     @($redactedRows) | Export-Csv -LiteralPath $DestinationPath -NoTypeInformation -Encoding UTF8
     @($redactedRows)
+}
+
+function New-ShareSurferRedactedLabRunEvents {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $DestinationPath,
+
+        [ValidateSet('StableToken', 'Strict')]
+        [string] $RedactionMode = 'StableToken',
+
+        [string] $RedactionSalt = 'ShareSurfer'
+    )
+
+    if (-not (Test-Path -LiteralPath $SourcePath)) {
+        return @()
+    }
+
+    $rows = New-Object System.Collections.ArrayList
+    foreach ($line in @(Get-Content -LiteralPath $SourcePath -ErrorAction SilentlyContinue)) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+
+        try {
+            $event = $line | ConvertFrom-Json
+        }
+        catch {
+            $event = [pscustomobject]@{
+                Timestamp = ''
+                Phase = 'ParseError'
+                Level = 'Warning'
+                Message = 'Unable to parse lab run event line.'
+                Detail = $line
+            }
+        }
+
+        $record = [ordered]@{
+            Timestamp = if ($event.PSObject.Properties['Timestamp']) { [string]$event.Timestamp } else { '' }
+            Phase = if ($event.PSObject.Properties['Phase']) { [string]$event.Phase } else { '' }
+            Level = if ($event.PSObject.Properties['Level']) { [string]$event.Level } else { '' }
+            Message = if ($event.PSObject.Properties['Message']) { [string]$event.Message } else { '' }
+            Detail = if ($event.PSObject.Properties['Detail']) { Protect-ShareSurferValue -Value $event.Detail -ColumnName 'Detail' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt } else { '' }
+        }
+        [void]$rows.Add([pscustomobject]$record)
+    }
+
+    Export-ShareSurferJsonLines -Path $DestinationPath -Rows @($rows)
+    @($rows)
 }
 
 function New-ShareSurferRedactedLabJsonSummary {
