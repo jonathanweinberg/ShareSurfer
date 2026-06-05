@@ -157,10 +157,11 @@ $requiredBundleFiles = @(
     'lab_validation_criteria.csv',
     'live_evidence_review.csv',
     'live_evidence.json',
-    'v1_acceptance.json'
+    'v1_acceptance.json',
+    'v1_acceptance_summary.json'
 )
 if ($AllowMissingBundledAcceptance) {
-    $requiredBundleFiles = @($requiredBundleFiles | Where-Object { $_ -ne 'v1_acceptance.json' })
+    $requiredBundleFiles = @($requiredBundleFiles | Where-Object { $_ -ne 'v1_acceptance.json' -and $_ -ne 'v1_acceptance_summary.json' })
 }
 $missingBundleFiles = @($requiredBundleFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $SupportBundlePath $_)) })
 $bundleManifestPath = Join-Path $SupportBundlePath 'support_bundle_manifest.csv'

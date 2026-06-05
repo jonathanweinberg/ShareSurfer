@@ -91,7 +91,7 @@ A useful support bundle includes:
 - `support_bundle_summary.json` with a quick redacted bundle health summary, validation result, redaction status, and file inventory.
 - `support_bundle_diagnostics.json` with redacted scan settings, export counts, finding/conflict rollups, partial-share counts, and collection-error counts for support triage.
 - `support_bundle_redaction_audit.csv` with checked source-value tokens, leak status, and leak file names when any are found. When `-RunRoot` is used, the audit also checks sensitive raw lab-run evidence values from preflight, criteria, live-evidence review, acceptance, and lab-run event artifacts.
-- `lab_run_diagnostics.json`, `lab_run_events.jsonl`, `lab_preflight.csv`, `lab_validation_criteria.csv`, `live_evidence_review.csv`, `live_evidence.json`, and `v1_acceptance.json` when `-RunRoot` is used after a lab validation run has produced acceptance evidence.
+- `lab_run_diagnostics.json`, `lab_run_events.jsonl`, `lab_preflight.csv`, `lab_validation_criteria.csv`, `live_evidence_review.csv`, `live_evidence.json`, `v1_acceptance.json`, and `v1_acceptance_summary.json` when `-RunRoot` is used after a lab validation run has produced acceptance evidence.
 - Any validation result from `Test-ShareSurferExport`.
 - A regenerated redacted `report.html`, when `-IncludeReport` is used.
 

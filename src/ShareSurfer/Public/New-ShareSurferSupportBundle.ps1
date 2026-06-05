@@ -248,6 +248,14 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         [void]$includedFiles.Add('v1_acceptance.json')
     }
 
+    $acceptanceSummary = New-ShareSurferRedactedLabJsonSummary -SourcePath (Join-Path $RunRoot 'v1-acceptance-summary.json') -Kind 'AcceptanceSummary' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+    if ($null -ne $acceptanceSummary) {
+        $acceptanceSummaryPath = Join-Path $BundlePath 'v1_acceptance_summary.json'
+        $acceptanceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptanceSummaryPath -Encoding UTF8
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $acceptanceSummaryPath -FileName 'v1_acceptance_summary.json' -RowCount 1))
+        [void]$includedFiles.Add('v1_acceptance_summary.json')
+    }
+
     $labRunEvents = @(New-ShareSurferRedactedLabRunEvents -SourcePath (Join-Path $RunRoot 'lab-run-events.jsonl') -DestinationPath (Join-Path $BundlePath 'lab_run_events.jsonl') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($labRunEvents.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_run_events.jsonl'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_run_events.jsonl') -FileName 'lab_run_events.jsonl' -RowCount $labRunEvents.Count))
@@ -278,6 +286,7 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         }
         LiveEvidence = if ($null -eq $liveEvidence) { $null } else { [ordered]@{ IsValid = $liveEvidence.IsValid; FallbackCount = $liveEvidence.FallbackCount } }
         Acceptance = if ($null -eq $acceptance) { $null } else { [ordered]@{ IsValid = $acceptance.IsValid; FailedCheckCount = $acceptance.FailedCheckCount } }
+        AcceptanceSummary = if ($null -eq $acceptanceSummary) { $null } else { [ordered]@{ IsValid = $acceptanceSummary.IsValid; FailedCheckCount = $acceptanceSummary.FailedCheckCount; CheckCount = $acceptanceSummary.CheckCount } }
         Notes = @(
             'This file summarizes lab validation evidence from redacted bundle artifacts.',
             'Raw run paths and evidence details are replaced with redacted values or stable tokens.',
@@ -387,7 +396,7 @@ function New-ShareSurferRedactedLabJsonSummary {
         [string] $SourcePath,
 
         [Parameter(Mandatory = $true)]
-        [ValidateSet('LiveEvidence', 'Acceptance')]
+        [ValidateSet('LiveEvidence', 'Acceptance', 'AcceptanceSummary')]
         [string] $Kind,
 
         [ValidateSet('StableToken', 'Strict')]
@@ -407,6 +416,26 @@ function New-ShareSurferRedactedLabJsonSummary {
             FallbackCount = [int]$source.FallbackCount
             FallbackCriteria = @($source.FallbackCriteria | ForEach-Object { [string]$_ })
             FallbackEvidenceSources = @($source.FallbackEvidenceSources | ForEach-Object { [string]$_ })
+        }
+    }
+
+    if ($Kind -eq 'AcceptanceSummary') {
+        return [ordered]@{
+            SummaryType = [string]$source.SummaryType
+            GeneratedAt = [string]$source.GeneratedAt
+            IsValid = [bool]$source.IsValid
+            RequireLiveEvidence = [bool]$source.RequireLiveEvidence
+            CheckCount = [int]$source.CheckCount
+            PassedCheckCount = [int]$source.PassedCheckCount
+            FailedCheckCount = [int]$source.FailedCheckCount
+            FailedChecks = @($source.FailedChecks | ForEach-Object { [string]$_ })
+            Checks = @($source.Checks | ForEach-Object {
+                [ordered]@{
+                    Name = [string]$_.Name
+                    Passed = [bool]$_.Passed
+                }
+            })
+            DetailPolicy = [string]$source.DetailPolicy
         }
     }
 
