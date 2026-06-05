@@ -64,6 +64,7 @@ $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $runRoot = Join-Path $OutputRoot $timestamp
 $exportPath = Join-Path $runRoot 'export'
 $reportPath = Join-Path $runRoot 'report.html'
+$dashboardReviewPath = Join-Path $runRoot 'dashboard-review.md'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 $preflightPath = Join-Path $runRoot 'lab-preflight.csv'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
@@ -160,6 +161,9 @@ Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'LabCriteria' -Mes
 
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Report' -Message 'Generating offline HTML report.' -Detail ('ReportPath={0}' -f $reportPath)
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
+$dashboardReviewScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferDashboardReview.ps1'
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Report' -Message 'Generating dashboard review evidence.' -Detail ('DashboardReviewPath={0}' -f $dashboardReviewPath)
+& $dashboardReviewScriptPath -RunRoot $runRoot -ExportPath $exportPath -ReportPath $reportPath -OutputPath $dashboardReviewPath | Out-Null
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'SupportBundle' -Message 'Generating redacted support bundle with lab-run evidence.' -Detail ('SupportBundlePath={0}' -f $bundlePath)
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
 $acceptanceScriptPath = Join-Path $PSScriptRoot 'Test-ShareSurferV1Acceptance.ps1'
@@ -215,6 +219,7 @@ if (-not $finishedPackageAcceptance.IsValid) {
     RunRoot = $runRoot
     ExportPath = $exportPath
     ReportPath = $reportPath
+    DashboardReviewPath = $dashboardReviewPath
     SupportBundlePath = $bundlePath
     ValidationPath = Join-Path $runRoot 'validation.json'
     PreflightPath = $preflightPath

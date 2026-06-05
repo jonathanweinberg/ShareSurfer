@@ -310,7 +310,7 @@ $issueDefinitions = @(
         Title = 'dynamic offline HTML report package'
         Focus = 'Prove the offline report and business review exports remain usable with enterprise lab output, owner review packets, related data areas, and redacted support evidence.'
         Criteria = @('EnterpriseOwnerRiskPivots', 'EnterpriseRelatedDataAreas', 'EnterpriseOwnerReviewPackets')
-        Checks = @('OfflineReport', 'OwnerReviewPackets', 'RedactedSupportBundle', 'LabRunSupportBundleEvidence')
+        Checks = @('OfflineReport', 'DashboardReviewEvidence', 'OwnerReviewPackets', 'RedactedSupportBundle', 'LabRunSupportBundleEvidence')
     }
 )
 

@@ -5,6 +5,7 @@ param(
 
     [string] $ExportPath = '',
     [string] $ReportPath = '',
+    [string] $DashboardReviewPath = '',
     [string] $SupportBundlePath = '',
     [string] $PreflightPath = '',
     [string] $CriteriaPath = '',
@@ -30,6 +31,9 @@ if ($ExportPath -eq '') {
 }
 if ($ReportPath -eq '') {
     $ReportPath = Join-Path $RunRoot 'report.html'
+}
+if ($DashboardReviewPath -eq '') {
+    $DashboardReviewPath = Join-Path $RunRoot 'dashboard-review.md'
 }
 if ($SupportBundlePath -eq '') {
     $SupportBundlePath = Join-Path $RunRoot 'support-bundle-redacted'
@@ -147,6 +151,21 @@ if ((Test-Path -LiteralPath $ReportPath) -and ((Get-Item -LiteralPath $ReportPat
 }
 [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'OfflineReport' -Passed $reportPassed -Detail $reportDetail))
 
+$dashboardReviewPassed = $false
+$dashboardReviewDetail = 'Dashboard review not found.'
+if ((Test-Path -LiteralPath $DashboardReviewPath) -and ((Get-Item -LiteralPath $DashboardReviewPath).Length -gt 0)) {
+    $dashboardReviewContent = Get-Content -LiteralPath $DashboardReviewPath -Raw
+    $dashboardReviewPassed = (
+        $dashboardReviewContent -like '*# ShareSurfer Dashboard Review*' -and
+        $dashboardReviewContent -like '*Dashboard review status: Pass*' -and
+        $dashboardReviewContent -like '*Automated Dashboard Checks*' -and
+        $dashboardReviewContent -like '*Operator Live Review*' -and
+        $dashboardReviewContent -notlike "*$RunRoot*"
+    )
+    $dashboardReviewDetail = 'DashboardReview={0}; ContainsRunRoot={1}' -f $DashboardReviewPath, ($dashboardReviewContent -like "*$RunRoot*")
+}
+[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'DashboardReviewEvidence' -Passed $dashboardReviewPassed -Detail $dashboardReviewDetail))
+
 $requiredBundleFiles = @(
     'support_bundle_manifest.csv',
     'support_bundle_files.csv',
@@ -155,6 +174,7 @@ $requiredBundleFiles = @(
     'support_bundle_redaction_audit.csv',
     'scan_events.jsonl',
     'report.html',
+    'dashboard_review.md',
     'lab_run_diagnostics.json',
     'lab_run_events.jsonl',
     'lab_preflight.csv',
@@ -419,6 +439,7 @@ $result = [pscustomobject]@{
     RunRoot = $RunRoot
     ExportPath = $ExportPath
     ReportPath = $ReportPath
+    DashboardReviewPath = $DashboardReviewPath
     SupportBundlePath = $SupportBundlePath
     PreflightPath = $PreflightPath
     CriteriaPath = $CriteriaPath
