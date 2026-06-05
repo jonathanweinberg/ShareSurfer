@@ -179,7 +179,7 @@ Use the report dashboard as a triage guide, not as the only source of truth.
 - Start with the executive summary, Review Workbench, Direct Access Review table, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
 - Use the business-unit, data-owner, and review-risk filters to narrow mapped findings and conflicts before sending review queues to business owners.
 - Use the visual risk rollups to quickly filter the dashboard by finding type, conflict type, owner, or business unit before opening the detailed rows.
-- Use the group browser when a security group is assigned rights and the business unit needs to see the expanded membership path.
+- Use the Permissioned Group Review and group browser when a security group is assigned rights and the business unit needs to see the expanded membership path.
 
 Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards, for example `\\files01\Finance*`.
 

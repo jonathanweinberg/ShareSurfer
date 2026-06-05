@@ -554,6 +554,14 @@ function ConvertTo-ShareSurferReport {
 
     <section class="view-panel" id="view-groups" data-panel="groups">
       <div class="panel">
+        <div class="table-header">
+          <h2>Permissioned Group Review</h2>
+          <span class="count" id="permissioned-groups-count"></span>
+        </div>
+        <p class="note">Security groups with observed share-level or NTFS assignments, enriched with OBS context and expanded membership size.</p>
+        <div class="scroll"><table id="permissioned-groups"></table></div>
+      </div>
+      <div class="panel">
         <h2>Group Browser</h2>
         <div class="controls">
           <input id="group-filter" type="search" placeholder="Filter group or member">
@@ -982,6 +990,21 @@ function ConvertTo-ShareSurferReport {
         Rights: Array.from(row.Rights).sort().join('; ')
       })).sort((a, b) => Number(b.ExpandedMembers || 0) - Number(a.ExpandedMembers || 0) || String(a.Identity).localeCompare(String(b.Identity))).slice(0, 20);
     }
+    function buildPermissionedGroupRows(state) {
+      const accessMap = new Map();
+      filterRows(data.share_permissions, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'Share', row.Rights || ''));
+      filterRows(data.acl_entries, state, true).forEach(row => addAccessAssignment(accessMap, row.Identity || '', 'NTFS', row.Rights || ''));
+      return Array.from(accessMap.values()).filter(row => String(row.ObjectClass || '').toLowerCase() === 'group' || groupParentKeys.has(normalizeIdentity(row.Identity))).map(row => ({
+        Group: row.Identity,
+        DisplayName: row.DisplayName,
+        ObsPath: row.ObsPath,
+        ManagerLevel1: row.ManagerLevel1,
+        ShareAssignments: row.ShareAssignments,
+        NtfsAssignments: row.NtfsAssignments,
+        ExpandedMembers: countExpandedMembers(row.Identity),
+        Rights: Array.from(row.Rights).sort().join('; ')
+      })).sort((a, b) => Number(b.ExpandedMembers || 0) - Number(a.ExpandedMembers || 0) || String(a.Group).localeCompare(String(b.Group)));
+    }
     function getWorkbenchRiskRows(state) {
       const findings = filterRows(data.findings, state, true).map(row => ({
         Source: 'Finding',
@@ -1221,6 +1244,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('conflict-rollups', filterRows(conflict_rollups, state, false));
       renderTable('owners', filterRows(data.owner_mappings, state, true));
       renderTable('owner-pivots', filterOwnerPivots(owner_pivots, state));
+      renderTable('permissioned-groups', buildPermissionedGroupRows(state));
       renderTable('groups', filterRows(data.group_edges, state, false));
       renderTable('collection-errors', filterRows(collection_errors, state, true));
       renderTable('collection-error-rollups', filterRows(collection_error_rollups, state, false));
