@@ -49,7 +49,7 @@ The live lab was established under `C:\ShareSurferEnterpriseLab`.
 - Offline report retrieved: `20260605-101639/report.html`
 - Dashboard review retrieved: `20260605-101639/dashboard-review.md`
 
-## Live Evidence Gate
+## Historical Live Evidence Metadata
 
 `20260605-101639/live-evidence.json` reports:
 
@@ -64,7 +64,7 @@ The blocking row is in `20260605-101639/live-evidence-review.csv`:
 FocusedAclScenarios, Required=True, Passed=True, EvidenceStatus=PlanOnly, EvidenceSource=LabPlan, ActualValue=256, MinimumValue=1
 ```
 
-All other required criteria in the live evidence review were backed by live evidence.
+All other required criteria in the original live evidence review were backed by live evidence. This section describes the historical run metadata as captured before the verifier was tightened; use the refreshed evidence section below for the current archived-export proof status.
 
 ## Current Verifier Refresh
 
@@ -106,6 +106,19 @@ The refreshed proof pack also includes:
 - `20260605-101639/refreshed-evidence/issue-comments/issue-6-dashboard-live-proof.md`
 - `20260605-101639/refreshed-evidence/issue-comment-publish-preview.csv`
 
+## Posted Proof Comments
+
+The refreshed proof comments were posted to GitHub and read back against their source body files:
+
+- Issue #1 lab fixture proof: <https://github.com/jonathanweinberg/ShareSurfer/issues/1#issuecomment-4634010005>
+- Issue #3 scanner proof: <https://github.com/jonathanweinberg/ShareSurfer/issues/3#issuecomment-4634010128>
+- Issue #5 identity and group proof: <https://github.com/jonathanweinberg/ShareSurfer/issues/5#issuecomment-4634010283>
+- Issue #6 dashboard proof: <https://github.com/jonathanweinberg/ShareSurfer/issues/6#issuecomment-4634010463>
+
+Issue #1 also has the publisher closeout note: <https://github.com/jonathanweinberg/ShareSurfer/issues/1#issuecomment-4634045570>
+
+The GitHub proof issues remain open for human review. Close them only after a reviewer agrees the live run and refreshed proof pack satisfy the issue acceptance criteria.
+
 ## Support Bundle Status
 
 `20260605-101639/support-bundle-redacted/` was retrieved as a partial redacted support bundle with `27` files. Bundle generation was stopped before these expected completion artifacts were produced:
@@ -123,8 +136,9 @@ The richer redacted lab-run support bundle is now optional phase-1 troubleshooti
 
 ## Recommended Follow-Up
 
-Preserve the live lab while the remaining acceptance blockers are fixed:
+Preserve the live lab for any reviewer who wants a fresh host-side rerun or deeper manual inspection:
 
-1. Rerun validation against the existing lab with `-ObsAttribute info`, `-IncludeFiles`, and `-RequireLiveEvidence`.
+1. Use the refreshed evidence folder as the current archived-export proof.
 2. Leave `-IncludeRedactedSupportBundle` off unless troubleshooting specifically needs the richer redacted lab-run bundle.
-3. Use the refreshed evidence folder as the current archived-export proof, and use a fresh live rerun when reviewers need new host-side AD, filesystem, or collector evidence.
+3. Rerun validation against the existing lab with `-ObsAttribute info`, `-IncludeFiles`, and `-RequireLiveEvidence` only when reviewers need new host-side AD, filesystem, or collector evidence.
+4. Close issues #1, #3, #5, and #6 only after human review accepts the posted proof comments.
