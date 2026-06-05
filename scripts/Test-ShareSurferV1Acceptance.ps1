@@ -47,6 +47,7 @@ if ($LiveEvidenceReviewPath -eq '') {
     $LiveEvidenceReviewPath = Join-Path $RunRoot 'live-evidence-review.csv'
 }
 $IssueCommentPath = Join-Path $RunRoot 'issue-comments'
+$IssueCommentPublishPreviewPath = Join-Path $RunRoot 'issue-comment-publish-preview.csv'
 
 function New-ShareSurferAcceptanceCheck {
     param(
@@ -166,7 +167,8 @@ $requiredBundleFiles = @(
     'issue_comments/issue-5-identity-group-live-proof.md',
     'issue_comments/issue-6-dashboard-live-proof.md',
     'issue_comments/issue_comment_manifest.csv',
-    'issue_comments/post_commands.txt'
+    'issue_comments/post_commands.txt',
+    'issue_comments/publish_preview.csv'
 )
 if ($AllowMissingBundledAcceptance) {
     $requiredBundleFiles = @($requiredBundleFiles | Where-Object { $_ -ne 'v1_acceptance.json' -and $_ -ne 'v1_acceptance_summary.json' })
@@ -237,44 +239,79 @@ else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationIssueComments' -Passed $issueCommentPassed -Detail $issueCommentDetail))
 }
 
+$publishPreviewPassed = $false
+$publishPreviewDetail = ''
+if (Test-Path -LiteralPath $IssueCommentPublishPreviewPath) {
+    $publishPreviewRows = @(Import-Csv -LiteralPath $IssueCommentPublishPreviewPath)
+    $publishIssueNumbers = @($publishPreviewRows | ForEach-Object { [string]$_.IssueNumber } | Sort-Object -Unique)
+    $missingPublishIssueNumbers = @(@('1', '3', '5', '6') | Where-Object { $publishIssueNumbers -notcontains $_ })
+    $nonDryRunRows = @($publishPreviewRows | Where-Object { [string]$_.Status -ne 'DryRun' })
+    $postedRows = @($publishPreviewRows | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.PostedUrl) })
+    $bodyFileRows = @($publishPreviewRows | Where-Object { [string]$_.Command -like '*--body-file*' })
+    $publishPreviewPassed = ($publishPreviewRows.Count -ge 4 -and $missingPublishIssueNumbers.Count -eq 0 -and $nonDryRunRows.Count -eq 0 -and $postedRows.Count -eq 0 -and $bodyFileRows.Count -eq $publishPreviewRows.Count)
+    $publishPreviewDetail = 'PublishPreviewPath={0}; Rows={1}; MissingIssues={2}; NonDryRunRows={3}; PostedRows={4}' -f $IssueCommentPublishPreviewPath, $publishPreviewRows.Count, ($missingPublishIssueNumbers -join ', '), $nonDryRunRows.Count, $postedRows.Count
+}
+else {
+    $publishPreviewDetail = 'Publish preview not found: {0}' -f $IssueCommentPublishPreviewPath
+}
+if ($AllowMissingIssueComments -and -not (Test-Path -LiteralPath $IssueCommentPublishPreviewPath)) {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationIssueCommentPublishPreview' -Passed $true -Detail ('Issue comment publish preview pending for staged acceptance: {0}' -f $publishPreviewDetail)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'ValidationIssueCommentPublishPreview' -Passed $publishPreviewPassed -Detail $publishPreviewDetail))
+}
+
 $bundledIssueCommentPath = Join-Path $SupportBundlePath 'issue_comments'
 $bundledIssueCommentManifestPath = Join-Path $bundledIssueCommentPath 'issue_comment_manifest.csv'
 $bundledIssueCommentPostCommandsPath = Join-Path $bundledIssueCommentPath 'post_commands.txt'
+$bundledIssueCommentPublishPreviewPath = Join-Path $bundledIssueCommentPath 'publish_preview.csv'
 $requiredBundledIssueCommentFiles = @(
     'issue-1-lab-fixture-live-proof.md',
     'issue-3-scanner-live-proof.md',
     'issue-5-identity-group-live-proof.md',
     'issue-6-dashboard-live-proof.md',
     'issue_comment_manifest.csv',
-    'post_commands.txt'
+    'post_commands.txt',
+    'publish_preview.csv'
 )
 $missingBundledIssueCommentFiles = @($requiredBundledIssueCommentFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $bundledIssueCommentPath $_)) })
 $bundledIssueCommentsPassed = $false
 $bundledIssueCommentDetail = ''
-if ($missingBundledIssueCommentFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundledIssueCommentManifestPath) -and (Test-Path -LiteralPath $bundledIssueCommentPostCommandsPath)) {
+if ($missingBundledIssueCommentFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundledIssueCommentManifestPath) -and (Test-Path -LiteralPath $bundledIssueCommentPostCommandsPath) -and (Test-Path -LiteralPath $bundledIssueCommentPublishPreviewPath)) {
     $bundledIssueCommentManifest = @(Import-Csv -LiteralPath $bundledIssueCommentManifestPath)
     $bundledManifestText = Get-Content -LiteralPath $bundledIssueCommentManifestPath -Raw
     $bundledPostCommandText = Get-Content -LiteralPath $bundledIssueCommentPostCommandsPath -Raw
+    $bundledPublishPreviewRows = @(Import-Csv -LiteralPath $bundledIssueCommentPublishPreviewPath)
+    $bundledPublishPreviewText = Get-Content -LiteralPath $bundledIssueCommentPublishPreviewPath -Raw
     $hasRawPathColumn = ($bundledManifestText -like '*OutputPath*')
-    $hasRunRootLeak = ($bundledManifestText -like "*$RunRoot*" -or $bundledPostCommandText -like "*$RunRoot*")
+    $hasRunRootLeak = ($bundledManifestText -like "*$RunRoot*" -or $bundledPostCommandText -like "*$RunRoot*" -or $bundledPublishPreviewText -like "*$RunRoot*")
     $hasRelativeBodyFiles = ($bundledPostCommandText -like '*--body-file "issue_comments/issue-1-lab-fixture-live-proof.md"*' -and $bundledPostCommandText -like '*--body-file "issue_comments/issue-6-dashboard-live-proof.md"*')
+    $previewBodyFiles = @($bundledPublishPreviewRows | ForEach-Object { [string]$_.BodyFile })
+    $hasRelativePublishBodyFiles = ($previewBodyFiles -contains 'issue_comments/issue-1-lab-fixture-live-proof.md' -and $previewBodyFiles -contains 'issue_comments/issue-6-dashboard-live-proof.md')
+    $nonDryRunBundledPreviewRows = @($bundledPublishPreviewRows | Where-Object { [string]$_.Status -ne 'DryRun' })
     $diagnosticsIssueCommentCount = 0
     $diagnosticsIssueCommentsIncluded = $false
+    $diagnosticsPublishPreviewIncluded = $false
+    $diagnosticsPublishPreviewRowCount = 0
     if (Test-Path -LiteralPath $labRunDiagnosticsPath) {
         try {
             $diagnosticsForIssueComments = Get-Content -LiteralPath $labRunDiagnosticsPath -Raw | ConvertFrom-Json
             if ($diagnosticsForIssueComments.PSObject.Properties['IssueComments']) {
                 $diagnosticsIssueCommentCount = [int]$diagnosticsForIssueComments.IssueComments.CommentCount
                 $diagnosticsIssueCommentsIncluded = ([string]$diagnosticsForIssueComments.IssueComments.Included -eq 'True')
+                $diagnosticsPublishPreviewIncluded = ([string]$diagnosticsForIssueComments.IssueComments.PublishPreviewIncluded -eq 'True')
+                $diagnosticsPublishPreviewRowCount = [int]$diagnosticsForIssueComments.IssueComments.PublishPreviewRowCount
             }
         }
         catch {
             $diagnosticsIssueCommentCount = 0
             $diagnosticsIssueCommentsIncluded = $false
+            $diagnosticsPublishPreviewIncluded = $false
+            $diagnosticsPublishPreviewRowCount = 0
         }
     }
-    $bundledIssueCommentsPassed = ($bundledIssueCommentManifest.Count -ge 4 -and -not $hasRawPathColumn -and -not $hasRunRootLeak -and $hasRelativeBodyFiles -and $diagnosticsIssueCommentsIncluded -and $diagnosticsIssueCommentCount -ge 4)
-    $bundledIssueCommentDetail = 'BundledIssueCommentPath={0}; ManifestRows={1}; Missing={2}; HasRawPathColumn={3}; HasRunRootLeak={4}; DiagnosticsCount={5}' -f $bundledIssueCommentPath, $bundledIssueCommentManifest.Count, ($missingBundledIssueCommentFiles -join ', '), $hasRawPathColumn, $hasRunRootLeak, $diagnosticsIssueCommentCount
+    $bundledIssueCommentsPassed = ($bundledIssueCommentManifest.Count -ge 4 -and $bundledPublishPreviewRows.Count -ge 4 -and $nonDryRunBundledPreviewRows.Count -eq 0 -and -not $hasRawPathColumn -and -not $hasRunRootLeak -and $hasRelativeBodyFiles -and $hasRelativePublishBodyFiles -and $diagnosticsIssueCommentsIncluded -and $diagnosticsIssueCommentCount -ge 4 -and $diagnosticsPublishPreviewIncluded -and $diagnosticsPublishPreviewRowCount -ge 4)
+    $bundledIssueCommentDetail = 'BundledIssueCommentPath={0}; ManifestRows={1}; PublishPreviewRows={2}; Missing={3}; HasRawPathColumn={4}; HasRunRootLeak={5}; DiagnosticsCount={6}; DiagnosticsPublishPreviewRows={7}' -f $bundledIssueCommentPath, $bundledIssueCommentManifest.Count, $bundledPublishPreviewRows.Count, ($missingBundledIssueCommentFiles -join ', '), $hasRawPathColumn, $hasRunRootLeak, $diagnosticsIssueCommentCount, $diagnosticsPublishPreviewRowCount
 }
 else {
     $bundledIssueCommentDetail = 'BundledIssueCommentPath={0}; Missing={1}' -f $bundledIssueCommentPath, ($missingBundledIssueCommentFiles -join ', ')

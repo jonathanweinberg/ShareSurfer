@@ -221,6 +221,8 @@ function New-ShareSurferSupportBundleLabRunEvidence {
     $issueCommentCount = 0
     $issueCommentManifestIncluded = $false
     $issueCommentPostCommandsIncluded = $false
+    $issueCommentPublishPreviewIncluded = $false
+    $issueCommentPublishPreviewRowCount = 0
     $preflightRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-preflight.csv') -DestinationPath (Join-Path $BundlePath 'lab_preflight.csv') -RedactColumns @('Evidence') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($preflightRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_preflight.csv'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_preflight.csv') -FileName 'lab_preflight.csv' -RowCount $preflightRows.Count))
@@ -288,6 +290,7 @@ function New-ShareSurferSupportBundleLabRunEvidence {
             $issueCommentCount++
         }
 
+        $repository = 'jonathanweinberg/ShareSurfer'
         $issueCommentManifestPath = Join-Path $issueCommentSourceDirectory 'issue-comment-manifest.csv'
         if (Test-Path -LiteralPath $issueCommentManifestPath) {
             $manifestRows = @(Import-Csv -LiteralPath $issueCommentManifestPath)
@@ -308,7 +311,6 @@ function New-ShareSurferSupportBundleLabRunEvidence {
             [void]$includedFiles.Add('issue_comments/issue_comment_manifest.csv')
             $issueCommentManifestIncluded = $true
 
-            $repository = 'jonathanweinberg/ShareSurfer'
             $sourcePostCommandsPath = Join-Path $issueCommentSourceDirectory 'post-commands.txt'
             if (Test-Path -LiteralPath $sourcePostCommandsPath) {
                 $sourceCommandText = Get-Content -LiteralPath $sourcePostCommandsPath -Raw -ErrorAction SilentlyContinue
@@ -327,6 +329,40 @@ function New-ShareSurferSupportBundleLabRunEvidence {
                 [void]$includedFiles.Add('issue_comments/post_commands.txt')
                 $issueCommentPostCommandsIncluded = $true
             }
+        }
+
+        $publishPreviewSourcePath = Join-Path $RunRoot 'issue-comment-publish-preview.csv'
+        if (Test-Path -LiteralPath $publishPreviewSourcePath) {
+            $previewRows = @(Import-Csv -LiteralPath $publishPreviewSourcePath)
+            $safePreviewRows = foreach ($row in @($previewRows)) {
+                $bodyFile = [string]$row.BodyFile
+                $bodyLeaf = if ([string]::IsNullOrWhiteSpace($bodyFile)) { '' } else { Split-Path -Leaf $bodyFile }
+                $bundledBodyFile = if ([string]::IsNullOrWhiteSpace($bodyLeaf)) { '' } else { 'issue_comments/{0}' -f $bodyLeaf }
+                $issueNumber = [string]$row.IssueNumber
+                $command = if ([string]::IsNullOrWhiteSpace($issueNumber) -or [string]::IsNullOrWhiteSpace($bundledBodyFile)) {
+                    ''
+                }
+                else {
+                    'gh issue comment {0} --repo {1} --body-file "{2}"' -f $issueNumber, $repository, $bundledBodyFile
+                }
+
+                [pscustomobject]@{
+                    IssueNumber = $issueNumber
+                    BodyFile = $bundledBodyFile
+                    Status = [string]$row.Status
+                    Command = $command
+                    PostedUrl = [string]$row.PostedUrl
+                    ReadbackVerified = [string]$row.ReadbackVerified
+                    Detail = [string]$row.Detail
+                }
+            }
+
+            $bundlePublishPreviewPath = Join-Path $issueCommentBundleDirectory 'publish_preview.csv'
+            @($safePreviewRows) | Export-Csv -LiteralPath $bundlePublishPreviewPath -NoTypeInformation -Encoding UTF8
+            [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $bundlePublishPreviewPath -FileName 'issue_comments/publish_preview.csv' -RowCount @($safePreviewRows).Count))
+            [void]$includedFiles.Add('issue_comments/publish_preview.csv')
+            $issueCommentPublishPreviewIncluded = $true
+            $issueCommentPublishPreviewRowCount = @($safePreviewRows).Count
         }
     }
 
@@ -372,6 +408,8 @@ function New-ShareSurferSupportBundleLabRunEvidence {
             CommentCount = [int]$issueCommentCount
             ManifestIncluded = [bool]$issueCommentManifestIncluded
             PostCommandsIncluded = [bool]$issueCommentPostCommandsIncluded
+            PublishPreviewIncluded = [bool]$issueCommentPublishPreviewIncluded
+            PublishPreviewRowCount = [int]$issueCommentPublishPreviewRowCount
         }
         Notes = @(
             'This file summarizes lab validation evidence from redacted bundle artifacts.',
