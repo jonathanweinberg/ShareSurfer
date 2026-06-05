@@ -171,13 +171,14 @@ New-ShareSurferSupportBundle `
 
 Use the report dashboard as a triage guide, not as the only source of truth.
 
+- Start in `What Needs Review First` when briefing business owners. Select a packet row to focus the Review Workbench by business unit, owner, and risk.
 - `shares` and `items` show the collected scope and whether data was partial. A partial share can mean an unresolved target path, missing share-level permission proof, failed folder enumeration, or ACL read errors; check `PartialReason` and the `CollectionError` findings before treating the scan as complete.
 - `share_permissions` and `acl_entries` show the two permission layers that determine effective access.
 - `conflicts` highlight mismatches such as NTFS identities that are not granted through the share gate.
 - `findings` highlight migration and governance risks such as broken inheritance, deep explicit ACEs, and long paths.
 - `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, and where the owner sits in the organization.
-- Start with the executive summary, Review Workbench, Migration Discovery, Direct Access Review table, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
+- Start with the executive summary, What Needs Review First queue, Review Workbench, Migration Discovery, Direct Access Review table, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
 - Use Migration Discovery before migration planning to find shares, folders, and files that appear to belong together by owner, business unit, path pattern, shared permission group, or review-risk signal.
 - Use the business-unit, data-owner, and review-risk filters to narrow mapped findings and conflicts before sending review queues to business owners.
 - Use the visual risk rollups to quickly filter the dashboard by finding type, conflict type, owner, or business unit before opening the detailed rows.
