@@ -87,11 +87,12 @@ For the enterprise profile, add:
   -RequireLiveEvidence
 ```
 
-Before creating an enterprise lab, run the same command with `-PreflightOnly`. This writes `lab-plan.json`, `owner-mapping.csv`, and `lab-preflight.csv`, then stops before creating AD objects, SMB shares, files, reports, scans, or support bundles.
+Before creating an enterprise lab, run the same command with `-PreflightOnly -CreateLab`. The `-CreateLab` switch tells preflight to check creation blockers such as target-volume free space, AD name collisions, and SMB share path collisions. `-PreflightOnly` still stops before creating AD objects, SMB shares, files, reports, scans, or support bundles.
 
 ```powershell
 .\scripts\Invoke-ShareSurferLabValidation.ps1 `
   -PreflightOnly `
+  -CreateLab `
   -LabRoot 'C:\ShareSurferLab' `
   -OutputRoot 'C:\ShareSurfer\lab-validation' `
   -DomainNetBiosName 'CONTOSO' `

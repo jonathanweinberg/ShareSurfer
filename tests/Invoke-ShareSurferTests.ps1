@@ -2267,12 +2267,17 @@ $tests = @(
             $labReadinessText = Get-Content -LiteralPath $labReadinessChecklist -Raw
             Assert-True ($labReadinessText -like '*Run Preflight First*') 'Lab readiness checklist should tell operators to run preflight first.'
             Assert-True ($labReadinessText -like '*-PreflightOnly*') 'Lab readiness checklist should include the preflight-only command.'
+            Assert-True ($labReadinessText -like '*-CreateLab*') 'Lab readiness checklist should run preflight in lab-creation mode.'
+            Assert-True ($labReadinessText -like '*checks the same creation blockers*') 'Lab readiness checklist should explain why preflight includes CreateLab.'
             Assert-True ($labReadinessText -like '*-Scale Enterprise*') 'Lab readiness checklist should include the enterprise validation command.'
             Assert-True ($labReadinessText -like '*v1-acceptance-summary.json*') 'Lab readiness checklist should explain the concise acceptance artifact.'
             Assert-True ($labReadinessText -like '*issue-summary.md*') 'Lab readiness checklist should explain the public-safe issue summary artifact.'
             Assert-True ($labReadinessText -like '*support-bundle-redacted*') 'Lab readiness checklist should explain the redacted support bundle artifact.'
             Assert-True ($labReadinessText -like '*Go Gates*') 'Lab readiness checklist should include go gates.'
             Assert-True ($labReadinessText -like '*Stop Gates*') 'Lab readiness checklist should include stop gates.'
+            $operatorWorkflowText = Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
+            Assert-True ($operatorWorkflowText -like '*-PreflightOnly -CreateLab*') 'Operator workflow should tell lab operators to run creation-mode preflight before creating enterprise fixtures.'
+            Assert-True ($operatorWorkflowText -like '*target-volume free space*') 'Operator workflow should explain creation-mode preflight blockers.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
