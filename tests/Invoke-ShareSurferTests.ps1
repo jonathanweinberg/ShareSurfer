@@ -653,6 +653,7 @@ $tests = @(
             }
 
             try {
+                . (Join-Path $repoRoot 'src/ShareSurfer/Private/Initialize-ShareSurferLabDirectoryObjects.ps1')
                 function global:Get-ADRootDSE {
                     [pscustomobject]@{ schemaNamingContext = 'CN=Schema,CN=Configuration,DC=example,DC=test' }
                 }
@@ -665,6 +666,9 @@ $tests = @(
 
                     if ($LDAPFilter -like '*attributeSchema*info*') {
                         return [pscustomobject]@{ lDAPDisplayName = 'info' }
+                    }
+                    if ($LDAPFilter -like '*attributeSchema*employeeNumber*') {
+                        return $null
                     }
                     if ($LDAPFilter -like '*attributeSchema*extensionAttribute10*') {
                         return $null
@@ -693,6 +697,8 @@ $tests = @(
                 $missingSchemaResult = Test-ShareSurferLabValidationObsAttributeSchema -Plan $missingSchemaPlan
                 Assert-True (-not [bool]$missingSchemaResult.Passed) 'OBS attribute schema helper should fail when the selected attribute is absent from the AD schema.'
                 Assert-True ([string]$missingSchemaResult.Evidence -like '*AttributeExists=False*') 'OBS attribute schema evidence should show when the selected attribute is absent.'
+                Assert-True (Test-ShareSurferLabUserAttributeAllowed -AttributeName 'info') 'Lab directory helper should detect optional user attributes allowed through inherited schema classes.'
+                Assert-True (-not (Test-ShareSurferLabUserAttributeAllowed -AttributeName 'employeeNumber')) 'Lab directory helper should treat employeeNumber as optional when it is absent from the schema.'
 
                 $obsSchemaPreflight = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $labRoot -RunRoot $exportPath -CreateLab -IncludeFiles | Where-Object { $_.Name -eq 'ObsAttributeSchema' })[0]
                 Assert-True (-not [bool]$obsSchemaPreflight.Passed) 'CreateLab preflight should block when the configured OBS attribute is absent from the AD schema.'
@@ -1099,6 +1105,61 @@ $tests = @(
             $dnResolverScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Resolve-ShareSurferDistinguishedNameIdentity.ps1') -Raw
             foreach ($propertyName in @('userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'userAccountControl', 'distinguishedName')) {
                 Assert-True ($dnResolverScript -like ('*{0}*' -f $propertyName)) ('LDAP DN member resolution should load {0} for group-expanded identity correlation.' -f $propertyName)
+            }
+        }
+    },
+    @{
+        Name = 'ActiveDirectory identity lookup retries when optional employeeNumber is absent'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferIdentityName.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferIdentityDomain.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferDirectoryIdentity.ps1')
+
+            try {
+                $script:adUserLookupPropertySets = @()
+                function global:Get-ADUser {
+                    param(
+                        [string] $Identity,
+                        [string[]] $Properties
+                    )
+
+                    $script:adUserLookupPropertySets += ,@($Properties)
+                    if (@($Properties | Where-Object { $_ -eq 'employeeNumber' }).Count -gt 0) {
+                        throw 'The specified directory service attribute or value does not exist: employeeNumber'
+                    }
+
+                    [pscustomobject]@{
+                        SamAccountName = $Identity
+                        DisplayName = 'Ava Accounting'
+                        EmployeeID = 'E1001'
+                        UserPrincipalName = 'ava.accounting@example.test'
+                        Mail = 'ava.accounting@example.test'
+                        Department = 'Accounts Payable'
+                        Title = 'Accounting Analyst'
+                        Company = 'Contoso Finance'
+                        physicalDeliveryOfficeName = 'HQ-4'
+                        Enabled = $true
+                        Manager = ''
+                        extensionAttribute10 = 'CORP.FIN.AP'
+                        DistinguishedName = 'CN=Ava Accounting,OU=ShareSurferLab,DC=example,DC=test'
+                    }
+                }
+                function global:Get-ADGroup {
+                    throw 'User lookup should succeed before group fallback.'
+                }
+
+                $identity = Get-ShareSurferDirectoryIdentity -Identity 'CONTOSO\Ava.Accounting' -ObsAttribute 'extensionAttribute10' -AdLookupMode ActiveDirectory
+                Assert-Equal $identity.EmployeeId 'E1001' 'AD identity lookup should preserve employeeID when employeeNumber is unavailable.'
+                Assert-Equal $identity.EmployeeNumber '' 'AD identity lookup should leave employeeNumber blank when the schema rejects it.'
+                Assert-Equal $identity.ObsPath 'CORP.FIN.AP' 'AD identity lookup should preserve the selected OBS attribute after retrying without employeeNumber.'
+                Assert-True ($script:adUserLookupPropertySets.Count -ge 2) 'AD identity lookup should retry after removing an optional rejected property.'
+                Assert-True (@($script:adUserLookupPropertySets[-1] | Where-Object { $_ -eq 'employeeNumber' }).Count -eq 0) 'AD identity retry should omit employeeNumber after the schema rejects it.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-ADUser -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ADGroup -ErrorAction SilentlyContinue
+                Remove-Variable -Name adUserLookupPropertySets -Scope Script -ErrorAction SilentlyContinue
             }
         }
     },

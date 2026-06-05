@@ -23,7 +23,7 @@ function Get-ShareSurferDirectoryIdentity {
     if ($AdLookupMode -ne 'Ldap' -and $null -ne $getAdUser -and $null -ne $getAdGroup) {
         try {
             $properties = @('employeeID', 'employeeNumber', 'manager', 'displayName', 'userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'distinguishedName', $ObsAttribute)
-            $user = Get-ADUser -Identity $sam -Properties $properties -ErrorAction Stop
+            $user = Get-ShareSurferAdUserWithOptionalProperties -SamAccountName $sam -Properties $properties -OptionalProperties @('employeeNumber', $ObsAttribute)
             $managerLevel1 = ''
             $managerLevel2 = ''
             if ($user.Manager) {
@@ -44,8 +44,8 @@ function Get-ShareSurferDirectoryIdentity {
                 SamAccountName = [string]$user.SamAccountName
                 DisplayName = [string]$user.DisplayName
                 ObjectClass = 'user'
-                EmployeeId = [string]$user.EmployeeID
-                EmployeeNumber = [string]$user.employeeNumber
+                EmployeeId = Get-ShareSurferAdObjectPropertyValue -Object $user -Name 'EmployeeID'
+                EmployeeNumber = Get-ShareSurferAdObjectPropertyValue -Object $user -Name 'employeeNumber'
                 UserPrincipalName = [string]$user.UserPrincipalName
                 Mail = [string]$user.Mail
                 Department = [string]$user.Department
@@ -56,7 +56,7 @@ function Get-ShareSurferDirectoryIdentity {
                 Manager = [string]$user.Manager
                 ManagerLevel1 = $managerLevel1
                 ManagerLevel2 = $managerLevel2
-                ObsPath = [string]$user.$ObsAttribute
+                ObsPath = Get-ShareSurferAdObjectPropertyValue -Object $user -Name $ObsAttribute
                 ObsAttribute = $ObsAttribute
                 Members = @()
                 DistinguishedName = [string]$user.DistinguishedName
@@ -64,7 +64,7 @@ function Get-ShareSurferDirectoryIdentity {
         }
         catch {
             try {
-                $group = Get-ADGroup -Identity $sam -Properties displayName, mail, managedBy, description, distinguishedName, $ObsAttribute -ErrorAction Stop
+                $group = Get-ShareSurferAdGroupWithOptionalProperties -SamAccountName $sam -Properties @('displayName', 'mail', 'managedBy', 'description', 'distinguishedName', $ObsAttribute) -OptionalProperties @($ObsAttribute)
                 $members = @()
                 if ($null -ne $getAdGroupMember) {
                     $members = @(Get-ADGroupMember -Identity $group.SamAccountName -ErrorAction SilentlyContinue | ForEach-Object {
@@ -94,7 +94,7 @@ function Get-ShareSurferDirectoryIdentity {
                     Manager = [string]$group.ManagedBy
                     ManagerLevel1 = [string]$group.ManagedBy
                     ManagerLevel2 = ''
-                    ObsPath = [string]$group.$ObsAttribute
+                    ObsPath = Get-ShareSurferAdObjectPropertyValue -Object $group -Name $ObsAttribute
                     ObsAttribute = $ObsAttribute
                     Members = @($members)
                     DistinguishedName = [string]$group.DistinguishedName
@@ -145,4 +145,85 @@ function Get-ShareSurferDirectoryIdentity {
     catch {
         $null
     }
+}
+
+function Get-ShareSurferAdUserWithOptionalProperties {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SamAccountName,
+
+        [string[]] $Properties = @(),
+
+        [string[]] $OptionalProperties = @()
+    )
+
+    Invoke-ShareSurferAdLookupWithOptionalProperties -CommandName 'Get-ADUser' -Identity $SamAccountName -Properties $Properties -OptionalProperties $OptionalProperties
+}
+
+function Get-ShareSurferAdGroupWithOptionalProperties {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SamAccountName,
+
+        [string[]] $Properties = @(),
+
+        [string[]] $OptionalProperties = @()
+    )
+
+    Invoke-ShareSurferAdLookupWithOptionalProperties -CommandName 'Get-ADGroup' -Identity $SamAccountName -Properties $Properties -OptionalProperties $OptionalProperties
+}
+
+function Invoke-ShareSurferAdLookupWithOptionalProperties {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Get-ADUser', 'Get-ADGroup')]
+        [string] $CommandName,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Identity,
+
+        [string[]] $Properties = @(),
+
+        [string[]] $OptionalProperties = @()
+    )
+
+    $remainingProperties = @($Properties | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $remainingOptional = @($OptionalProperties | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    while ($true) {
+        try {
+            if ($remainingProperties.Count -gt 0) {
+                return & $CommandName -Identity $Identity -Properties $remainingProperties -ErrorAction Stop
+            }
+
+            return & $CommandName -Identity $Identity -ErrorAction Stop
+        }
+        catch {
+            if ($remainingOptional.Count -eq 0) {
+                throw
+            }
+
+            $propertyToRemove = [string]$remainingOptional[0]
+            $remainingOptional = @($remainingOptional | Select-Object -Skip 1)
+            $remainingProperties = @($remainingProperties | Where-Object { $_ -ne $propertyToRemove })
+        }
+    }
+}
+
+function Get-ShareSurferAdObjectPropertyValue {
+    param(
+        $Object,
+
+        [string] $Name = ''
+    )
+
+    if ($null -eq $Object -or [string]::IsNullOrWhiteSpace($Name)) {
+        return ''
+    }
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return ''
+    }
+
+    [string]$property.Value
 }
