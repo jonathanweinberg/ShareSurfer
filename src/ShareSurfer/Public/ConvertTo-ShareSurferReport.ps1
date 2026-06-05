@@ -159,6 +159,62 @@ function ConvertTo-ShareSurferReport {
       border-color: var(--accent);
       color: #ffffff;
     }
+    .filter-state {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    .filter-state-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .filter-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-height: 30px;
+    }
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 280px;
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 5px 9px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    .filter-chip span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .filter-chip button {
+      border: 0;
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: 1px 6px;
+      min-width: 20px;
+      font-size: 12px;
+      line-height: 18px;
+    }
+    .filter-chip-clear {
+      background: transparent;
+      color: var(--accent);
+      border-color: var(--accent);
+    }
     .summary {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -445,6 +501,10 @@ function ConvertTo-ShareSurferReport {
         <button type="button" data-view="org" aria-selected="false">Org & Logs</button>
         <button type="button" data-view="raw" aria-selected="false">Raw Evidence</button>
       </nav>
+      <div class="filter-state" aria-live="polite">
+        <span class="filter-state-label">Active Context</span>
+        <div class="filter-chips" id="active-filter-chips"></div>
+      </div>
     </section>
 
     <section class="view-panel active" id="view-overview" data-panel="overview">
@@ -923,6 +983,8 @@ function ConvertTo-ShareSurferReport {
     }
     const itemById = new Map(data.items.map(item => [String(item.ItemId || ''), item]));
     const shareById = new Map(data.shares.map(share => [String(share.ShareId || ''), share]));
+    const dashboardStateKey = 'ShareSurferDashboardState';
+    let activeDashboardView = 'overview';
     function getDashboardFilterState() {
       return {
         query: document.getElementById('filter').value.toLowerCase(),
@@ -1113,6 +1175,131 @@ function ConvertTo-ShareSurferReport {
       if (state.riskLevel) { labels.push('Review Risk: ' + state.riskLevel); }
       if (state.query) { labels.push('Search: ' + state.query); }
       document.getElementById('active-filter-note').textContent = labels.length > 0 ? ('Active dashboard filters: ' + labels.join('; ')) : 'Showing all owner and business-unit review rows.';
+    }
+    function createFilterChip(label, value, key) {
+      const chip = document.createElement('div');
+      chip.className = 'filter-chip';
+      const text = document.createElement('span');
+      text.textContent = label + ': ' + value;
+      chip.appendChild(text);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'x';
+      button.setAttribute('aria-label', 'Clear ' + label + ' filter');
+      button.addEventListener('click', () => clearDashboardFilter(key));
+      chip.appendChild(button);
+      return chip;
+    }
+    function renderActiveFilterChips(state) {
+      const target = document.getElementById('active-filter-chips');
+      if (!target) { return; }
+      target.textContent = '';
+      const chips = [];
+      if (state.query) { chips.push(createFilterChip('Search', state.query, 'query')); }
+      if (state.businessUnit) { chips.push(createFilterChip('Business Unit', state.businessUnit, 'businessUnit')); }
+      if (state.owner) { chips.push(createFilterChip('Data Owner', state.owner, 'owner')); }
+      if (state.riskLevel) { chips.push(createFilterChip('Review Risk', state.riskLevel, 'riskLevel')); }
+      if (chips.length === 0) {
+        const empty = document.createElement('span');
+        empty.className = 'note';
+        empty.textContent = 'No filters applied.';
+        target.appendChild(empty);
+        return;
+      }
+      chips.forEach(chip => target.appendChild(chip));
+      const clearAll = document.createElement('button');
+      clearAll.type = 'button';
+      clearAll.className = 'filter-chip filter-chip-clear';
+      clearAll.textContent = 'Clear all';
+      clearAll.addEventListener('click', clearAllDashboardFilters);
+      target.appendChild(clearAll);
+    }
+    function clearDashboardFilter(key) {
+      if (key === 'query') { document.getElementById('filter').value = ''; }
+      if (key === 'businessUnit') { document.getElementById('business-unit-filter').value = ''; }
+      if (key === 'owner') { document.getElementById('owner-filter').value = ''; }
+      if (key === 'riskLevel') { document.getElementById('risk-filter').value = ''; }
+      applyFilter();
+    }
+    function clearAllDashboardFilters() {
+      document.getElementById('filter').value = '';
+      document.getElementById('business-unit-filter').value = '';
+      document.getElementById('owner-filter').value = '';
+      document.getElementById('risk-filter').value = '';
+      applyFilter();
+      document.getElementById('filter').focus();
+    }
+    function getPersistedDashboardState(viewName) {
+      const state = getDashboardFilterState();
+      const rawDataset = document.getElementById('raw-dataset-filter').value || '';
+      return {
+        view: viewName || activeDashboardView || 'overview',
+        query: state.query || '',
+        businessUnit: state.businessUnit || '',
+        owner: state.owner || '',
+        riskLevel: state.riskLevel || '',
+        rawDataset: rawDataset
+      };
+    }
+    function saveDashboardState(viewName) {
+      const state = getPersistedDashboardState(viewName);
+      try {
+        window.localStorage.setItem(dashboardStateKey, JSON.stringify(state));
+      } catch (error) {}
+      try {
+        const params = new URLSearchParams();
+        if (state.view && state.view !== 'overview') { params.set('view', state.view); }
+        if (state.query) { params.set('q', state.query); }
+        if (state.businessUnit) { params.set('bu', state.businessUnit); }
+        if (state.owner) { params.set('owner', state.owner); }
+        if (state.riskLevel) { params.set('risk', state.riskLevel); }
+        if (state.rawDataset && activeDashboardView === 'raw') { params.set('raw', state.rawDataset); }
+        const nextHash = params.toString() ? ('#' + params.toString()) : '';
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, document.title, window.location.pathname + window.location.search + nextHash);
+        }
+      } catch (error) {}
+    }
+    function readDashboardStateFromHash() {
+      const hash = String(window.location.hash || '').replace(/^#/, '');
+      if (!hash || hash.indexOf('=') === -1) { return {}; }
+      try {
+        const params = new URLSearchParams(hash);
+        return {
+          view: params.get('view') || '',
+          query: params.get('q') || '',
+          businessUnit: params.get('bu') || '',
+          owner: params.get('owner') || '',
+          riskLevel: params.get('risk') || '',
+          rawDataset: params.get('raw') || ''
+        };
+      } catch (error) {
+        return {};
+      }
+    }
+    function readSavedDashboardState() {
+      const hashState = readDashboardStateFromHash();
+      if (Object.keys(hashState).some(key => hashState[key])) { return hashState; }
+      try {
+        const rawState = window.localStorage.getItem(dashboardStateKey);
+        return rawState ? JSON.parse(rawState) : {};
+      } catch (error) {
+        return {};
+      }
+    }
+    function isKnownDashboardView(viewName) {
+      return Array.from(document.querySelectorAll('[data-view]')).some(button => button.dataset.view === viewName);
+    }
+    function restoreDashboardState() {
+      const state = readSavedDashboardState();
+      document.getElementById('filter').value = String(state.query || '');
+      setSelectValueIfPresent('business-unit-filter', state.businessUnit);
+      setSelectValueIfPresent('owner-filter', state.owner);
+      setSelectValueIfPresent('risk-filter', state.riskLevel);
+      setSelectValueIfPresent('raw-dataset-filter', state.rawDataset);
+      const requestedView = String(state.view || 'overview');
+      activeDashboardView = isKnownDashboardView(requestedView) ? requestedView : 'overview';
+      return activeDashboardView;
     }
     function setWorkbenchStat(target, label, value) {
       const wrapper = document.createElement('div');
@@ -1705,6 +1892,7 @@ function ConvertTo-ShareSurferReport {
     function applyFilter() {
       const state = getDashboardFilterState();
       updateFilterNote(state);
+      renderActiveFilterChips(state);
       renderTable('findings', filterRows(data.findings, state, true));
       renderTable('finding-rollups', filterRows(finding_rollups, state, false));
       renderTable('conflicts', filterRows(data.conflicts, state, true));
@@ -1733,14 +1921,17 @@ function ConvertTo-ShareSurferReport {
       renderMigrationDiscovery(state);
       renderRawEvidence(state);
       applyGroupBrowser();
+      saveDashboardState();
     }
     function showView(viewName) {
+      activeDashboardView = viewName || 'overview';
       document.querySelectorAll('[data-panel]').forEach(panel => {
-        panel.classList.toggle('active', panel.dataset.panel === viewName);
+        panel.classList.toggle('active', panel.dataset.panel === activeDashboardView);
       });
       document.querySelectorAll('[data-view]').forEach(button => {
-        button.setAttribute('aria-selected', String(button.dataset.view === viewName));
+        button.setAttribute('aria-selected', String(button.dataset.view === activeDashboardView));
       });
+      saveDashboardState(activeDashboardView);
     }
     document.querySelectorAll('[data-view]').forEach(button => {
       button.addEventListener('click', () => showView(button.dataset.view));
@@ -1753,6 +1944,7 @@ function ConvertTo-ShareSurferReport {
     document.getElementById('raw-dataset-filter').addEventListener('change', applyFilter);
     populateDashboardFilters();
     populateRawDatasetFilter();
+    const restoredDashboardView = restoreDashboardState();
     renderSummary();
     renderBarChart('finding-chart', finding_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'warning', viewName: 'findings' });
     renderBarChart('conflict-chart', conflict_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'high', viewName: 'conflicts' });
@@ -1761,7 +1953,7 @@ function ConvertTo-ShareSurferReport {
     renderPriorityActions();
     updateOverallRisk();
     applyFilter();
-    showView('overview');
+    showView(restoredDashboardView || 'overview');
   </script>
 </body>
 </html>
