@@ -58,7 +58,7 @@ function Measure-ShareSurferLabValidationEvidence {
     $actualFileCount = $null
     $actualBytes = $null
     $actualDeepFileCount = $null
-    if ($CreateLab -and (Test-Path -LiteralPath $LabRoot)) {
+    if (Test-Path -LiteralPath $LabRoot) {
         $actualFiles = @(Get-ChildItem -LiteralPath $LabRoot -Recurse -File -ErrorAction SilentlyContinue)
         $actualFileCount = $actualFiles.Count
         $actualBytes = [int64]0
