@@ -19,7 +19,7 @@ function Get-ShareSurferLocalInventory {
         $index++
         $shareId = 'target-{0}' -f $index
         try {
-            $targetItem = Get-Item -LiteralPath $target -ErrorAction Stop
+            $targetItem = Get-Item -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $target) -ErrorAction Stop
         }
         catch {
             [void]$shares.Add([pscustomobject]@{
@@ -42,8 +42,9 @@ function Get-ShareSurferLocalInventory {
             [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolveError' -Source 'TargetPath' -ShareId $shareId -Message ('Unable to resolve target path {0}' -f $target) -Detail ([string]$_.Exception.Message)))
             continue
         }
+        $targetDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)
         $shareInfo = Get-ShareSurferTargetShareInfo -TargetPath $target -TargetItem $targetItem
-        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetItem.FullName))
+        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetDisplayPath))
         $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
         foreach ($permissionRow in $permissionRows) {
             [void]$sharePermissions.Add($permissionRow)
@@ -52,14 +53,14 @@ function Get-ShareSurferLocalInventory {
             $permissionMessage = 'Share-level permissions were not collected through Get-SmbShareAccess.'
             [void]$scanErrors.Add([pscustomobject]@{
                 ShareId = $shareId
-                FullPath = $targetItem.FullName
+                FullPath = $targetDisplayPath
                 ErrorType = 'SharePermissionCollectionUnavailable'
                 Severity = 'Warning'
                 Source = 'Get-SmbShareAccess'
                 Message = $permissionMessage
                 Detail = 'Best-effort target path scan cannot prove the share-level access gate for this share.'
             })
-            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'Get-SmbShareAccess' -ShareId $shareId -Message $permissionMessage -Detail $targetItem.FullName))
+            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'Get-SmbShareAccess' -ShareId $shareId -Message $permissionMessage -Detail $targetDisplayPath))
         }
 
         [void]$shares.Add([pscustomobject]@{
@@ -68,7 +69,7 @@ function Get-ShareSurferLocalInventory {
             ComputerName = $shareInfo.ComputerName
             ShareName = $shareInfo.ShareName
             UNCPath = $shareInfo.UNCPath
-            LocalPath = $targetItem.FullName
+            LocalPath = $targetDisplayPath
             Description = 'Best-effort target path scan'
             PartialData = ($permissionRows.Count -eq 0)
             PartialReason = if ($permissionRows.Count -eq 0) { 'Share-level permissions were not collected through Get-SmbShareAccess.' } else { '' }
@@ -76,9 +77,9 @@ function Get-ShareSurferLocalInventory {
 
         $scanItems = @($targetItem)
         $childErrors = @()
-        $children = Get-ChildItem -LiteralPath $targetItem.FullName -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable childErrors
+        $children = Get-ChildItem -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)) -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable childErrors
         foreach ($childError in $childErrors) {
-            $errorPath = Get-ShareSurferCollectionErrorPath -ErrorRecord $childError -FallbackPath $targetItem.FullName
+            $errorPath = ConvertFrom-ShareSurferFilesystemPath -Path (Get-ShareSurferCollectionErrorPath -ErrorRecord $childError -FallbackPath $targetDisplayPath)
             [void]$scanErrors.Add([pscustomobject]@{
                 ShareId = $shareId
                 FullPath = $errorPath
@@ -86,7 +87,7 @@ function Get-ShareSurferLocalInventory {
                 Severity = 'Warning'
                 Source = 'Get-ChildItem'
                 Message = [string]$childError.Exception.Message
-                Detail = ('FallbackPath={0}' -f $targetItem.FullName)
+                Detail = ('FallbackPath={0}' -f $targetDisplayPath)
             })
             [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'EnumerationError' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Unable to enumerate child path {0}' -f $errorPath) -Detail ([string]$childError.Exception.Message)))
         }
@@ -97,7 +98,8 @@ function Get-ShareSurferLocalInventory {
         }
 
         foreach ($scanItem in $scanItems) {
-            $relative = $scanItem.FullName.Substring($targetItem.FullName.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+            $scanItemDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$scanItem.FullName)
+            $relative = $scanItemDisplayPath.Substring($targetDisplayPath.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
             $depth = 0
             if ($relative -ne '') {
                 $depth = @($relative -split '[\\/]' | Where-Object { $_ -ne '' }).Count
@@ -109,17 +111,17 @@ function Get-ShareSurferLocalInventory {
 
             if ($null -ne $getAcl) {
                 try {
-                    $acl = Get-Acl -LiteralPath $scanItem.FullName -ErrorAction Stop
+                    $acl = Get-Acl -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path ([string]$scanItem.FullName)) -ErrorAction Stop
                     $owner = $acl.Owner
                     $inheritanceEnabled = -not $acl.AreAccessRulesProtected
                     if ($acl.AreAccessRulesProtected) {
-                        $inheritanceBrokenAt = $scanItem.FullName
+                        $inheritanceBrokenAt = $scanItemDisplayPath
                     }
                     foreach ($access in $acl.Access) {
                         [void]$aclEntries.Add([pscustomobject]@{
                             ItemId = $itemId
                             ShareId = $shareId
-                            FullPath = $scanItem.FullName
+                            FullPath = $scanItemDisplayPath
                             Identity = [string]$access.IdentityReference
                             Rights = [string]$access.FileSystemRights
                             AccessControlType = [string]$access.AccessControlType
@@ -133,7 +135,7 @@ function Get-ShareSurferLocalInventory {
                 catch {
                     [void]$scanErrors.Add([pscustomobject]@{
                         ShareId = $shareId
-                        FullPath = $scanItem.FullName
+                        FullPath = $scanItemDisplayPath
                         ErrorType = 'AclReadError'
                         Message = [string]$_.Exception.Message
                     })
@@ -145,7 +147,7 @@ function Get-ShareSurferLocalInventory {
                 ItemId = $itemId
                 ShareId = $shareId
                 ItemType = if ($scanItem.PSIsContainer) { 'Directory' } else { 'File' }
-                FullPath = $scanItem.FullName
+                FullPath = $scanItemDisplayPath
                 RelativePath = $relative
                 Depth = $depth
                 Owner = $owner

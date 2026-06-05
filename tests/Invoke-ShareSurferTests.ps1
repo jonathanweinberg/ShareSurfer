@@ -999,10 +999,33 @@ $tests = @(
             } $fallbackPath
             Assert-Equal $fallbackResolvedPath $fallbackPath 'Enumeration diagnostics should fall back to the scanned target root when no child target is available.'
 
+            $extendedDrivePath = & $module {
+                ConvertTo-ShareSurferFilesystemPath -Path 'C:\ShareSurferLab\Finance'
+            }
+            Assert-Equal $extendedDrivePath '\\?\C:\ShareSurferLab\Finance' 'Filesystem helper should convert local Windows paths to extended-length paths for collector access.'
+            $extendedUncPath = & $module {
+                ConvertTo-ShareSurferFilesystemPath -Path '\\files01\Finance'
+            }
+            Assert-Equal $extendedUncPath '\\?\UNC\files01\Finance' 'Filesystem helper should convert UNC paths to extended-length UNC paths for collector access.'
+            $displayDrivePath = & $module {
+                ConvertFrom-ShareSurferFilesystemPath -Path '\\?\C:\ShareSurferLab\Finance'
+            }
+            Assert-Equal $displayDrivePath 'C:\ShareSurferLab\Finance' 'Filesystem helper should restore display paths before export.'
+            $displayUncPath = & $module {
+                ConvertFrom-ShareSurferFilesystemPath -Path '\\?\UNC\files01\Finance'
+            }
+            Assert-Equal $displayUncPath '\\files01\Finance' 'Filesystem helper should restore display UNC paths before export.'
+
             $localScannerText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferLocalInventory.ps1') -Raw
+            $smbScannerText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferSmbShareInventory.ps1') -Raw
             Assert-True ($localScannerText -like '*Get-ShareSurferCollectionErrorPath -ErrorRecord $childError*') 'Local scanner should use the collection-error path resolver for enumeration errors.'
             Assert-True ($localScannerText -like '*Source = ''Get-ChildItem''*') 'Local scanner should identify Get-ChildItem as the source for enumeration error rows.'
             Assert-True ($localScannerText -like '*EventType ''EnumerationError''*') 'Local scanner should record enumeration errors as scan events for diagnostics.'
+            Assert-True ($localScannerText -like '*ConvertTo-ShareSurferFilesystemPath -Path $target*') 'Local scanner should resolve target roots through extended-length filesystem paths.'
+            Assert-True ($localScannerText.Contains('ConvertTo-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)')) 'Local scanner should enumerate children through extended-length filesystem paths.'
+            Assert-True ($localScannerText.Contains('ConvertTo-ShareSurferFilesystemPath -Path ([string]$scanItem.FullName)')) 'Local scanner should read ACLs through extended-length filesystem paths.'
+            Assert-True ($localScannerText -like '*ConvertFrom-ShareSurferFilesystemPath*') 'Local scanner should convert internal filesystem paths back to display paths for exported rows.'
+            Assert-True ($smbScannerText -like '*Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath)*') 'SMB scanner should test local share paths through extended-length filesystem paths.'
         }
     },
     @{

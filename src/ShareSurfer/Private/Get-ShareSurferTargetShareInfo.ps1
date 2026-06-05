@@ -18,6 +18,6 @@ function Get-ShareSurferTargetShareInfo {
     [pscustomobject]@{
         ComputerName = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { [System.Environment]::MachineName }
         ShareName = $TargetItem.Name
-        UNCPath = $TargetItem.FullName
+        UNCPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$TargetItem.FullName)
     }
 }
