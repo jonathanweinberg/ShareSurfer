@@ -80,6 +80,16 @@ else {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'NormalizedCsvExport' -Passed $false -Detail ('Export path not found: {0}' -f $ExportPath)))
 }
 
+$ownerReviewPacketsPath = Join-Path $ExportPath 'owner_review_packets.csv'
+$ownerReviewPacketsPassed = $false
+$ownerReviewPacketsDetail = 'owner_review_packets.csv not found.'
+if (Test-Path -LiteralPath $ownerReviewPacketsPath) {
+    $ownerReviewPackets = @(Import-Csv -LiteralPath $ownerReviewPacketsPath)
+    $ownerReviewPacketsPassed = ($ownerReviewPackets.Count -gt 0)
+    $ownerReviewPacketsDetail = 'OwnerReviewPacketRows={0}; Path={1}' -f $ownerReviewPackets.Count, $ownerReviewPacketsPath
+}
+[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'OwnerReviewPackets' -Passed $ownerReviewPacketsPassed -Detail $ownerReviewPacketsDetail))
+
 $rawEventLogPath = Join-Path $ExportPath 'scan_events.jsonl'
 $rawEventLogPassed = (Test-Path -LiteralPath $rawEventLogPath) -and ((Get-Item -LiteralPath $rawEventLogPath).Length -gt 0)
 [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RawEventLog' -Passed $rawEventLogPassed -Detail ('Raw event log: {0}' -f $rawEventLogPath)))

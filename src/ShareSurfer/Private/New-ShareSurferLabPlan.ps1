@@ -360,6 +360,14 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes migration discovery evidence for like-owned shares, folders, and files.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseOwnerReviewPackets'
+            MinimumValue = 1
+            ActualPlanValue = @($ownerMappings).Count
+            Unit = 'owner review packets'
+            Required = $true
+            Description = 'Enterprise validation includes business-owner review packet evidence with why-review and next-action guidance.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseDiskBudget'
             MinimumValue = 1
             ActualPlanValue = if ($estimatedLabBytes -le $MaxLabBytes) { 1 } else { 0 }
