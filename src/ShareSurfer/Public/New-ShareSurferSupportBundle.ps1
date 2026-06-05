@@ -78,7 +78,7 @@ function New-ShareSurferSupportBundle {
     }
 
     $redactionAuditPath = Join-Path $OutputPath 'support_bundle_redaction_audit.csv'
-    $redactionAudit = @(New-ShareSurferRedactionAudit -ExportPath $ExportPath -BundlePath $OutputPath -Schema $schema -RedactionSalt $RedactionSalt)
+    $redactionAudit = @(New-ShareSurferRedactionAudit -ExportPath $ExportPath -BundlePath $OutputPath -Schema $schema -RedactionSalt $RedactionSalt -RunRoot $RunRoot)
     $redactionAudit | Export-Csv -LiteralPath $redactionAuditPath -NoTypeInformation -Encoding UTF8
     [void]$fileDiagnostics.Add([pscustomobject]@{
         FileName = 'support_bundle_redaction_audit.csv'
@@ -617,7 +617,9 @@ function New-ShareSurferRedactionAudit {
         [hashtable] $Schema,
 
         [Parameter(Mandatory = $true)]
-        [string] $RedactionSalt
+        [string] $RedactionSalt,
+
+        [string] $RunRoot = ''
     )
 
     $bundleFiles = @(Get-ChildItem -LiteralPath $BundlePath -File -ErrorAction SilentlyContinue | Where-Object {
@@ -662,23 +664,143 @@ function New-ShareSurferRedactionAudit {
                 }
                 $seen[$key] = $true
 
-                $leakFiles = New-Object System.Collections.ArrayList
-                foreach ($bundleFile in $bundleFiles) {
-                    $content = [string]$bundleContents[$bundleFile.Name]
-                    if ($content -ne '' -and $content.IndexOf($value, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                        [void]$leakFiles.Add($bundleFile.Name)
+                New-ShareSurferRedactionAuditRow -SourceFile $fileName -ColumnName $column -Value $value -BundleFiles $bundleFiles -BundleContents $bundleContents -RedactionSalt $RedactionSalt
+            }
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($RunRoot) -and (Test-Path -LiteralPath $RunRoot)) {
+        foreach ($sourceValue in @(Get-ShareSurferLabRunRedactionAuditValues -RunRoot $RunRoot)) {
+            $value = [string]$sourceValue.Value
+            if (-not (Test-ShareSurferRedactionAuditValue -Value $value -ColumnName ([string]$sourceValue.ColumnName))) {
+                continue
+            }
+
+            $key = '{0}|{1}|{2}' -f [string]$sourceValue.SourceFile, [string]$sourceValue.ColumnName, $value
+            if ($seen.ContainsKey($key)) {
+                continue
+            }
+            $seen[$key] = $true
+
+            New-ShareSurferRedactionAuditRow -SourceFile ([string]$sourceValue.SourceFile) -ColumnName ([string]$sourceValue.ColumnName) -Value $value -BundleFiles $bundleFiles -BundleContents $bundleContents -RedactionSalt $RedactionSalt
+        }
+    }
+}
+
+function New-ShareSurferRedactionAuditRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourceFile,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ColumnName,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Value,
+
+        [Parameter(Mandatory = $true)]
+        $BundleFiles,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable] $BundleContents,
+
+        [Parameter(Mandatory = $true)]
+        [string] $RedactionSalt
+    )
+
+    $leakFiles = New-Object System.Collections.ArrayList
+    foreach ($bundleFile in $BundleFiles) {
+        $content = [string]$BundleContents[$bundleFile.Name]
+        if ($content -ne '' -and $content.IndexOf($Value, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            [void]$leakFiles.Add($bundleFile.Name)
+        }
+    }
+
+    [pscustomobject]@{
+        SourceFile = $SourceFile
+        ColumnName = $ColumnName
+        ValueToken = Get-ShareSurferStableToken -Value $Value -Salt $RedactionSalt
+        ValueLength = $Value.Length
+        CheckedFileCount = $BundleFiles.Count
+        LeakDetected = ($leakFiles.Count -gt 0)
+        LeakFiles = (@($leakFiles) -join ';')
+    }
+}
+
+function Get-ShareSurferLabRunRedactionAuditValues {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $RunRoot
+    )
+
+    foreach ($definition in @(
+        [pscustomobject]@{ FileName = 'lab-preflight.csv'; Columns = @('Evidence') },
+        [pscustomobject]@{ FileName = 'lab-validation-criteria.csv'; Columns = @('EvidenceDetail') },
+        [pscustomobject]@{ FileName = 'live-evidence-review.csv'; Columns = @('EvidenceDetail') }
+    )) {
+        $path = Join-Path $RunRoot $definition.FileName
+        if (-not (Test-Path -LiteralPath $path)) {
+            continue
+        }
+
+        foreach ($row in @(Import-Csv -LiteralPath $path)) {
+            foreach ($column in @($definition.Columns)) {
+                $property = $row.PSObject.Properties[$column]
+                if ($null -eq $property) {
+                    continue
+                }
+                [pscustomobject]@{
+                    SourceFile = $definition.FileName
+                    ColumnName = $column
+                    Value = [string]$property.Value
+                }
+            }
+        }
+    }
+
+    $eventPath = Join-Path $RunRoot 'lab-run-events.jsonl'
+    if (Test-Path -LiteralPath $eventPath) {
+        foreach ($line in @(Get-Content -LiteralPath $eventPath -ErrorAction SilentlyContinue)) {
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                continue
+            }
+
+            try {
+                $event = $line | ConvertFrom-Json
+            }
+            catch {
+                $event = [pscustomobject]@{ Detail = $line }
+            }
+
+            if ($event.PSObject.Properties['Detail']) {
+                [pscustomobject]@{
+                    SourceFile = 'lab-run-events.jsonl'
+                    ColumnName = 'Detail'
+                    Value = [string]$event.Detail
+                }
+            }
+        }
+    }
+
+    $acceptancePath = Join-Path $RunRoot 'v1-acceptance.json'
+    if (Test-Path -LiteralPath $acceptancePath) {
+        try {
+            $acceptance = Get-Content -LiteralPath $acceptancePath -Raw | ConvertFrom-Json
+            foreach ($check in @($acceptance.Checks)) {
+                if ($check.PSObject.Properties['Detail']) {
+                    [pscustomobject]@{
+                        SourceFile = 'v1-acceptance.json'
+                        ColumnName = 'Checks.Detail'
+                        Value = [string]$check.Detail
                     }
                 }
-
-                [pscustomobject]@{
-                    SourceFile = $fileName
-                    ColumnName = $column
-                    ValueToken = Get-ShareSurferStableToken -Value $value -Salt $RedactionSalt
-                    ValueLength = $value.Length
-                    CheckedFileCount = $bundleFiles.Count
-                    LeakDetected = ($leakFiles.Count -gt 0)
-                    LeakFiles = (@($leakFiles) -join ';')
-                }
+            }
+        }
+        catch {
+            [pscustomobject]@{
+                SourceFile = 'v1-acceptance.json'
+                ColumnName = 'Detail'
+                Value = [string](Get-Content -LiteralPath $acceptancePath -Raw -ErrorAction SilentlyContinue)
             }
         }
     }
