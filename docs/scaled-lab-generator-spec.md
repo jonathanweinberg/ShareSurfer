@@ -125,7 +125,7 @@ Seed groups preserve focused access and recursive expansion scenarios:
 
 - `SS-Finance-Readers`
 - `SS-Finance-Editors`
-- `SS-Engineering-Readers`
+- `SS-Eng-Readers`
 - `SS-Operations-Owners`
 - `SS-Recursive-A`
 - `SS-Recursive-B`
@@ -134,6 +134,8 @@ Generated enterprise groups use two groups per generated enterprise share:
 
 - Reader group: `SS-ENT-0001-Readers`
 - Editor group: `SS-ENT-0001-Editors`
+
+All generated group names used as permission identities must be 20 characters or fewer so live Active Directory creation can use the same value as the group `sAMAccountName`.
 
 Membership pattern:
 
