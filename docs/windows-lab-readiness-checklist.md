@@ -37,11 +37,12 @@ Change `$domain` to the NetBIOS name of the test domain.
 
 ## Run Preflight First
 
-Run preflight before creating users, groups, shares, files, reports, or support bundles.
+Run preflight before creating users, groups, shares, files, reports, or support bundles. Use `-CreateLab` with `-PreflightOnly` so ShareSurfer checks the same creation blockers the full run will use, while still stopping before it changes anything.
 
 ```powershell
 .\scripts\Invoke-ShareSurferLabValidation.ps1 `
   -PreflightOnly `
+  -CreateLab `
   -LabRoot $labRoot `
   -OutputRoot $outputRoot `
   -DomainNetBiosName $domain `
