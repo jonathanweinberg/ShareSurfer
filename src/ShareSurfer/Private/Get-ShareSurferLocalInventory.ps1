@@ -48,6 +48,19 @@ function Get-ShareSurferLocalInventory {
         foreach ($permissionRow in $permissionRows) {
             [void]$sharePermissions.Add($permissionRow)
         }
+        if ($permissionRows.Count -eq 0) {
+            $permissionMessage = 'Share-level permissions were not collected through Get-SmbShareAccess.'
+            [void]$scanErrors.Add([pscustomobject]@{
+                ShareId = $shareId
+                FullPath = $targetItem.FullName
+                ErrorType = 'SharePermissionCollectionUnavailable'
+                Severity = 'Warning'
+                Source = 'Get-SmbShareAccess'
+                Message = $permissionMessage
+                Detail = 'Best-effort target path scan cannot prove the share-level access gate for this share.'
+            })
+            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'Get-SmbShareAccess' -ShareId $shareId -Message $permissionMessage -Detail $targetItem.FullName))
+        }
 
         [void]$shares.Add([pscustomobject]@{
             ShareId = $shareId

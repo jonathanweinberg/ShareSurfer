@@ -150,7 +150,7 @@ Common V1 finding types include:
 
 Expected columns: `ErrorId`, `ShareId`, `ItemId`, `FullPath`, `ErrorType`, `Severity`, `Source`, `Message`, `Detail`.
 
-Use this file when a scan has partial data, failed folder enumeration, ACL read failures, unresolved target paths, or best-effort SMB/Samba gaps. `ErrorType` is preserved as a troubleshooting category, while paths, messages, and details are redacted in support bundles.
+Use this file when a scan has partial data, failed folder enumeration, ACL read failures, unresolved target paths, or best-effort SMB/Samba gaps. `SharePermissionCollectionUnavailable` means ShareSurfer could enumerate a target path but could not prove the share-level access gate through `Get-SmbShareAccess`. `ErrorType` is preserved as a troubleshooting category, while paths, messages, and details are redacted in support bundles.
 
 ### `scan_events.csv`
 
