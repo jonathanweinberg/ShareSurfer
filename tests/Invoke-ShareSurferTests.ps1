@@ -1317,6 +1317,28 @@ $tests = @(
                     Detail = 'PreflightPath=C:\ShareSurfer\lab-validation\CONTOSO\lab-preflight.csv; FailedRequiredCount=1'
                 }
             ) | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 4 } | Set-Content -LiteralPath (Join-Path $runRoot 'lab-run-events.jsonl') -Encoding UTF8
+            $issueCommentDirectory = Join-Path $runRoot 'issue-comments'
+            New-Item -ItemType Directory -Path $issueCommentDirectory -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $issueCommentDirectory 'issue-1-lab-fixture-live-proof.md') -Value @(
+                'ShareSurfer live validation update for issue #1: lab fixture proof.',
+                '',
+                '**Safe Sharing Note**',
+                '- This public-safe comment omits raw evidence detail values.'
+            ) -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $issueCommentDirectory 'issue-3-scanner-live-proof.md') -Value @(
+                'ShareSurfer live validation update for issue #3: scanner proof.',
+                '',
+                '**Safe Sharing Note**',
+                '- This public-safe comment omits raw evidence detail values.'
+            ) -Encoding UTF8
+            @(
+                [pscustomobject]@{ IssueNumber = 1; FileName = 'issue-1-lab-fixture-live-proof.md'; CriteriaPassed = $true; AcceptanceChecksPassed = $true; BlockingLiveReviewRows = 0; OutputPath = (Join-Path $issueCommentDirectory 'issue-1-lab-fixture-live-proof.md') },
+                [pscustomobject]@{ IssueNumber = 3; FileName = 'issue-3-scanner-live-proof.md'; CriteriaPassed = $true; AcceptanceChecksPassed = $true; BlockingLiveReviewRows = 0; OutputPath = (Join-Path $issueCommentDirectory 'issue-3-scanner-live-proof.md') }
+            ) | Export-Csv -LiteralPath (Join-Path $issueCommentDirectory 'issue-comment-manifest.csv') -NoTypeInformation -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $issueCommentDirectory 'post-commands.txt') -Value @(
+                ('gh issue comment 1 --repo jonathanweinberg/ShareSurfer --body-file "{0}"' -f (Join-Path $issueCommentDirectory 'issue-1-lab-fixture-live-proof.md')),
+                ('gh issue comment 3 --repo jonathanweinberg/ShareSurfer --body-file "{0}"' -f (Join-Path $issueCommentDirectory 'issue-3-scanner-live-proof.md'))
+            ) -Encoding UTF8
 
             New-ShareSurferSupportBundle -ExportPath $outputPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'unit-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $rawEventLogPath = Join-Path $outputPath 'scan_events.jsonl'
@@ -1434,6 +1456,10 @@ $tests = @(
             Assert-True ($labRunDiagnosticsText -notlike '*files01*') 'Lab-run diagnostics must not contain source server names.'
             Assert-True ($labRunDiagnosticsText -notlike '*unit-test*') 'Lab-run diagnostics must not expose the redaction salt.'
             Assert-True ($labRunDiagnosticsText -like '*ID-*') 'Lab-run diagnostics should preserve relationships with stable tokens.'
+            Assert-Equal ([string]$labRunDiagnostics.IssueComments.Included) 'True' 'Lab-run diagnostics should record bundled issue comment inclusion.'
+            Assert-Equal ([int]$labRunDiagnostics.IssueComments.CommentCount) 2 'Lab-run diagnostics should record bundled issue comment count.'
+            Assert-Equal ([string]$labRunDiagnostics.IssueComments.ManifestIncluded) 'True' 'Lab-run diagnostics should record bundled issue comment manifest inclusion.'
+            Assert-Equal ([string]$labRunDiagnostics.IssueComments.PostCommandsIncluded) 'True' 'Lab-run diagnostics should record bundled issue comment post-command inclusion.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'related_data_areas.csv') 'Support bundle file diagnostics should include related data areas.'
@@ -1449,7 +1475,21 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'live_evidence_review.csv') 'Support bundle file diagnostics should include redacted live evidence review.'
             Assert-True ($bundleFiles.FileName -contains 'live_evidence.json') 'Support bundle file diagnostics should include live evidence summary.'
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Support bundle file diagnostics should include acceptance summary when present.'
+            Assert-True ($bundleFiles.FileName -contains 'issue_comments/issue-1-lab-fixture-live-proof.md') 'Support bundle file diagnostics should include bundled issue #1 comment body.'
+            Assert-True ($bundleFiles.FileName -contains 'issue_comments/issue-3-scanner-live-proof.md') 'Support bundle file diagnostics should include bundled issue #3 comment body.'
+            Assert-True ($bundleFiles.FileName -contains 'issue_comments/issue_comment_manifest.csv') 'Support bundle file diagnostics should include sanitized issue comment manifest.'
+            Assert-True ($bundleFiles.FileName -contains 'issue_comments/post_commands.txt') 'Support bundle file diagnostics should include sanitized issue comment post commands.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_redaction_audit.csv') 'Support bundle file diagnostics should include redaction audit diagnostics.'
+            $bundledIssueOneComment = Get-Content -LiteralPath (Join-Path $bundlePath 'issue_comments/issue-1-lab-fixture-live-proof.md') -Raw
+            Assert-True ($bundledIssueOneComment -like '*ShareSurfer live validation update for issue #1*') 'Bundled issue comment should preserve the public-safe body.'
+            Assert-True ($bundledIssueOneComment -notlike '*CONTOSO*') 'Bundled issue comment must not contain source domain names.'
+            $bundledIssueCommentManifest = Get-Content -LiteralPath (Join-Path $bundlePath 'issue_comments/issue_comment_manifest.csv') -Raw
+            $bundledIssueCommentPostCommands = Get-Content -LiteralPath (Join-Path $bundlePath 'issue_comments/post_commands.txt') -Raw
+            Assert-True ($bundledIssueCommentManifest -notlike "*$runRoot*") 'Bundled issue comment manifest must not contain raw run-root paths.'
+            Assert-True ($bundledIssueCommentManifest -notlike '*OutputPath*') 'Bundled issue comment manifest must not include raw output path columns.'
+            Assert-True ($bundledIssueCommentManifest -like '*BundledFileName*') 'Bundled issue comment manifest should include relative bundle file names.'
+            Assert-True ($bundledIssueCommentPostCommands -notlike "*$runRoot*") 'Bundled issue comment post commands must not contain raw run-root paths.'
+            Assert-True ($bundledIssueCommentPostCommands -like '*--body-file "issue_comments/issue-1-lab-fixture-live-proof.md"*') 'Bundled issue comment post commands should use relative bundle paths.'
             Assert-True ($redactionAudit.Count -gt 0) 'Redaction audit should include checked sensitive source values.'
             Assert-True (@($redactionAudit | Where-Object { $_.LeakDetected -eq 'True' }).Count -eq 0) 'Redaction audit should not detect leaked source values.'
             Assert-True (($redactionAudit | Get-Member -MemberType NoteProperty).Name -contains 'ValueToken') 'Redaction audit should use synthetic tokens instead of raw source values.'

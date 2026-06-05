@@ -117,7 +117,7 @@ The `issue-comments` folder contains:
 - `issue-comment-manifest.csv`
 - `post-commands.txt`
 
-Review each Markdown file before posting. They summarize only safe status values, counts, criterion names, and check names. Use `post-commands.txt` when you are ready to post the comments with `gh issue comment --body-file`.
+Review each Markdown file before posting. They summarize only safe status values, counts, criterion names, and check names. Use `post-commands.txt` when you are ready to post the comments with `gh issue comment --body-file`. The redacted support bundle also includes a sanitized `issue_comments` folder with the same comment bodies, a manifest without raw run paths, and post commands that use relative bundle paths.
 
 Open `lab-preflight.csv` first if validation stops early. It checks whether the run appears to be on a Windows collector host, whether PowerShell 5.1 and the required Active Directory and SMB cmdlets are available, whether planned AD user or group names already exist outside the ShareSurferLab OU, whether any planned SMB share name already points at another local path, whether the output path exists, whether an existing lab root is present when `-CreateLab` is not used, whether planned data stays under the disk budget, whether plan criteria are satisfiable, whether Windows path components are safe, and whether enterprise validation is scanning files.
 
