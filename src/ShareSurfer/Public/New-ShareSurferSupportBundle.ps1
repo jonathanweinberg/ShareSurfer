@@ -178,7 +178,8 @@ function New-ShareSurferSupportBundle {
         'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.',
         'lab_run_events.jsonl is included when a lab validation run root was supplied and records redacted lab-validation phase events.',
-        'lab_run_diagnostics.json is included when a lab validation run root was supplied.'
+        'lab_run_diagnostics.json is included when a lab validation run root was supplied.',
+        'issue_summary.md is included when a lab validation run has generated a public-safe issue summary.'
     ) -Encoding UTF8
 
     [pscustomobject]@{
@@ -214,6 +215,8 @@ function New-ShareSurferSupportBundleLabRunEvidence {
     }
 
     $includedFiles = New-Object System.Collections.ArrayList
+    $issueSummaryIncluded = $false
+    $issueSummaryLineCount = 0
     $preflightRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-preflight.csv') -DestinationPath (Join-Path $BundlePath 'lab_preflight.csv') -RedactColumns @('Evidence') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($preflightRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_preflight.csv'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_preflight.csv') -FileName 'lab_preflight.csv' -RowCount $preflightRows.Count))
@@ -256,6 +259,16 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         [void]$includedFiles.Add('v1_acceptance_summary.json')
     }
 
+    $issueSummarySourcePath = Join-Path $RunRoot 'issue-summary.md'
+    if (Test-Path -LiteralPath $issueSummarySourcePath) {
+        $issueSummaryPath = Join-Path $BundlePath 'issue_summary.md'
+        Copy-Item -LiteralPath $issueSummarySourcePath -Destination $issueSummaryPath -Force
+        $issueSummaryLineCount = @((Get-Content -LiteralPath $issueSummaryPath -ErrorAction SilentlyContinue)).Count
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $issueSummaryPath -FileName 'issue_summary.md' -RowCount $issueSummaryLineCount))
+        [void]$includedFiles.Add('issue_summary.md')
+        $issueSummaryIncluded = $true
+    }
+
     $labRunEvents = @(New-ShareSurferRedactedLabRunEvents -SourcePath (Join-Path $RunRoot 'lab-run-events.jsonl') -DestinationPath (Join-Path $BundlePath 'lab_run_events.jsonl') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($labRunEvents.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_run_events.jsonl'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_run_events.jsonl') -FileName 'lab_run_events.jsonl' -RowCount $labRunEvents.Count))
@@ -287,6 +300,11 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         LiveEvidence = if ($null -eq $liveEvidence) { $null } else { [ordered]@{ IsValid = $liveEvidence.IsValid; FallbackCount = $liveEvidence.FallbackCount } }
         Acceptance = if ($null -eq $acceptance) { $null } else { [ordered]@{ IsValid = $acceptance.IsValid; FailedCheckCount = $acceptance.FailedCheckCount } }
         AcceptanceSummary = if ($null -eq $acceptanceSummary) { $null } else { [ordered]@{ IsValid = $acceptanceSummary.IsValid; FailedCheckCount = $acceptanceSummary.FailedCheckCount; CheckCount = $acceptanceSummary.CheckCount } }
+        IssueSummary = [ordered]@{
+            Included = [bool]$issueSummaryIncluded
+            FileName = if ($issueSummaryIncluded) { 'issue_summary.md' } else { '' }
+            LineCount = [int]$issueSummaryLineCount
+        }
         Notes = @(
             'This file summarizes lab validation evidence from redacted bundle artifacts.',
             'Raw run paths and evidence details are replaced with redacted values or stable tokens.',

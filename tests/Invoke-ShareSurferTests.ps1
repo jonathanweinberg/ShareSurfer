@@ -1552,6 +1552,17 @@ $tests = @(
             Assert-True ($issueSummaryText -like '*issue #6*') 'Validation issue summary should point to the remaining dashboard proof issue.'
             Assert-True ($issueSummaryText -notlike '*Synthetic acceptance proof*') 'Validation issue summary should not include raw evidence detail values.'
             Assert-True ($issueSummaryText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Validation issue summary should not include raw lab-run detail values.'
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
+            $bundleFilesAfterIssueSummary = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'support_bundle_files.csv'))
+            Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
+            $bundledIssueSummaryPath = Join-Path $bundlePath 'issue_summary.md'
+            $bundledIssueSummary = Get-Content -LiteralPath $bundledIssueSummaryPath -Raw
+            Assert-True ($bundledIssueSummary -like '*ShareSurfer live validation evidence summary*') 'Bundled issue summary should keep the public-safe validation title.'
+            Assert-True ($bundledIssueSummary -notlike '*Synthetic acceptance proof*') 'Bundled issue summary should not include raw evidence detail values.'
+            Assert-True ($bundledIssueSummary -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Bundled issue summary should not include raw lab-run detail values.'
+            $labRunDiagnosticsWithIssueSummary = Get-Content -LiteralPath (Join-Path $bundlePath 'lab_run_diagnostics.json') -Raw | ConvertFrom-Json
+            Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.IssueSummary.Included) 'True' 'Lab-run diagnostics should record bundled issue summary inclusion.'
+            Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.IssueSummary.FileName) 'issue_summary.md' 'Lab-run diagnostics should name the bundled issue summary file.'
 
             Set-Content -LiteralPath $reportPath -Value '<html><body>not a ShareSurfer dashboard</body></html>' -Encoding UTF8
             $badReportResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
@@ -1565,10 +1576,12 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Final lab support bundle should include the redacted acceptance summary.'
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance_summary.json') 'Final lab support bundle should include the concise acceptance summary.'
             Assert-True ($bundleFiles.FileName -contains 'lab_run_events.jsonl') 'Final lab support bundle should include the redacted lab-run event log.'
+            Assert-True ($bundleFiles.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
             $bundledAcceptanceSummary = Get-Content -LiteralPath (Join-Path $bundlePath 'v1_acceptance_summary.json') -Raw
             Assert-True ($bundledAcceptanceSummary -notlike '*Synthetic acceptance proof*') 'Bundled acceptance summary should not include raw evidence detail values.'
             $labRunDiagnostics = Get-Content -LiteralPath (Join-Path $bundlePath 'lab_run_diagnostics.json') -Raw | ConvertFrom-Json
             Assert-Equal ([string]$labRunDiagnostics.AcceptanceSummary.IsValid) 'True' 'Lab-run diagnostics should summarize the bundled acceptance summary.'
+            Assert-Equal ([string]$labRunDiagnostics.IssueSummary.Included) 'True' 'Lab-run diagnostics should summarize the bundled issue summary.'
             $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
             $badBundleManifest = @(
                 [pscustomobject]@{
@@ -1649,6 +1662,7 @@ $tests = @(
             Assert-True ($labValidationScript -like '*New-ShareSurferValidationIssueSummary.ps1*') 'Lab validation should call the validation issue summary generator automatically.'
             Assert-True ($labValidationScript -like '*IssueSummaryPath*') 'Lab validation output should include the issue summary artifact path.'
             Assert-True ($labValidationScript -like '*IssueSummary*') 'Lab validation should record issue summary generation events.'
+            Assert-True ($labValidationScript -like '*refreshing final redacted support bundle with issue summary*') 'Lab validation should refresh the final support bundle after the issue summary exists.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
             Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'

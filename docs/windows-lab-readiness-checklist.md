@@ -118,7 +118,7 @@ Use these files first:
 - `issue-summary.md`: public-safe Markdown starting point for GitHub issue updates.
 - `report.html`: offline business review dashboard.
 
-Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. Do not attach raw run folders outside the trusted lab environment.
+Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md` as the shareable copy of the public-safe issue summary. Do not attach raw run folders outside the trusted lab environment.
 
 ## Go Gates
 
