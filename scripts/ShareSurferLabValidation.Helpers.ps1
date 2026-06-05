@@ -404,6 +404,7 @@ function Measure-ShareSurferLabValidationEvidence {
     $aclEntries = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'acl_entries.csv'))
     $collectionErrors = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'collection_errors.csv'))
     $identities = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'identities.csv'))
+    $orgChains = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'org_chains.csv'))
     $groupEdges = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'group_edges.csv'))
     $ownerRiskPivots = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_risk_pivots.csv'))
     $relatedDataAreas = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'related_data_areas.csv'))
@@ -433,6 +434,24 @@ function Measure-ShareSurferLabValidationEvidence {
         $_.PSObject.Properties[$Plan.ObsAttribute] -and
         [string]$_.PSObject.Properties[$Plan.ObsAttribute].Value -ne ''
     })
+    $identityUserEmployeeIdentifierCount = @($identities | Where-Object {
+        [string]$_.ObjectClass -eq 'user' -and
+        ([string]$_.EmployeeId -ne '' -or [string]$_.EmployeeNumber -ne '')
+    }).Count
+    $identityUserObsCount = @($identities | Where-Object {
+        [string]$_.ObjectClass -eq 'user' -and
+        [string]$_.ObsPath -ne '' -and
+        ([string]$_.ObsAttribute -eq '' -or [string]$_.ObsAttribute -eq [string]$Plan.ObsAttribute)
+    }).Count
+    $identityManagerChainCount = @($identities | Where-Object {
+        [string]$_.ObjectClass -eq 'user' -and
+        [string]$_.ManagerLevel1 -ne '' -and
+        [string]$_.ManagerLevel2 -ne ''
+    }).Count
+    $orgManagerChainCount = @($orgChains | Where-Object {
+        [string]$_.ManagerLevel1 -ne '' -and
+        [string]$_.ManagerLevel2 -ne ''
+    }).Count
     $identityPermissionGroupObsMap = @{}
     foreach ($identity in @($identities)) {
         if ([string]$identity.ObjectClass -ne 'group') {
@@ -482,6 +501,10 @@ function Measure-ShareSurferLabValidationEvidence {
         DirectoryEvidenceSource = $directoryCounts.EvidenceSource
         DirectoryEvidenceDetail = $directoryCounts.EvidenceDetail
         ExpectedPermissionGroupCount = $expectedPermissionGroupNames.Count
+        IdentityUserEmployeeIdentifierCount = $identityUserEmployeeIdentifierCount
+        IdentityUserObsCount = $identityUserObsCount
+        IdentityManagerChainCount = $identityManagerChainCount
+        OrgManagerChainCount = $orgManagerChainCount
         PlannedPermissionGroupObsCount = $plannedPermissionGroupsWithObs.Count
         IdentityPermissionGroupObsCount = $identityPermissionGroupObsMap.Count
         ScannedShareCount = $shares.Count
@@ -586,6 +609,27 @@ function New-ShareSurferLabValidationCriteriaRows {
                     $source = 'LabPlan'
                 }
                 $detail = 'DirectoryUsers={0}; PlannedUsers={1}; {2}' -f $evidence.DirectoryUserCount, $evidence.PlannedUserCount, $evidence.DirectoryEvidenceDetail
+            }
+            'EnterpriseEmployeeIdentifierCoverage' {
+                if ([int64]$evidence.IdentityUserEmployeeIdentifierCount -gt 0) {
+                    $actual = [int64]$evidence.IdentityUserEmployeeIdentifierCount
+                    $source = 'ScanExport:identities.csv'
+                }
+                $detail = 'UsersWithEmployeeIdentifiers={0}' -f $evidence.IdentityUserEmployeeIdentifierCount
+            }
+            'EnterpriseManagerChainCoverage' {
+                if ([int64]$evidence.IdentityManagerChainCount -gt 0 -or [int64]$evidence.OrgManagerChainCount -gt 0) {
+                    $actual = [Math]::Max([int64]$evidence.IdentityManagerChainCount, [int64]$evidence.OrgManagerChainCount)
+                    $source = if ([int64]$evidence.IdentityManagerChainCount -gt 0) { 'ScanExport:identities.csv' } else { 'ScanExport:org_chains.csv' }
+                }
+                $detail = 'IdentityTwoLevelManagerChains={0}; OrgChainTwoLevelManagerChains={1}' -f $evidence.IdentityManagerChainCount, $evidence.OrgManagerChainCount
+            }
+            'EnterpriseUserObsCoverage' {
+                if ([int64]$evidence.IdentityUserObsCount -gt 0) {
+                    $actual = [int64]$evidence.IdentityUserObsCount
+                    $source = 'ScanExport:identities.csv'
+                }
+                $detail = 'IdentityUsersWithObs={0}; ObsAttribute={1}' -f $evidence.IdentityUserObsCount, $Plan.ObsAttribute
             }
             'EnterpriseSharePopulation' {
                 if ([int64]$evidence.ScannedShareCount -gt 0) {

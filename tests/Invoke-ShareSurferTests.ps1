@@ -291,6 +291,9 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerReviewPackets') 'Enterprise lab plan should include owner review packet validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterprisePermissionGroupObsCoverage') 'Enterprise lab plan should include permission-group OBS coverage validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseCollectionErrors') 'Enterprise lab plan should include collection-error evidence validation.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseEmployeeIdentifierCoverage') 'Enterprise lab plan should include employee identifier coverage validation.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseManagerChainCoverage') 'Enterprise lab plan should include manager-chain coverage validation.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseUserObsCoverage') 'Enterprise lab plan should include user OBS coverage validation.'
             Assert-True (@($plan.Groups | Where-Object { $_.PSObject.Properties.Name -contains 'extensionAttribute10' -and [string]$_.extensionAttribute10 -ne '' }).Count -eq $plan.Groups.Count) 'Enterprise lab groups should all include OBS values for group review.'
             foreach ($criterion in @($plan.ValidationCriteria | Where-Object { [string]$_.Name -like 'Enterprise*' -and [bool]$_.Required })) {
                 Assert-True ([int64]$criterion.ActualPlanValue -ge [int64]$criterion.MinimumValue) ('Enterprise plan criterion should be satisfiable before live evidence replaces plan evidence: {0}' -f $criterion.Name)
@@ -371,8 +374,12 @@ $tests = @(
             @(
                 [pscustomobject]@{ Identity = 'CONTOSO\Readers'; SamAccountName = 'Readers'; DisplayName = 'Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.READ'; ObsAttribute = 'extensionAttribute10' },
                 [pscustomobject]@{ Identity = 'CONTOSO\Editors'; SamAccountName = 'Editors'; DisplayName = 'Editors'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.MODIFY'; ObsAttribute = 'extensionAttribute10' },
-                [pscustomobject]@{ Identity = 'CONTOSO\FileReaders'; SamAccountName = 'FileReaders'; DisplayName = 'File Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.FILE'; ObsAttribute = 'extensionAttribute10' }
+                [pscustomobject]@{ Identity = 'CONTOSO\FileReaders'; SamAccountName = 'FileReaders'; DisplayName = 'File Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.FILE'; ObsAttribute = 'extensionAttribute10' },
+                [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; SamAccountName = 'SSUser00001'; DisplayName = 'ShareSurfer User 00001'; ObjectClass = 'user'; EmployeeId = 'E0000001'; EmployeeNumber = '0000001'; Manager = 'CONTOSO\Manager01'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'identities.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; EmployeeId = 'E0000001'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'org_chains.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RiskLevel = 'High' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_risk_pivots.csv') -NoTypeInformation -Encoding UTF8
@@ -410,6 +417,9 @@ $tests = @(
                 )
                 ValidationCriteria = @(
                     [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 3; Unit = 'users'; Description = 'Users' },
+                    [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with employee identifiers'; Description = 'Employee identifiers' },
+                    [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; Unit = 'two-level manager chains'; Description = 'Manager chains' },
+                    [pscustomobject]@{ Name = 'EnterpriseUserObsCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with OBS'; Description = 'User OBS coverage' },
                     [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 2; Unit = 'shares'; Description = 'Shares' },
                     [pscustomobject]@{ Name = 'EnterpriseRealFiles'; Required = $true; MinimumValue = 3; Unit = 'file fixtures'; Description = 'Files' },
                     [pscustomobject]@{ Name = 'EnterpriseDeepPaths'; Required = $true; MinimumValue = 1; Unit = 'deep file fixtures'; Description = 'Deep paths' },
@@ -441,6 +451,9 @@ $tests = @(
 
             $criteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
             $userCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserPopulation' })[0]
+            $employeeIdentifierCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseEmployeeIdentifierCoverage' })[0]
+            $managerChainCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseManagerChainCoverage' })[0]
+            $userObsCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserObsCoverage' })[0]
             $shareCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseSharePopulation' })[0]
             $fileCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseRealFiles' })[0]
             $deepCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDeepPaths' })[0]
@@ -461,6 +474,15 @@ $tests = @(
 
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
             Assert-Equal $userCriterion.EvidenceSource 'ActiveDirectory' 'User validation should identify directory evidence.'
+            Assert-Equal ([int]$employeeIdentifierCriterion.ActualValue) 1 'Employee identifier validation should count enriched user identities.'
+            Assert-Equal $employeeIdentifierCriterion.EvidenceSource 'ScanExport:identities.csv' 'Employee identifier validation should identify identity export evidence.'
+            Assert-True ([string]$employeeIdentifierCriterion.EvidenceDetail -like '*UsersWithEmployeeIdentifiers=1*') 'Employee identifier evidence should record enriched user counts.'
+            Assert-Equal ([int]$managerChainCriterion.ActualValue) 1 'Manager-chain validation should count two-level manager evidence.'
+            Assert-Equal $managerChainCriterion.EvidenceSource 'ScanExport:identities.csv' 'Manager-chain validation should prefer identity export evidence when present.'
+            Assert-True ([string]$managerChainCriterion.EvidenceDetail -like '*OrgChainTwoLevelManagerChains=1*') 'Manager-chain evidence should record org-chain export counts.'
+            Assert-Equal ([int]$userObsCriterion.ActualValue) 1 'User OBS validation should count enriched user OBS values.'
+            Assert-Equal $userObsCriterion.EvidenceSource 'ScanExport:identities.csv' 'User OBS validation should identify identity export evidence.'
+            Assert-True ([string]$userObsCriterion.EvidenceDetail -like '*ObsAttribute=extensionAttribute10*') 'User OBS evidence should record the runtime OBS attribute.'
             Assert-Equal ([int]$shareCriterion.ActualValue) 2 'Share validation should use scanned shares.'
             Assert-Equal $shareCriterion.EvidenceSource 'ScanExport:shares.csv' 'Share validation should identify scan export evidence.'
             Assert-Equal ([int]$fileCriterion.ActualValue) 3 'File validation should use scanned file item rows.'

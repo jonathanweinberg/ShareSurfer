@@ -242,6 +242,38 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes a multi-thousand user population.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseEmployeeIdentifierCoverage'
+            MinimumValue = 1
+            ActualPlanValue = @($users | Where-Object { [string]$_.EmployeeId -ne '' -and [string]$_.EmployeeNumber -ne '' }).Count
+            Unit = 'users with employee identifiers'
+            Required = $true
+            Description = 'Enterprise validation proves enriched user identities include employeeId and employeeNumber evidence.'
+        })
+        $userManagerMap = @{}
+        foreach ($user in @($users)) {
+            $userManagerMap[[string]$user.SamAccountName] = [string]$user.Manager
+        }
+        $plannedTwoLevelManagerChains = @($users | Where-Object {
+            $manager = [string]$_.Manager
+            $manager -ne '' -and $userManagerMap.ContainsKey($manager) -and [string]$userManagerMap[$manager] -ne ''
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseManagerChainCoverage'
+            MinimumValue = 1
+            ActualPlanValue = @($plannedTwoLevelManagerChains).Count
+            Unit = 'two-level manager chains'
+            Required = $true
+            Description = 'Enterprise validation proves enriched user identities include manager and manager-manager context.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseUserObsCoverage'
+            MinimumValue = 1
+            ActualPlanValue = @($users | Where-Object { $_.PSObject.Properties[$ObsAttribute] -and [string]$_.PSObject.Properties[$ObsAttribute].Value -ne '' }).Count
+            Unit = 'users with OBS'
+            Required = $true
+            Description = 'Enterprise validation proves enriched user identities carry the runtime-selected OBS/OID extension attribute.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseSharePopulation'
             MinimumValue = $EnterpriseShareCount
             ActualPlanValue = @($shares).Count
