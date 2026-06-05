@@ -158,10 +158,10 @@ $liveEvidenceReview = @(New-ShareSurferLabValidationEvidenceReview -CriteriaRows
 $liveEvidenceReview | Export-Csv -LiteralPath $liveEvidenceReviewPath -NoTypeInformation -Encoding UTF8
 $failedRequiredCriteria = @($criteriaRows | Where-Object { $_.Required -and -not $_.Passed })
 if ($failedRequiredCriteria.Count -gt 0) {
-    throw ('ShareSurfer lab validation criteria failed. See {0}' -f $criteriaPath)
+    Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'LabCriteria' -Level Warning -Message 'Lab validation criteria failed; continuing to generate diagnostics before final failure.' -Detail ('CriteriaPath={0}; FailedRequiredCount={1}' -f $criteriaPath, $failedRequiredCriteria.Count)
 }
 if ($RequireLiveEvidence -and -not $liveEvidence.IsValid) {
-    throw ('ShareSurfer live lab evidence validation failed. See {0}' -f $liveEvidencePath)
+    Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'LabCriteria' -Level Warning -Message 'Live evidence gate failed; continuing to generate diagnostics before final failure.' -Detail ('LiveEvidencePath={0}; FallbackCount={1}' -f $liveEvidencePath, [int]$liveEvidence.FallbackCount)
 }
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'LabCriteria' -Message 'Lab validation criteria and live-evidence gate completed.' -Detail ('CriteriaPath={0}; FailedRequiredCount={1}; LiveEvidenceIsValid={2}; FallbackCount={3}' -f $criteriaPath, $failedRequiredCriteria.Count, [bool]$liveEvidence.IsValid, [int]$liveEvidence.FallbackCount)
 
@@ -177,7 +177,7 @@ Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Mess
 $acceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence -AllowMissingBundledAcceptance -AllowMissingIssueComments
 $acceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptancePath -Encoding UTF8
 if (-not $acceptance.IsValid) {
-    throw ('ShareSurfer V1 acceptance validation failed. See {0}' -f $acceptancePath)
+    Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Level Warning -Message 'Staged V1 acceptance package is not ready; continuing to generate diagnostics before final failure.' -Detail ('AcceptancePath={0}; FailedCheckCount={1}' -f $acceptancePath, [int]$acceptance.FailedCheckCount)
 }
 
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'SupportBundle' -Message 'Refreshing redacted support bundle with acceptance evidence.' -Detail ('SupportBundlePath={0}' -f $bundlePath)
@@ -186,7 +186,7 @@ Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Mess
 $acceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence -SummaryPath $acceptanceSummaryPath -AllowMissingIssueComments
 $acceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptancePath -Encoding UTF8
 if (-not $acceptance.IsValid) {
-    throw ('ShareSurfer V1 acceptance validation failed. See {0}' -f $acceptancePath)
+    Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Level Warning -Message 'Bundled V1 acceptance package is not ready; continuing to generate issue summaries and closeout diagnostics.' -Detail ('AcceptancePath={0}; FailedCheckCount={1}' -f $acceptancePath, [int]$acceptance.FailedCheckCount)
 }
 
 $issueSummaryScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueSummary.ps1'
@@ -212,13 +212,13 @@ Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Mess
 $finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
 $finishedPackageAcceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptancePath -Encoding UTF8
 if (-not $finishedPackageAcceptance.IsValid) {
-    throw ('ShareSurfer finished support bundle validation failed. See {0}' -f $acceptancePath)
+    Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Level Warning -Message 'Finished V1 acceptance package is not ready; refreshing final redacted support bundle before final failure.' -Detail ('AcceptancePath={0}; FailedCheckCount={1}' -f $acceptancePath, [int]$finishedPackageAcceptance.FailedCheckCount)
 }
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'SupportBundle' -Message 'Refreshing redacted support bundle with final acceptance evidence.' -Detail ('SupportBundlePath={0}' -f $bundlePath)
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
 $finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence
 if (-not $finishedPackageAcceptance.IsValid) {
-    throw ('ShareSurfer final refreshed support bundle validation failed. See {0}' -f $acceptancePath)
+    throw ('ShareSurfer final validation package is not ready for proof review. See {0} and {1}' -f $acceptancePath, $closeoutChecklistPath)
 }
 
 [pscustomobject]@{

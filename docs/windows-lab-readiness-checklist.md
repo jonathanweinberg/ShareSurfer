@@ -176,6 +176,8 @@ Stop and review before sharing evidence if any of these happen:
 - `dashboard-review.md` is missing or says the dashboard needs review.
 - The run creates more lab data than the configured budget.
 
+If a `-RequireLiveEvidence` run fails after scanning, still check the generated `validation-closeout-checklist.md`, `live-evidence-review.csv`, and `support-bundle-redacted` folder. ShareSurfer attempts to finish those diagnostics before returning the final not-ready error so you can see what to fix before rerunning.
+
 ## What To Attach To Issues
 
 For GitHub issue updates, prefer concise evidence:
