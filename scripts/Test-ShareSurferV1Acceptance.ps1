@@ -118,7 +118,12 @@ $requiredBundleFiles = @(
     'support_bundle_diagnostics.json',
     'support_bundle_redaction_audit.csv',
     'scan_events.jsonl',
-    'report.html'
+    'report.html',
+    'lab_run_diagnostics.json',
+    'lab_preflight.csv',
+    'lab_validation_criteria.csv',
+    'live_evidence_review.csv',
+    'live_evidence.json'
 )
 $missingBundleFiles = @($requiredBundleFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $SupportBundlePath $_)) })
 $bundleManifestPath = Join-Path $SupportBundlePath 'support_bundle_manifest.csv'
@@ -142,6 +147,16 @@ else {
 }
 $redactedSupportPassed = ($missingBundleFiles.Count -eq 0 -and $bundleManifestPassed)
 [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RedactedSupportBundle' -Passed $redactedSupportPassed -Detail ('Bundle={0}; Missing={1}; {2}' -f $SupportBundlePath, ($missingBundleFiles -join ', '), $bundleManifestDetail)))
+
+$labRunDiagnosticsPath = Join-Path $SupportBundlePath 'lab_run_diagnostics.json'
+if (Test-Path -LiteralPath $labRunDiagnosticsPath) {
+    $labRunDiagnostics = Get-Content -LiteralPath $labRunDiagnosticsPath -Raw | ConvertFrom-Json
+    $labRunEvidencePassed = ([string]$labRunDiagnostics.BundleType -eq 'ShareSurferRedactedLabRunDiagnostics' -and [int]$labRunDiagnostics.Preflight.RowCount -gt 0 -and [int]$labRunDiagnostics.Criteria.RowCount -gt 0)
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $labRunEvidencePassed -Detail ('LabRunDiagnostics={0}; IncludedFiles={1}' -f $labRunDiagnosticsPath, @($labRunDiagnostics.IncludedFiles).Count)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $false -Detail ('Lab run diagnostics not found in support bundle: {0}' -f $labRunDiagnosticsPath)))
+}
 
 if (Test-Path -LiteralPath $PreflightPath) {
     $preflightRows = @(Import-Csv -LiteralPath $PreflightPath)
