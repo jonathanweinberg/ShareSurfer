@@ -18,7 +18,7 @@ function Initialize-ShareSurferLabDirectoryObjects {
         New-ADOrganizationalUnit -Name $ouName -Path $domain.DistinguishedName -ProtectedFromAccidentalDeletion:$false | Out-Null
     }
 
-    $defaultPassword = ConvertTo-SecureString 'ShareSurfer-Lab-Passw0rd!' -AsPlainText -Force
+    $defaultPassword = New-ShareSurferLabDefaultPassword
     foreach ($user in $Plan.Users) {
         $samAccountName = [string]$user.SamAccountName
         $existingUser = Get-ShareSurferLabAdUser -SamAccountName $samAccountName -SearchBase $ouDn
@@ -78,6 +78,11 @@ function Initialize-ShareSurferLabDirectoryObjects {
             Add-ADGroupMember -Identity $labGroup.DistinguishedName -Members $memberObject.DistinguishedName -ErrorAction SilentlyContinue
         }
     }
+}
+
+function New-ShareSurferLabDefaultPassword {
+    $suffix = ([guid]::NewGuid().ToString('N')).Substring(0, 16)
+    ConvertTo-SecureString ('Ssf-Lab-2026-{0}!aZ9' -f $suffix) -AsPlainText -Force
 }
 
 function Get-ShareSurferLabOrganizationalUnit {

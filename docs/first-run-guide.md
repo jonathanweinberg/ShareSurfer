@@ -30,7 +30,7 @@ Use a Windows collector machine with:
 - Directory read access if you want user, group, manager, employee, and OBS enrichment.
 - A local output folder with enough free space for CSVs, logs, reports, and support bundles.
 
-For AD enrichment, record the OBS attribute before scanning. The default is `extensionAttribute10`, but your environment may use another extension attribute.
+For AD enrichment, record the OBS attribute before scanning. The default is `extensionAttribute10`, but your environment may use another extension attribute. Some labs do not have Exchange-style extension attributes in the AD schema; in that case, choose an attribute that exists on both users and groups, such as `info`, and pass it with `-ObsAttribute`.
 
 For lab validation, use the designated Windows/AD lab host directly.
 
@@ -279,7 +279,7 @@ For a migration review:
 | --- | --- |
 | The scan shows partial data | Open `shares.csv` and read `PartialReason`. Confirm the target path exists and that your account can read share metadata, folders, files, and ACLs, then check `findings.csv` for `CollectionError` rows. |
 | Identity details are missing | Confirm directory read access and the selected `-AdLookupMode`. |
-| OBS values are blank | Confirm the correct `-ObsAttribute`, such as `extensionAttribute10`. |
+| OBS values are blank | Confirm the correct `-ObsAttribute`, such as `extensionAttribute10`. If that attribute does not exist in your AD schema, use an existing user/group attribute such as `info`. |
 | Group expansion is incomplete | Increase `-GroupExpansionMaxDepth` or check for directory lookup errors. |
 | The report is sparse | Confirm `Test-ShareSurferExport` passed and the scan target contained data. |
 | A support bundle still shows real names | Do not share it. Regenerate with redaction and inspect again. |

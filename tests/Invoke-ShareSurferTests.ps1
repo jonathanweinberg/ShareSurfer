@@ -315,6 +315,8 @@ $tests = @(
             Assert-True ($initializerScript -like '*Set-ADGroup*') 'Lab directory initializer should update existing security group attributes.'
             Assert-True ($initializerScript -like '*-OtherAttributes $groupAttributes*') 'Lab directory initializer should create security groups with OBS extension attributes.'
             Assert-True ($initializerScript -like '*$Plan.ObsAttribute*') 'Lab directory initializer should use the runtime-selected OBS attribute for groups.'
+            Assert-True ($initializerScript -like '*New-ShareSurferLabDefaultPassword*') 'Lab directory initializer should generate a lab password per creation run.'
+            Assert-True ($initializerScript -notlike '*ShareSurfer-Lab-Passw0rd!*') 'Lab directory initializer should not use the old fixed lab password pattern.'
             Assert-True ($initializerScript -like '*Get-ShareSurferLabOrganizationalUnit -DistinguishedName $ouDn*') 'Lab directory initializer should resolve the dedicated OU through the lab OU helper.'
             Assert-True ($initializerScript -like '*Get-ADOrganizationalUnit -LDAPFilter "(distinguishedName=$DistinguishedName)"*') 'Lab directory initializer should look up the dedicated OU by distinguished name.'
             Assert-True ($initializerScript -like '*Get-ADUser -Filter $filter -SearchBase $SearchBase*') 'Lab directory initializer should search users inside the lab OU.'
@@ -606,6 +608,7 @@ $tests = @(
             Assert-True ($preflightRows.Name -contains 'EnterpriseIncludeFiles') 'Preflight should report enterprise IncludeFiles readiness.'
             Assert-True ($preflightRows.Name -contains 'AdObjectNameCollisions') 'Preflight should report AD object name collision readiness.'
             Assert-True ($preflightRows.Name -contains 'SmbSharePathCollisions') 'Preflight should report SMB share path collision readiness.'
+            Assert-True ($preflightRows.Name -contains 'ObsAttributeSchema') 'Preflight should report whether the runtime OBS attribute is writable in the AD schema.'
             $includeFilesPreflight = @($preflightRows | Where-Object { $_.Name -eq 'EnterpriseIncludeFiles' })[0]
             Assert-True ([bool]$includeFilesPreflight.Passed) 'Enterprise IncludeFiles preflight should pass when IncludeFiles is set.'
             $targetVolumePreflight = @($preflightRows | Where-Object { $_.Name -eq 'TargetVolumeFreeSpace' })[0]
@@ -616,6 +619,52 @@ $tests = @(
             $targetVolumeResult = Test-ShareSurferLabValidationTargetVolumeFreeSpace -Plan $tinyVolumePlan -LabRoot $labRoot
             Assert-True ([bool]$targetVolumeResult.Passed) 'Target volume helper should pass when available free space is greater than the configured byte budget.'
             Assert-True ([string]$targetVolumeResult.Evidence -like '*RequiredBytes=1*') 'Target volume helper should record the configured byte requirement.'
+
+            try {
+                function global:Get-ADRootDSE {
+                    [pscustomobject]@{ schemaNamingContext = 'CN=Schema,CN=Configuration,DC=example,DC=test' }
+                }
+                function global:Get-ADObject {
+                    param(
+                        [string] $SearchBase,
+                        [string] $LDAPFilter,
+                        [string[]] $Properties
+                    )
+
+                    if ($LDAPFilter -like '*attributeSchema*info*') {
+                        return [pscustomobject]@{ lDAPDisplayName = 'info' }
+                    }
+                    if ($LDAPFilter -like '*attributeSchema*extensionAttribute10*') {
+                        return $null
+                    }
+                    if ($LDAPFilter -like '*classSchema*user*') {
+                        return [pscustomobject]@{ lDAPDisplayName = 'user'; mayContain = @('info') }
+                    }
+                    if ($LDAPFilter -like '*classSchema*group*') {
+                        return [pscustomobject]@{ lDAPDisplayName = 'group'; mayContain = @('info') }
+                    }
+                    $null
+                }
+
+                $schemaPlan = [pscustomobject]@{ ObsAttribute = 'info' }
+                $schemaResult = Test-ShareSurferLabValidationObsAttributeSchema -Plan $schemaPlan
+                Assert-True ([bool]$schemaResult.Passed) 'OBS attribute schema helper should pass when the attribute exists and is allowed on user and group classes.'
+                Assert-True ([string]$schemaResult.Evidence -like '*ObsAttribute=info*UserAllows=True*GroupAllows=True*') 'OBS attribute schema evidence should show the checked attribute and allowed classes.'
+
+                $missingSchemaPlan = [pscustomobject]@{ ObsAttribute = 'extensionAttribute10' }
+                $missingSchemaResult = Test-ShareSurferLabValidationObsAttributeSchema -Plan $missingSchemaPlan
+                Assert-True (-not [bool]$missingSchemaResult.Passed) 'OBS attribute schema helper should fail when the selected attribute is absent from the AD schema.'
+                Assert-True ([string]$missingSchemaResult.Evidence -like '*AttributeExists=False*') 'OBS attribute schema evidence should show when the selected attribute is absent.'
+
+                $obsSchemaPreflight = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $labRoot -RunRoot $exportPath -CreateLab -IncludeFiles | Where-Object { $_.Name -eq 'ObsAttributeSchema' })[0]
+                Assert-True (-not [bool]$obsSchemaPreflight.Passed) 'CreateLab preflight should block when the configured OBS attribute is absent from the AD schema.'
+                Assert-True ([bool]$obsSchemaPreflight.Required) 'CreateLab preflight should make OBS schema readiness required evidence.'
+                Assert-True ([string]$obsSchemaPreflight.NextAction -like '*-ObsAttribute*') 'OBS schema preflight should tell the operator to rerun with a valid attribute.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-ADRootDSE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ADObject -ErrorAction SilentlyContinue
+            }
 
             try {
                 function global:Get-SmbShare {
@@ -2290,6 +2339,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*owner_review_packets.csv*') 'First-run guide should explain owner review packet exports.'
             Assert-True ($firstRunText -like '*What Needs Review First*') 'First-run guide should point users to the owner review queue.'
             Assert-True ($firstRunText -like '*Access Model*') 'First-run guide should point users to the access model view.'
+            Assert-True ($firstRunText -like '*choose an attribute that exists on both users and groups*') 'First-run guide should explain OBS attribute schema fallback.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -2309,6 +2359,7 @@ $tests = @(
             Assert-True ($labReadinessText -like '*-PreflightOnly*') 'Lab readiness checklist should include the preflight-only command.'
             Assert-True ($labReadinessText -like '*-CreateLab*') 'Lab readiness checklist should run preflight in lab-creation mode.'
             Assert-True ($labReadinessText -like '*checks the same creation blockers*') 'Lab readiness checklist should explain why preflight includes CreateLab.'
+            Assert-True ($labReadinessText -like '*ObsAttributeSchema*') 'Lab readiness checklist should include the OBS attribute schema preflight row.'
             Assert-True ($labReadinessText -like '*-Scale Enterprise*') 'Lab readiness checklist should include the enterprise validation command.'
             Assert-True ($labReadinessText -like '*v1-acceptance-summary.json*') 'Lab readiness checklist should explain the concise acceptance artifact.'
             Assert-True ($labReadinessText -like '*issue-summary.md*') 'Lab readiness checklist should explain the public-safe issue summary artifact.'
@@ -2318,6 +2369,7 @@ $tests = @(
             $operatorWorkflowText = Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
             Assert-True ($operatorWorkflowText -like '*-PreflightOnly -CreateLab*') 'Operator workflow should tell lab operators to run creation-mode preflight before creating enterprise fixtures.'
             Assert-True ($operatorWorkflowText -like '*target-volume free space*') 'Operator workflow should explain creation-mode preflight blockers.'
+            Assert-True ($operatorWorkflowText.Contains('selected `-ObsAttribute` exists and is allowed on both users and groups')) 'Operator workflow should explain the OBS attribute schema preflight check.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw

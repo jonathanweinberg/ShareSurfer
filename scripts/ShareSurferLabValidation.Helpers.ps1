@@ -213,6 +213,108 @@ function Test-ShareSurferLabValidationAdObjectCollisions {
     }
 }
 
+function Test-ShareSurferLabValidationObsAttributeSchema {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan
+    )
+
+    $obsAttribute = ''
+    if ($Plan.PSObject.Properties['ObsAttribute']) {
+        $obsAttribute = [string]$Plan.ObsAttribute
+    }
+    if ([string]::IsNullOrWhiteSpace($obsAttribute)) {
+        return [pscustomobject]@{
+            Passed = $false
+            Evidence = 'ObsAttribute was blank.'
+        }
+    }
+
+    $requiredCommands = @('Get-ADRootDSE', 'Get-ADObject')
+    $missingCommands = @($requiredCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })
+    if ($missingCommands.Count -gt 0) {
+        return [pscustomobject]@{
+            Passed = $false
+            Evidence = 'Missing AD schema commands: {0}' -f ($missingCommands -join ', ')
+        }
+    }
+
+    try {
+        $rootDse = Get-ADRootDSE -ErrorAction Stop
+        $schemaNamingContext = [string]$rootDse.schemaNamingContext
+        if ([string]::IsNullOrWhiteSpace($schemaNamingContext)) {
+            return [pscustomobject]@{
+                Passed = $false
+                Evidence = 'AD schema naming context was blank.'
+            }
+        }
+
+        $escapedAttribute = ConvertTo-ShareSurferLabValidationLdapFilterValue -Value $obsAttribute
+        $attributeSchema = Get-ADObject -SearchBase $schemaNamingContext -LDAPFilter "(&(objectClass=attributeSchema)(lDAPDisplayName=$escapedAttribute))" -Properties lDAPDisplayName -ErrorAction SilentlyContinue
+        if ($null -eq $attributeSchema) {
+            return [pscustomobject]@{
+                Passed = $false
+                Evidence = 'ObsAttribute={0}; AttributeExists=False; Schema={1}' -f $obsAttribute, $schemaNamingContext
+            }
+        }
+
+        $userClass = Get-ShareSurferLabValidationSchemaClass -SchemaNamingContext $schemaNamingContext -ClassName 'user'
+        $groupClass = Get-ShareSurferLabValidationSchemaClass -SchemaNamingContext $schemaNamingContext -ClassName 'group'
+        $userAllows = Test-ShareSurferLabValidationSchemaClassAllowsAttribute -ClassSchema $userClass -AttributeName $obsAttribute
+        $groupAllows = Test-ShareSurferLabValidationSchemaClassAllowsAttribute -ClassSchema $groupClass -AttributeName $obsAttribute
+
+        [pscustomobject]@{
+            Passed = ($userAllows -and $groupAllows)
+            Evidence = 'ObsAttribute={0}; AttributeExists=True; UserAllows={1}; GroupAllows={2}; Schema={3}' -f $obsAttribute, $userAllows, $groupAllows, $schemaNamingContext
+        }
+    }
+    catch {
+        [pscustomobject]@{
+            Passed = $false
+            Evidence = 'OBS attribute schema check failed for {0}: {1}' -f $obsAttribute, $_.Exception.Message
+        }
+    }
+}
+
+function Get-ShareSurferLabValidationSchemaClass {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SchemaNamingContext,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ClassName
+    )
+
+    $escapedClassName = ConvertTo-ShareSurferLabValidationLdapFilterValue -Value $ClassName
+    Get-ADObject -SearchBase $SchemaNamingContext -LDAPFilter "(&(objectClass=classSchema)(lDAPDisplayName=$escapedClassName))" -Properties mayContain, systemMayContain, mustContain, systemMustContain -ErrorAction SilentlyContinue
+}
+
+function Test-ShareSurferLabValidationSchemaClassAllowsAttribute {
+    param(
+        $ClassSchema,
+
+        [Parameter(Mandatory = $true)]
+        [string] $AttributeName
+    )
+
+    if ($null -eq $ClassSchema) {
+        return $false
+    }
+
+    foreach ($propertyName in @('mayContain', 'systemMayContain', 'mustContain', 'systemMustContain')) {
+        if (-not $ClassSchema.PSObject.Properties[$propertyName]) {
+            continue
+        }
+        foreach ($value in @($ClassSchema.PSObject.Properties[$propertyName].Value)) {
+            if ([string]::Equals([string]$value, $AttributeName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                return $true
+            }
+        }
+    }
+
+    $false
+}
+
 function Test-ShareSurferLabValidationObjectInOu {
     param(
         [string] $DistinguishedName = '',
@@ -231,6 +333,14 @@ function ConvertTo-ShareSurferLabValidationAdFilterValue {
     )
 
     $Value -replace "'", "''"
+}
+
+function ConvertTo-ShareSurferLabValidationLdapFilterValue {
+    param(
+        [string] $Value = ''
+    )
+
+    ([string]$Value).Replace('\', '\5c').Replace('*', '\2a').Replace('(', '\28').Replace(')', '\29').Replace([string][char]0, '\00')
 }
 
 function ConvertTo-ShareSurferLabValidationBool {
@@ -343,6 +453,9 @@ function New-ShareSurferLabValidationPreflight {
         $adEvidence = 'Module={0}' -f $adModule.Path
     }
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'ActiveDirectoryModule' -Required $adRequired -Passed ($null -ne $adModule) -Evidence $adEvidence -NextAction 'Install or enable RSAT Active Directory PowerShell tools on the collector host.'))
+
+    $obsAttributeSchemaResult = Test-ShareSurferLabValidationObsAttributeSchema -Plan $Plan
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'ObsAttributeSchema' -Required ([bool]$CreateLab) -Passed ((-not [bool]$CreateLab) -or [bool]$obsAttributeSchemaResult.Passed) -Evidence $obsAttributeSchemaResult.Evidence -NextAction 'Choose an AD attribute that exists and is allowed on both user and group objects, then rerun with -ObsAttribute using that attribute name.'))
 
     $adObjectCollisionResult = Test-ShareSurferLabValidationAdObjectCollisions -Plan $Plan
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'AdObjectNameCollisions' -Required ([bool]$CreateLab) -Passed ([bool]$adObjectCollisionResult.Passed) -Evidence $adObjectCollisionResult.Evidence -NextAction 'Rename or remove any existing AD user or group whose name matches a planned ShareSurfer lab object but is outside the ShareSurferLab OU.'))

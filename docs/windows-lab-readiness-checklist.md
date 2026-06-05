@@ -61,6 +61,7 @@ Stop and fix the issue before continuing if any required row is not passing, esp
 - `WindowsCollectorHost`
 - `PowerShell51`
 - `ActiveDirectoryModule`
+- `ObsAttributeSchema`
 - `SmbShareCommands`
 - `EnterpriseIncludeFiles`
 - `WindowsPathComponents`
