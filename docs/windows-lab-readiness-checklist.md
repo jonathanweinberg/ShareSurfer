@@ -105,6 +105,7 @@ Keep these raw files inside the trusted lab environment:
 - `live-evidence-review.csv`
 - `v1-acceptance.json`
 - `v1-acceptance-summary.json`
+- `dashboard-review.md`
 - `issue-summary.md`
 - `issue-comments\issue-1-lab-fixture-live-proof.md`
 - `issue-comments\issue-3-scanner-live-proof.md`
@@ -123,6 +124,7 @@ Use these files first:
 - `v1-acceptance-summary.json`: quick pass/fail summary.
 - `v1-acceptance.json`: detailed acceptance evidence.
 - `validation-closeout-checklist.md`: safe go/no-go checklist for proof review and issue-comment posting.
+- `dashboard-review.md`: dashboard marker checks, row counts, and the operator live-review checklist for issue #6.
 - `issue-summary.md`: public-safe Markdown starting point for GitHub issue updates.
 - `issue-comments\*.md`: public-safe targeted body-file comments for the remaining proof issues.
 - `issue-comments\post-commands.txt`: exact `gh issue comment --body-file` commands for posting those targeted comments after review.
@@ -146,6 +148,7 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `support-bundle-redacted\support_bundle_manifest.csv` has `RedactionLeakCount=0`.
 - `support-bundle-redacted\v1_acceptance_summary.json` exists.
 - `report.html` opens locally and shows the ShareSurfer Business Review Dashboard.
+- `dashboard-review.md` has `Dashboard review status: Pass`, then the operator confirms the live dashboard views render and respond to filters.
 
 ## Stop Gates
 
@@ -157,6 +160,7 @@ Stop and review before sharing evidence if any of these happen:
 - Live evidence falls back to `LabPlan` for a required enterprise criterion.
 - The redacted support bundle reports a redaction leak.
 - The dashboard is blank, unreadable, or missing expected owner, group, findings, diagnostics, or migration discovery views.
+- `dashboard-review.md` is missing or says the dashboard needs review.
 - The run creates more lab data than the configured budget.
 
 ## What To Attach To Issues

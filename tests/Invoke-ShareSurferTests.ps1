@@ -1708,9 +1708,11 @@ $tests = @(
             $issueCommentScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueComments.ps1'
             $issueCommentPublisherScript = Join-Path $repoRoot 'scripts/Publish-ShareSurferValidationIssueComments.ps1'
             $closeoutChecklistScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationCloseoutChecklist.ps1'
+            $dashboardReviewScript = Join-Path $repoRoot 'scripts/New-ShareSurferDashboardReview.ps1'
             $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferAcceptance-' + [guid]::NewGuid().ToString('N'))
             $exportPath = Join-Path $runRoot 'export'
             $reportPath = Join-Path $runRoot 'report.html'
+            $dashboardReviewPath = Join-Path $runRoot 'dashboard-review.md'
             $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
             $acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
             $closeoutChecklistPath = Join-Path $runRoot 'validation-closeout-checklist.md'
@@ -1719,6 +1721,7 @@ $tests = @(
 
             Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
             ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
+            & $dashboardReviewScript -RunRoot $runRoot -ExportPath $exportPath -ReportPath $reportPath -OutputPath $dashboardReviewPath | Out-Null
             @(
                 [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users'; Passed = $true; EvidenceSource = 'ActiveDirectory'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Users' },
                 [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'shares'; Passed = $true; EvidenceSource = 'ScanExport:shares.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Shares' }
@@ -1748,6 +1751,12 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $issueCommentScript) 'Validation issue comment generator script should exist.'
             Assert-True (Test-Path -LiteralPath $issueCommentPublisherScript) 'Validation issue comment publisher script should exist.'
             Assert-True (Test-Path -LiteralPath $closeoutChecklistScript) 'Validation closeout checklist script should exist.'
+            Assert-True (Test-Path -LiteralPath $dashboardReviewScript) 'Dashboard review generator script should exist.'
+            Assert-True (Test-Path -LiteralPath $dashboardReviewPath) 'Dashboard review generator should write a review artifact.'
+            $dashboardReviewText = Get-Content -LiteralPath $dashboardReviewPath -Raw
+            Assert-True ($dashboardReviewText -like '*Dashboard review status: Pass*') 'Dashboard review should pass for the synthetic report.'
+            Assert-True ($dashboardReviewText -like '*Operator Live Review*') 'Dashboard review should include operator review guidance.'
+            Assert-True ($dashboardReviewText -notlike "*$runRoot*") 'Dashboard review should not include raw run-root paths.'
             $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -AllowMissingIssueComments
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
@@ -1799,6 +1808,7 @@ $tests = @(
             Assert-True ($issueThreeComment -like '*EnterpriseOwnershipEvidence*') 'Issue #3 comment should summarize scanner ownership evidence.'
             Assert-True ($issueFiveComment -like '*EnterpriseGroupExpansion*') 'Issue #5 comment should summarize group expansion evidence.'
             Assert-True ($issueSixComment -like '*OwnerReviewPackets*') 'Issue #6 comment should summarize dashboard and owner review evidence.'
+            Assert-True ($issueSixComment -like '*DashboardReviewEvidence*') 'Issue #6 comment should summarize dashboard review evidence.'
             $postCommands = Get-Content -LiteralPath (Join-Path $issueCommentDirectory 'post-commands.txt') -Raw
             Assert-True ($postCommands -like '*gh issue comment 1 --repo jonathanweinberg/ShareSurfer --body-file*') 'Post commands should use the body-file issue comment pattern.'
             Assert-True ($postCommands -like '*issue-6-dashboard-live-proof.md*') 'Post commands should include the dashboard proof issue body file.'
@@ -1839,6 +1849,7 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
             Assert-True ($result.Checks.Name -contains 'OwnerReviewPackets') 'Acceptance checks should include owner review packet evidence.'
             Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
+            Assert-True ($result.Checks.Name -contains 'DashboardReviewEvidence') 'Acceptance checks should include dashboard review evidence.'
             Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
             Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
             Assert-True ($result.Checks.Name -contains 'LabRunSupportBundleEvidence') 'Acceptance checks should include redacted lab-run support bundle evidence.'
@@ -1852,12 +1863,15 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
             $bundleFilesAfterIssueSummary = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'support_bundle_files.csv'))
             Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
+            Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'dashboard_review.md') 'Final lab support bundle should include the dashboard review artifact.'
             $bundledIssueSummaryPath = Join-Path $bundlePath 'issue_summary.md'
             $bundledIssueSummary = Get-Content -LiteralPath $bundledIssueSummaryPath -Raw
             Assert-True ($bundledIssueSummary -like '*ShareSurfer live validation evidence summary*') 'Bundled issue summary should keep the public-safe validation title.'
             Assert-True ($bundledIssueSummary -notlike '*Synthetic acceptance proof*') 'Bundled issue summary should not include raw evidence detail values.'
             Assert-True ($bundledIssueSummary -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Bundled issue summary should not include raw lab-run detail values.'
             $labRunDiagnosticsWithIssueSummary = Get-Content -LiteralPath (Join-Path $bundlePath 'lab_run_diagnostics.json') -Raw | ConvertFrom-Json
+            Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.DashboardReview.Included) 'True' 'Lab-run diagnostics should record bundled dashboard review inclusion.'
+            Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.DashboardReview.FileName) 'dashboard_review.md' 'Lab-run diagnostics should name the bundled dashboard review file.'
             Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.IssueSummary.Included) 'True' 'Lab-run diagnostics should record bundled issue summary inclusion.'
             Assert-Equal ([string]$labRunDiagnosticsWithIssueSummary.IssueSummary.FileName) 'issue_summary.md' 'Lab-run diagnostics should name the bundled issue summary file.'
 
@@ -1866,6 +1880,13 @@ $tests = @(
             Assert-True (-not $badReportResult.IsValid) 'Acceptance checker should fail when the offline report is present but missing dashboard content.'
             Assert-True (@($badReportResult.Checks | Where-Object { $_.Name -eq 'OfflineReport' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report offline report content failures.'
             ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
+            & $dashboardReviewScript -RunRoot $runRoot -ExportPath $exportPath -ReportPath $reportPath -OutputPath $dashboardReviewPath | Out-Null
+
+            Set-Content -LiteralPath $dashboardReviewPath -Value '# ShareSurfer Dashboard Review' -Encoding UTF8
+            $badDashboardReviewResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badDashboardReviewResult.IsValid) 'Acceptance checker should fail when dashboard review evidence is incomplete.'
+            Assert-True (@($badDashboardReviewResult.Checks | Where-Object { $_.Name -eq 'DashboardReviewEvidence' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report dashboard review evidence failures.'
+            & $dashboardReviewScript -RunRoot $runRoot -ExportPath $exportPath -ReportPath $reportPath -OutputPath $dashboardReviewPath | Out-Null
 
             $bundleManifestPath = Join-Path $bundlePath 'support_bundle_manifest.csv'
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
@@ -1873,6 +1894,7 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Final lab support bundle should include the redacted acceptance summary.'
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance_summary.json') 'Final lab support bundle should include the concise acceptance summary.'
             Assert-True ($bundleFiles.FileName -contains 'lab_run_events.jsonl') 'Final lab support bundle should include the redacted lab-run event log.'
+            Assert-True ($bundleFiles.FileName -contains 'dashboard_review.md') 'Final lab support bundle should include the dashboard review artifact.'
             Assert-True ($bundleFiles.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
             Assert-True ($bundleFiles.FileName -contains 'validation_closeout_checklist.md') 'Final lab support bundle should include the public-safe closeout checklist.'
             Assert-True ($bundleFiles.FileName -contains 'issue_comments/publish_preview.csv') 'Final lab support bundle should include the sanitized issue-comment publish preview.'
@@ -1887,6 +1909,7 @@ $tests = @(
             Assert-True ($bundledAcceptanceSummary -notlike '*Synthetic acceptance proof*') 'Bundled acceptance summary should not include raw evidence detail values.'
             $labRunDiagnostics = Get-Content -LiteralPath (Join-Path $bundlePath 'lab_run_diagnostics.json') -Raw | ConvertFrom-Json
             Assert-Equal ([string]$labRunDiagnostics.AcceptanceSummary.IsValid) 'True' 'Lab-run diagnostics should summarize the bundled acceptance summary.'
+            Assert-Equal ([string]$labRunDiagnostics.DashboardReview.Included) 'True' 'Lab-run diagnostics should summarize dashboard review evidence.'
             Assert-Equal ([string]$labRunDiagnostics.IssueSummary.Included) 'True' 'Lab-run diagnostics should summarize the bundled issue summary.'
             Assert-Equal ([string]$labRunDiagnostics.CloseoutChecklist.Included) 'True' 'Lab-run diagnostics should summarize the bundled closeout checklist.'
             Assert-Equal ([string]$labRunDiagnostics.CloseoutChecklist.FileName) 'validation_closeout_checklist.md' 'Lab-run diagnostics should name the bundled closeout checklist.'
@@ -2001,6 +2024,9 @@ $tests = @(
             Assert-True ($labValidationScript -like '*v1-acceptance-summary.json*') 'Lab validation should write a concise acceptance summary artifact.'
             Assert-True ($labValidationScript -like '*AcceptanceSummaryPath*') 'Lab validation output should include the acceptance summary artifact path.'
             Assert-True ($labValidationScript -like '*-SummaryPath $acceptanceSummaryPath*') 'Lab validation should write the summary before refreshing the final support bundle.'
+            Assert-True ($labValidationScript -like '*dashboard-review.md*') 'Lab validation should write dashboard review evidence.'
+            Assert-True ($labValidationScript -like '*New-ShareSurferDashboardReview.ps1*') 'Lab validation should call the dashboard review generator automatically.'
+            Assert-True ($labValidationScript -like '*DashboardReviewPath*') 'Lab validation output should include the dashboard review artifact path.'
             Assert-True ($labValidationScript -like '*issue-summary.md*') 'Lab validation should write a public-safe issue summary artifact.'
             Assert-True ($labValidationScript -like '*New-ShareSurferValidationIssueSummary.ps1*') 'Lab validation should call the validation issue summary generator automatically.'
             Assert-True ($labValidationScript -like '*IssueSummaryPath*') 'Lab validation output should include the issue summary artifact path.'

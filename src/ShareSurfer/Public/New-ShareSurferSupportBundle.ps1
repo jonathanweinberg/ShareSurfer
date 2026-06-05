@@ -179,6 +179,7 @@ function New-ShareSurferSupportBundle {
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.',
         'lab_run_events.jsonl is included when a lab validation run root was supplied and records redacted lab-validation phase events.',
         'lab_run_diagnostics.json is included when a lab validation run root was supplied.',
+        'dashboard_review.md is included when a lab validation run generated dashboard review evidence.',
         'issue_summary.md is included when a lab validation run has generated a public-safe issue summary.',
         'validation_closeout_checklist.md is included when a lab validation run has generated a public-safe closeout checklist.',
         'issue_comments contains public-safe issue comment bodies when a lab validation run generated targeted issue updates.'
@@ -226,6 +227,8 @@ function New-ShareSurferSupportBundleLabRunEvidence {
     $issueCommentPostCommandsIncluded = $false
     $issueCommentPublishPreviewIncluded = $false
     $issueCommentPublishPreviewRowCount = 0
+    $dashboardReviewIncluded = $false
+    $dashboardReviewLineCount = 0
     $preflightRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-preflight.csv') -DestinationPath (Join-Path $BundlePath 'lab_preflight.csv') -RedactColumns @('Evidence') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($preflightRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_preflight.csv'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_preflight.csv') -FileName 'lab_preflight.csv' -RowCount $preflightRows.Count))
@@ -266,6 +269,16 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         $acceptanceSummary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $acceptanceSummaryPath -Encoding UTF8
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $acceptanceSummaryPath -FileName 'v1_acceptance_summary.json' -RowCount 1))
         [void]$includedFiles.Add('v1_acceptance_summary.json')
+    }
+
+    $dashboardReviewSourcePath = Join-Path $RunRoot 'dashboard-review.md'
+    if (Test-Path -LiteralPath $dashboardReviewSourcePath) {
+        $dashboardReviewPath = Join-Path $BundlePath 'dashboard_review.md'
+        Copy-Item -LiteralPath $dashboardReviewSourcePath -Destination $dashboardReviewPath -Force
+        $dashboardReviewLineCount = @((Get-Content -LiteralPath $dashboardReviewPath -ErrorAction SilentlyContinue)).Count
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $dashboardReviewPath -FileName 'dashboard_review.md' -RowCount $dashboardReviewLineCount))
+        [void]$includedFiles.Add('dashboard_review.md')
+        $dashboardReviewIncluded = $true
     }
 
     $issueSummarySourcePath = Join-Path $RunRoot 'issue-summary.md'
@@ -410,6 +423,11 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         LiveEvidence = if ($null -eq $liveEvidence) { $null } else { [ordered]@{ IsValid = $liveEvidence.IsValid; FallbackCount = $liveEvidence.FallbackCount } }
         Acceptance = if ($null -eq $acceptance) { $null } else { [ordered]@{ IsValid = $acceptance.IsValid; FailedCheckCount = $acceptance.FailedCheckCount } }
         AcceptanceSummary = if ($null -eq $acceptanceSummary) { $null } else { [ordered]@{ IsValid = $acceptanceSummary.IsValid; FailedCheckCount = $acceptanceSummary.FailedCheckCount; CheckCount = $acceptanceSummary.CheckCount } }
+        DashboardReview = [ordered]@{
+            Included = [bool]$dashboardReviewIncluded
+            FileName = if ($dashboardReviewIncluded) { 'dashboard_review.md' } else { '' }
+            LineCount = [int]$dashboardReviewLineCount
+        }
         IssueSummary = [ordered]@{
             Included = [bool]$issueSummaryIncluded
             FileName = if ($issueSummaryIncluded) { 'issue_summary.md' } else { '' }
