@@ -203,6 +203,7 @@ function New-ShareSurferSupportBundleDiagnostics {
     $identities = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'identities.csv'))
     $groupEdges = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'group_edges.csv'))
     $ownerPivots = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_risk_pivots.csv'))
+    $relatedDataAreas = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'related_data_areas.csv'))
     $findings = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'findings.csv'))
     $conflicts = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'conflicts.csv'))
     $events = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'scan_events.csv'))
@@ -251,6 +252,7 @@ function New-ShareSurferSupportBundleDiagnostics {
             IdentityCount = $identities.Count
             GroupEdgeCount = $groupEdges.Count
             OwnerRiskPivotCount = $ownerPivots.Count
+            RelatedDataAreaCount = $relatedDataAreas.Count
             FindingCount = $findings.Count
             HighFindingCount = $highFindings.Count
             ConflictCount = $conflicts.Count
@@ -418,12 +420,20 @@ function Test-ShareSurferRedactionAuditValue {
         'InheritanceEnabled',
         'PartialData',
         'PartialReason',
+        'MigrationReadiness',
+        'MatchingShares',
         'MatchingItems',
         'Directories',
         'Files',
         'FindingCount',
         'ConflictCount',
+        'ReviewItemCount',
         'PartialShareCount',
+        'DirectIdentityCount',
+        'DirectGroupCount',
+        'ExpandedMemberCount',
+        'RelatedBecause',
+        'SuggestedNextAction',
         'RiskLevel',
         'ObjectClass',
         'ChildObjectClass',
@@ -449,6 +459,7 @@ function Test-ShareSurferRedactionAuditValue {
         'ItemId',
         'FindingId',
         'ConflictId',
+        'RelatedAreaId',
         'EventId',
         'Level',
         'EventType'

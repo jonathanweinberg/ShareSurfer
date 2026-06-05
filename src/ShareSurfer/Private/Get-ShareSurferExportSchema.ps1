@@ -92,6 +92,29 @@ function Get-ShareSurferExportSchema {
             'ExpandedMemberCount',
             'RiskLevel'
         )
+        'related_data_areas.csv' = @(
+            'RelatedAreaId',
+            'RelatedDataArea',
+            'BusinessUnit',
+            'Owner',
+            'Pattern',
+            'Source',
+            'RiskLevel',
+            'MigrationReadiness',
+            'MatchingShares',
+            'MatchingItems',
+            'Directories',
+            'Files',
+            'FindingCount',
+            'ConflictCount',
+            'ReviewItemCount',
+            'PartialShareCount',
+            'DirectIdentityCount',
+            'DirectGroupCount',
+            'ExpandedMemberCount',
+            'RelatedBecause',
+            'SuggestedNextAction'
+        )
         'conflicts.csv' = @(
             'ConflictId',
             'ConflictType',
