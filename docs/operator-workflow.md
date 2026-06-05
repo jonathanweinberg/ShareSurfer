@@ -130,7 +130,7 @@ Invoke-ShareSurferScan `
 
 If a pre-collected inventory object is being tested, pass it with `-InputObject`. For production collection, use the source-selection parameters supported by the implementation and keep the same export path discipline.
 
-Use `-AdLookupMode Auto` for normal runs. Use `ActiveDirectory` to force the AD PowerShell module path, `Ldap` to force the built-in .NET directory searcher fallback, or `DirectoryOnly` for imported fixture data where no live directory lookup should occur.
+Use `-AdLookupMode Auto` for normal runs. Use `ActiveDirectory` to force the AD PowerShell module path, `Ldap` to force the built-in .NET directory searcher fallback, or `DirectoryOnly` for imported fixture data where no live directory lookup should occur. Both live directory paths try to populate employee fields, the selected OBS attribute, direct manager, and manager's manager when directory permissions allow those reads.
 
 After every scan, validate the export set:
 

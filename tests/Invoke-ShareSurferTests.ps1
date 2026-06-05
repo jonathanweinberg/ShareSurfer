@@ -486,6 +486,45 @@ $tests = @(
         }
     },
     @{
+        Name = 'LDAP identity normalization preserves two-level manager chains and OBS attributes'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ConvertTo-ShareSurferArray.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/New-ShareSurferLdapIdentityRecord.ps1')
+
+            $userProperties = @{
+                samaccountname = @('Ava.Accounting')
+                displayname = @('Ava Accounting')
+                objectclass = @('top', 'person', 'organizationalPerson', 'user')
+                employeeid = @('E1001')
+                employeenumber = @('1001')
+                manager = @('CN=Morgan Manager,OU=Users,DC=example,DC=test')
+                extensionattribute10 = @('CORP.FIN.AP')
+            }
+
+            $user = New-ShareSurferLdapIdentityRecord -Identity 'CONTOSO\Ava.Accounting' -Properties $userProperties -ObsAttribute 'extensionAttribute10' -ManagerLevel2 'CN=Taylor Director,OU=Users,DC=example,DC=test'
+            Assert-Equal $user.ObjectClass 'user' 'LDAP user record should identify user object class.'
+            Assert-Equal $user.ManagerLevel1 'CN=Morgan Manager,OU=Users,DC=example,DC=test' 'LDAP user record should preserve direct manager DN.'
+            Assert-Equal $user.ManagerLevel2 'CN=Taylor Director,OU=Users,DC=example,DC=test' 'LDAP user record should preserve manager manager DN.'
+            Assert-Equal $user.ObsPath 'CORP.FIN.AP' 'LDAP user record should read the configured OBS attribute.'
+            Assert-Equal $user.EmployeeId 'E1001' 'LDAP user record should preserve employee ID.'
+
+            $groupProperties = @{
+                samaccountname = @('FinanceEditors')
+                displayname = @('Finance Editors')
+                objectclass = @('top', 'group')
+                member = @('CN=Ava Accounting,OU=Users,DC=example,DC=test')
+                extensionattribute10 = @('CORP.FIN')
+            }
+            $group = New-ShareSurferLdapIdentityRecord -Identity 'CONTOSO\FinanceEditors' -Properties $groupProperties -ObsAttribute 'extensionAttribute10' -Members @('CONTOSO\Ava.Accounting')
+            Assert-Equal $group.ObjectClass 'group' 'LDAP group record should identify group object class.'
+            Assert-True ($group.Members -contains 'CONTOSO\Ava.Accounting') 'LDAP group record should preserve resolved members.'
+
+            $ldapScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferDirectoryIdentity.ps1') -Raw
+            Assert-True ($ldapScript -like '*Get-ShareSurferLdapManagerLevel2*') 'LDAP fallback should resolve manager manager for org-chain rollups.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan classifies restrictive share gates and NTFS deny collisions'
         Body = {
             Import-Module $moduleManifest -Force

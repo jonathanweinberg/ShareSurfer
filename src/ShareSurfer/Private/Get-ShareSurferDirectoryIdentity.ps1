@@ -122,20 +122,9 @@ function Get-ShareSurferDirectoryIdentity {
             })
         }
 
-        [pscustomobject]@{
-            Identity = $Identity
-            SamAccountName = [string]$props['samaccountname'][0]
-            DisplayName = [string]$props['displayname'][0]
-            ObjectClass = $objectClass
-            EmployeeId = [string]$props['employeeid'][0]
-            EmployeeNumber = [string]$props['employeenumber'][0]
-            Manager = [string]$props['manager'][0]
-            ManagerLevel1 = [string]$props['manager'][0]
-            ManagerLevel2 = ''
-            ObsPath = [string]$props[$ObsAttribute.ToLowerInvariant()][0]
-            ObsAttribute = $ObsAttribute
-            Members = @($members)
-        }
+        $managerLevel1 = Get-ShareSurferLdapPropertyValue -Properties $props -Name 'manager'
+        $managerLevel2 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel1
+        New-ShareSurferLdapIdentityRecord -Identity $Identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2
     }
     catch {
         $null

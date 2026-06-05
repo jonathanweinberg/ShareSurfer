@@ -35,21 +35,9 @@ function Resolve-ShareSurferDistinguishedNameIdentity {
             $members = @($props['member'] | ForEach-Object { [string]$_ })
         }
 
-        [pscustomobject]@{
-            Identity = $identity
-            SamAccountName = $sam
-            DisplayName = [string]$props['displayname'][0]
-            ObjectClass = $objectClass
-            EmployeeId = [string]$props['employeeid'][0]
-            EmployeeNumber = [string]$props['employeenumber'][0]
-            Manager = [string]$props['manager'][0]
-            ManagerLevel1 = [string]$props['manager'][0]
-            ManagerLevel2 = ''
-            ObsPath = [string]$props[$ObsAttribute.ToLowerInvariant()][0]
-            ObsAttribute = $ObsAttribute
-            Members = @($members)
-            DistinguishedName = $DistinguishedName
-        }
+        $managerLevel1 = Get-ShareSurferLdapPropertyValue -Properties $props -Name 'manager'
+        $managerLevel2 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel1
+        New-ShareSurferLdapIdentityRecord -Identity $identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2 -DistinguishedName $DistinguishedName
     }
     catch {
         $null
