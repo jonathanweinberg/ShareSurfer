@@ -610,6 +610,17 @@ function New-ShareSurferLabValidationCriteriaRows {
                 }
                 $detail = 'DirectoryUsers={0}; PlannedUsers={1}; {2}' -f $evidence.DirectoryUserCount, $evidence.PlannedUserCount, $evidence.DirectoryEvidenceDetail
             }
+            'EnterpriseGroupPopulation' {
+                if ($null -ne $evidence.DirectoryGroupCount) {
+                    $actual = [int64]$evidence.DirectoryGroupCount
+                    $source = [string]$evidence.DirectoryEvidenceSource
+                }
+                else {
+                    $actual = [int64]@($Plan.Groups).Count
+                    $source = 'LabPlan'
+                }
+                $detail = 'DirectoryGroups={0}; PlannedGroups={1}; {2}' -f $evidence.DirectoryGroupCount, @($Plan.Groups).Count, $evidence.DirectoryEvidenceDetail
+            }
             'EnterpriseEmployeeIdentifierCoverage' {
                 if ([int64]$evidence.IdentityUserEmployeeIdentifierCount -gt 0) {
                     $actual = [int64]$evidence.IdentityUserEmployeeIdentifierCount

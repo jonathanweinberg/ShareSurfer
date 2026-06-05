@@ -242,6 +242,14 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes a multi-thousand user population.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseGroupPopulation'
+            MinimumValue = @($groups).Count
+            ActualPlanValue = @($groups).Count
+            Unit = 'groups'
+            Required = $true
+            Description = 'Enterprise validation includes the generated security group population for share and ACL access scenarios.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseEmployeeIdentifierCoverage'
             MinimumValue = 1
             ActualPlanValue = @($users | Where-Object { [string]$_.EmployeeId -ne '' -and [string]$_.EmployeeNumber -ne '' }).Count
