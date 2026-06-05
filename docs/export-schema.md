@@ -35,6 +35,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
 | `related_data_areas.csv` | One row per migration discovery area | Groups like-owned shares, folders, and files for migration planning with explainable relatedness and readiness. |
+| `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
 | `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
@@ -106,6 +107,12 @@ Expected columns: `RelatedAreaId`, `RelatedDataArea`, `BusinessUnit`, `Owner`, `
 
 Use this file before migration planning to find shares, folders, and files that appear to belong together. `RelatedBecause` is intentionally plain language, such as same owner mapping, same business unit, matching path pattern, shared permission group, shared review risk, or partial collection gap. `MigrationReadiness` is not approval; it indicates whether the current scan suggests the area is a candidate, needs review, or is blocked by scan gaps.
 
+### `owner_review_packets.csv`
+
+Expected columns: `ReviewPacketId`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `ReviewStatus`, `WhyReview`, `WhatToReviewFirst`, `SuggestedNextAction`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `MigrationReadiness`, `RelatedDataAreaCount`.
+
+Use this file when business owners need a CSV-first review packet instead of raw ACL evidence. `WhyReview`, `WhatToReviewFirst`, and `SuggestedNextAction` are plain-language fields generated from owner pivots, findings, conflicts, partial-share counts, group counts, and related-data-area readiness. The packet is not approval; it is a starting point for owner confirmation and access cleanup.
+
 ### `conflicts.csv`
 
 Expected columns: `ConflictId`, `ConflictType`, `ShareId`, `ItemId`, `Identity`, `ShareRights`, `NtfsRights`, `Severity`, `Message`.
@@ -151,3 +158,4 @@ Use the manifest to reproduce scan settings and explain incomplete data.
 - `owner_mappings` adds business context to paths and shares.
 - `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.
+- `owner_review_packets` builds on owner risk pivots and related data areas to produce business-owner review packets with plain next steps.

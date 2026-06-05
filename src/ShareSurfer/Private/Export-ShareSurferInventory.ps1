@@ -90,6 +90,7 @@ function Export-ShareSurferInventory {
     $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
     $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts)
     $relatedDataAreas = @(Get-ShareSurferRelatedDataAreas -OwnerRiskPivots $ownerRiskPivots -Items $items -Shares $shares)
+    $ownerReviewPackets = @(Get-ShareSurferOwnerReviewPackets -OwnerRiskPivots $ownerRiskPivots -RelatedDataAreas $relatedDataAreas)
     $manifest = @(
         [pscustomobject]@{
             ScanId = [guid]::NewGuid().ToString('N')
@@ -118,6 +119,7 @@ function Export-ShareSurferInventory {
         'owner_mappings.csv' = $ownerMappings
         'owner_risk_pivots.csv' = $ownerRiskPivots
         'related_data_areas.csv' = $relatedDataAreas
+        'owner_review_packets.csv' = $ownerReviewPackets
         'conflicts.csv' = $conflicts
         'findings.csv' = $findings
         'scan_events.csv' = @($scanEvents)
@@ -142,5 +144,6 @@ function Export-ShareSurferInventory {
         Findings = $findings.Count
         Conflicts = $conflicts.Count
         RelatedDataAreas = $relatedDataAreas.Count
+        OwnerReviewPackets = $ownerReviewPackets.Count
     }
 }

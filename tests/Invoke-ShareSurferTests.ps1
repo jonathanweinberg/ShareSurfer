@@ -513,6 +513,7 @@ $tests = @(
                 'owner_mappings.csv',
                 'owner_risk_pivots.csv',
                 'related_data_areas.csv',
+                'owner_review_packets.csv',
                 'conflicts.csv',
                 'findings.csv',
                 'scan_events.csv',
@@ -555,6 +556,14 @@ $tests = @(
             Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'SuggestedNextAction') 'Related data area CSV should include suggested next actions.'
             Assert-True ([int]$relatedDataAreas[0].ReviewItemCount -ge 1) 'Related data areas should count findings and conflicts that need migration review.'
             Assert-True ([int]$relatedDataAreas[0].DirectGroupCount -ge 1) 'Related data areas should count permissioned groups.'
+
+            $ownerReviewPackets = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_review_packets.csv')
+            Assert-True ($ownerReviewPackets.BusinessUnit -contains 'Finance') 'Owner review packets should expose business-unit review packets as CSV.'
+            Assert-True ($ownerReviewPackets[0].PSObject.Properties.Name -contains 'WhyReview') 'Owner review packets should include plain why-review guidance.'
+            Assert-True ($ownerReviewPackets[0].PSObject.Properties.Name -contains 'WhatToReviewFirst') 'Owner review packets should include where-to-start guidance.'
+            Assert-True ($ownerReviewPackets[0].PSObject.Properties.Name -contains 'SuggestedNextAction') 'Owner review packets should include suggested next actions.'
+            Assert-True ($ownerReviewPackets[0].WhyReview -like '*permission*' -or $ownerReviewPackets[0].WhyReview -like '*finding*' -or $ownerReviewPackets[0].WhyReview -like '*risk*') 'Owner review packet guidance should explain why review is needed.'
+            Assert-True ([int]$ownerReviewPackets[0].DirectGroupCount -ge 1) 'Owner review packets should carry access-review group sizing.'
 
             $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
             Assert-True ($events.EventType -contains 'ScanStarted') 'Scan events should record scan start.'
@@ -919,6 +928,7 @@ $tests = @(
             Assert-True ($report -like '*raw-dataset-filter*') 'Raw evidence view should let operators choose a normalized dataset.'
             Assert-True ($report -like '*renderRawEvidence*') 'Raw evidence view should dynamically render embedded CSV-shaped rows.'
             Assert-True ($report -like '*rawDatasetLabels*') 'Raw evidence view should present friendly dataset labels.'
+            Assert-True ($report -like '*owner_review_packets.csv*') 'Raw evidence view should expose owner review packets.'
             Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'
             Assert-True ($report -like '*.summary, .visual-grid { grid-template-columns: 1fr; }*') 'Report summary and visual grids should collapse cleanly on mobile.'
         }
@@ -1062,6 +1072,7 @@ $tests = @(
             $redactedOwners = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_mappings.csv') -Raw
             $redactedOwnerRiskPivots = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_risk_pivots.csv') -Raw
             $redactedRelatedDataAreas = Get-Content -LiteralPath (Join-Path $bundlePath 'related_data_areas.csv') -Raw
+            $redactedOwnerReviewPackets = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_review_packets.csv') -Raw
             Assert-True ($redactedIdentities -notlike '*E1001*') 'Employee IDs must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
@@ -1070,6 +1081,9 @@ $tests = @(
             Assert-True ($redactedRelatedDataAreas -notlike '*Finance*') 'Related data areas must anonymize source owner and business-unit labels.'
             Assert-True ($redactedRelatedDataAreas -like '*MigrationReadiness*') 'Related data areas should preserve migration readiness headers.'
             Assert-True ($redactedRelatedDataAreas -like '*same owner mapping*') 'Related data areas should preserve safe relatedness reasons.'
+            Assert-True ($redactedOwnerReviewPackets -notlike '*Finance*') 'Owner review packets must anonymize owner and business-unit labels.'
+            Assert-True ($redactedOwnerReviewPackets -like '*WhyReview*') 'Owner review packets should preserve guidance headers.'
+            Assert-True ($redactedOwnerReviewPackets -like '*SuggestedNextAction*') 'Owner review packets should preserve next-action guidance.'
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
@@ -1107,6 +1121,7 @@ $tests = @(
             Assert-True (@($bundleDiagnostics.Rollups.FindingsByType | Where-Object { $_.Name -eq 'DeepExplicitAce' }).Count -gt 0) 'Support bundle diagnostics should include finding type rollups.'
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
             Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.OwnerReviewPacketCount -gt 0) 'Support bundle diagnostics should summarize owner review packet counts.'
             Assert-True (@($bundleSummary.Files | Where-Object { $_.FileName -eq 'acl_entries.csv' }).Count -eq 1) 'Support bundle summary should include redacted file diagnostics.'
             Assert-True ($bundleSummaryText -notlike '*CONTOSO*') 'Support bundle summary must not contain source domain names.'
             Assert-True ($bundleSummaryText -notlike '*FinanceEditors*') 'Support bundle summary must not contain source group names.'
@@ -1117,6 +1132,7 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'related_data_areas.csv') 'Support bundle file diagnostics should include related data areas.'
+            Assert-True ($bundleFiles.FileName -contains 'owner_review_packets.csv') 'Support bundle file diagnostics should include owner review packets.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'
@@ -1309,6 +1325,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*visuals/report-dashboard-findings.png*') 'First-run guide should show an example findings screenshot.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-migration.png*') 'First-run guide should show an example migration discovery screenshot.'
             Assert-True ($firstRunText -like '*Raw Evidence Tables*') 'First-run guide should explain the raw evidence report view.'
+            Assert-True ($firstRunText -like '*owner_review_packets.csv*') 'First-run guide should explain owner review packet exports.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'

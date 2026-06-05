@@ -204,6 +204,7 @@ function New-ShareSurferSupportBundleDiagnostics {
     $groupEdges = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'group_edges.csv'))
     $ownerPivots = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_risk_pivots.csv'))
     $relatedDataAreas = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'related_data_areas.csv'))
+    $ownerReviewPackets = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'owner_review_packets.csv'))
     $findings = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'findings.csv'))
     $conflicts = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'conflicts.csv'))
     $events = @(Read-ShareSurferCsv -Path (Join-Path $BundlePath 'scan_events.csv'))
@@ -253,6 +254,7 @@ function New-ShareSurferSupportBundleDiagnostics {
             GroupEdgeCount = $groupEdges.Count
             OwnerRiskPivotCount = $ownerPivots.Count
             RelatedDataAreaCount = $relatedDataAreas.Count
+            OwnerReviewPacketCount = $ownerReviewPackets.Count
             FindingCount = $findings.Count
             HighFindingCount = $highFindings.Count
             ConflictCount = $conflicts.Count
@@ -434,6 +436,10 @@ function Test-ShareSurferRedactionAuditValue {
         'ExpandedMemberCount',
         'RelatedBecause',
         'SuggestedNextAction',
+        'ReviewStatus',
+        'WhyReview',
+        'WhatToReviewFirst',
+        'RelatedDataAreaCount',
         'RiskLevel',
         'ObjectClass',
         'ChildObjectClass',
@@ -460,6 +466,7 @@ function Test-ShareSurferRedactionAuditValue {
         'FindingId',
         'ConflictId',
         'RelatedAreaId',
+        'ReviewPacketId',
         'EventId',
         'Level',
         'EventType'

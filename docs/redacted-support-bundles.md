@@ -73,6 +73,7 @@ A useful support bundle includes:
 - `scan_manifest.csv` with sensitive values redacted but scan settings preserved.
 - `owner_risk_pivots.csv` with owner/business-unit tokens but preserved counts, access-review sizing, and risk levels for support triage.
 - `related_data_areas.csv` with owner/business-unit/path tokens but preserved migration readiness, relatedness reasons, counts, and suggested next actions.
+- `owner_review_packets.csv` with owner/business-unit/path tokens but preserved review status, why-review guidance, where-to-start guidance, counts, and suggested next actions.
 - `scan_events.jsonl` with redacted structured scan events for support tools that prefer JSON Lines logs.
 - `support_bundle_manifest.csv` with redaction mode, validation status, and bundle-level file counts.
 - `support_bundle_files.csv` with redacted CSV row counts and SHA256 hashes for support-case integrity checks.

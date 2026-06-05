@@ -177,8 +177,9 @@ The most important CSVs for a first review are:
 | `owner_mappings.csv` | Business owner and business unit rules. |
 | `owner_risk_pivots.csv` | Owner/business-unit review queue with mapped item counts, direct identities, direct groups, expanded members, findings, conflicts, partial shares, and risk level. |
 | `related_data_areas.csv` | Migration discovery rows for like-owned shares, folders, and files that should be reviewed together before migration planning. |
+| `owner_review_packets.csv` | Plain-language owner review packets showing why review is needed, where to start, and the suggested next action. |
 
-Start with `owner_risk_pivots.csv`, `related_data_areas.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
+Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
 
 ## Step 7: Generate the Offline Report
 
