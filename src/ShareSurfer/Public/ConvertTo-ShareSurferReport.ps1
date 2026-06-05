@@ -344,10 +344,44 @@ function ConvertTo-ShareSurferReport {
       margin-bottom: 10px;
     }
     .controls input { max-width: 360px; }
+    .workbench-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, .85fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .workbench-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin: 0;
+    }
+    .workbench-stats div {
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 10px 12px;
+      min-height: 76px;
+    }
+    .workbench-stats dt {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      text-transform: uppercase;
+    }
+    .workbench-stats dd {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .compact-scroll {
+      max-height: 245px;
+    }
     @media (max-width: 940px) {
       header { padding: 26px 20px 18px; }
       main { padding: 18px 20px 28px; }
-      .hero-grid, .toolbar, .filter-grid, .two-column { grid-template-columns: 1fr; }
+      .hero-grid, .toolbar, .filter-grid, .two-column, .workbench-grid { grid-template-columns: 1fr; }
       .summary, .visual-grid { grid-template-columns: 1fr; }
       .view-tabs { justify-content: flex-start; }
       h1 { font-size: 28px; }
@@ -399,6 +433,33 @@ function ConvertTo-ShareSurferReport {
       <div class="panel">
         <h2>Executive Summary</h2>
         <div class="summary" id="summary"></div>
+      </div>
+      <div class="panel" id="review-workbench">
+        <div class="table-header">
+          <h2>Review Workbench</h2>
+          <span class="count" id="workbench-count"></span>
+        </div>
+        <p class="note" id="workbench-context"></p>
+        <div class="workbench-grid">
+          <div>
+            <h3>Context Snapshot</h3>
+            <dl class="workbench-stats" id="workbench-stats"></dl>
+          </div>
+          <div>
+            <h3>Recommended Review</h3>
+            <ul class="actions" id="workbench-actions"></ul>
+          </div>
+        </div>
+        <div class="workbench-grid">
+          <div>
+            <h3>Related Groups</h3>
+            <div class="scroll compact-scroll"><table id="workbench-groups"></table></div>
+          </div>
+          <div>
+            <h3>Top Findings and Conflicts</h3>
+            <div class="scroll compact-scroll"><table id="workbench-risks"></table></div>
+          </div>
+        </div>
       </div>
       <div class="panel">
         <h2>Visual Risk Rollups</h2>
@@ -820,6 +881,126 @@ function ConvertTo-ShareSurferReport {
       if (state.query) { labels.push('Search: ' + state.query); }
       document.getElementById('active-filter-note').textContent = labels.length > 0 ? ('Active dashboard filters: ' + labels.join('; ')) : 'Showing all owner and business-unit review rows.';
     }
+    function setWorkbenchStat(target, label, value) {
+      const wrapper = document.createElement('div');
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = String(value);
+      wrapper.appendChild(dt);
+      wrapper.appendChild(dd);
+      target.appendChild(wrapper);
+    }
+    function renderWorkbenchStats(stats) {
+      const target = document.getElementById('workbench-stats');
+      target.textContent = '';
+      stats.forEach(stat => setWorkbenchStat(target, stat.label, stat.value));
+    }
+    function normalizeIdentity(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+    function addIdentity(identitySet, value) {
+      const key = normalizeIdentity(value);
+      if (key) { identitySet.add(key); }
+    }
+    function getItemPath(row) {
+      const item = itemById.get(String(row.ItemId || ''));
+      return String(row.FullPath || (item ? item.FullPath : '') || '');
+    }
+    function getWorkbenchRiskRows(state) {
+      const findings = filterRows(data.findings, state, true).map(row => ({
+        Source: 'Finding',
+        Type: row.FindingType || '',
+        Severity: row.Severity || '',
+        Identity: row.Identity || '',
+        Path: getItemPath(row),
+        Message: row.Message || ''
+      }));
+      const conflicts = filterRows(data.conflicts, state, true).map(row => ({
+        Source: 'Conflict',
+        Type: row.ConflictType || '',
+        Severity: row.Severity || '',
+        Identity: row.Identity || '',
+        Path: getItemPath(row),
+        Message: row.Message || ''
+      }));
+      return findings.concat(conflicts)
+        .sort((a, b) => Number(severityRank[b.Severity] ?? -1) - Number(severityRank[a.Severity] ?? -1) || String(a.Type).localeCompare(String(b.Type)) || String(a.Path).localeCompare(String(b.Path)))
+        .slice(0, 10);
+    }
+    function getWorkbenchGroupRows(state, riskRows) {
+      const identitySet = new Set();
+      riskRows.forEach(row => addIdentity(identitySet, row.Identity));
+      filterRows(data.acl_entries, state, true).forEach(row => addIdentity(identitySet, row.Identity));
+      filterRows(data.share_permissions, state, true).forEach(row => addIdentity(identitySet, row.Identity));
+      const rows = group_browser_rows.filter(row => {
+        const parent = normalizeIdentity(row.ParentGroup);
+        const child = normalizeIdentity(row.ChildIdentity);
+        if (identitySet.size === 0) {
+          return rowMatchesSearch(row, state);
+        }
+        return identitySet.has(parent) || identitySet.has(child);
+      });
+      return rows
+        .sort((a, b) => String(a.ParentGroup).localeCompare(String(b.ParentGroup)) || Number(a.Depth || 0) - Number(b.Depth || 0) || String(a.ChildIdentity).localeCompare(String(b.ChildIdentity)))
+        .slice(0, 12);
+    }
+    function renderWorkbenchActions(state, pivots, riskRows, groupRows) {
+      const list = document.getElementById('workbench-actions');
+      list.textContent = '';
+      const highRisks = riskRows.filter(row => Number(severityRank[row.Severity] ?? -1) >= 3).length;
+      const longPathRisks = riskRows.filter(row => row.Type === 'LongPathOperationalPolicy' || row.Type === 'AzureFullPathLimit' || row.Type === 'AzurePathComponentLimit').length;
+      const deepAccessRisks = riskRows.filter(row => row.Type === 'DeepExplicitAce' || row.Type === 'BrokenInheritance').length;
+      const truncatedGroups = groupRows.filter(row => String(row.IsTruncated) === 'True').length;
+      if (pivots.length === 0 && hasOwnerContextFilter(state)) {
+        addPriorityAction(list, 'warning', 'Check owner mapping coverage', 'No owner pivot matched the active business-unit, owner, or risk filter.');
+      }
+      if (highRisks > 0) {
+        addPriorityAction(list, 'high', 'Start with high-priority rows', String(highRisks) + ' finding or conflict row(s) in this context need review first.');
+      }
+      if (longPathRisks > 0) {
+        addPriorityAction(list, 'warning', 'Confirm migration path handling', String(longPathRisks) + ' path row(s) need remediation planning or migration exception review.');
+      }
+      if (deepAccessRisks > 0) {
+        addPriorityAction(list, 'warning', 'Validate delegated folder access', String(deepAccessRisks) + ' inheritance or deep explicit permission row(s) should be reviewed with the data owner.');
+      }
+      if (truncatedGroups > 0) {
+        addPriorityAction(list, 'warning', 'Rerun with deeper group expansion', String(truncatedGroups) + ' related group edge(s) were truncated.');
+      }
+      if (groupRows.length > 0) {
+        addPriorityAction(list, 'good', 'Use related groups for access review', String(groupRows.length) + ' group edge(s) are shown for the current review context.');
+      }
+      if (list.children.length === 0) {
+        addPriorityAction(list, 'good', 'Review context is low risk', 'Use the owner pivot and related rows to confirm ownership before migration planning continues.');
+      }
+    }
+    function renderReviewWorkbench(state) {
+      const pivots = filterOwnerPivots(owner_pivots, state);
+      const riskRows = getWorkbenchRiskRows(state);
+      const groupRows = getWorkbenchGroupRows(state, riskRows);
+      const businessUnits = distinctCount(pivots, 'BusinessUnit');
+      const owners = distinctCount(pivots, 'Owner');
+      const matchingItems = pivots.reduce((sum, pivot) => sum + Number(pivot.MatchingItems || 0), 0);
+      const partialShares = pivots.reduce((sum, pivot) => sum + Number(pivot.PartialShareCount || 0), 0);
+      const labels = [];
+      if (state.businessUnit) { labels.push(state.businessUnit); }
+      if (state.owner) { labels.push(state.owner); }
+      if (state.riskLevel) { labels.push(state.riskLevel + ' risk'); }
+      if (state.query) { labels.push('search "' + state.query + '"'); }
+      document.getElementById('workbench-context').textContent = labels.length > 0 ? ('Reviewing ' + labels.join(' / ') + '. Use this snapshot to brief the owner before opening the detailed tables.') : 'Enterprise-wide review snapshot. Select a business unit, data owner, or risk level to narrow this workbench.';
+      document.getElementById('workbench-count').textContent = String(pivots.length) + ' owner pivot' + (pivots.length === 1 ? '' : 's');
+      renderWorkbenchStats([
+        { label: 'Business Units', value: businessUnits },
+        { label: 'Data Owners', value: owners },
+        { label: 'Matching Items', value: matchingItems },
+        { label: 'Top Risks', value: riskRows.length },
+        { label: 'Related Groups', value: groupRows.length },
+        { label: 'Partial Shares', value: partialShares }
+      ]);
+      renderWorkbenchActions(state, pivots, riskRows, groupRows);
+      renderTable('workbench-risks', riskRows);
+      renderTable('workbench-groups', groupRows);
+    }
     function buildRollups(rows, fields) {
       const rollups = new Map();
       asRows(rows).forEach(row => {
@@ -955,6 +1136,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('collection-error-rollups', filterRows(collection_error_rollups, state, false));
       renderTable('org-rollups', filterRows(org_rollups, state, false));
       renderTable('events', filterRows(data.scan_events, state, false));
+      renderReviewWorkbench(state);
       applyGroupBrowser();
     }
     function showView(viewName) {

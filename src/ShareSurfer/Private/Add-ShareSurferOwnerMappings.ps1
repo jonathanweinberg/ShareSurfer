@@ -16,6 +16,12 @@ function Add-ShareSurferOwnerMappings {
     }
 
     $fileMappings = @(Read-ShareSurferOwnerMapping -Path $OwnerMappingPath)
-    $Inventory.OwnerMappings = @($existingMappings + $fileMappings)
+    $mergedMappings = @($existingMappings + $fileMappings)
+    if ($null -ne $Inventory.PSObject.Properties['OwnerMappings']) {
+        $Inventory.OwnerMappings = $mergedMappings
+    }
+    else {
+        $Inventory | Add-Member -MemberType NoteProperty -Name OwnerMappings -Value $mergedMappings
+    }
     $Inventory
 }

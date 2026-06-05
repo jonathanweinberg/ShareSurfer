@@ -691,7 +691,7 @@ $tests = @(
                 }
             ) | Export-Csv -LiteralPath $mappingPath -NoTypeInformation -Encoding UTF8
             $inventory = New-TestInventory
-            $inventory.OwnerMappings = @()
+            [void]$inventory.PSObject.Properties.Remove('OwnerMappings')
 
             Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -OwnerMappingPath $mappingPath -SkipIdentityEnrichment | Out-Null
             $ownerMappings = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_mappings.csv')
@@ -699,6 +699,7 @@ $tests = @(
             Assert-Equal $ownerMappings[0].Pattern '\\files01\Finance*' 'Owner mapping pattern should be imported from CSV.'
             Assert-Equal $ownerMappings[0].BusinessUnit 'Finance' 'Owner mapping business unit should be imported from CSV.'
             Assert-Equal $ownerMappings[0].Source 'unit-test-csv' 'Owner mapping source should be imported from CSV.'
+            Assert-Equal $ownerMappings.Count 1 'Owner mapping import should work when a custom inventory object does not already expose OwnerMappings.'
         }
     },
     @{
@@ -804,6 +805,13 @@ $tests = @(
             Assert-True ($report -like '*collection-error-chart*') 'Report should render a collection-error chart.'
             Assert-True ($report -like '*renderBarChart*') 'Report should render offline native bar charts from embedded CSV data.'
             Assert-True ($report -like '*focusDashboardValue*') 'Report should support chart-driven drilldown filtering.'
+            Assert-True ($report -like '*Review Workbench*') 'Report should include an owner/business-unit review workbench.'
+            Assert-True ($report -like '*workbench-stats*') 'Report should include workbench context stats.'
+            Assert-True ($report -like '*Related Groups*') 'Report should expose workbench-related group rows.'
+            Assert-True ($report -like '*Top Findings and Conflicts*') 'Report should expose a ranked workbench risk list.'
+            Assert-True ($report -like '*renderReviewWorkbench*') 'Report should dynamically update the review workbench from dashboard filters.'
+            Assert-True ($report -like '*getWorkbenchRiskRows*') 'Report should combine findings and conflicts for workbench review.'
+            Assert-True ($report -like '*getWorkbenchGroupRows*') 'Report should infer related groups for the current owner context.'
             Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'
             Assert-True ($report -like '*.summary, .visual-grid { grid-template-columns: 1fr; }*') 'Report summary and visual grids should collapse cleanly on mobile.'
         }
