@@ -119,6 +119,23 @@ The `issue-comments` folder contains:
 
 Review each Markdown file before posting. They summarize only safe status values, counts, criterion names, and check names. Use `post-commands.txt` when you are ready to post the comments with `gh issue comment --body-file`. The redacted support bundle also includes a sanitized `issue_comments` folder with the same comment bodies, a manifest without raw run paths, and post commands that use relative bundle paths.
 
+Preview the generated issue updates before posting:
+
+```powershell
+.\scripts\Publish-ShareSurferValidationIssueComments.ps1 `
+  -RunRoot 'C:\ShareSurfer\lab-validation\20260604-193000'
+```
+
+Post only after you have reviewed the generated Markdown files:
+
+```powershell
+.\scripts\Publish-ShareSurferValidationIssueComments.ps1 `
+  -RunRoot 'C:\ShareSurfer\lab-validation\20260604-193000' `
+  -Post
+```
+
+Use `-IssueNumber 1,3` when you only want to post selected proof comments. The publisher uses `gh issue comment --body-file` and reads back posted comments for verification.
+
 Open `lab-preflight.csv` first if validation stops early. It checks whether the run appears to be on a Windows collector host, whether PowerShell 5.1 and the required Active Directory and SMB cmdlets are available, whether planned AD user or group names already exist outside the ShareSurferLab OU, whether any planned SMB share name already points at another local path, whether the output path exists, whether an existing lab root is present when `-CreateLab` is not used, whether planned data stays under the disk budget, whether plan criteria are satisfiable, whether Windows path components are safe, and whether enterprise validation is scanning files.
 
 Each criteria row includes `EvidenceSource` and `EvidenceDetail`. Prefer rows backed by live evidence such as `ActiveDirectory`, `ScanExport:shares.csv`, `ScanExport:share_permissions.csv`, `ScanExport:items.csv`, `ScanExport:acl_entries.csv`, `ScanExport:identities.csv`, `ScanExport:findings.csv`, `ScanExport:conflicts.csv`, `ScanExport:group_edges.csv`, `ScanExport:owner_risk_pivots.csv`, `ScanExport:related_data_areas.csv`, `ScanExport:owner_review_packets.csv`, or `FileSystem`. `LabPlan` rows are useful for planning, but they are not enough by themselves for final enterprise-scale proof. `-RequireLiveEvidence` makes this strict: the run fails if any required enterprise criterion is still backed only by the lab plan, blank evidence, or unavailable directory evidence. Open `live-evidence.json` for the machine-readable gate result and `live-evidence-review.csv` for the operator checklist with evidence status and next actions.
