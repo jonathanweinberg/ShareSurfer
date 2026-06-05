@@ -638,17 +638,23 @@ $tests = @(
                         return $null
                     }
                     if ($LDAPFilter -like '*classSchema*user*') {
-                        return [pscustomobject]@{ lDAPDisplayName = 'user'; mayContain = @('info') }
+                        return [pscustomobject]@{ lDAPDisplayName = 'user'; subClassOf = 'organizationalPerson'; mayContain = @() }
+                    }
+                    if ($LDAPFilter -like '*classSchema*organizationalPerson*') {
+                        return [pscustomobject]@{ lDAPDisplayName = 'organizationalPerson'; mayContain = @('info') }
+                    }
+                    if ($LDAPFilter -like '*classSchema*shareSurferGroupAux*') {
+                        return [pscustomobject]@{ lDAPDisplayName = 'shareSurferGroupAux'; mayContain = @('info') }
                     }
                     if ($LDAPFilter -like '*classSchema*group*') {
-                        return [pscustomobject]@{ lDAPDisplayName = 'group'; mayContain = @('info') }
+                        return [pscustomobject]@{ lDAPDisplayName = 'group'; auxiliaryClass = 'shareSurferGroupAux'; mayContain = @() }
                     }
                     $null
                 }
 
                 $schemaPlan = [pscustomobject]@{ ObsAttribute = 'info' }
                 $schemaResult = Test-ShareSurferLabValidationObsAttributeSchema -Plan $schemaPlan
-                Assert-True ([bool]$schemaResult.Passed) 'OBS attribute schema helper should pass when the attribute exists and is allowed on user and group classes.'
+                Assert-True ([bool]$schemaResult.Passed) 'OBS attribute schema helper should pass when the attribute exists and is allowed through direct, inherited, or auxiliary class schema.'
                 Assert-True ([string]$schemaResult.Evidence -like '*ObsAttribute=info*UserAllows=True*GroupAllows=True*') 'OBS attribute schema evidence should show the checked attribute and allowed classes.'
 
                 $missingSchemaPlan = [pscustomobject]@{ ObsAttribute = 'extensionAttribute10' }
