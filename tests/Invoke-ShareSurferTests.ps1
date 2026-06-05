@@ -2139,6 +2139,8 @@ $tests = @(
             Assert-True ($publisherScriptText -like '*gh issue comment*--body-file*') 'Publisher should post issue comments with the body-file pattern.'
             Assert-True ($publisherScriptText -like '*gh api*issues/comments*') 'Publisher should read back posted comments by comment id.'
             Assert-True ($publisherScriptText -like '*SkipReadyCheck*') 'Publisher should expose an explicit override for the closeout readiness guard.'
+            Assert-True ($publisherScriptText.Contains('Ready for proof review: `True`')) 'Publisher should use a literal closeout readiness marker that preserves Markdown backticks.'
+            Assert-True ($publisherScriptText.Contains('$closeoutText.Contains')) 'Publisher readiness guard should avoid wildcard matching against Markdown backticks.'
             $readyGuardMessage = ''
             $goodCloseoutChecklistText = Get-Content -LiteralPath $closeoutChecklistPath -Raw
             Set-Content -LiteralPath $closeoutChecklistPath -Value ($goodCloseoutChecklistText -replace 'Ready for proof review: `True`', 'Ready for proof review: `False`') -Encoding UTF8
