@@ -11,14 +11,14 @@
   </defs>
   <rect class="bg" width="1200" height="560"/>
   <text x="48" y="58" class="text" font-size="34" font-weight="700">Enterprise Lab Validation</text>
-  <text x="48" y="90" class="small">Designed for realistic proof without exceeding the 8 GB generated data budget.</text>
+  <text x="48" y="90" class="small">Designed for realistic proof under the default 2 GiB generated data budget.</text>
   <rect x="44" y="130" width="1112" height="120" rx="10" class="lane"/>
   <text x="70" y="170" class="text" font-weight="700">Plan</text>
   <text x="190" y="170" class="small">2500+ users</text>
-  <text x="390" y="170" class="small">200+ shares</text>
+  <text x="390" y="170" class="small">250 shares</text>
   <text x="580" y="170" class="small">Deep paths</text>
   <text x="760" y="170" class="small">Real small files</text>
-  <text x="980" y="170" class="small">&lt; 8 GB</text>
+  <text x="980" y="170" class="small">&lt; 2 GiB</text>
   <text x="70" y="215" class="small">OutputPlanOnly produces lab-plan.json before anything is created.</text>
   <g transform="translate(60 300)">
     <rect class="box" width="210" height="120" rx="8"/>

@@ -16,7 +16,7 @@ Use this visual when explaining how raw Windows and Samba-style share data becom
 
 ![Enterprise lab validation workflow](visuals/enterprise-lab-validation.svg)
 
-Use this visual when planning the scaled Windows/AD lab run. The validation criteria must prove multi-thousand users, hundreds of SMB shares, deep paths with real files, and less than 8 GB of generated lab file data. Final enterprise proof should use the live-evidence gate so required criteria are backed by directory, scan, or filesystem evidence.
+Use this visual when planning the scaled Windows/AD lab run. The validation criteria must prove multi-thousand users, hundreds of SMB shares, deep paths with real files, and generated lab file data under the configured budget. The default budget is 2 GiB; 8 GiB is reserved for explicit stress runs. Final enterprise proof should use the live-evidence gate so required criteria are backed by directory, scan, or filesystem evidence.
 
 ## Redacted Support Bundle
 

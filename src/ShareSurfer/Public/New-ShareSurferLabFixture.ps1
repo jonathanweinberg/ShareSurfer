@@ -8,15 +8,42 @@ function New-ShareSurferLabFixture {
         [string] $ObsAttribute = 'extensionAttribute10',
         [ValidateSet('Focused', 'Enterprise')]
         [string] $Scale = 'Focused',
+        [Alias('UserCount')]
+        [ValidateRange(1000, 100000)]
         [int] $EnterpriseUserCount = 2500,
+        [Alias('ShareCount')]
+        [ValidateRange(100, 5000)]
         [int] $EnterpriseShareCount = 250,
+        [Alias('FilesPerShare')]
+        [ValidateRange(1, 128)]
         [int] $EnterpriseFilesPerShare = 8,
-        [int64] $MaxLabBytes = 8589934592,
+        [Alias('MaxDepth')]
+        [ValidateRange(3, 12)]
+        [int] $EnterpriseTargetDepth = 5,
+        [Alias('FileSizeBytes')]
+        [ValidateRange(128, 1048576)]
+        [int64] $EnterpriseFileSizeBytes = 512,
+        [ValidateRange(0, 5000)]
+        [int] $LongPathShareCount = 1,
+        [ValidateRange(1, 8589934592)]
+        [int64] $MaxLabBytes = 2147483648,
+        [ValidateRange(1, 8589934592)]
+        [int64] $AbsoluteMaxLabBytes = 8589934592,
+        [Alias('DiskBudgetGB')]
+        [ValidateRange(1, 8)]
+        [double] $MaxLabGiB = 0,
         [switch] $OutputPlanOnly,
         [switch] $Force
     )
 
-    $plan = New-ShareSurferLabPlan -RootPath $RootPath -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes
+    if ($PSBoundParameters.ContainsKey('MaxLabGiB')) {
+        $MaxLabBytes = [int64]($MaxLabGiB * 1073741824)
+    }
+    if ($MaxLabBytes -gt $AbsoluteMaxLabBytes) {
+        throw ('MaxLabBytes {0} exceeds AbsoluteMaxLabBytes {1}. Use a lower explicit disk budget.' -f $MaxLabBytes, $AbsoluteMaxLabBytes)
+    }
+
+    $plan = New-ShareSurferLabPlan -RootPath $RootPath -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -EnterpriseTargetDepth $EnterpriseTargetDepth -EnterpriseFileSizeBytes $EnterpriseFileSizeBytes -LongPathShareCount $LongPathShareCount -MaxLabBytes $MaxLabBytes -AbsoluteMaxLabBytes $AbsoluteMaxLabBytes
     if ($OutputPlanOnly) {
         return $plan
     }
@@ -46,11 +73,11 @@ function New-ShareSurferLabFixture {
             if ($targetType -eq 'File') {
                 $parentPath = Split-Path -Parent $scenarioPath
                 New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
-                Set-Content -Path $scenarioPath -Value ('ShareSurfer file fixture: {0}' -f $scenario.Name) -Encoding UTF8
+                Set-Content -Path $scenarioPath -Value (New-ShareSurferLabFileContent -Tag $scenario.Name -SizeBytes 512) -Encoding ASCII -NoNewline
             }
             else {
                 New-Item -ItemType Directory -Path $scenarioPath -Force | Out-Null
-                Set-Content -Path (Join-Path $scenarioPath 'sample.txt') -Value ('ShareSurfer fixture: {0}' -f $scenario.Name) -Encoding UTF8
+                Set-Content -Path (Join-Path $scenarioPath 'sample.txt') -Value (New-ShareSurferLabFileContent -Tag $scenario.Name -SizeBytes 512) -Encoding ASCII -NoNewline
             }
         }
 
@@ -63,8 +90,8 @@ function New-ShareSurferLabFixture {
                 $filePath = Join-Path $share.LocalPath $file.RelativePath
                 $parentPath = Split-Path -Parent $filePath
                 New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
-                $content = 'ShareSurfer file fixture {0}' -f $file.ContentTag
-                Set-Content -Path $filePath -Value $content -Encoding UTF8
+                $content = New-ShareSurferLabFileContent -Tag $file.ContentTag -SizeBytes $file.SizeBytes
+                Set-Content -Path $filePath -Value $content -Encoding ASCII -NoNewline
             }
         }
 
@@ -163,4 +190,19 @@ function Get-ShareSurferLabScenarioOwnerIdentity {
     }
 
     ''
+}
+
+function New-ShareSurferLabFileContent {
+    param(
+        [string] $Tag = 'Fixture',
+        [int64] $SizeBytes = 512
+    )
+
+    $prefix = 'ShareSurfer synthetic file fixture: {0}. ' -f $Tag
+    if ($SizeBytes -le $prefix.Length) {
+        return $prefix.Substring(0, [int]$SizeBytes)
+    }
+
+    $remaining = [int]($SizeBytes - $prefix.Length)
+    $prefix + ('x' * $remaining)
 }

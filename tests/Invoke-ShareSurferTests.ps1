@@ -238,21 +238,29 @@ $tests = @(
         Body = {
             Import-Module $moduleManifest -Force
             $labRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferEnterpriseLab-' + [guid]::NewGuid().ToString('N'))
-            $eightGb = [int64]8589934592
+            $twoGb = [int64]2147483648
 
-            $plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $labRoot -DomainNetBiosName 'CONTOSO' -ObsAttribute 'extensionAttribute10' -Scale Enterprise -EnterpriseUserCount 2500 -EnterpriseShareCount 200 -MaxLabBytes $eightGb
+            $plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $labRoot -DomainNetBiosName 'CONTOSO' -ObsAttribute 'extensionAttribute10' -Scale Enterprise -EnterpriseUserCount 2500 -EnterpriseShareCount 250
 
             Assert-Equal $plan.ScaleProfile 'Enterprise' 'Enterprise lab plan should record its scale profile.'
+            Assert-Equal ([int64]$plan.MaxLabBytes) $twoGb 'Enterprise lab plan should default to the 2 GiB generated file-data budget.'
+            Assert-Equal ([int64]$plan.AbsoluteMaxLabBytes) ([int64]8589934592) 'Enterprise lab plan should record the explicit 8 GiB stress-run ceiling.'
+            Assert-Equal ([int]$plan.EnterpriseTargetDepth) 5 'Enterprise lab plan should default to five business hierarchy folders.'
+            Assert-Equal ([int64]$plan.EnterpriseFileSizeBytes) ([int64]512) 'Enterprise lab plan should default to 512-byte file fixtures.'
+            Assert-Equal ([int]$plan.LongPathShareCount) 1 'Enterprise lab plan should default to one long-path policy fixture share.'
             Assert-True ($plan.Users.Count -ge 2500) 'Enterprise lab plan should include a multi-thousand user population.'
-            Assert-True ($plan.Shares.Count -ge 200) 'Enterprise lab plan should include hundreds of SMB shares.'
-            Assert-True ($plan.FileFixtures.Count -ge (200 * 8)) 'Enterprise lab plan should include real file objects throughout share trees.'
-            Assert-True ([int64]$plan.EstimatedLabBytes -le $eightGb) 'Enterprise lab plan should stay under the 8 GB lab-data budget.'
+            Assert-Equal $plan.Shares.Count 250 'Enterprise lab plan should include the default 250 SMB shares.'
+            Assert-Equal $plan.Groups.Count 500 'Enterprise lab plan should include two generated groups per enterprise share plus seed groups.'
+            Assert-Equal $plan.AclScenarios.Count 256 'Enterprise lab plan should include seed ACL scenarios, generated explicit ACEs, and one long-path scenario.'
+            Assert-Equal $plan.FileFixtures.Count 2000 'Enterprise lab plan should include eight real file objects per share.'
+            Assert-Equal ([int64]$plan.EstimatedLabBytes) ([int64]1024000) 'Enterprise lab plan should estimate file data from fixture count and file size.'
+            Assert-True ([int64]$plan.EstimatedLabBytes -le $twoGb) 'Enterprise lab plan should stay under the default 2 GiB lab-data budget.'
             Assert-True (@($plan.FileFixtures | Where-Object { ([string]$_.RelativePath -split '\\').Count -ge 6 }).Count -gt 0) 'Enterprise lab plan should include deep folder/file paths.'
             Assert-True (@($plan.AclScenarios | Where-Object { ([string]$_.RelativePath).Length -gt 256 }).Count -gt 0) 'Enterprise lab plan should include operational long-path fixtures.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseUserPopulation') 'Enterprise lab plan should include a user-population validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseSharePopulation') 'Enterprise lab plan should include a share-population validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRealFiles') 'Enterprise lab plan should include a real-file validation criterion.'
-            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include an 8 GB disk-budget validation criterion.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include a disk-budget validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerRiskPivots') 'Enterprise lab plan should include owner risk pivot validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterprisePermissionGroupObsCoverage') 'Enterprise lab plan should include permission-group OBS coverage validation.'
             Assert-True (@($plan.Groups | Where-Object { $_.PSObject.Properties.Name -contains 'extensionAttribute10' -and [string]$_.extensionAttribute10 -ne '' }).Count -eq $plan.Groups.Count) 'Enterprise lab groups should all include OBS values for group review.'
@@ -263,9 +271,12 @@ $tests = @(
             Assert-True (-not (Test-Path -LiteralPath $labRoot)) 'OutputPlanOnly enterprise planning must not create the lab root.'
 
             $windowsRootErrors = @()
-            $windowsRootPlan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab' -Scale Enterprise -EnterpriseUserCount 50 -EnterpriseShareCount 10 -EnterpriseFilesPerShare 2 -ErrorVariable windowsRootErrors
+            $windowsRootPlan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab' -Scale Enterprise -UserCount 1000 -ShareCount 100 -FilesPerShare 2 -MaxDepth 6 -FileSizeBytes 1024 -DiskBudgetGB 2 -ErrorVariable windowsRootErrors
             Assert-Equal $windowsRootErrors.Count 0 'OutputPlanOnly should not emit local drive errors when planning Windows target paths from a non-Windows workstation.'
             Assert-True ([string]$windowsRootPlan.Shares[0].LocalPath -like 'C:\ShareSurferEnterpriseLab\*') 'Windows target root paths should be preserved in plan-only output.'
+            Assert-Equal ([int]$windowsRootPlan.EnterpriseTargetDepth) 6 'Enterprise depth alias should feed the plan.'
+            Assert-Equal ([int64]$windowsRootPlan.EnterpriseFileSizeBytes) ([int64]1024) 'Enterprise file-size alias should feed the plan.'
+            Assert-Equal ([int64]$windowsRootPlan.MaxLabBytes) ([int64]2147483648) 'DiskBudgetGB alias should set MaxLabBytes.'
 
             $initializerScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Initialize-ShareSurferLabDirectoryObjects.ps1') -Raw
             Assert-True ($initializerScript -like '*Set-ADGroup*') 'Lab directory initializer should update existing security group attributes.'

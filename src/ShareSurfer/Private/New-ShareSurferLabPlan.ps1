@@ -12,8 +12,16 @@ function New-ShareSurferLabPlan {
         [int] $EnterpriseUserCount = 2500,
         [int] $EnterpriseShareCount = 250,
         [int] $EnterpriseFilesPerShare = 8,
-        [int64] $MaxLabBytes = 8589934592
+        [int] $EnterpriseTargetDepth = 5,
+        [int64] $EnterpriseFileSizeBytes = 512,
+        [int] $LongPathShareCount = 1,
+        [int64] $MaxLabBytes = 2147483648,
+        [int64] $AbsoluteMaxLabBytes = 8589934592
     )
+
+    if ($MaxLabBytes -gt $AbsoluteMaxLabBytes) {
+        throw ('MaxLabBytes {0} exceeds AbsoluteMaxLabBytes {1}. Use a lower explicit disk budget.' -f $MaxLabBytes, $AbsoluteMaxLabBytes)
+    }
 
     $users = @(
         @{ SamAccountName = 'Ava.Accounting'; DisplayName = 'Ava Accounting'; EmployeeId = 'E1001'; EmployeeNumber = '1001'; Manager = 'Morgan.Manager'; Obs = 'CORP.FIN.AP' },
@@ -153,12 +161,12 @@ function New-ShareSurferLabPlan {
                 )
             })
 
-            $deepPath = 'Division{0:D2}\Region{1:D2}\Program{2:D2}\Project{3:D2}\Workstream{4:D2}' -f (($i % 12) + 1), (($i % 18) + 1), (($i % 30) + 1), (($i % 40) + 1), (($i % 50) + 1)
-            [void]$aclList.Add([pscustomobject]@{ Name = ('EnterpriseDeepExplicitAce{0:D4}' -f $i); ShareName = $shareName; RelativePath = $deepPath; TargetType = 'Directory'; Identity = "$DomainNetBiosName\$editorGroup"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 5; OwnerIdentity = '' })
+            $deepPath = New-ShareSurferEnterpriseRelativePath -Index $i -TargetDepth $EnterpriseTargetDepth
+            [void]$aclList.Add([pscustomobject]@{ Name = ('EnterpriseDeepExplicitAce{0:D4}' -f $i); ShareName = $shareName; RelativePath = $deepPath; TargetType = 'Directory'; Identity = "$DomainNetBiosName\$editorGroup"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = $EnterpriseTargetDepth; OwnerIdentity = '' })
 
-            if ($i -eq 1) {
+            if ($i -le $LongPathShareCount) {
                 $longRelativePath = $deepPath + '\' + ('L' * 120) + '\' + ('M' * 120)
-                [void]$aclList.Add([pscustomobject]@{ Name = 'EnterpriseLongPath'; ShareName = $shareName; RelativePath = $longRelativePath; TargetType = 'Directory'; Identity = "$DomainNetBiosName\$editorGroup"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 7; OwnerIdentity = '' })
+                [void]$aclList.Add([pscustomobject]@{ Name = ('EnterpriseLongPath{0:D4}' -f $i); ShareName = $shareName; RelativePath = $longRelativePath; TargetType = 'Directory'; Identity = "$DomainNetBiosName\$editorGroup"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $false; Depth = ($EnterpriseTargetDepth + 2); OwnerIdentity = '' })
             }
 
             for ($fileIndex = 1; $fileIndex -le $EnterpriseFilesPerShare; $fileIndex++) {
@@ -166,7 +174,7 @@ function New-ShareSurferLabPlan {
                 [void]$fileFixtures.Add([pscustomobject]@{
                     ShareName = $shareName
                     RelativePath = $fileRelativePath
-                    SizeBytes = 512
+                    SizeBytes = $EnterpriseFileSizeBytes
                     ContentTag = ('EnterpriseShare{0:D4}File{1:D2}' -f $i, $fileIndex)
                 })
             }
@@ -182,7 +190,7 @@ function New-ShareSurferLabPlan {
                 [void]$fileFixtures.Add([pscustomobject]@{
                     ShareName = $share.ShareName
                     RelativePath = 'EnterpriseEvidence\Fixture{0:D2}.txt' -f $fileIndex
-                    SizeBytes = 512
+                    SizeBytes = $EnterpriseFileSizeBytes
                     ContentTag = ('EnterpriseSupplemental{0}File{1:D2}' -f $share.ShareName, $fileIndex)
                 })
             }
@@ -360,6 +368,10 @@ function New-ShareSurferLabPlan {
         DomainNetBiosName = $DomainNetBiosName
         ObsAttribute = $ObsAttribute
         MaxLabBytes = $MaxLabBytes
+        AbsoluteMaxLabBytes = $AbsoluteMaxLabBytes
+        EnterpriseTargetDepth = $EnterpriseTargetDepth
+        EnterpriseFileSizeBytes = $EnterpriseFileSizeBytes
+        LongPathShareCount = $LongPathShareCount
         EstimatedLabBytes = $estimatedLabBytes
         OrganizationalUnit = 'OU=ShareSurferLab'
         Users = @($users)
@@ -386,6 +398,32 @@ function Join-ShareSurferLabPlanPath {
     }
 
     Join-Path $RootPath $ChildPath
+}
+
+function New-ShareSurferEnterpriseRelativePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int] $Index,
+
+        [int] $TargetDepth = 5
+    )
+
+    $segments = @(
+        'Division{0:D2}' -f (($Index % 12) + 1)
+        'Region{0:D2}' -f (($Index % 18) + 1)
+        'Program{0:D2}' -f (($Index % 30) + 1)
+        'Project{0:D2}' -f (($Index % 40) + 1)
+        'Workstream{0:D2}' -f (($Index % 50) + 1)
+        'Portfolio{0:D2}' -f (($Index % 60) + 1)
+        'Service{0:D2}' -f (($Index % 70) + 1)
+        'Dataset{0:D2}' -f (($Index % 80) + 1)
+        'Archive{0:D2}' -f (($Index % 90) + 1)
+        'Quarter{0:D2}' -f (($Index % 12) + 1)
+        'Review{0:D2}' -f (($Index % 24) + 1)
+        'Evidence{0:D2}' -f (($Index % 36) + 1)
+    )
+
+    ($segments[0..([Math]::Min($TargetDepth, $segments.Count) - 1)]) -join '\'
 }
 
 function New-ShareSurferLabGroupRecord {

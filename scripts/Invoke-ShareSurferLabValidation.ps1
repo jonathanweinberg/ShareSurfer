@@ -9,7 +9,11 @@ param(
     [int] $EnterpriseUserCount = 2500,
     [int] $EnterpriseShareCount = 250,
     [int] $EnterpriseFilesPerShare = 8,
-    [int64] $MaxLabBytes = 8589934592,
+    [int] $EnterpriseTargetDepth = 5,
+    [int64] $EnterpriseFileSizeBytes = 512,
+    [int] $LongPathShareCount = 1,
+    [int64] $MaxLabBytes = 2147483648,
+    [int64] $AbsoluteMaxLabBytes = 8589934592,
     [switch] $CreateLab,
     [switch] $IncludeFiles,
     [switch] $RequireLiveEvidence
@@ -42,7 +46,7 @@ $ownerMappingPath = Join-Path $runRoot 'owner-mapping.csv'
 
 New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
-$plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes
+$plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -EnterpriseTargetDepth $EnterpriseTargetDepth -EnterpriseFileSizeBytes $EnterpriseFileSizeBytes -LongPathShareCount $LongPathShareCount -MaxLabBytes $MaxLabBytes -AbsoluteMaxLabBytes $AbsoluteMaxLabBytes
 $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'lab-plan.json') -Encoding UTF8
 @($plan.OwnerMappings) | Export-Csv -LiteralPath $ownerMappingPath -NoTypeInformation -Encoding UTF8
 $preflightRows = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $LabRoot -RunRoot $runRoot -CreateLab:$CreateLab -IncludeFiles:$IncludeFiles -RequireLiveEvidence:$RequireLiveEvidence)
@@ -54,7 +58,7 @@ if ($failedPreflightRows.Count -gt 0) {
 
 if ($CreateLab) {
     if ($PSCmdlet.ShouldProcess($LabRoot, 'Create or update ShareSurfer Windows/AD lab fixtures')) {
-        New-ShareSurferLabFixture -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes -Force | Out-Null
+        New-ShareSurferLabFixture -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -EnterpriseTargetDepth $EnterpriseTargetDepth -EnterpriseFileSizeBytes $EnterpriseFileSizeBytes -LongPathShareCount $LongPathShareCount -MaxLabBytes $MaxLabBytes -AbsoluteMaxLabBytes $AbsoluteMaxLabBytes -Force | Out-Null
     }
 }
 
