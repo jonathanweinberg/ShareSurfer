@@ -45,8 +45,15 @@ function Initialize-ShareSurferLabDirectoryObjects {
 
     foreach ($group in $Plan.Groups) {
         $existingGroup = Get-ADGroup -Filter ("SamAccountName -eq '{0}'" -f $group.Name) -ErrorAction SilentlyContinue
+        $groupAttributes = @{}
+        if ($group.PSObject.Properties[$Plan.ObsAttribute]) {
+            $groupAttributes[$Plan.ObsAttribute] = [string]$group.PSObject.Properties[$Plan.ObsAttribute].Value
+        }
         if ($null -eq $existingGroup) {
-            New-ADGroup -Name $group.Name -SamAccountName $group.Name -GroupScope Global -GroupCategory Security -Path $ouDn -Description $group.Description | Out-Null
+            New-ADGroup -Name $group.Name -SamAccountName $group.Name -GroupScope Global -GroupCategory Security -Path $ouDn -Description $group.Description -OtherAttributes $groupAttributes | Out-Null
+        }
+        elseif ($groupAttributes.Count -gt 0) {
+            Set-ADGroup -Identity $existingGroup -Description $group.Description -Replace $groupAttributes | Out-Null
         }
     }
 

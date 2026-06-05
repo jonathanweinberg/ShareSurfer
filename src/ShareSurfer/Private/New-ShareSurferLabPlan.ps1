@@ -68,12 +68,12 @@ function New-ShareSurferLabPlan {
     }
 
     $groups = @(
-        [pscustomobject]@{ Name = 'SS-Finance-Readers'; Members = @('Ava.Accounting', 'Noah.Payroll'); Description = 'Finance share read access' },
-        [pscustomobject]@{ Name = 'SS-Finance-Editors'; Members = @('SS-Finance-Readers', 'Morgan.Manager'); Description = 'Finance NTFS modify access' },
-        [pscustomobject]@{ Name = 'SS-Engineering-Readers'; Members = @('Mia.Engineering', 'Parker.Manager'); Description = 'Engineering share read access' },
-        [pscustomobject]@{ Name = 'SS-Operations-Owners'; Members = @('Leo.Operations', 'Quinn.Manager'); Description = 'Operations share full control' },
-        [pscustomobject]@{ Name = 'SS-Recursive-A'; Members = @('SS-Recursive-B'); Description = 'Cycle test group A' },
-        [pscustomobject]@{ Name = 'SS-Recursive-B'; Members = @('SS-Recursive-A'); Description = 'Cycle test group B' }
+        New-ShareSurferLabGroupRecord -Name 'SS-Finance-Readers' -Members @('Ava.Accounting', 'Noah.Payroll') -Description 'Finance share read access' -ObsAttribute $ObsAttribute -Obs 'CORP.FIN.ACCESS.READ'
+        New-ShareSurferLabGroupRecord -Name 'SS-Finance-Editors' -Members @('SS-Finance-Readers', 'Morgan.Manager') -Description 'Finance NTFS modify access' -ObsAttribute $ObsAttribute -Obs 'CORP.FIN.ACCESS.MODIFY'
+        New-ShareSurferLabGroupRecord -Name 'SS-Engineering-Readers' -Members @('Mia.Engineering', 'Parker.Manager') -Description 'Engineering share read access' -ObsAttribute $ObsAttribute -Obs 'CORP.ENG.ACCESS.READ'
+        New-ShareSurferLabGroupRecord -Name 'SS-Operations-Owners' -Members @('Leo.Operations', 'Quinn.Manager') -Description 'Operations share full control' -ObsAttribute $ObsAttribute -Obs 'CORP.OPS.ACCESS.OWNER'
+        New-ShareSurferLabGroupRecord -Name 'SS-Recursive-A' -Members @('SS-Recursive-B') -Description 'Cycle test group A' -ObsAttribute $ObsAttribute -Obs 'CORP.TEST.RECURSIVE'
+        New-ShareSurferLabGroupRecord -Name 'SS-Recursive-B' -Members @('SS-Recursive-A') -Description 'Cycle test group B' -ObsAttribute $ObsAttribute -Obs 'CORP.TEST.RECURSIVE'
     )
 
     $shares = @(
@@ -140,8 +140,9 @@ function New-ShareSurferLabPlan {
             $firstUser = 'SSUser{0:D5}' -f ((($i - 1) % [Math]::Max($EnterpriseUserCount - 8, 1)) + 1)
             $secondUser = 'SSUser{0:D5}' -f (($i % [Math]::Max($EnterpriseUserCount - 8, 1)) + 1)
 
-            [void]$groupList.Add([pscustomobject]@{ Name = $readerGroup; Members = @($firstUser, $secondUser); Description = ('Enterprise share {0:D4} read access' -f $i) })
-            [void]$groupList.Add([pscustomobject]@{ Name = $editorGroup; Members = @($readerGroup); Description = ('Enterprise share {0:D4} modify access' -f $i) })
+            $enterpriseObs = 'CORP.ENT.SHARE{0:D4}' -f $i
+            [void]$groupList.Add((New-ShareSurferLabGroupRecord -Name $readerGroup -Members @($firstUser, $secondUser) -Description ('Enterprise share {0:D4} read access' -f $i) -ObsAttribute $ObsAttribute -Obs ('{0}.READ' -f $enterpriseObs)))
+            [void]$groupList.Add((New-ShareSurferLabGroupRecord -Name $editorGroup -Members @($readerGroup) -Description ('Enterprise share {0:D4} modify access' -f $i) -ObsAttribute $ObsAttribute -Obs ('{0}.MODIFY' -f $enterpriseObs)))
 
             [void]$shareList.Add([pscustomobject]@{
                 ShareName = $shareName
@@ -371,4 +372,31 @@ function Join-ShareSurferLabPlanPath {
     }
 
     Join-Path $RootPath $ChildPath
+}
+
+function New-ShareSurferLabGroupRecord {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+
+        [Parameter(Mandatory = $true)]
+        [object[]] $Members,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Description,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ObsAttribute,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Obs
+    )
+
+    $record = [ordered]@{
+        Name = $Name
+        Members = @($Members)
+        Description = $Description
+    }
+    $record[$ObsAttribute] = $Obs
+    [pscustomobject]$record
 }

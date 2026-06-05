@@ -218,6 +218,8 @@ $tests = @(
             Assert-Equal $plan.ObsAttribute 'extensionAttribute11' 'OBS attribute should be runtime-selectable.'
             Assert-True ($plan.Users.Count -ge 6) 'Lab plan should include multiple demo users.'
             Assert-True ($plan.Groups.Count -ge 4) 'Lab plan should include nested security groups.'
+            Assert-True ($plan.Groups[0].PSObject.Properties.Name -contains 'extensionAttribute11') 'Lab group records should include the runtime-selected OBS attribute.'
+            Assert-True ([string]$plan.Groups[0].extensionAttribute11 -ne '') 'Lab group OBS values should be populated for security group review.'
             Assert-True ($plan.Shares.Count -ge 2) 'Lab plan should include multiple SMB share scenarios.'
             Assert-True ($plan.AclScenarios.Name -contains 'DeepExplicitAce') 'Lab plan should include deep explicit ACE scenario.'
             Assert-True ($plan.AclScenarios.Name -contains 'ShareVsNtfsConflict') 'Lab plan should include share-vs-NTFS conflict scenario.'
@@ -252,6 +254,7 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRealFiles') 'Enterprise lab plan should include a real-file validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include an 8 GB disk-budget validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerRiskPivots') 'Enterprise lab plan should include owner risk pivot validation.'
+            Assert-True (@($plan.Groups | Where-Object { $_.PSObject.Properties.Name -contains 'extensionAttribute10' -and [string]$_.extensionAttribute10 -ne '' }).Count -eq $plan.Groups.Count) 'Enterprise lab groups should all include OBS values for group review.'
             foreach ($criterion in @($plan.ValidationCriteria | Where-Object { [string]$_.Name -like 'Enterprise*' -and [bool]$_.Required })) {
                 Assert-True ([int64]$criterion.ActualPlanValue -ge [int64]$criterion.MinimumValue) ('Enterprise plan criterion should be satisfiable before live evidence replaces plan evidence: {0}' -f $criterion.Name)
             }
@@ -262,6 +265,11 @@ $tests = @(
             $windowsRootPlan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab' -Scale Enterprise -EnterpriseUserCount 50 -EnterpriseShareCount 10 -EnterpriseFilesPerShare 2 -ErrorVariable windowsRootErrors
             Assert-Equal $windowsRootErrors.Count 0 'OutputPlanOnly should not emit local drive errors when planning Windows target paths from a non-Windows workstation.'
             Assert-True ([string]$windowsRootPlan.Shares[0].LocalPath -like 'C:\ShareSurferEnterpriseLab\*') 'Windows target root paths should be preserved in plan-only output.'
+
+            $initializerScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Initialize-ShareSurferLabDirectoryObjects.ps1') -Raw
+            Assert-True ($initializerScript -like '*Set-ADGroup*') 'Lab directory initializer should update existing security group attributes.'
+            Assert-True ($initializerScript -like '*-OtherAttributes $groupAttributes*') 'Lab directory initializer should create security groups with OBS extension attributes.'
+            Assert-True ($initializerScript -like '*$Plan.ObsAttribute*') 'Lab directory initializer should use the runtime-selected OBS attribute for groups.'
         }
     },
     @{
