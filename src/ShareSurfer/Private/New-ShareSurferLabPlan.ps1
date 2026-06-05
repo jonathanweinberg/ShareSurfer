@@ -79,7 +79,7 @@ function New-ShareSurferLabPlan {
     $shares = @(
         [pscustomobject]@{
             ShareName = 'SSFinance'
-            LocalPath = Join-Path $RootPath 'Finance'
+            LocalPath = Join-ShareSurferLabPlanPath -RootPath $RootPath -ChildPath 'Finance'
             Description = 'Finance lab share with deep explicit ACEs and share-vs-NTFS conflict'
             SharePermissions = @(
                 [pscustomobject]@{ Identity = "$DomainNetBiosName\SS-Finance-Readers"; Rights = 'Read' }
@@ -87,7 +87,7 @@ function New-ShareSurferLabPlan {
         },
         [pscustomobject]@{
             ShareName = 'SSEngineering'
-            LocalPath = Join-Path $RootPath 'Engineering'
+            LocalPath = Join-ShareSurferLabPlanPath -RootPath $RootPath -ChildPath 'Engineering'
             Description = 'Engineering lab share with normal inherited permissions'
             SharePermissions = @(
                 [pscustomobject]@{ Identity = "$DomainNetBiosName\SS-Engineering-Readers"; Rights = 'Read' }
@@ -95,7 +95,7 @@ function New-ShareSurferLabPlan {
         },
         [pscustomobject]@{
             ShareName = 'SSOperations'
-            LocalPath = Join-Path $RootPath 'Operations'
+            LocalPath = Join-ShareSurferLabPlanPath -RootPath $RootPath -ChildPath 'Operations'
             Description = 'Operations lab share with ownership and broken inheritance examples'
             SharePermissions = @(
                 [pscustomobject]@{ Identity = "$DomainNetBiosName\SS-Operations-Owners"; Rights = 'Full' }
@@ -145,7 +145,7 @@ function New-ShareSurferLabPlan {
 
             [void]$shareList.Add([pscustomobject]@{
                 ShareName = $shareName
-                LocalPath = Join-Path $RootPath ('Enterprise\Share{0:D4}' -f $i)
+                LocalPath = Join-ShareSurferLabPlanPath -RootPath $RootPath -ChildPath ('Enterprise\Share{0:D4}' -f $i)
                 Description = ('Enterprise-scale complex share {0:D4}' -f $i)
                 SharePermissions = @(
                     [pscustomobject]@{ Identity = "$DomainNetBiosName\$readerGroup"; Rights = 'Read' }
@@ -174,6 +174,18 @@ function New-ShareSurferLabPlan {
         $groups = @($groupList)
         $shares = @($shareList)
         $aclScenarios = @($aclList)
+
+        foreach ($share in @($shares)) {
+            $shareFileCount = @($fileFixtures | Where-Object { $_.ShareName -eq $share.ShareName }).Count
+            for ($fileIndex = $shareFileCount + 1; $fileIndex -le $EnterpriseFilesPerShare; $fileIndex++) {
+                [void]$fileFixtures.Add([pscustomobject]@{
+                    ShareName = $share.ShareName
+                    RelativePath = 'EnterpriseEvidence\Fixture{0:D2}.txt' -f $fileIndex
+                    SizeBytes = 512
+                    ContentTag = ('EnterpriseSupplemental{0}File{1:D2}' -f $share.ShareName, $fileIndex)
+                })
+            }
+        }
     }
 
     $estimatedLabBytes = 0
@@ -343,4 +355,20 @@ function New-ShareSurferLabPlan {
         OwnerMappings = @($ownerMappings)
         ValidationCriteria = @($validationCriteria)
     }
+}
+
+function Join-ShareSurferLabPlanPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $RootPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ChildPath
+    )
+
+    if ($RootPath -match '^[A-Za-z]:[\\/]' -or $RootPath -like '\\*') {
+        return ('{0}\{1}' -f ($RootPath -replace '[\\/]+$', ''), ($ChildPath -replace '^[\\/]+', ''))
+    }
+
+    Join-Path $RootPath $ChildPath
 }

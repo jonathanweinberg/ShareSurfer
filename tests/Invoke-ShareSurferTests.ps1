@@ -243,7 +243,7 @@ $tests = @(
             Assert-Equal $plan.ScaleProfile 'Enterprise' 'Enterprise lab plan should record its scale profile.'
             Assert-True ($plan.Users.Count -ge 2500) 'Enterprise lab plan should include a multi-thousand user population.'
             Assert-True ($plan.Shares.Count -ge 200) 'Enterprise lab plan should include hundreds of SMB shares.'
-            Assert-True ($plan.FileFixtures.Count -ge 1000) 'Enterprise lab plan should include real file objects throughout share trees.'
+            Assert-True ($plan.FileFixtures.Count -ge (200 * 8)) 'Enterprise lab plan should include real file objects throughout share trees.'
             Assert-True ([int64]$plan.EstimatedLabBytes -le $eightGb) 'Enterprise lab plan should stay under the 8 GB lab-data budget.'
             Assert-True (@($plan.FileFixtures | Where-Object { ([string]$_.RelativePath -split '\\').Count -ge 6 }).Count -gt 0) 'Enterprise lab plan should include deep folder/file paths.'
             Assert-True (@($plan.AclScenarios | Where-Object { ([string]$_.RelativePath).Length -gt 256 }).Count -gt 0) 'Enterprise lab plan should include operational long-path fixtures.'
@@ -252,8 +252,16 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRealFiles') 'Enterprise lab plan should include a real-file validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include an 8 GB disk-budget validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerRiskPivots') 'Enterprise lab plan should include owner risk pivot validation.'
+            foreach ($criterion in @($plan.ValidationCriteria | Where-Object { [string]$_.Name -like 'Enterprise*' -and [bool]$_.Required })) {
+                Assert-True ([int64]$criterion.ActualPlanValue -ge [int64]$criterion.MinimumValue) ('Enterprise plan criterion should be satisfiable before live evidence replaces plan evidence: {0}' -f $criterion.Name)
+            }
             Assert-True ($plan.OwnerMappings.Count -ge $plan.Shares.Count) 'Enterprise lab plan should include owner mappings for generated shares.'
             Assert-True (-not (Test-Path -LiteralPath $labRoot)) 'OutputPlanOnly enterprise planning must not create the lab root.'
+
+            $windowsRootErrors = @()
+            $windowsRootPlan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab' -Scale Enterprise -EnterpriseUserCount 50 -EnterpriseShareCount 10 -EnterpriseFilesPerShare 2 -ErrorVariable windowsRootErrors
+            Assert-Equal $windowsRootErrors.Count 0 'OutputPlanOnly should not emit local drive errors when planning Windows target paths from a non-Windows workstation.'
+            Assert-True ([string]$windowsRootPlan.Shares[0].LocalPath -like 'C:\ShareSurferEnterpriseLab\*') 'Windows target root paths should be preserved in plan-only output.'
         }
     },
     @{
