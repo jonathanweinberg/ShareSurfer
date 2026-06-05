@@ -426,6 +426,7 @@ $tests = @(
                 'group_edges.csv',
                 'org_chains.csv',
                 'owner_mappings.csv',
+                'owner_risk_pivots.csv',
                 'conflicts.csv',
                 'findings.csv',
                 'scan_events.csv',
@@ -447,6 +448,13 @@ $tests = @(
 
             $conflicts = Import-Csv -LiteralPath (Join-Path $outputPath 'conflicts.csv')
             Assert-True ($conflicts.ConflictType -contains 'NtfsIdentityMissingShareGate') 'Conflicts should show NTFS identities missing at the share gate.'
+
+            $ownerRiskPivots = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_risk_pivots.csv')
+            Assert-True ($ownerRiskPivots.BusinessUnit -contains 'Finance') 'Owner risk pivots should expose business-unit review rows as CSV.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'FindingCount') 'Owner risk pivot CSV should include finding counts.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'ConflictCount') 'Owner risk pivot CSV should include conflict counts.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'PartialShareCount') 'Owner risk pivot CSV should include partial-share counts.'
+            Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'RiskLevel') 'Owner risk pivot CSV should include review risk levels.'
 
             $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
             Assert-True ($events.EventType -contains 'ScanStarted') 'Scan events should record scan start.'
@@ -878,9 +886,12 @@ $tests = @(
 
             $redactedIdentities = Get-Content -LiteralPath (Join-Path $bundlePath 'identities.csv') -Raw
             $redactedOwners = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_mappings.csv') -Raw
+            $redactedOwnerRiskPivots = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_risk_pivots.csv') -Raw
             Assert-True ($redactedIdentities -notlike '*E1001*') 'Employee IDs must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
+            Assert-True ($redactedOwnerRiskPivots -notlike '*Finance*') 'Owner risk pivot business-unit names must be anonymized.'
+            Assert-True ($redactedOwnerRiskPivots -like '*ID-*') 'Owner risk pivots should preserve review relationships with stable tokens.'
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
@@ -901,6 +912,7 @@ $tests = @(
             Assert-Equal $bundleManifest[0].ReportIncluded 'True' 'Support bundle manifest should record that the redacted report was included.'
             Assert-Equal $bundleManifest[0].RedactionLeakCount '0' 'Support bundle manifest should record zero redaction leaks.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
+            Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_redaction_audit.csv') 'Support bundle file diagnostics should include redaction audit diagnostics.'

@@ -669,8 +669,11 @@ function ConvertTo-ShareSurferReport {
       return new RegExp('^' + escaped + '$', 'i').test(String(value || ''));
     }
     function buildOwnerPivots() {
-      const pivots = new Map();
       const riskOrder = { High: 0, Review: 1, Monitor: 2 };
+      if (Array.isArray(data.owner_risk_pivots) && data.owner_risk_pivots.length > 0) {
+        return data.owner_risk_pivots.slice().sort((a, b) => Number(riskOrder[a.RiskLevel] ?? 99) - Number(riskOrder[b.RiskLevel] ?? 99) || String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
+      }
+      const pivots = new Map();
       data.owner_mappings.forEach(mapping => {
         const matchedItems = data.items.filter(item => wildcardMatch(mapping.Pattern, item.FullPath));
         const matchedItemIds = new Set(matchedItems.map(item => String(item.ItemId || '')).filter(Boolean));

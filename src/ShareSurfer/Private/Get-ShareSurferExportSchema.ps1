@@ -76,6 +76,19 @@ function Get-ShareSurferExportSchema {
             'BusinessUnit',
             'Source'
         )
+        'owner_risk_pivots.csv' = @(
+            'BusinessUnit',
+            'Owner',
+            'Pattern',
+            'Source',
+            'MatchingItems',
+            'Directories',
+            'Files',
+            'FindingCount',
+            'ConflictCount',
+            'PartialShareCount',
+            'RiskLevel'
+        )
         'conflicts.csv' = @(
             'ConflictId',
             'ConflictType',

@@ -175,8 +175,9 @@ The most important CSVs for a first review are:
 | `group_edges.csv` | Expanded group membership paths. |
 | `org_chains.csv` | Manager and manager's manager context. |
 | `owner_mappings.csv` | Business owner and business unit rules. |
+| `owner_risk_pivots.csv` | Owner/business-unit review queue with mapped item counts, findings, conflicts, partial shares, and risk level. |
 
-Start with `findings.csv` and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
+Start with `owner_risk_pivots.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
 
 ## Step 7: Generate the Offline Report
 
