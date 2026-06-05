@@ -6,6 +6,7 @@ param(
     [string] $ExportPath = '',
     [string] $ReportPath = '',
     [string] $SupportBundlePath = '',
+    [string] $PreflightPath = '',
     [string] $CriteriaPath = '',
     [string] $LiveEvidencePath = '',
     [string] $LiveEvidenceReviewPath = '',
@@ -28,6 +29,9 @@ if ($ReportPath -eq '') {
 }
 if ($SupportBundlePath -eq '') {
     $SupportBundlePath = Join-Path $RunRoot 'support-bundle-redacted'
+}
+if ($PreflightPath -eq '') {
+    $PreflightPath = Join-Path $RunRoot 'lab-preflight.csv'
 }
 if ($CriteriaPath -eq '') {
     $CriteriaPath = Join-Path $RunRoot 'lab-validation-criteria.csv'
@@ -127,6 +131,15 @@ else {
 $redactedSupportPassed = ($missingBundleFiles.Count -eq 0 -and $bundleManifestPassed)
 [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RedactedSupportBundle' -Passed $redactedSupportPassed -Detail ('Bundle={0}; Missing={1}; {2}' -f $SupportBundlePath, ($missingBundleFiles -join ', '), $bundleManifestDetail)))
 
+if (Test-Path -LiteralPath $PreflightPath) {
+    $preflightRows = @(Import-Csv -LiteralPath $PreflightPath)
+    $failedRequiredPreflightRows = @($preflightRows | Where-Object { [string]$_.Required -eq 'True' -and [string]$_.Passed -ne 'True' })
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabPreflight' -Passed ($preflightRows.Count -gt 0 -and $failedRequiredPreflightRows.Count -eq 0) -Detail ('PreflightRows={0}; FailedRequired={1}; Preflight={2}' -f $preflightRows.Count, $failedRequiredPreflightRows.Count, $PreflightPath)))
+}
+else {
+    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabPreflight' -Passed $false -Detail ('Preflight file not found: {0}' -f $PreflightPath)))
+}
+
 if (Test-Path -LiteralPath $CriteriaPath) {
     $criteriaRows = @(Import-Csv -LiteralPath $CriteriaPath)
     $failedRequiredCriteria = @($criteriaRows | Where-Object { [string]$_.Required -eq 'True' -and [string]$_.Passed -ne 'True' })
@@ -172,6 +185,7 @@ $failedChecks = @($checks | Where-Object { -not $_.Passed })
     ExportPath = $ExportPath
     ReportPath = $ReportPath
     SupportBundlePath = $SupportBundlePath
+    PreflightPath = $PreflightPath
     CriteriaPath = $CriteriaPath
     LiveEvidencePath = $LiveEvidencePath
     LiveEvidenceReviewPath = $LiveEvidenceReviewPath

@@ -16,6 +16,160 @@ function Import-ShareSurferLabValidationCsv {
     @(Import-Csv -LiteralPath $Path)
 }
 
+function New-ShareSurferLabValidationPreflightRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $Required,
+
+        [Parameter(Mandatory = $true)]
+        [bool] $Passed,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Evidence,
+
+        [Parameter(Mandatory = $true)]
+        [string] $NextAction
+    )
+
+    [pscustomobject]@{
+        Name = $Name
+        Required = $Required
+        Passed = $Passed
+        Status = if ($Passed) { 'Pass' } elseif ($Required) { 'Blocker' } else { 'Review' }
+        Evidence = $Evidence
+        NextAction = $NextAction
+    }
+}
+
+function Test-ShareSurferLabValidationWindowsPathComponents {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan
+    )
+
+    $badSegments = New-Object System.Collections.ArrayList
+    $paths = New-Object System.Collections.ArrayList
+    foreach ($share in @($Plan.Shares)) {
+        if ($share.PSObject.Properties['LocalPath']) {
+            [void]$paths.Add([string]$share.LocalPath)
+        }
+    }
+    foreach ($scenario in @($Plan.AclScenarios)) {
+        if ($scenario.PSObject.Properties['RelativePath']) {
+            [void]$paths.Add([string]$scenario.RelativePath)
+        }
+    }
+    foreach ($file in @($Plan.FileFixtures)) {
+        if ($file.PSObject.Properties['RelativePath']) {
+            [void]$paths.Add([string]$file.RelativePath)
+        }
+    }
+
+    foreach ($path in @($paths)) {
+        foreach ($segment in @($path -split '[\\/]')) {
+            $normalized = $segment
+            if ($normalized -match '^[A-Za-z]:$') {
+                continue
+            }
+            if ($normalized.Length -gt 255) {
+                [void]$badSegments.Add(('{0} ({1} chars)' -f $normalized.Substring(0, [Math]::Min(40, $normalized.Length)), $normalized.Length))
+            }
+        }
+    }
+
+    [pscustomobject]@{
+        Passed = ($badSegments.Count -eq 0)
+        BadSegmentCount = $badSegments.Count
+        BadSegments = @($badSegments)
+    }
+}
+
+function New-ShareSurferLabValidationPreflight {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan,
+
+        [Parameter(Mandatory = $true)]
+        [string] $LabRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string] $RunRoot,
+
+        [switch] $CreateLab,
+        [switch] $IncludeFiles,
+        [switch] $RequireLiveEvidence
+    )
+
+    $rows = New-Object System.Collections.ArrayList
+    $scaleProfile = ''
+    if ($Plan.PSObject.Properties['ScaleProfile']) {
+        $scaleProfile = [string]$Plan.ScaleProfile
+    }
+    $collectorIsWindows = $false
+    try {
+        $collectorIsWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+    }
+    catch {
+        $collectorIsWindows = $env:OS -eq 'Windows_NT'
+    }
+
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'WindowsCollectorHost' -Required $true -Passed $collectorIsWindows -Evidence ('IsWindows={0}; PSVersion={1}; PSEdition={2}' -f $collectorIsWindows, $PSVersionTable.PSVersion, $PSVersionTable.PSEdition) -NextAction 'Run lab validation from a Windows collector host with Windows PowerShell 5.1.'))
+
+    $isPs51 = ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -eq 1)
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'PowerShell51' -Required $true -Passed $isPs51 -Evidence ('PSVersion={0}; PSEdition={1}' -f $PSVersionTable.PSVersion, $PSVersionTable.PSEdition) -NextAction 'Run from Windows PowerShell 5.1 for V1 validation.'))
+
+    $adModule = Get-Module -ListAvailable ActiveDirectory | Select-Object -First 1
+    $adRequired = ($scaleProfile -eq 'Enterprise' -or $CreateLab -or $RequireLiveEvidence)
+    $adEvidence = 'Module not found.'
+    if ($null -ne $adModule) {
+        $adEvidence = 'Module={0}' -f $adModule.Path
+    }
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'ActiveDirectoryModule' -Required $adRequired -Passed ($null -ne $adModule) -Evidence $adEvidence -NextAction 'Install or enable RSAT Active Directory PowerShell tools on the collector host.'))
+
+    $smbCommands = @('Get-SmbShare', 'Get-SmbShareAccess', 'New-SmbShare', 'Grant-SmbShareAccess')
+    $missingSmbCommands = @($smbCommands | Where-Object { $null -eq (Get-Command $_ -ErrorAction SilentlyContinue) })
+    $smbRequired = ($CreateLab -or $scaleProfile -eq 'Enterprise' -or $RequireLiveEvidence)
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'SmbShareCommands' -Required $smbRequired -Passed ($missingSmbCommands.Count -eq 0) -Evidence ('Missing={0}' -f ($missingSmbCommands -join ', ')) -NextAction 'Run from a Windows host with the SMBShare PowerShell module available.'))
+
+    $runRootExists = Test-Path -LiteralPath $RunRoot
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'RunRootWritable' -Required $true -Passed $runRootExists -Evidence ('RunRoot={0}; Exists={1}' -f $RunRoot, $runRootExists) -NextAction 'Choose an output root that the collector account can create and write to.'))
+
+    $labRootExists = Test-Path -LiteralPath $LabRoot
+    $labRootRequired = (-not $CreateLab)
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'ExistingLabRoot' -Required $labRootRequired -Passed ((-not $labRootRequired) -or $labRootExists) -Evidence ('LabRoot={0}; Exists={1}; CreateLab={2}' -f $LabRoot, $labRootExists, [bool]$CreateLab) -NextAction 'Use -CreateLab for a new fixture, or point -LabRoot at an existing ShareSurfer lab root.'))
+
+    $estimatedLabBytes = [int64]0
+    if ($Plan.PSObject.Properties['EstimatedLabBytes']) {
+        $estimatedLabBytes = [int64]$Plan.EstimatedLabBytes
+    }
+    $maxLabBytes = [int64]0
+    if ($Plan.PSObject.Properties['MaxLabBytes']) {
+        $maxLabBytes = [int64]$Plan.MaxLabBytes
+    }
+    $diskPlanPassed = ($maxLabBytes -gt 0 -and $estimatedLabBytes -le $maxLabBytes)
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'PlanDiskBudget' -Required $true -Passed $diskPlanPassed -Evidence ('EstimatedBytes={0}; MaxLabBytes={1}' -f $estimatedLabBytes, $maxLabBytes) -NextAction 'Reduce enterprise shares/files per share or raise MaxLabBytes before creating the lab.'))
+
+    $failedPlanCriteria = @($Plan.ValidationCriteria | Where-Object {
+        $actualPlanValue = 0
+        if ($_.PSObject.Properties['ActualPlanValue']) {
+            $actualPlanValue = [int64]$_.ActualPlanValue
+        }
+        [bool]$_.Required -and $actualPlanValue -lt [int64]$_.MinimumValue
+    })
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'PlanCriteria' -Required $true -Passed ($failedPlanCriteria.Count -eq 0) -Evidence ('FailedPlanCriteria={0}' -f (($failedPlanCriteria | ForEach-Object { $_.Name }) -join ', ')) -NextAction 'Adjust the lab scale inputs until all required plan criteria meet their minimum values.'))
+
+    $pathComponentResult = Test-ShareSurferLabValidationWindowsPathComponents -Plan $Plan
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'WindowsPathComponents' -Required $true -Passed ([bool]$pathComponentResult.Passed) -Evidence ('BadSegmentCount={0}; Examples={1}' -f $pathComponentResult.BadSegmentCount, (@($pathComponentResult.BadSegments) -join '; ')) -NextAction 'Shorten fixture path segments so each Windows path component is 255 characters or less.'))
+
+    $includeFilesPassed = (($scaleProfile -ne 'Enterprise') -or $IncludeFiles)
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'EnterpriseIncludeFiles' -Required ($scaleProfile -eq 'Enterprise') -Passed $includeFilesPassed -Evidence ('Scale={0}; IncludeFiles={1}' -f $scaleProfile, [bool]$IncludeFiles) -NextAction 'Use -IncludeFiles for enterprise validation so real file objects are scanned and proven.'))
+
+    @($rows)
+}
+
 function Measure-ShareSurferLabValidationEvidence {
     param(
         [Parameter(Mandatory = $true)]

@@ -33,6 +33,7 @@ $runRoot = Join-Path $OutputRoot $timestamp
 $exportPath = Join-Path $runRoot 'export'
 $reportPath = Join-Path $runRoot 'report.html'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
+$preflightPath = Join-Path $runRoot 'lab-preflight.csv'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
 $liveEvidenceReviewPath = Join-Path $runRoot 'live-evidence-review.csv'
@@ -44,6 +45,12 @@ New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 $plan = New-ShareSurferLabFixture -OutputPlanOnly -RootPath $LabRoot -DomainNetBiosName $DomainNetBiosName -ObsAttribute $ObsAttribute -Scale $Scale -EnterpriseUserCount $EnterpriseUserCount -EnterpriseShareCount $EnterpriseShareCount -EnterpriseFilesPerShare $EnterpriseFilesPerShare -MaxLabBytes $MaxLabBytes
 $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'lab-plan.json') -Encoding UTF8
 @($plan.OwnerMappings) | Export-Csv -LiteralPath $ownerMappingPath -NoTypeInformation -Encoding UTF8
+$preflightRows = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $LabRoot -RunRoot $runRoot -CreateLab:$CreateLab -IncludeFiles:$IncludeFiles -RequireLiveEvidence:$RequireLiveEvidence)
+$preflightRows | Export-Csv -LiteralPath $preflightPath -NoTypeInformation -Encoding UTF8
+$failedPreflightRows = @($preflightRows | Where-Object { $_.Required -and -not $_.Passed })
+if ($failedPreflightRows.Count -gt 0) {
+    throw ('ShareSurfer lab validation preflight failed. See {0}' -f $preflightPath)
+}
 
 if ($CreateLab) {
     if ($PSCmdlet.ShouldProcess($LabRoot, 'Create or update ShareSurfer Windows/AD lab fixtures')) {
@@ -89,6 +96,7 @@ if (-not $acceptance.IsValid) {
     ReportPath = $reportPath
     SupportBundlePath = $bundlePath
     ValidationPath = Join-Path $runRoot 'validation.json'
+    PreflightPath = $preflightPath
     CriteriaPath = $criteriaPath
     LiveEvidencePath = $liveEvidencePath
     LiveEvidenceReviewPath = $liveEvidenceReviewPath
