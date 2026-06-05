@@ -61,6 +61,10 @@ Dashboard overview:
 
 ![ShareSurfer dashboard overview](visuals/report-dashboard-overview.png)
 
+Owner review workbench:
+
+![ShareSurfer review workbench](visuals/report-dashboard-workbench.png)
+
 Findings drilldown:
 
 ![ShareSurfer findings drilldown](visuals/report-dashboard-findings.png)

@@ -176,7 +176,7 @@ Use the report dashboard as a triage guide, not as the only source of truth.
 - `findings` highlight migration and governance risks such as broken inheritance, deep explicit ACEs, and long paths.
 - `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, and where the owner sits in the organization.
-- Start with the executive summary, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
+- Start with the executive summary, Review Workbench, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
 - Use the business-unit, data-owner, and review-risk filters to narrow mapped findings and conflicts before sending review queues to business owners.
 - Use the visual risk rollups to quickly filter the dashboard by finding type, conflict type, owner, or business unit before opening the detailed rows.
 - Use the group browser when a security group is assigned rights and the business unit needs to see the expanded membership path.

@@ -1121,6 +1121,7 @@ $tests = @(
             )
             $expectedScreenshots = @(
                 'report-dashboard-overview.png',
+                'report-dashboard-workbench.png',
                 'report-dashboard-findings.png'
             )
 
@@ -1158,6 +1159,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*Understand Outputs*') 'First-run guide should explain output interpretation.'
             Assert-True ($firstRunText -like '*Redacted Support Bundle*') 'First-run guide should explain redacted support bundle creation.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-overview.png*') 'First-run guide should show an example dashboard screenshot.'
+            Assert-True ($firstRunText -like '*visuals/report-dashboard-workbench.png*') 'First-run guide should show an example review workbench screenshot.'
             Assert-True ($firstRunText -like '*visuals/report-dashboard-findings.png*') 'First-run guide should show an example findings screenshot.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
@@ -1168,6 +1170,7 @@ $tests = @(
             Assert-True ($managementText -like '*owner/business-unit*') 'Management overview should explain owner/business-unit pivots.'
             Assert-True ($managementText -like '*expected outcomes*') 'Management overview should explain expected outcomes.'
             Assert-True ($managementText -like '*visuals/report-dashboard-overview.png*') 'Management overview should include an example dashboard screenshot.'
+            Assert-True ($managementText -like '*visuals/report-dashboard-workbench.png*') 'Management overview should include an example review workbench screenshot.'
             Assert-True ($managementText -like '*visuals/report-dashboard-findings.png*') 'Management overview should include an example findings screenshot.'
 
             $publicText = @(
