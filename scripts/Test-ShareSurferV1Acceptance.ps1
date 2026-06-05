@@ -76,8 +76,22 @@ $rawEventLogPath = Join-Path $ExportPath 'scan_events.jsonl'
 $rawEventLogPassed = (Test-Path -LiteralPath $rawEventLogPath) -and ((Get-Item -LiteralPath $rawEventLogPath).Length -gt 0)
 [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RawEventLog' -Passed $rawEventLogPassed -Detail ('Raw event log: {0}' -f $rawEventLogPath)))
 
-$reportPassed = (Test-Path -LiteralPath $ReportPath) -and ((Get-Item -LiteralPath $ReportPath).Length -gt 0)
-[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'OfflineReport' -Passed $reportPassed -Detail ('Report: {0}' -f $ReportPath)))
+$reportMarkers = @(
+    'ShareSurfer Business Review Dashboard',
+    'Dashboard Filters',
+    'sharesurfer-data',
+    'owner-pivots',
+    'Collection Error Drilldown'
+)
+$reportPassed = $false
+$reportDetail = 'Report not found or empty.'
+if ((Test-Path -LiteralPath $ReportPath) -and ((Get-Item -LiteralPath $ReportPath).Length -gt 0)) {
+    $reportContent = Get-Content -LiteralPath $ReportPath -Raw
+    $missingReportMarkers = @($reportMarkers | Where-Object { $reportContent -notlike ('*{0}*' -f $_) })
+    $reportPassed = ($missingReportMarkers.Count -eq 0)
+    $reportDetail = 'Report={0}; MissingMarkers={1}' -f $ReportPath, ($missingReportMarkers -join ', ')
+}
+[void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'OfflineReport' -Passed $reportPassed -Detail $reportDetail))
 
 $requiredBundleFiles = @(
     'support_bundle_manifest.csv',

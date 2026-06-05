@@ -974,6 +974,12 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
 
+            Set-Content -LiteralPath $reportPath -Value '<html><body>not a ShareSurfer dashboard</body></html>' -Encoding UTF8
+            $badReportResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badReportResult.IsValid) 'Acceptance checker should fail when the offline report is present but missing dashboard content.'
+            Assert-True (@($badReportResult.Checks | Where-Object { $_.Name -eq 'OfflineReport' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report offline report content failures.'
+            ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath $reportPath | Out-Null
+
             $bundleManifestPath = Join-Path $bundlePath 'support_bundle_manifest.csv'
             $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
             $badBundleManifest = @(
