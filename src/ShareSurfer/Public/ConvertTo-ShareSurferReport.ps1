@@ -106,7 +106,7 @@ function ConvertTo-ShareSurferReport {
     .risk-badge.good { border-color: #bbf7d0; background: #f0fdf4; color: var(--good); }
     .toolbar {
       display: grid;
-      grid-template-columns: minmax(220px, 520px) auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 14px;
       align-items: center;
       padding: 14px;
@@ -114,6 +114,12 @@ function ConvertTo-ShareSurferReport {
       border-radius: 8px;
       background: var(--panel);
       box-shadow: var(--shadow);
+    }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: minmax(260px, 2fr) repeat(3, minmax(160px, 1fr));
+      gap: 12px;
+      align-items: end;
     }
     label {
       display: block;
@@ -123,7 +129,7 @@ function ConvertTo-ShareSurferReport {
       margin-bottom: 6px;
       text-transform: uppercase;
     }
-    input {
+    input, select {
       width: 100%;
       padding: 10px 12px;
       border: 1px solid var(--line);
@@ -198,7 +204,7 @@ function ConvertTo-ShareSurferReport {
     }
     .bar-row {
       display: grid;
-      grid-template-columns: minmax(86px, 1fr) minmax(120px, 2fr) auto;
+      grid-template-columns: minmax(150px, 1.5fr) minmax(90px, 1fr) 28px;
       gap: 8px;
       align-items: center;
       width: 100%;
@@ -215,9 +221,11 @@ function ConvertTo-ShareSurferReport {
     }
     .bar-label {
       color: var(--ink);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      overflow-wrap: anywhere;
+      line-height: 1.15;
+      overflow-wrap: break-word;
+      word-break: normal;
     }
     .bar-track {
       height: 12px;
@@ -339,7 +347,7 @@ function ConvertTo-ShareSurferReport {
     @media (max-width: 940px) {
       header { padding: 26px 20px 18px; }
       main { padding: 18px 20px 28px; }
-      .hero-grid, .toolbar, .two-column { grid-template-columns: 1fr; }
+      .hero-grid, .toolbar, .filter-grid, .two-column { grid-template-columns: 1fr; }
       .summary, .visual-grid { grid-template-columns: 1fr; }
       .view-tabs { justify-content: flex-start; }
       h1 { font-size: 28px; }
@@ -358,9 +366,23 @@ function ConvertTo-ShareSurferReport {
   </header>
   <main>
     <section class="toolbar" aria-label="Dashboard Filters">
-      <div>
-        <label for="filter">Dashboard Filters</label>
-        <input id="filter" type="search" placeholder="Search findings, conflicts, owners, groups, events, or paths">
+      <div class="filter-grid">
+        <div>
+          <label for="filter">Dashboard Filters</label>
+          <input id="filter" type="search" placeholder="Search findings, conflicts, owners, groups, events, or paths">
+        </div>
+        <div>
+          <label for="business-unit-filter">Business Unit</label>
+          <select id="business-unit-filter" aria-label="Filter by business unit"></select>
+        </div>
+        <div>
+          <label for="owner-filter">Data Owner</label>
+          <select id="owner-filter" aria-label="Filter by data owner"></select>
+        </div>
+        <div>
+          <label for="risk-filter">Review Risk</label>
+          <select id="risk-filter" aria-label="Filter by review risk"></select>
+        </div>
       </div>
       <nav class="view-tabs" aria-label="Dashboard views">
         <button type="button" data-view="overview" aria-selected="true">Overview</button>
@@ -415,6 +437,7 @@ function ConvertTo-ShareSurferReport {
           <h2>Business Unit Pivots</h2>
           <span class="count" id="owner-pivots-count"></span>
         </div>
+        <p class="note" id="active-filter-note"></p>
         <p class="note">Owner Risk Pivots combine mapped paths with item, finding, conflict, and partial-share counts so each business unit can see why it is being asked to review access.</p>
         <div class="scroll"><table id="owner-pivots"></table></div>
       </div>
@@ -538,6 +561,21 @@ function ConvertTo-ShareSurferReport {
     }
     function countWhere(rows, predicate) {
       return asRows(rows).filter(predicate).length;
+    }
+    function sortedDistinct(rows, field) {
+      return Array.from(new Set(asRows(rows).map(row => String(row[field] || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    }
+    function appendSelectOption(select, value, label) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      select.appendChild(option);
+    }
+    function populateSelect(id, values, allLabel) {
+      const select = document.getElementById(id);
+      select.textContent = '';
+      appendSelectOption(select, '', allLabel);
+      values.forEach(value => appendSelectOption(select, value, value));
     }
     function setCount(id, rows) {
       const target = document.getElementById(id + '-count');
@@ -719,6 +757,69 @@ function ConvertTo-ShareSurferReport {
       });
       return Array.from(pivots.values()).sort((a, b) => Number(riskOrder[a.RiskLevel] ?? 99) - Number(riskOrder[b.RiskLevel] ?? 99) || String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
     }
+    const itemById = new Map(data.items.map(item => [String(item.ItemId || ''), item]));
+    const shareById = new Map(data.shares.map(share => [String(share.ShareId || ''), share]));
+    function getDashboardFilterState() {
+      return {
+        query: document.getElementById('filter').value.toLowerCase(),
+        businessUnit: document.getElementById('business-unit-filter').value,
+        owner: document.getElementById('owner-filter').value,
+        riskLevel: document.getElementById('risk-filter').value
+      };
+    }
+    function hasOwnerContextFilter(state) {
+      return Boolean(state.businessUnit || state.owner || state.riskLevel);
+    }
+    function pivotMatchesState(pivot, state) {
+      return (!state.businessUnit || String(pivot.BusinessUnit || '') === state.businessUnit) &&
+        (!state.owner || String(pivot.Owner || '') === state.owner) &&
+        (!state.riskLevel || String(pivot.RiskLevel || '') === state.riskLevel);
+    }
+    function rowMatchesSearch(row, state) {
+      return JSON.stringify(row).toLowerCase().includes(state.query);
+    }
+    function rowMatchesPivot(row, pivot) {
+      const pattern = String(pivot.Pattern || '');
+      if (!pattern) { return false; }
+      if (String(row.Pattern || '') === pattern) { return true; }
+      if (String(row.BusinessUnit || '') === String(pivot.BusinessUnit || '') && String(row.Owner || '') === String(pivot.Owner || '')) { return true; }
+
+      const fullPath = String(row.FullPath || '');
+      if (fullPath && wildcardMatch(pattern, fullPath)) { return true; }
+
+      const item = itemById.get(String(row.ItemId || ''));
+      if (item && wildcardMatch(pattern, item.FullPath)) { return true; }
+
+      const share = shareById.get(String(row.ShareId || ''));
+      if (share) {
+        const sharePaths = [share.UNCPath, share.LocalPath].map(value => String(value || '')).filter(Boolean);
+        if (sharePaths.some(path => wildcardMatch(pattern, path))) { return true; }
+      }
+      return false;
+    }
+    function rowMatchesOwnerContext(row, state) {
+      if (!hasOwnerContextFilter(state)) { return true; }
+      return owner_pivots.filter(pivot => pivotMatchesState(pivot, state)).some(pivot => rowMatchesPivot(row, pivot));
+    }
+    function filterRows(rows, state, ownerAware) {
+      return asRows(rows).filter(row => rowMatchesSearch(row, state) && (!ownerAware || rowMatchesOwnerContext(row, state)));
+    }
+    function filterOwnerPivots(rows, state) {
+      return asRows(rows).filter(row => rowMatchesSearch(row, state) && pivotMatchesState(row, state));
+    }
+    function populateDashboardFilters() {
+      populateSelect('business-unit-filter', sortedDistinct(owner_pivots, 'BusinessUnit'), 'All business units');
+      populateSelect('owner-filter', sortedDistinct(owner_pivots, 'Owner'), 'All data owners');
+      populateSelect('risk-filter', sortedDistinct(owner_pivots, 'RiskLevel'), 'All review risks');
+    }
+    function updateFilterNote(state) {
+      const labels = [];
+      if (state.businessUnit) { labels.push('Business Unit: ' + state.businessUnit); }
+      if (state.owner) { labels.push('Data Owner: ' + state.owner); }
+      if (state.riskLevel) { labels.push('Review Risk: ' + state.riskLevel); }
+      if (state.query) { labels.push('Search: ' + state.query); }
+      document.getElementById('active-filter-note').textContent = labels.length > 0 ? ('Active dashboard filters: ' + labels.join('; ')) : 'Showing all owner and business-unit review rows.';
+    }
     function buildRollups(rows, fields) {
       const rollups = new Map();
       asRows(rows).forEach(row => {
@@ -841,19 +942,19 @@ function ConvertTo-ShareSurferReport {
       renderTable('group-browser', group_browser_rows.filter(match));
     }
     function applyFilter() {
-      const q = document.getElementById('filter').value.toLowerCase();
-      const match = row => JSON.stringify(row).toLowerCase().includes(q);
-      renderTable('findings', data.findings.filter(match));
-      renderTable('finding-rollups', finding_rollups.filter(match));
-      renderTable('conflicts', data.conflicts.filter(match));
-      renderTable('conflict-rollups', conflict_rollups.filter(match));
-      renderTable('owners', data.owner_mappings.filter(match));
-      renderTable('owner-pivots', owner_pivots.filter(match));
-      renderTable('groups', data.group_edges.filter(match));
-      renderTable('collection-errors', collection_errors.filter(match));
-      renderTable('collection-error-rollups', collection_error_rollups.filter(match));
-      renderTable('org-rollups', org_rollups.filter(match));
-      renderTable('events', data.scan_events.filter(match));
+      const state = getDashboardFilterState();
+      updateFilterNote(state);
+      renderTable('findings', filterRows(data.findings, state, true));
+      renderTable('finding-rollups', filterRows(finding_rollups, state, false));
+      renderTable('conflicts', filterRows(data.conflicts, state, true));
+      renderTable('conflict-rollups', filterRows(conflict_rollups, state, false));
+      renderTable('owners', filterRows(data.owner_mappings, state, true));
+      renderTable('owner-pivots', filterOwnerPivots(owner_pivots, state));
+      renderTable('groups', filterRows(data.group_edges, state, false));
+      renderTable('collection-errors', filterRows(collection_errors, state, true));
+      renderTable('collection-error-rollups', filterRows(collection_error_rollups, state, false));
+      renderTable('org-rollups', filterRows(org_rollups, state, false));
+      renderTable('events', filterRows(data.scan_events, state, false));
       applyGroupBrowser();
     }
     function showView(viewName) {
@@ -868,7 +969,11 @@ function ConvertTo-ShareSurferReport {
       button.addEventListener('click', () => showView(button.dataset.view));
     });
     document.getElementById('filter').addEventListener('input', applyFilter);
+    document.getElementById('business-unit-filter').addEventListener('change', applyFilter);
+    document.getElementById('owner-filter').addEventListener('change', applyFilter);
+    document.getElementById('risk-filter').addEventListener('change', applyFilter);
     document.getElementById('group-filter').addEventListener('input', applyGroupBrowser);
+    populateDashboardFilters();
     renderSummary();
     renderBarChart('finding-chart', finding_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'warning', viewName: 'findings' });
     renderBarChart('conflict-chart', conflict_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'high', viewName: 'conflicts' });

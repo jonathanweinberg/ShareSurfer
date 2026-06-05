@@ -202,7 +202,7 @@ Use the dashboard to review:
 - Executive summary cards.
 - Priority actions.
 - Visual risk rollups. Click a bar to filter the dashboard to that finding type, conflict type, owner, or business unit.
-- Dashboard-level search and view tabs.
+- Dashboard-level search, business-unit filters, data-owner filters, review-risk filters, and view tabs.
 - Business-unit and owner pivots, including mapped item counts, finding counts, conflict counts, partial-share counts, and a simple review risk level.
 - Finding rollups.
 - Conflict rollups.
