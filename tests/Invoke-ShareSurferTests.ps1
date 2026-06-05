@@ -333,6 +333,9 @@ $tests = @(
             @(
                 [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RiskLevel = 'High' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_risk_pivots.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ RelatedAreaId = 'related-area-0001'; RelatedDataArea = 'Finance / Finance Operations'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; MigrationReadiness = 'Review'; MatchingShares = '1'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; ReviewItemCount = '4'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RelatedBecause = 'same owner mapping; same business unit; matching path pattern; shared permission group; shared review risk'; SuggestedNextAction = 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'related_data_areas.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
                 MaxLabBytes = [int64]8589934592
@@ -504,6 +507,7 @@ $tests = @(
                 'org_chains.csv',
                 'owner_mappings.csv',
                 'owner_risk_pivots.csv',
+                'related_data_areas.csv',
                 'conflicts.csv',
                 'findings.csv',
                 'scan_events.csv',
@@ -538,6 +542,14 @@ $tests = @(
             Assert-True ([int]$ownerRiskPivots[0].DirectGroupCount -ge 2) 'Owner risk pivot should count direct groups for access review sizing.'
             Assert-True ([int]$ownerRiskPivots[0].ExpandedMemberCount -ge 1) 'Owner risk pivot should count expanded group members for access review sizing.'
             Assert-True ($ownerRiskPivots[0].PSObject.Properties.Name -contains 'RiskLevel') 'Owner risk pivot CSV should include review risk levels.'
+
+            $relatedDataAreas = Import-Csv -LiteralPath (Join-Path $outputPath 'related_data_areas.csv')
+            Assert-True ($relatedDataAreas.BusinessUnit -contains 'Finance') 'Related data areas should expose migration discovery rows as CSV.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'MigrationReadiness') 'Related data area CSV should include migration readiness.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'RelatedBecause') 'Related data area CSV should include explainable grouping reasons.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'SuggestedNextAction') 'Related data area CSV should include suggested next actions.'
+            Assert-True ([int]$relatedDataAreas[0].ReviewItemCount -ge 1) 'Related data areas should count findings and conflicts that need migration review.'
+            Assert-True ([int]$relatedDataAreas[0].DirectGroupCount -ge 1) 'Related data areas should count permissioned groups.'
 
             $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
             Assert-True ($events.EventType -contains 'ScanStarted') 'Scan events should record scan start.'
@@ -863,6 +875,7 @@ $tests = @(
             Assert-True ($report -like '*getWorkbenchGroupRows*') 'Report should infer related groups for the current owner context.'
             Assert-True ($report -like '*Migration Discovery*') 'Report should include a migration discovery lane for related data areas.'
             Assert-True ($report -like '*RelatedDataArea*') 'Migration discovery rows should identify related data areas.'
+            Assert-True ($report -like '*related_data_areas*') 'Report should prefer the related data areas CSV when present.'
             Assert-True ($report -like '*Migration Candidate Packet*') 'Report should include a candidate packet for selected related data areas.'
             Assert-True ($report -like '*buildMigrationDiscoveryRows*') 'Report should dynamically derive related data areas from existing CSV exports.'
             Assert-True ($report -like '*RelatedBecause*') 'Migration discovery should explain why rows were grouped.'
@@ -1009,11 +1022,15 @@ $tests = @(
             $redactedIdentities = Get-Content -LiteralPath (Join-Path $bundlePath 'identities.csv') -Raw
             $redactedOwners = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_mappings.csv') -Raw
             $redactedOwnerRiskPivots = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_risk_pivots.csv') -Raw
+            $redactedRelatedDataAreas = Get-Content -LiteralPath (Join-Path $bundlePath 'related_data_areas.csv') -Raw
             Assert-True ($redactedIdentities -notlike '*E1001*') 'Employee IDs must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
             Assert-True ($redactedOwners -notlike '*Finance*') 'Business unit names and owner mappings must be anonymized.'
             Assert-True ($redactedOwnerRiskPivots -notlike '*Finance*') 'Owner risk pivot business-unit names must be anonymized.'
             Assert-True ($redactedOwnerRiskPivots -like '*ID-*') 'Owner risk pivots should preserve review relationships with stable tokens.'
+            Assert-True ($redactedRelatedDataAreas -notlike '*Finance*') 'Related data areas must anonymize source owner and business-unit labels.'
+            Assert-True ($redactedRelatedDataAreas -like '*MigrationReadiness*') 'Related data areas should preserve migration readiness headers.'
+            Assert-True ($redactedRelatedDataAreas -like '*same owner mapping*') 'Related data areas should preserve safe relatedness reasons.'
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
@@ -1050,6 +1067,7 @@ $tests = @(
             Assert-True ([int]$bundleDiagnostics.Inventory.ScanEventCount -gt 0) 'Support bundle diagnostics should summarize scan events.'
             Assert-True (@($bundleDiagnostics.Rollups.FindingsByType | Where-Object { $_.Name -eq 'DeepExplicitAce' }).Count -gt 0) 'Support bundle diagnostics should include finding type rollups.'
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
+            Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
             Assert-True (@($bundleSummary.Files | Where-Object { $_.FileName -eq 'acl_entries.csv' }).Count -eq 1) 'Support bundle summary should include redacted file diagnostics.'
             Assert-True ($bundleSummaryText -notlike '*CONTOSO*') 'Support bundle summary must not contain source domain names.'
             Assert-True ($bundleSummaryText -notlike '*FinanceEditors*') 'Support bundle summary must not contain source group names.'
@@ -1059,6 +1077,7 @@ $tests = @(
             Assert-True ($bundleDiagnosticsText -notlike '*unit-test*') 'Support bundle diagnostics must not expose the redaction salt.'
             Assert-True ($bundleFiles.FileName -contains 'acl_entries.csv') 'Support bundle file diagnostics should include redacted ACL export.'
             Assert-True ($bundleFiles.FileName -contains 'owner_risk_pivots.csv') 'Support bundle file diagnostics should include owner risk pivots.'
+            Assert-True ($bundleFiles.FileName -contains 'related_data_areas.csv') 'Support bundle file diagnostics should include related data areas.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'

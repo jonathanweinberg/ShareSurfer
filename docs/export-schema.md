@@ -34,6 +34,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
+| `related_data_areas.csv` | One row per migration discovery area | Groups like-owned shares, folders, and files for migration planning with explainable relatedness and readiness. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
 | `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
@@ -99,6 +100,12 @@ Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`,
 
 Use this file when business reviewers need a CSV-first view of which owner or business unit should review a share area. The direct identity, direct group, and expanded member counts size the likely access-review queue before a reviewer opens the detailed identity and group exports. `RiskLevel` is `High` when mapped findings or conflicts include high-severity rows, `Review` when mapped findings, conflicts, or partial shares exist, and `Monitor` when the mapping has no current risk rows.
 
+### `related_data_areas.csv`
+
+Expected columns: `RelatedAreaId`, `RelatedDataArea`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `MigrationReadiness`, `MatchingShares`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `ReviewItemCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RelatedBecause`, `SuggestedNextAction`.
+
+Use this file before migration planning to find shares, folders, and files that appear to belong together. `RelatedBecause` is intentionally plain language, such as same owner mapping, same business unit, matching path pattern, shared permission group, shared review risk, or partial collection gap. `MigrationReadiness` is not approval; it indicates whether the current scan suggests the area is a candidate, needs review, or is blocked by scan gaps.
+
 ### `conflicts.csv`
 
 Expected columns: `ConflictId`, `ConflictType`, `ShareId`, `ItemId`, `Identity`, `ShareRights`, `NtfsRights`, `Severity`, `Message`.
@@ -143,3 +150,4 @@ Use the manifest to reproduce scan settings and explain incomplete data.
 - `group_edges` expands access from groups to child identities.
 - `owner_mappings` adds business context to paths and shares.
 - `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.
+- `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.

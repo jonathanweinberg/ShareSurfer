@@ -1126,7 +1126,37 @@ function ConvertTo-ShareSurferReport {
       if (readiness === 'Review') { return 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.'; }
       return 'Confirm ownership and mark as migration-ready when the business owner agrees.';
     }
+    function normalizeMigrationDiscoveryRow(row) {
+      return {
+        RelatedAreaId: row.RelatedAreaId || '',
+        RelatedDataArea: row.RelatedDataArea || [row.BusinessUnit || 'Unmapped', row.Owner || 'Unassigned owner'].filter(Boolean).join(' / '),
+        BusinessUnit: row.BusinessUnit || '',
+        Owner: row.Owner || '',
+        RiskLevel: row.RiskLevel || '',
+        MigrationReadiness: row.MigrationReadiness || getMigrationReadiness(row),
+        Shares: Number(row.Shares || row.MatchingShares || 0),
+        Folders: Number(row.Folders || row.Directories || 0),
+        Files: Number(row.Files || 0),
+        ReviewItems: Number(row.ReviewItems || row.ReviewItemCount || 0),
+        PermissionedGroups: Number(row.PermissionedGroups || row.DirectGroupCount || 0),
+        RelatedBecause: row.RelatedBecause || '',
+        SuggestedNextAction: row.SuggestedNextAction || getMigrationNextAction(row.MigrationReadiness || getMigrationReadiness(row)),
+        Pattern: row.Pattern || ''
+      };
+    }
+    function relatedDataAreaMatchesState(row, state) {
+      return rowMatchesSearch(row, state) &&
+        (!state.businessUnit || String(row.BusinessUnit || '') === state.businessUnit) &&
+        (!state.owner || String(row.Owner || '') === state.owner) &&
+        (!state.riskLevel || String(row.RiskLevel || '') === state.riskLevel || String(row.MigrationReadiness || '') === state.riskLevel);
+    }
     function buildMigrationDiscoveryRows(state) {
+      if (Array.isArray(data.related_data_areas) && data.related_data_areas.length > 0) {
+        return data.related_data_areas
+          .filter(row => relatedDataAreaMatchesState(row, state))
+          .map(normalizeMigrationDiscoveryRow)
+          .sort((a, b) => String(a.MigrationReadiness).localeCompare(String(b.MigrationReadiness)) || Number(b.ReviewItems || 0) - Number(a.ReviewItems || 0) || String(a.RelatedDataArea).localeCompare(String(b.RelatedDataArea)));
+      }
       return filterOwnerPivots(owner_pivots, state).map(pivot => {
         const permissionGroups = getMigrationGroupsForPivot(pivot);
         const matchedShareIds = new Set();
