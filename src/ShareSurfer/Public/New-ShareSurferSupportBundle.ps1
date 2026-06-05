@@ -180,6 +180,7 @@ function New-ShareSurferSupportBundle {
         'lab_run_events.jsonl is included when a lab validation run root was supplied and records redacted lab-validation phase events.',
         'lab_run_diagnostics.json is included when a lab validation run root was supplied.',
         'issue_summary.md is included when a lab validation run has generated a public-safe issue summary.',
+        'validation_closeout_checklist.md is included when a lab validation run has generated a public-safe closeout checklist.',
         'issue_comments contains public-safe issue comment bodies when a lab validation run generated targeted issue updates.'
     ) -Encoding UTF8
 
@@ -218,6 +219,8 @@ function New-ShareSurferSupportBundleLabRunEvidence {
     $includedFiles = New-Object System.Collections.ArrayList
     $issueSummaryIncluded = $false
     $issueSummaryLineCount = 0
+    $closeoutChecklistIncluded = $false
+    $closeoutChecklistLineCount = 0
     $issueCommentCount = 0
     $issueCommentManifestIncluded = $false
     $issueCommentPostCommandsIncluded = $false
@@ -273,6 +276,16 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $issueSummaryPath -FileName 'issue_summary.md' -RowCount $issueSummaryLineCount))
         [void]$includedFiles.Add('issue_summary.md')
         $issueSummaryIncluded = $true
+    }
+
+    $closeoutChecklistSourcePath = Join-Path $RunRoot 'validation-closeout-checklist.md'
+    if (Test-Path -LiteralPath $closeoutChecklistSourcePath) {
+        $closeoutChecklistPath = Join-Path $BundlePath 'validation_closeout_checklist.md'
+        Copy-Item -LiteralPath $closeoutChecklistSourcePath -Destination $closeoutChecklistPath -Force
+        $closeoutChecklistLineCount = @((Get-Content -LiteralPath $closeoutChecklistPath -ErrorAction SilentlyContinue)).Count
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $closeoutChecklistPath -FileName 'validation_closeout_checklist.md' -RowCount $closeoutChecklistLineCount))
+        [void]$includedFiles.Add('validation_closeout_checklist.md')
+        $closeoutChecklistIncluded = $true
     }
 
     $issueCommentSourceDirectory = Join-Path $RunRoot 'issue-comments'
@@ -401,6 +414,11 @@ function New-ShareSurferSupportBundleLabRunEvidence {
             Included = [bool]$issueSummaryIncluded
             FileName = if ($issueSummaryIncluded) { 'issue_summary.md' } else { '' }
             LineCount = [int]$issueSummaryLineCount
+        }
+        CloseoutChecklist = [ordered]@{
+            Included = [bool]$closeoutChecklistIncluded
+            FileName = if ($closeoutChecklistIncluded) { 'validation_closeout_checklist.md' } else { '' }
+            LineCount = [int]$closeoutChecklistLineCount
         }
         IssueComments = [ordered]@{
             Included = ([int]$issueCommentCount -gt 0)

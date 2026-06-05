@@ -121,6 +121,7 @@ Use these files first:
 - `live-evidence-review.csv`: operator-friendly proof rows and next actions.
 - `v1-acceptance-summary.json`: quick pass/fail summary.
 - `v1-acceptance.json`: detailed acceptance evidence.
+- `validation-closeout-checklist.md`: safe go/no-go checklist for proof review and issue-comment posting.
 - `issue-summary.md`: public-safe Markdown starting point for GitHub issue updates.
 - `issue-comments\*.md`: public-safe targeted body-file comments for the remaining proof issues.
 - `issue-comments\post-commands.txt`: exact `gh issue comment --body-file` commands for posting those targeted comments after review.
@@ -128,7 +129,7 @@ Use these files first:
 - `scripts\Publish-ShareSurferValidationIssueComments.ps1`: preview or post the generated issue comments after you review them.
 - `report.html`: offline business review dashboard.
 
-Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md` and a sanitized `issue_comments` folder as shareable copies of the public-safe issue update artifacts. Do not attach raw run folders outside the trusted lab environment.
+Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md`, `validation_closeout_checklist.md`, and a sanitized `issue_comments` folder as shareable copies of the public-safe issue update artifacts. Do not attach raw run folders outside the trusted lab environment.
 
 ## Go Gates
 

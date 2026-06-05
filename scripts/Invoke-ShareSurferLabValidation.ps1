@@ -72,6 +72,7 @@ $liveEvidenceReviewPath = Join-Path $runRoot 'live-evidence-review.csv'
 $acceptancePath = Join-Path $runRoot 'v1-acceptance.json'
 $acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
 $issueSummaryPath = Join-Path $runRoot 'issue-summary.md'
+$closeoutChecklistPath = Join-Path $runRoot 'validation-closeout-checklist.md'
 $issueCommentDirectory = Join-Path $runRoot 'issue-comments'
 $issueCommentPublishPreviewPath = Join-Path $runRoot 'issue-comment-publish-preview.csv'
 $ownerMappingPath = Join-Path $runRoot 'owner-mapping.csv'
@@ -191,6 +192,10 @@ Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueComments' -M
 $issueCommentPublishPreview = @(& $issueCommentPublisherScriptPath -RunRoot $runRoot)
 $issueCommentPublishPreview | Export-Csv -LiteralPath $issueCommentPublishPreviewPath -NoTypeInformation -Encoding UTF8
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueComments' -Message 'Validation issue comment publish preview generated.' -Detail ('PublishPreviewPath={0}; PreviewRows={1}' -f $issueCommentPublishPreviewPath, @($issueCommentPublishPreview).Count)
+$closeoutChecklistScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationCloseoutChecklist.ps1'
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'CloseoutChecklist' -Message 'Generating validation closeout checklist.' -Detail ('CloseoutChecklistPath={0}' -f $closeoutChecklistPath)
+& $closeoutChecklistScriptPath -RunRoot $runRoot -OutputPath $closeoutChecklistPath | Out-Null
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'CloseoutChecklist' -Message 'Validation closeout checklist generated.' -Detail ('CloseoutChecklistPath={0}' -f $closeoutChecklistPath)
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Complete' -Message 'ShareSurfer lab validation evidence completed; refreshing final redacted support bundle with issue summary.' -Detail ('RunRoot={0}; AcceptanceIsValid={1}; LiveEvidenceIsValid={2}; SupportBundlePath={3}; IssueSummaryPath={4}' -f $runRoot, [bool]$acceptance.IsValid, [bool]$liveEvidence.IsValid, $bundlePath, $issueSummaryPath)
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Acceptance' -Message 'Running final V1 acceptance package check with issue-comment evidence.' -Detail ('AcceptancePath={0}; IssueCommentDirectory={1}' -f $acceptancePath, $issueCommentDirectory)
@@ -220,6 +225,7 @@ if (-not $finishedPackageAcceptance.IsValid) {
     AcceptancePath = $acceptancePath
     AcceptanceSummaryPath = $acceptanceSummaryPath
     IssueSummaryPath = $issueSummaryPath
+    CloseoutChecklistPath = $closeoutChecklistPath
     IssueCommentDirectory = $issueCommentDirectory
     IssueCommentPublishPreviewPath = $issueCommentPublishPreviewPath
     OwnerMappingPath = $ownerMappingPath

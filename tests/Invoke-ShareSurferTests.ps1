@@ -1520,11 +1520,13 @@ $tests = @(
             $issueSummaryScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueSummary.ps1'
             $issueCommentScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueComments.ps1'
             $issueCommentPublisherScript = Join-Path $repoRoot 'scripts/Publish-ShareSurferValidationIssueComments.ps1'
+            $closeoutChecklistScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationCloseoutChecklist.ps1'
             $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferAcceptance-' + [guid]::NewGuid().ToString('N'))
             $exportPath = Join-Path $runRoot 'export'
             $reportPath = Join-Path $runRoot 'report.html'
             $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
             $acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
+            $closeoutChecklistPath = Join-Path $runRoot 'validation-closeout-checklist.md'
             $issueCommentDirectory = Join-Path $runRoot 'issue-comments'
             New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
@@ -1558,6 +1560,7 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $issueSummaryScript) 'Validation issue summary script should exist.'
             Assert-True (Test-Path -LiteralPath $issueCommentScript) 'Validation issue comment generator script should exist.'
             Assert-True (Test-Path -LiteralPath $issueCommentPublisherScript) 'Validation issue comment publisher script should exist.'
+            Assert-True (Test-Path -LiteralPath $closeoutChecklistScript) 'Validation closeout checklist script should exist.'
             $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -AllowMissingIssueComments
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
@@ -1619,6 +1622,14 @@ $tests = @(
             $publishPreviewPath = Join-Path $runRoot 'issue-comment-publish-preview.csv'
             $publishPreview | Export-Csv -LiteralPath $publishPreviewPath -NoTypeInformation -Encoding UTF8
             Assert-True (Test-Path -LiteralPath $publishPreviewPath) 'Publisher dry run should be capturable as validation evidence.'
+            $closeoutChecklist = & $closeoutChecklistScript -RunRoot $runRoot -OutputPath $closeoutChecklistPath -PassThru
+            $closeoutChecklistText = [string]($closeoutChecklist -join "`n")
+            Assert-True (Test-Path -LiteralPath $closeoutChecklistPath) 'Closeout checklist script should write a Markdown checklist.'
+            Assert-True ($closeoutChecklistText -like '*ShareSurfer live validation closeout checklist*') 'Closeout checklist should include a recognizable title.'
+            Assert-True ($closeoutChecklistText -like '*Ready for proof review:*') 'Closeout checklist should include ready-for-proof-review status.'
+            Assert-True ($closeoutChecklistText -like '*Issue comment publish preview is dry-run only*') 'Closeout checklist should summarize publish preview readiness.'
+            Assert-True ($closeoutChecklistText -notlike '*Synthetic acceptance proof*') 'Closeout checklist should not include raw evidence detail values.'
+            Assert-True ($closeoutChecklistText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Closeout checklist should not include raw lab-run detail values.'
             $publishFilteredPreview = @(& $issueCommentPublisherScript -RunRoot $runRoot -Repository 'jonathanweinberg/ShareSurfer' -IssueNumber 3)
             Assert-Equal $publishFilteredPreview.Count 1 'Publisher should filter to a requested issue number.'
             Assert-Equal ([int]$publishFilteredPreview[0].IssueNumber) 3 'Publisher issue filter should select issue #3.'
@@ -1646,6 +1657,8 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'ValidationIssueComments') 'Acceptance checks should include raw validation issue-comment artifacts.'
             Assert-True ($result.Checks.Name -contains 'ValidationIssueCommentPublishPreview') 'Acceptance checks should include raw validation issue-comment publish preview evidence.'
             Assert-True ($result.Checks.Name -contains 'BundledValidationIssueComments') 'Acceptance checks should include bundled validation issue-comment artifacts.'
+            Assert-True ($result.Checks.Name -contains 'ValidationCloseoutChecklist') 'Acceptance checks should include the raw validation closeout checklist.'
+            Assert-True ($result.Checks.Name -contains 'BundledValidationCloseoutChecklist') 'Acceptance checks should include the bundled validation closeout checklist.'
             Assert-True ($result.Checks.Name -contains 'LabPreflight') 'Acceptance checks should include lab preflight readiness evidence.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
@@ -1673,7 +1686,11 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance_summary.json') 'Final lab support bundle should include the concise acceptance summary.'
             Assert-True ($bundleFiles.FileName -contains 'lab_run_events.jsonl') 'Final lab support bundle should include the redacted lab-run event log.'
             Assert-True ($bundleFiles.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
+            Assert-True ($bundleFiles.FileName -contains 'validation_closeout_checklist.md') 'Final lab support bundle should include the public-safe closeout checklist.'
             Assert-True ($bundleFiles.FileName -contains 'issue_comments/publish_preview.csv') 'Final lab support bundle should include the sanitized issue-comment publish preview.'
+            $bundledCloseoutChecklist = Get-Content -LiteralPath (Join-Path $bundlePath 'validation_closeout_checklist.md') -Raw
+            Assert-True ($bundledCloseoutChecklist -like '*ShareSurfer live validation closeout checklist*') 'Bundled closeout checklist should preserve the public-safe title.'
+            Assert-True ($bundledCloseoutChecklist -notlike "*$runRoot*") 'Bundled closeout checklist must not contain raw run-root paths.'
             $bundledPublishPreview = Get-Content -LiteralPath (Join-Path $bundlePath 'issue_comments/publish_preview.csv') -Raw
             $bundledPublishPreviewRows = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'issue_comments/publish_preview.csv'))
             Assert-True ($bundledPublishPreview -notlike "*$runRoot*") 'Bundled issue-comment publish preview must not contain raw run-root paths.'
@@ -1683,6 +1700,8 @@ $tests = @(
             $labRunDiagnostics = Get-Content -LiteralPath (Join-Path $bundlePath 'lab_run_diagnostics.json') -Raw | ConvertFrom-Json
             Assert-Equal ([string]$labRunDiagnostics.AcceptanceSummary.IsValid) 'True' 'Lab-run diagnostics should summarize the bundled acceptance summary.'
             Assert-Equal ([string]$labRunDiagnostics.IssueSummary.Included) 'True' 'Lab-run diagnostics should summarize the bundled issue summary.'
+            Assert-Equal ([string]$labRunDiagnostics.CloseoutChecklist.Included) 'True' 'Lab-run diagnostics should summarize the bundled closeout checklist.'
+            Assert-Equal ([string]$labRunDiagnostics.CloseoutChecklist.FileName) 'validation_closeout_checklist.md' 'Lab-run diagnostics should name the bundled closeout checklist.'
             Assert-Equal ([string]$labRunDiagnostics.IssueComments.PublishPreviewIncluded) 'True' 'Lab-run diagnostics should summarize the issue-comment publish preview.'
             Assert-Equal ([int]$labRunDiagnostics.IssueComments.PublishPreviewRowCount) 4 'Lab-run diagnostics should count issue-comment publish preview rows.'
             $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
@@ -1751,6 +1770,7 @@ $tests = @(
             Assert-True (@($badRawIssueCommentResult.Checks | Where-Object { $_.Name -eq 'ValidationIssueComments' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report missing raw issue-comment artifacts.'
             & $issueCommentScript -RunRoot $runRoot -OutputDirectory $issueCommentDirectory -Repository 'jonathanweinberg/ShareSurfer' | Out-Null
             & $issueCommentPublisherScript -RunRoot $runRoot -Repository 'jonathanweinberg/ShareSurfer' | Export-Csv -LiteralPath $publishPreviewPath -NoTypeInformation -Encoding UTF8
+            & $closeoutChecklistScript -RunRoot $runRoot -OutputPath $closeoutChecklistPath | Out-Null
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
 
             Remove-Item -LiteralPath $publishPreviewPath -Force
@@ -1758,6 +1778,14 @@ $tests = @(
             Assert-True (-not $badPublishPreviewResult.IsValid) 'Acceptance checker should fail when raw issue-comment publish preview evidence is missing.'
             Assert-True (@($badPublishPreviewResult.Checks | Where-Object { $_.Name -eq 'ValidationIssueCommentPublishPreview' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report missing raw issue-comment publish preview evidence.'
             & $issueCommentPublisherScript -RunRoot $runRoot -Repository 'jonathanweinberg/ShareSurfer' | Export-Csv -LiteralPath $publishPreviewPath -NoTypeInformation -Encoding UTF8
+            & $closeoutChecklistScript -RunRoot $runRoot -OutputPath $closeoutChecklistPath | Out-Null
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
+
+            Remove-Item -LiteralPath $closeoutChecklistPath -Force
+            $badCloseoutChecklistResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badCloseoutChecklistResult.IsValid) 'Acceptance checker should fail when the raw closeout checklist is missing.'
+            Assert-True (@($badCloseoutChecklistResult.Checks | Where-Object { $_.Name -eq 'ValidationCloseoutChecklist' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report missing raw closeout checklist evidence.'
+            & $closeoutChecklistScript -RunRoot $runRoot -OutputPath $closeoutChecklistPath | Out-Null
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
 
             Remove-Item -LiteralPath (Join-Path $bundlePath 'scan_events.jsonl') -Force
@@ -1795,6 +1823,9 @@ $tests = @(
             Assert-True ($labValidationScript -like '*Publish-ShareSurferValidationIssueComments.ps1*') 'Lab validation should call the validation issue comment publisher in dry-run preview mode.'
             Assert-True ($labValidationScript -like '*issue-comment-publish-preview.csv*') 'Lab validation should write the issue-comment publish preview artifact.'
             Assert-True ($labValidationScript -like '*IssueCommentPublishPreviewPath*') 'Lab validation output should include the issue-comment publish preview artifact path.'
+            Assert-True ($labValidationScript -like '*New-ShareSurferValidationCloseoutChecklist.ps1*') 'Lab validation should call the validation closeout checklist generator automatically.'
+            Assert-True ($labValidationScript -like '*validation-closeout-checklist.md*') 'Lab validation should write the validation closeout checklist artifact.'
+            Assert-True ($labValidationScript -like '*CloseoutChecklistPath*') 'Lab validation output should include the closeout checklist artifact path.'
             Assert-True ($labValidationScript -like '*refreshing final redacted support bundle with issue summary*') 'Lab validation should refresh the final support bundle after the issue summary exists.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
