@@ -44,6 +44,10 @@ ShareSurfer can pivot access and findings by:
 - Security group and expanded membership.
 - Share, folder, file, and path pattern.
 
+## Migration Discovery
+
+ShareSurfer also helps migration teams avoid splitting related data across waves. The report can group areas that appear to belong together because they share the same owner, business unit, path pattern, permission-bearing group, or review-risk signal. This is not migration approval; it is a starting point for confirming ownership and deciding what should move together.
+
 ## Expected Outcomes
 
 After a useful scan, leaders should expect:
@@ -52,6 +56,7 @@ After a useful scan, leaders should expect:
 - An offline report that business reviewers can open locally.
 - A list of high-priority access conflicts and migration risks.
 - A clearer owner or business-unit view for each reviewed share.
+- A related-data view for identifying like-owned shares, folders, and files before migration planning.
 - Redacted support evidence when the project team needs help diagnosing a bug.
 - A repeatable process for rescanning after cleanup.
 
