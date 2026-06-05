@@ -1,0 +1,4 @@
+gh issue comment 1 --repo jonathanweinberg/ShareSurfer --body-file "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-1-lab-fixture-live-proof.md"
+gh issue comment 3 --repo jonathanweinberg/ShareSurfer --body-file "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-3-scanner-live-proof.md"
+gh issue comment 5 --repo jonathanweinberg/ShareSurfer --body-file "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-5-identity-group-live-proof.md"
+gh issue comment 6 --repo jonathanweinberg/ShareSurfer --body-file "docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-6-dashboard-live-proof.md"

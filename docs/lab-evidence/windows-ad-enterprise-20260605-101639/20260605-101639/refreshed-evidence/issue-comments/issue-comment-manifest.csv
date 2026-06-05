@@ -1,0 +1,5 @@
+"IssueNumber","FileName","CriteriaPassed","AcceptanceChecksPassed","BlockingLiveReviewRows","OutputPath"
+"1","issue-1-lab-fixture-live-proof.md","True","True","0","docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-1-lab-fixture-live-proof.md"
+"3","issue-3-scanner-live-proof.md","True","True","0","docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-3-scanner-live-proof.md"
+"5","issue-5-identity-group-live-proof.md","True","True","0","docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-5-identity-group-live-proof.md"
+"6","issue-6-dashboard-live-proof.md","True","True","0","docs/lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-comments/issue-6-dashboard-live-proof.md"

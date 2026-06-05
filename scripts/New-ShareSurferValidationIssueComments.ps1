@@ -3,9 +3,18 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $RunRoot,
 
+    [string] $AcceptanceSummaryPath = '',
+    [string] $AcceptancePath = '',
+    [string] $LiveEvidencePath = '',
+    [string] $LiveEvidenceReviewPath = '',
+    [string] $CriteriaPath = '',
+    [string] $SupportBundlePath = '',
+
     [string] $OutputDirectory = '',
 
     [string] $Repository = 'jonathanweinberg/ShareSurfer',
+
+    [switch] $AllowMissingSupportBundle,
 
     [switch] $PassThru
 )
@@ -208,6 +217,7 @@ function New-ShareSurferIssueCommentBody {
         [object[]] $BlockingRows,
         [string] $BundleValidation,
         [string] $BundleLeakCount,
+        [bool] $SupportBundleGatePassed,
         [bool] $IssueCriteriaPassed,
         [bool] $AcceptanceChecksPassed
     )
@@ -216,7 +226,7 @@ function New-ShareSurferIssueCommentBody {
     $failedCheckCount = if ($null -eq $AcceptanceSummary) { 'Unknown' } else { [string]$AcceptanceSummary.FailedCheckCount }
     $liveEvidenceValid = if ($null -eq $LiveEvidence) { 'Missing' } else { [string](ConvertTo-ShareSurferIssueCommentBool $LiveEvidence.IsValid) }
     $fallbackCount = if ($null -eq $LiveEvidence) { 'Unknown' } else { [string]$LiveEvidence.FallbackCount }
-    $readyForReview = ($IssueCriteriaPassed -and $AcceptanceChecksPassed -and $acceptanceValid -eq 'True' -and $liveEvidenceValid -eq 'True' -and [string]$BundleValidation -eq 'True' -and [string]$BundleLeakCount -eq '0')
+    $readyForReview = ($IssueCriteriaPassed -and $AcceptanceChecksPassed -and $acceptanceValid -eq 'True' -and $liveEvidenceValid -eq 'True' -and $SupportBundleGatePassed)
 
     $lines = New-Object System.Collections.ArrayList
     Add-ShareSurferIssueCommentLine -Lines $lines -Text ('ShareSurfer live validation update for issue #{0}: {1}.' -f $IssueNumber, $Title)
@@ -262,12 +272,31 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
-$acceptanceSummary = Get-ShareSurferIssueCommentJson -Path (Join-Path $RunRoot 'v1-acceptance-summary.json')
-$acceptanceResult = Get-ShareSurferIssueCommentJson -Path (Join-Path $RunRoot 'v1-acceptance.json')
-$liveEvidence = Get-ShareSurferIssueCommentJson -Path (Join-Path $RunRoot 'live-evidence.json')
-$criteriaRows = @(Get-ShareSurferIssueCommentCsv -Path (Join-Path $RunRoot 'lab-validation-criteria.csv'))
-$liveEvidenceReview = @(Get-ShareSurferIssueCommentCsv -Path (Join-Path $RunRoot 'live-evidence-review.csv'))
-$bundleManifestRows = @(Get-ShareSurferIssueCommentCsv -Path (Join-Path (Join-Path $RunRoot 'support-bundle-redacted') 'support_bundle_manifest.csv'))
+if ([string]::IsNullOrWhiteSpace($AcceptanceSummaryPath)) {
+    $AcceptanceSummaryPath = Join-Path $RunRoot 'v1-acceptance-summary.json'
+}
+if ([string]::IsNullOrWhiteSpace($AcceptancePath)) {
+    $AcceptancePath = Join-Path $RunRoot 'v1-acceptance.json'
+}
+if ([string]::IsNullOrWhiteSpace($LiveEvidencePath)) {
+    $LiveEvidencePath = Join-Path $RunRoot 'live-evidence.json'
+}
+if ([string]::IsNullOrWhiteSpace($LiveEvidenceReviewPath)) {
+    $LiveEvidenceReviewPath = Join-Path $RunRoot 'live-evidence-review.csv'
+}
+if ([string]::IsNullOrWhiteSpace($CriteriaPath)) {
+    $CriteriaPath = Join-Path $RunRoot 'lab-validation-criteria.csv'
+}
+if ([string]::IsNullOrWhiteSpace($SupportBundlePath)) {
+    $SupportBundlePath = Join-Path $RunRoot 'support-bundle-redacted'
+}
+
+$acceptanceSummary = Get-ShareSurferIssueCommentJson -Path $AcceptanceSummaryPath
+$acceptanceResult = Get-ShareSurferIssueCommentJson -Path $AcceptancePath
+$liveEvidence = Get-ShareSurferIssueCommentJson -Path $LiveEvidencePath
+$criteriaRows = @(Get-ShareSurferIssueCommentCsv -Path $CriteriaPath)
+$liveEvidenceReview = @(Get-ShareSurferIssueCommentCsv -Path $LiveEvidenceReviewPath)
+$bundleManifestRows = @(Get-ShareSurferIssueCommentCsv -Path (Join-Path $SupportBundlePath 'support_bundle_manifest.csv'))
 $acceptanceChecks = if ($null -eq $acceptanceResult) { @() } else { @($acceptanceResult.Checks) }
 
 $blockingStatuses = @('Failed', 'MissingEvidenceSource', 'PlanOnly', 'EvidenceUnavailable')
@@ -277,6 +306,12 @@ $bundleLeakCount = 'Unknown'
 if ($bundleManifestRows.Count -gt 0) {
     $bundleValidation = [string]$bundleManifestRows[0].ValidationIsValid
     $bundleLeakCount = [string]$bundleManifestRows[0].RedactionLeakCount
+}
+$supportBundleGatePassed = ($bundleValidation -eq 'True' -and $bundleLeakCount -eq '0')
+if ($AllowMissingSupportBundle -and $bundleManifestRows.Count -eq 0) {
+    $bundleValidation = 'SkippedOptional'
+    $bundleLeakCount = '0'
+    $supportBundleGatePassed = $true
 }
 
 $issueDefinitions = @(
@@ -319,7 +354,7 @@ $postCommands = New-Object System.Collections.ArrayList
 foreach ($definition in @($issueDefinitions)) {
     $criteriaPassed = Test-ShareSurferIssueCommentRowsPassed -Rows $criteriaRows -Names $definition.Criteria
     $checksPassed = Test-ShareSurferIssueCommentRowsPassed -Rows $acceptanceChecks -Names $definition.Checks
-    $body = New-ShareSurferIssueCommentBody -IssueNumber $definition.IssueNumber -Title $definition.Title -Focus $definition.Focus -CriteriaNames $definition.Criteria -AcceptanceCheckNames $definition.Checks -CriteriaRows $criteriaRows -AcceptanceChecks $acceptanceChecks -AcceptanceSummary $acceptanceSummary -LiveEvidence $liveEvidence -BlockingRows $blockingRows -BundleValidation $bundleValidation -BundleLeakCount $bundleLeakCount -IssueCriteriaPassed:$criteriaPassed -AcceptanceChecksPassed:$checksPassed
+    $body = New-ShareSurferIssueCommentBody -IssueNumber $definition.IssueNumber -Title $definition.Title -Focus $definition.Focus -CriteriaNames $definition.Criteria -AcceptanceCheckNames $definition.Checks -CriteriaRows $criteriaRows -AcceptanceChecks $acceptanceChecks -AcceptanceSummary $acceptanceSummary -LiveEvidence $liveEvidence -BlockingRows $blockingRows -BundleValidation $bundleValidation -BundleLeakCount $bundleLeakCount -SupportBundleGatePassed:$supportBundleGatePassed -IssueCriteriaPassed:$criteriaPassed -AcceptanceChecksPassed:$checksPassed
     $fileName = 'issue-{0}-{1}.md' -f $definition.IssueNumber, $definition.Slug
     $filePath = Join-Path $OutputDirectory $fileName
     Set-Content -LiteralPath $filePath -Value $body -Encoding UTF8

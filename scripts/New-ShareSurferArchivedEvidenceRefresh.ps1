@@ -17,6 +17,10 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $modulePath = Join-Path $repoRoot 'src\ShareSurfer\ShareSurfer.psd1'
 $helperPath = Join-Path $PSScriptRoot 'ShareSurferLabValidation.Helpers.ps1'
 $acceptanceScriptPath = Join-Path $PSScriptRoot 'Test-ShareSurferV1Acceptance.ps1'
+$issueSummaryScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueSummary.ps1'
+$issueCommentScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueComments.ps1'
+$issueCommentPublisherScriptPath = Join-Path $PSScriptRoot 'Publish-ShareSurferValidationIssueComments.ps1'
+$closeoutChecklistScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationCloseoutChecklist.ps1'
 
 Import-Module $modulePath -Force -ErrorAction Stop
 . $helperPath
@@ -69,6 +73,10 @@ $outputLiveEvidencePath = Join-Path $OutputPath 'live-evidence.json'
 $outputLiveEvidenceReviewPath = Join-Path $OutputPath 'live-evidence-review.csv'
 $outputAcceptancePath = Join-Path $OutputPath 'v1-acceptance.json'
 $outputAcceptanceSummaryPath = Join-Path $OutputPath 'v1-acceptance-summary.json'
+$outputIssueSummaryPath = Join-Path $OutputPath 'issue-summary.md'
+$outputIssueCommentDirectory = Join-Path $OutputPath 'issue-comments'
+$outputIssueCommentPublishPreviewPath = Join-Path $OutputPath 'issue-comment-publish-preview.csv'
+$outputCloseoutChecklistPath = Join-Path $OutputPath 'validation-closeout-checklist.md'
 $outputSummaryPath = Join-Path $OutputPath 'evidence-refresh-summary.md'
 
 $existingCriteria | Export-Csv -LiteralPath $outputCriteriaPath -NoTypeInformation -Encoding UTF8
@@ -87,6 +95,40 @@ $acceptance = & $acceptanceScriptPath `
     -AllowMissingSupportBundle:$AllowMissingSupportBundle `
     -AllowMissingIssueComments:$AllowMissingIssueComments
 $acceptance | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $outputAcceptancePath -Encoding UTF8
+
+& $issueSummaryScriptPath `
+    -RunRoot $RunRoot `
+    -AcceptanceSummaryPath $outputAcceptanceSummaryPath `
+    -LiveEvidencePath $outputLiveEvidencePath `
+    -LiveEvidenceReviewPath $outputLiveEvidenceReviewPath `
+    -CriteriaPath $outputCriteriaPath `
+    -OutputPath $outputIssueSummaryPath `
+    -AllowMissingSupportBundle:$AllowMissingSupportBundle | Out-Null
+
+& $issueCommentScriptPath `
+    -RunRoot $RunRoot `
+    -AcceptanceSummaryPath $outputAcceptanceSummaryPath `
+    -AcceptancePath $outputAcceptancePath `
+    -LiveEvidencePath $outputLiveEvidencePath `
+    -LiveEvidenceReviewPath $outputLiveEvidenceReviewPath `
+    -CriteriaPath $outputCriteriaPath `
+    -OutputDirectory $outputIssueCommentDirectory `
+    -AllowMissingSupportBundle:$AllowMissingSupportBundle | Out-Null
+
+$publishPreview = @(& $issueCommentPublisherScriptPath -RunRoot $OutputPath -IssueCommentPath $outputIssueCommentDirectory)
+$publishPreview | Export-Csv -LiteralPath $outputIssueCommentPublishPreviewPath -NoTypeInformation -Encoding UTF8
+
+& $closeoutChecklistScriptPath `
+    -RunRoot $RunRoot `
+    -AcceptanceSummaryPath $outputAcceptanceSummaryPath `
+    -LiveEvidencePath $outputLiveEvidencePath `
+    -LiveEvidenceReviewPath $outputLiveEvidenceReviewPath `
+    -CriteriaPath $outputCriteriaPath `
+    -PreflightPath (Join-Path $RunRoot 'lab-preflight.csv') `
+    -IssueCommentDirectory $outputIssueCommentDirectory `
+    -IssueCommentPublishPreviewPath $outputIssueCommentPublishPreviewPath `
+    -OutputPath $outputCloseoutChecklistPath `
+    -AllowMissingSupportBundle:$AllowMissingSupportBundle | Out-Null
 
 $failedChecks = @($acceptance.Checks | Where-Object { -not $_.Passed } | ForEach-Object { [string]$_.Name })
 $fallbackCriteria = @($liveEvidence.FallbackCriteria | ForEach-Object { [string]$_ })
@@ -115,6 +157,10 @@ $summaryLines | Set-Content -LiteralPath $outputSummaryPath -Encoding UTF8
     LiveEvidenceReviewPath = $outputLiveEvidenceReviewPath
     AcceptancePath = $outputAcceptancePath
     AcceptanceSummaryPath = $outputAcceptanceSummaryPath
+    IssueSummaryPath = $outputIssueSummaryPath
+    IssueCommentDirectory = $outputIssueCommentDirectory
+    IssueCommentPublishPreviewPath = $outputIssueCommentPublishPreviewPath
+    CloseoutChecklistPath = $outputCloseoutChecklistPath
     SummaryPath = $outputSummaryPath
     StrengthenedCriteria = @($strengthenedRows)
     LiveEvidenceIsValid = [bool]$liveEvidence.IsValid
