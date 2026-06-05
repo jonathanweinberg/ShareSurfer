@@ -70,6 +70,7 @@ $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
 $liveEvidenceReviewPath = Join-Path $runRoot 'live-evidence-review.csv'
 $acceptancePath = Join-Path $runRoot 'v1-acceptance.json'
+$acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
 $ownerMappingPath = Join-Path $runRoot 'owner-mapping.csv'
 $labRunEventPath = Join-Path $runRoot 'lab-run-events.jsonl'
 
@@ -176,7 +177,7 @@ if (-not $acceptance.IsValid) {
 
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Complete' -Message 'ShareSurfer lab validation evidence completed; refreshing final redacted support bundle.' -Detail ('RunRoot={0}; AcceptanceIsValid={1}; LiveEvidenceIsValid={2}; SupportBundlePath={3}' -f $runRoot, [bool]$acceptance.IsValid, [bool]$liveEvidence.IsValid, $bundlePath)
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
-$finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence
+$finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
 if (-not $finishedPackageAcceptance.IsValid) {
     throw ('ShareSurfer finished support bundle validation failed. See {0}' -f $acceptancePath)
 }
@@ -193,9 +194,10 @@ if (-not $finishedPackageAcceptance.IsValid) {
     LiveEvidencePath = $liveEvidencePath
     LiveEvidenceReviewPath = $liveEvidenceReviewPath
     AcceptancePath = $acceptancePath
+    AcceptanceSummaryPath = $acceptanceSummaryPath
     OwnerMappingPath = $ownerMappingPath
-    AcceptanceIsValid = [bool]$acceptance.IsValid
-    AcceptanceFailedCheckCount = [int]$acceptance.FailedCheckCount
+    AcceptanceIsValid = [bool]$finishedPackageAcceptance.IsValid
+    AcceptanceFailedCheckCount = [int]$finishedPackageAcceptance.FailedCheckCount
     LiveEvidenceRequired = [bool]$RequireLiveEvidence
     LiveEvidenceIsValid = [bool]$liveEvidence.IsValid
     LiveEvidenceFallbackCount = [int]$liveEvidence.FallbackCount

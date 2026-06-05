@@ -1481,6 +1481,7 @@ $tests = @(
             $exportPath = Join-Path $runRoot 'export'
             $reportPath = Join-Path $runRoot 'report.html'
             $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
+            $acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
             New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
             Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
@@ -1514,8 +1515,17 @@ $tests = @(
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
-            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
             Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
+            Assert-True (Test-Path -LiteralPath $acceptanceSummaryPath) 'Acceptance checker should write the concise acceptance summary when requested.'
+            $acceptanceSummary = Get-Content -LiteralPath $acceptanceSummaryPath -Raw | ConvertFrom-Json
+            $acceptanceSummaryRaw = Get-Content -LiteralPath $acceptanceSummaryPath -Raw
+            Assert-Equal ([string]$acceptanceSummary.SummaryType) 'ShareSurferV1AcceptanceSummary' 'Acceptance summary should identify its schema.'
+            Assert-Equal ([string]$acceptanceSummary.IsValid) 'True' 'Acceptance summary should carry the overall pass/fail status.'
+            Assert-Equal ([int]$acceptanceSummary.FailedCheckCount) 0 'Acceptance summary should include failed check count.'
+            Assert-True (@($acceptanceSummary.Checks).Count -ge 1) 'Acceptance summary should include check names and pass/fail states.'
+            Assert-True ($acceptanceSummaryRaw -notlike '*Synthetic acceptance proof*') 'Acceptance summary should omit raw check detail values.'
+            Assert-True ($acceptanceSummaryRaw -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Acceptance summary should omit raw lab-run detail values.'
             Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
             Assert-True ($result.Checks.Name -contains 'OwnerReviewPackets') 'Acceptance checks should include owner review packet evidence.'
             Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
@@ -1610,6 +1620,9 @@ $tests = @(
             Assert-True ($labValidationScript -like '*PreflightPath*') 'Lab validation output should include the preflight artifact path.'
             Assert-True ($labValidationScript -like '*v1-acceptance.json*') 'Lab validation should write an acceptance result artifact.'
             Assert-True ($labValidationScript -like '*AcceptancePath*') 'Lab validation output should include the acceptance artifact path.'
+            Assert-True ($labValidationScript -like '*v1-acceptance-summary.json*') 'Lab validation should write a concise acceptance summary artifact.'
+            Assert-True ($labValidationScript -like '*AcceptanceSummaryPath*') 'Lab validation output should include the acceptance summary artifact path.'
+            Assert-True ($labValidationScript -like '*-SummaryPath $acceptanceSummaryPath*') 'Lab validation should write the summary during the final strict acceptance check.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
             Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'
