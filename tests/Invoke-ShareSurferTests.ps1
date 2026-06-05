@@ -263,6 +263,7 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include a disk-budget validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerRiskPivots') 'Enterprise lab plan should include owner risk pivot validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRelatedDataAreas') 'Enterprise lab plan should include related data area validation.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerReviewPackets') 'Enterprise lab plan should include owner review packet validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterprisePermissionGroupObsCoverage') 'Enterprise lab plan should include permission-group OBS coverage validation.'
             Assert-True (@($plan.Groups | Where-Object { $_.PSObject.Properties.Name -contains 'extensionAttribute10' -and [string]$_.extensionAttribute10 -ne '' }).Count -eq $plan.Groups.Count) 'Enterprise lab groups should all include OBS values for group review.'
             foreach ($criterion in @($plan.ValidationCriteria | Where-Object { [string]$_.Name -like 'Enterprise*' -and [bool]$_.Required })) {
@@ -337,6 +338,9 @@ $tests = @(
             @(
                 [pscustomobject]@{ RelatedAreaId = 'related-area-0001'; RelatedDataArea = 'Finance / Finance Operations'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; MigrationReadiness = 'Review'; MatchingShares = '1'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; ReviewItemCount = '4'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RelatedBecause = 'same owner mapping; same business unit; matching path pattern; shared permission group; shared review risk'; SuggestedNextAction = 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'related_data_areas.csv') -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ ReviewPacketId = 'owner-review-0001'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; ReviewStatus = 'High priority review'; WhyReview = 'high-priority access or migration risk; permission-bearing security groups'; WhatToReviewFirst = 'access conflicts; findings; permissioned groups'; SuggestedNextAction = 'Confirm ownership, review assigned groups, and document the remediation decision.'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; MigrationReadiness = 'Review'; RelatedDataAreaCount = '1' }
+            ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
                 MaxLabBytes = [int64]8589934592
@@ -379,6 +383,7 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterprisePermissionGroupObsCoverage'; Required = $true; MinimumValue = 3; Unit = 'groups with OBS'; Description = 'Permission group OBS coverage' },
                     [pscustomobject]@{ Name = 'EnterpriseOwnerRiskPivots'; Required = $true; MinimumValue = 1; Unit = 'owner risk pivots'; Description = 'Owner risk pivots' },
                     [pscustomobject]@{ Name = 'EnterpriseRelatedDataAreas'; Required = $true; MinimumValue = 1; Unit = 'related data areas'; Description = 'Related data areas' },
+                    [pscustomobject]@{ Name = 'EnterpriseOwnerReviewPackets'; Required = $true; MinimumValue = 1; Unit = 'owner review packets'; Description = 'Owner review packets' },
                     [pscustomobject]@{ Name = 'EnterpriseDiskBudget'; Required = $true; MinimumValue = 1; Unit = 'pass/fail'; Description = 'Disk budget' }
                 )
             }
@@ -408,6 +413,7 @@ $tests = @(
             $permissionGroupObsCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterprisePermissionGroupObsCoverage' })[0]
             $ownerRiskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseOwnerRiskPivots' })[0]
             $relatedDataAreaCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseRelatedDataAreas' })[0]
+            $ownerReviewPacketCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseOwnerReviewPackets' })[0]
             $diskCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDiskBudget' })[0]
 
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
@@ -441,6 +447,9 @@ $tests = @(
             Assert-Equal $ownerRiskCriterion.EvidenceSource 'ScanExport:owner_risk_pivots.csv' 'Owner risk pivot validation should identify owner risk pivot export evidence.'
             Assert-Equal ([int]$relatedDataAreaCriterion.ActualValue) 1 'Related data area validation should use related data area rows.'
             Assert-Equal $relatedDataAreaCriterion.EvidenceSource 'ScanExport:related_data_areas.csv' 'Related data area validation should identify migration discovery export evidence.'
+            Assert-Equal ([int]$ownerReviewPacketCriterion.ActualValue) 1 'Owner review packet validation should use owner review packet rows.'
+            Assert-Equal $ownerReviewPacketCriterion.EvidenceSource 'ScanExport:owner_review_packets.csv' 'Owner review packet validation should identify owner review packet export evidence.'
+            Assert-True ([string]$ownerReviewPacketCriterion.EvidenceDetail -like '*OwnerReviewPacketRows=1*') 'Owner review packet evidence should record packet row counts.'
             Assert-Equal ([int]$diskCriterion.ActualValue) 1 'Disk budget validation should pass under the configured budget.'
             Assert-Equal $diskCriterion.EvidenceSource 'FileSystem' 'Disk budget validation should measure the lab root when available.'
             Assert-True ([string]$diskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Disk budget evidence should include measured bytes.'
@@ -1190,6 +1199,7 @@ $tests = @(
             $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
             Assert-True ($result.Checks.Name -contains 'NormalizedCsvExport') 'Acceptance checks should include normalized CSV validation.'
+            Assert-True ($result.Checks.Name -contains 'OwnerReviewPackets') 'Acceptance checks should include owner review packet evidence.'
             Assert-True ($result.Checks.Name -contains 'OfflineReport') 'Acceptance checks should include offline report output.'
             Assert-True ($result.Checks.Name -contains 'RawEventLog') 'Acceptance checks should include raw JSONL event log output.'
             Assert-True ($result.Checks.Name -contains 'RedactedSupportBundle') 'Acceptance checks should include redacted support bundle output.'
@@ -1225,6 +1235,14 @@ $tests = @(
             Assert-True (-not $badBundleResult.IsValid) 'Acceptance checker should fail when the redacted support bundle manifest reports validation failure or redaction leaks.'
             Assert-True (@($badBundleResult.Checks | Where-Object { $_.Name -eq 'RedactedSupportBundle' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report redacted support bundle manifest failures.'
             $goodBundleManifest | Export-Csv -LiteralPath $bundleManifestPath -NoTypeInformation -Encoding UTF8
+
+            $ownerReviewPacketPath = Join-Path $exportPath 'owner_review_packets.csv'
+            $goodOwnerReviewPackets = Get-Content -LiteralPath $ownerReviewPacketPath -Raw
+            Set-Content -LiteralPath $ownerReviewPacketPath -Value 'ReviewPacketId,BusinessUnit,Owner,Pattern,Source,RiskLevel,ReviewStatus,WhyReview,WhatToReviewFirst,SuggestedNextAction,MatchingItems,Directories,Files,FindingCount,ConflictCount,PartialShareCount,DirectIdentityCount,DirectGroupCount,ExpandedMemberCount,MigrationReadiness,RelatedDataAreaCount' -Encoding UTF8
+            $badOwnerReviewResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
+            Assert-True (-not $badOwnerReviewResult.IsValid) 'Acceptance checker should fail when owner review packets are missing rows.'
+            Assert-True (@($badOwnerReviewResult.Checks | Where-Object { $_.Name -eq 'OwnerReviewPackets' -and -not $_.Passed }).Count -gt 0) 'Acceptance checker should report owner review packet evidence failures.'
+            Set-Content -LiteralPath $ownerReviewPacketPath -Value $goodOwnerReviewPackets -Encoding UTF8
 
             @(
                 [pscustomobject]@{ Name = 'EnterprisePlanOnlyProof'; Required = $true; Passed = $true; EvidenceStatus = 'PlanOnly'; EvidenceSource = 'LabPlan'; ActualValue = '1'; MinimumValue = '1'; EvidenceDetail = 'Planned only'; NextAction = 'Create or scan the lab.' }
@@ -1349,6 +1367,7 @@ $tests = @(
                 Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
             ) -join "`n"
             Assert-True ($publicText -like '*Test-ShareSurferV1Acceptance.ps1*') 'Operator documentation should include the final V1 acceptance checker.'
+            Assert-True ($publicText -like '*ScanExport:owner_review_packets.csv*') 'Operator documentation should call out owner review packet live evidence.'
             Assert-True ($publicText -like '*Raw Evidence Tables*') 'Operator documentation should mention the report raw evidence view.'
             $oldLabToolPattern = 'pr' + 'lctl'
             $internalVisualPattern = '(?i)' + 'image' + '-gen2'

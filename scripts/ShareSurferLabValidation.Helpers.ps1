@@ -195,6 +195,7 @@ function Measure-ShareSurferLabValidationEvidence {
     $groupEdges = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'group_edges.csv'))
     $ownerRiskPivots = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_risk_pivots.csv'))
     $relatedDataAreas = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'related_data_areas.csv'))
+    $ownerReviewPackets = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_review_packets.csv'))
     $scannedFiles = @($items | Where-Object { $_.ItemType -eq 'File' })
     $scannedDeepItems = @($items | Where-Object {
         $depth = 0
@@ -285,6 +286,7 @@ function Measure-ShareSurferLabValidationEvidence {
         GroupEdgeCount = $groupEdges.Count
         OwnerRiskPivotCount = $ownerRiskPivots.Count
         RelatedDataAreaCount = $relatedDataAreas.Count
+        OwnerReviewPacketCount = $ownerReviewPackets.Count
         ActualFileCount = $actualFileCount
         ActualDeepFileCount = $actualDeepFileCount
         ActualLabBytes = $actualBytes
@@ -479,6 +481,11 @@ function New-ShareSurferLabValidationCriteriaRows {
                 $actual = [int64]$evidence.RelatedDataAreaCount
                 $source = 'ScanExport:related_data_areas.csv'
                 $detail = 'RelatedDataAreaRows={0}' -f $evidence.RelatedDataAreaCount
+            }
+            'EnterpriseOwnerReviewPackets' {
+                $actual = [int64]$evidence.OwnerReviewPacketCount
+                $source = 'ScanExport:owner_review_packets.csv'
+                $detail = 'OwnerReviewPacketRows={0}' -f $evidence.OwnerReviewPacketCount
             }
             'EnterpriseDiskBudget' {
                 if ($null -ne $evidence.ActualLabBytes) {

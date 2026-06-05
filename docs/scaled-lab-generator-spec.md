@@ -335,7 +335,7 @@ Plan-only acceptance must pass without a Windows host:
 - at least one ACL scenario has a relative path longer than `256` characters.
 - no generated path component exceeds `255` characters.
 - every permission-bearing group has a non-empty runtime OBS attribute.
-- `ValidationCriteria` includes user population, share population, real files, deep paths, long-path policy, share permissions, ACL entries, file ACL entries, deep explicit ACE findings, broken inheritance, conflict findings, group expansion, permission-group OBS coverage, owner-risk pivots, related data areas, and disk budget.
+- `ValidationCriteria` includes user population, share population, real files, deep paths, long-path policy, share permissions, ACL entries, file ACL entries, deep explicit ACE findings, broken inheritance, conflict findings, group expansion, permission-group OBS coverage, owner-risk pivots, related data areas, owner review packets, and disk budget.
 
 Live acceptance on a disposable Windows/AD lab host must additionally prove:
 
