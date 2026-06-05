@@ -176,16 +176,16 @@ if (-not $acceptance.IsValid) {
     throw ('ShareSurfer V1 acceptance validation failed. See {0}' -f $acceptancePath)
 }
 
-Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Complete' -Message 'ShareSurfer lab validation evidence completed; refreshing final redacted support bundle.' -Detail ('RunRoot={0}; AcceptanceIsValid={1}; LiveEvidenceIsValid={2}; SupportBundlePath={3}' -f $runRoot, [bool]$acceptance.IsValid, [bool]$liveEvidence.IsValid, $bundlePath)
+$issueSummaryScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueSummary.ps1'
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueSummary' -Message 'Generating public-safe validation issue summary.' -Detail ('IssueSummaryPath={0}' -f $issueSummaryPath)
+& $issueSummaryScriptPath -RunRoot $runRoot -OutputPath $issueSummaryPath | Out-Null
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueSummary' -Message 'Public-safe validation issue summary generated.' -Detail ('IssueSummaryPath={0}' -f $issueSummaryPath)
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Complete' -Message 'ShareSurfer lab validation evidence completed; refreshing final redacted support bundle with issue summary.' -Detail ('RunRoot={0}; AcceptanceIsValid={1}; LiveEvidenceIsValid={2}; SupportBundlePath={3}; IssueSummaryPath={4}' -f $runRoot, [bool]$acceptance.IsValid, [bool]$liveEvidence.IsValid, $bundlePath, $issueSummaryPath)
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -IncludeReport -RunRoot $runRoot | Out-Null
 $finishedPackageAcceptance = & $acceptanceScriptPath -RunRoot $runRoot -RequireLiveEvidence:$RequireLiveEvidence
 if (-not $finishedPackageAcceptance.IsValid) {
     throw ('ShareSurfer finished support bundle validation failed. See {0}' -f $acceptancePath)
 }
-$issueSummaryScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueSummary.ps1'
-Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueSummary' -Message 'Generating public-safe validation issue summary.' -Detail ('IssueSummaryPath={0}' -f $issueSummaryPath)
-& $issueSummaryScriptPath -RunRoot $runRoot -OutputPath $issueSummaryPath | Out-Null
-Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'IssueSummary' -Message 'Public-safe validation issue summary generated.' -Detail ('IssueSummaryPath={0}' -f $issueSummaryPath)
 
 [pscustomobject]@{
     RunRoot = $runRoot
