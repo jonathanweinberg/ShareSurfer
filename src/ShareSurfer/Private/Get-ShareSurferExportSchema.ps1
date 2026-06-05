@@ -115,6 +115,29 @@ function Get-ShareSurferExportSchema {
             'RelatedBecause',
             'SuggestedNextAction'
         )
+        'owner_review_packets.csv' = @(
+            'ReviewPacketId',
+            'BusinessUnit',
+            'Owner',
+            'Pattern',
+            'Source',
+            'RiskLevel',
+            'ReviewStatus',
+            'WhyReview',
+            'WhatToReviewFirst',
+            'SuggestedNextAction',
+            'MatchingItems',
+            'Directories',
+            'Files',
+            'FindingCount',
+            'ConflictCount',
+            'PartialShareCount',
+            'DirectIdentityCount',
+            'DirectGroupCount',
+            'ExpandedMemberCount',
+            'MigrationReadiness',
+            'RelatedDataAreaCount'
+        )
         'conflicts.csv' = @(
             'ConflictId',
             'ConflictType',

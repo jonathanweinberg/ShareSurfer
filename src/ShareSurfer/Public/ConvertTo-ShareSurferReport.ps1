@@ -970,6 +970,7 @@ function ConvertTo-ShareSurferReport {
       owner_mappings: 'owner_mappings.csv',
       owner_risk_pivots: 'owner_risk_pivots.csv',
       related_data_areas: 'related_data_areas.csv',
+      owner_review_packets: 'owner_review_packets.csv',
       conflicts: 'conflicts.csv',
       findings: 'findings.csv',
       scan_events: 'scan_events.jsonl',
