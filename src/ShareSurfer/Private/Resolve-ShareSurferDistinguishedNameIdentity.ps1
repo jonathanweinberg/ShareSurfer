@@ -12,7 +12,7 @@ function Resolve-ShareSurferDistinguishedNameIdentity {
         $searcher = New-Object System.DirectoryServices.DirectorySearcher
         $escapedDn = $DistinguishedName.Replace('\', '\5c').Replace('(', '\28').Replace(')', '\29')
         $searcher.Filter = "(distinguishedName=$escapedDn)"
-        foreach ($property in @('sAMAccountName', 'displayName', 'objectClass', 'employeeID', 'employeeNumber', 'manager', 'member', $ObsAttribute)) {
+        foreach ($property in @('sAMAccountName', 'displayName', 'objectClass', 'employeeID', 'employeeNumber', 'userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'userAccountControl', 'distinguishedName', 'manager', 'member', $ObsAttribute)) {
             [void]$searcher.PropertiesToLoad.Add($property)
         }
 
