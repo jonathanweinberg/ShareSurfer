@@ -285,7 +285,7 @@ $issueDefinitions = @(
         Slug = 'lab-fixture-live-proof'
         Title = 'lab fixture system for AD users, groups, shares, and ACL scenarios'
         Focus = 'Prove the enterprise ShareSurferLab fixture was created and scanned with the expected users, groups, shares, files, deep paths, long-path policy fixtures, and disk budget.'
-        Criteria = @('EnterpriseUserPopulation', 'EnterpriseSharePopulation', 'EnterpriseRealFiles', 'EnterpriseDeepPaths', 'EnterpriseLongPathPolicy', 'EnterpriseDiskBudget')
+        Criteria = @('EnterpriseUserPopulation', 'EnterpriseGroupPopulation', 'EnterpriseSharePopulation', 'EnterpriseRealFiles', 'EnterpriseDeepPaths', 'EnterpriseLongPathPolicy', 'EnterpriseDiskBudget')
         Checks = @('LabPreflight', 'LabValidationCriteria', 'LiveEvidenceGate', 'LabRunSupportBundleEvidence')
     },
     [pscustomobject]@{

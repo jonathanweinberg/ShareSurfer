@@ -283,6 +283,7 @@ $tests = @(
             Assert-True (@($plan.FileFixtures | Where-Object { ([string]$_.RelativePath -split '\\').Count -ge 6 }).Count -gt 0) 'Enterprise lab plan should include deep folder/file paths.'
             Assert-True (@($plan.AclScenarios | Where-Object { ([string]$_.RelativePath).Length -gt 256 }).Count -gt 0) 'Enterprise lab plan should include operational long-path fixtures.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseUserPopulation') 'Enterprise lab plan should include a user-population validation criterion.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseGroupPopulation') 'Enterprise lab plan should include a group-population validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseSharePopulation') 'Enterprise lab plan should include a share-population validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseRealFiles') 'Enterprise lab plan should include a real-file validation criterion.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseDiskBudget') 'Enterprise lab plan should include a disk-budget validation criterion.'
@@ -417,6 +418,7 @@ $tests = @(
                 )
                 ValidationCriteria = @(
                     [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 3; Unit = 'users'; Description = 'Users' },
+                    [pscustomobject]@{ Name = 'EnterpriseGroupPopulation'; Required = $true; MinimumValue = 2; Unit = 'groups'; Description = 'Groups' },
                     [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with employee identifiers'; Description = 'Employee identifiers' },
                     [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; Unit = 'two-level manager chains'; Description = 'Manager chains' },
                     [pscustomobject]@{ Name = 'EnterpriseUserObsCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with OBS'; Description = 'User OBS coverage' },
@@ -451,6 +453,7 @@ $tests = @(
 
             $criteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
             $userCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserPopulation' })[0]
+            $groupPopulationCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseGroupPopulation' })[0]
             $employeeIdentifierCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseEmployeeIdentifierCoverage' })[0]
             $managerChainCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseManagerChainCoverage' })[0]
             $userObsCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserObsCoverage' })[0]
@@ -474,6 +477,9 @@ $tests = @(
 
             Assert-Equal ([int]$userCriterion.ActualValue) 4 'User validation should prefer directory counts when available.'
             Assert-Equal $userCriterion.EvidenceSource 'ActiveDirectory' 'User validation should identify directory evidence.'
+            Assert-Equal ([int]$groupPopulationCriterion.ActualValue) 2 'Group validation should prefer directory counts when available.'
+            Assert-Equal $groupPopulationCriterion.EvidenceSource 'ActiveDirectory' 'Group validation should identify directory evidence.'
+            Assert-True ([string]$groupPopulationCriterion.EvidenceDetail -like '*DirectoryGroups=2*') 'Group population evidence should record directory group counts.'
             Assert-Equal ([int]$employeeIdentifierCriterion.ActualValue) 1 'Employee identifier validation should count enriched user identities.'
             Assert-Equal $employeeIdentifierCriterion.EvidenceSource 'ScanExport:identities.csv' 'Employee identifier validation should identify identity export evidence.'
             Assert-True ([string]$employeeIdentifierCriterion.EvidenceDetail -like '*UsersWithEmployeeIdentifiers=1*') 'Employee identifier evidence should record enriched user counts.'
