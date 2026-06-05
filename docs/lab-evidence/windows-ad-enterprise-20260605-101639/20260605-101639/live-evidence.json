@@ -1,0 +1,10 @@
+﻿{
+    "IsValid":  false,
+    "FallbackCount":  1,
+    "FallbackCriteria":  [
+                             "FocusedAclScenarios"
+                         ],
+    "FallbackEvidenceSources":  [
+                                    "LabPlan"
+                                ]
+}

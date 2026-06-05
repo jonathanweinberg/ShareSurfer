@@ -1,0 +1,72 @@
+﻿{
+    "ArtifactType":  "ShareSurferCollectorEnvironment",
+    "GeneratedAt":  "2026-06-05T17:16:57.2486833Z",
+    "IsWindows":  true,
+    "OSDescription":  "Microsoft Windows 10.0.26100 ",
+    "OSArchitecture":  "X64",
+    "ComputerName":  "ID-1C5100718C3A",
+    "UserDomain":  "ID-743194C54E21",
+    "UserName":  "ID-77BE16EABCE2",
+    "PowerShell":  {
+                       "Version":  "5.1.26100.32684",
+                       "PSEdition":  "Desktop",
+                       "HostName":  "ConsoleHost",
+                       "ClrVersion":  "4.0.30319.42000"
+                   },
+    "Modules":  [
+                    {
+                        "Name":  "ActiveDirectory",
+                        "Available":  true,
+                        "Version":  "1.0.1.0",
+                        "Path":  "ID-D07C3FAC345C"
+                    },
+                    {
+                        "Name":  "SmbShare",
+                        "Available":  true,
+                        "Version":  "2.0.0.0",
+                        "Path":  "ID-EB40C513F670"
+                    }
+                ],
+    "Commands":  [
+                     {
+                         "Name":  "Get-SmbShare",
+                         "Available":  true,
+                         "Source":  "ID-464916EA6F28"
+                     },
+                     {
+                         "Name":  "Get-SmbShareAccess",
+                         "Available":  true,
+                         "Source":  "ID-464916EA6F28"
+                     },
+                     {
+                         "Name":  "New-SmbShare",
+                         "Available":  true,
+                         "Source":  "ID-464916EA6F28"
+                     },
+                     {
+                         "Name":  "Grant-SmbShareAccess",
+                         "Available":  true,
+                         "Source":  "ID-464916EA6F28"
+                     },
+                     {
+                         "Name":  "Get-Acl",
+                         "Available":  true,
+                         "Source":  "ID-D9CA48C3B8D1"
+                     },
+                     {
+                         "Name":  "Get-ADUser",
+                         "Available":  true,
+                         "Source":  "ID-15589F196822"
+                     },
+                     {
+                         "Name":  "Get-ADGroup",
+                         "Available":  true,
+                         "Source":  "ID-15589F196822"
+                     },
+                     {
+                         "Name":  "Get-ADDomain",
+                         "Available":  true,
+                         "Source":  "ID-15589F196822"
+                     }
+                 ]
+}

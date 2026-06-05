@@ -1,0 +1,70 @@
+﻿{
+    "BundleType":  "ShareSurferRedactedLabRunDiagnostics",
+    "GeneratedAt":  "2026-06-05T18:26:50.1743062Z",
+    "RunRootToken":  "ID-980B201C157A",
+    "IncludedFiles":  [
+                          "lab_preflight.csv",
+                          "lab_validation_criteria.csv",
+                          "live_evidence_review.csv",
+                          "live_evidence.json",
+                          "dashboard_review.md",
+                          "collector_environment.json",
+                          "lab_run_events.jsonl"
+                      ],
+    "RunEvents":  {
+                      "RowCount":  23,
+                      "ErrorCount":  0,
+                      "WarningCount":  2
+                  },
+    "Preflight":  {
+                      "RowCount":  13,
+                      "FailedRequiredCount":  0
+                  },
+    "Criteria":  {
+                     "RowCount":  24,
+                     "FailedRequiredCount":  0
+                 },
+    "LiveEvidenceReview":  {
+                               "RowCount":  24,
+                               "BlockingCount":  1
+                           },
+    "LiveEvidence":  {
+                         "IsValid":  false,
+                         "FallbackCount":  1
+                     },
+    "Acceptance":  null,
+    "AcceptanceSummary":  null,
+    "CollectorEnvironment":  {
+                                 "Included":  true,
+                                 "FileName":  "collector_environment.json"
+                             },
+    "DashboardReview":  {
+                            "Included":  true,
+                            "FileName":  "dashboard_review.md",
+                            "LineCount":  40
+                        },
+    "IssueSummary":  {
+                         "Included":  false,
+                         "FileName":  "",
+                         "LineCount":  0
+                     },
+    "CloseoutChecklist":  {
+                              "Included":  false,
+                              "FileName":  "",
+                              "LineCount":  0
+                          },
+    "IssueComments":  {
+                          "Included":  false,
+                          "Directory":  "",
+                          "CommentCount":  0,
+                          "ManifestIncluded":  false,
+                          "PostCommandsIncluded":  false,
+                          "PublishPreviewIncluded":  false,
+                          "PublishPreviewRowCount":  0
+                      },
+    "Notes":  [
+                  "This file summarizes lab validation evidence from redacted bundle artifacts.",
+                  "Raw run paths and evidence details are replaced with redacted values or stable tokens.",
+                  "Use the companion lab evidence files for row-level status review."
+              ]
+}

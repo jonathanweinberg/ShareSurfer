@@ -1,0 +1,2 @@
+﻿"ScanId","GeneratedAt","ExportVersion","ObsAttribute","SourceMode","OperationalPathLengthThreshold","AzurePathComponentLimit","AzureFullPathLimit","ExplicitAceDepthThreshold","GroupExpansionMaxDepth","AdLookupMode","IncludeFiles"
+"ID-83BADCE7A8A8","2026-06-05T17:41:14.2282311Z","1","info","SmbShare","256","255","2048","2","20","Auto","True"

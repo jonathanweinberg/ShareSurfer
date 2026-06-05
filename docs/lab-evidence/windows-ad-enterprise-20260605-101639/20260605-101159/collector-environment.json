@@ -1,0 +1,72 @@
+﻿{
+    "ArtifactType":  "ShareSurferCollectorEnvironment",
+    "GeneratedAt":  "2026-06-05T17:12:17.4931239Z",
+    "IsWindows":  true,
+    "OSDescription":  "Microsoft Windows 10.0.26100 ",
+    "OSArchitecture":  "X64",
+    "ComputerName":  "WINSERVER",
+    "UserDomain":  "LAB",
+    "UserName":  "administrator",
+    "PowerShell":  {
+                       "Version":  "5.1.26100.32684",
+                       "PSEdition":  "Desktop",
+                       "HostName":  "ConsoleHost",
+                       "ClrVersion":  "4.0.30319.42000"
+                   },
+    "Modules":  [
+                    {
+                        "Name":  "ActiveDirectory",
+                        "Available":  true,
+                        "Version":  "1.0.1.0",
+                        "Path":  "C:\\WINDOWS\\system32\\WindowsPowerShell\\v1.0\\Modules\\ActiveDirectory\\ActiveDirectory.psd1"
+                    },
+                    {
+                        "Name":  "SmbShare",
+                        "Available":  true,
+                        "Version":  "2.0.0.0",
+                        "Path":  "C:\\WINDOWS\\system32\\WindowsPowerShell\\v1.0\\Modules\\SmbShare\\SmbShare.psd1"
+                    }
+                ],
+    "Commands":  [
+                     {
+                         "Name":  "Get-SmbShare",
+                         "Available":  true,
+                         "Source":  "SmbShare"
+                     },
+                     {
+                         "Name":  "Get-SmbShareAccess",
+                         "Available":  true,
+                         "Source":  "SmbShare"
+                     },
+                     {
+                         "Name":  "New-SmbShare",
+                         "Available":  true,
+                         "Source":  "SmbShare"
+                     },
+                     {
+                         "Name":  "Grant-SmbShareAccess",
+                         "Available":  true,
+                         "Source":  "SmbShare"
+                     },
+                     {
+                         "Name":  "Get-Acl",
+                         "Available":  true,
+                         "Source":  "Microsoft.PowerShell.Security"
+                     },
+                     {
+                         "Name":  "Get-ADUser",
+                         "Available":  true,
+                         "Source":  "ActiveDirectory"
+                     },
+                     {
+                         "Name":  "Get-ADGroup",
+                         "Available":  true,
+                         "Source":  "ActiveDirectory"
+                     },
+                     {
+                         "Name":  "Get-ADDomain",
+                         "Available":  true,
+                         "Source":  "ActiveDirectory"
+                     }
+                 ]
+}

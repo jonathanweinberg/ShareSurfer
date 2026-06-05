@@ -1,0 +1,5 @@
+﻿"ErrorId","ShareId","ItemId","FullPath","ErrorType","Severity","Source","Message","Detail"
+"error-1","ID-427FE57F8BEB","","ID-32BFA3989507","EnumerationError","Warning","Get-ChildItem","ID-65D5C022631B","ID-B17DFFB25219"
+"error-2","ID-427FE57F8BEB","","ID-32BFA3989507","AclReadError","High","SmbShare","ID-5C518E4C8553",""
+"error-3","ID-4114DC20EECA","","ID-30DCBF471A3C","EnumerationError","Warning","Get-ChildItem","ID-B7011A6AE17F","ID-4C32C7F46158"
+"error-4","ID-4114DC20EECA","","ID-30DCBF471A3C","AclReadError","High","SmbShare","ID-3F78F460F6F2",""

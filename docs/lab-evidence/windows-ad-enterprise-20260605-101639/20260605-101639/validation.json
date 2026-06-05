@@ -1,0 +1,655 @@
+﻿{
+    "ExportPath":  "C:\\ShareSurfer\\lab-validation\\20260605-101639\\export",
+    "IsValid":  true,
+    "MissingFiles":  [
+
+                     ],
+    "SchemaErrors":  [
+
+                     ],
+    "FileResults":  [
+                        {
+                            "FileName":  "shares.csv",
+                            "Exists":  true,
+                            "RowCount":  250,
+                            "ExpectedColumns":  [
+                                                    "ShareId",
+                                                    "Source",
+                                                    "ComputerName",
+                                                    "ShareName",
+                                                    "UNCPath",
+                                                    "LocalPath",
+                                                    "Description",
+                                                    "PartialData",
+                                                    "PartialReason"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ShareId",
+                                                  "Source",
+                                                  "ComputerName",
+                                                  "ShareName",
+                                                  "UNCPath",
+                                                  "LocalPath",
+                                                  "Description",
+                                                  "PartialData",
+                                                  "PartialReason"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "items.csv",
+                            "Exists":  true,
+                            "RowCount":  5728,
+                            "ExpectedColumns":  [
+                                                    "ItemId",
+                                                    "ShareId",
+                                                    "ItemType",
+                                                    "FullPath",
+                                                    "RelativePath",
+                                                    "Depth",
+                                                    "Owner",
+                                                    "InheritanceEnabled",
+                                                    "InheritanceBrokenAt"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ItemId",
+                                                  "ShareId",
+                                                  "ItemType",
+                                                  "FullPath",
+                                                  "RelativePath",
+                                                  "Depth",
+                                                  "Owner",
+                                                  "InheritanceEnabled",
+                                                  "InheritanceBrokenAt"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "share_permissions.csv",
+                            "Exists":  true,
+                            "RowCount":  500,
+                            "ExpectedColumns":  [
+                                                    "ShareId",
+                                                    "Identity",
+                                                    "Rights",
+                                                    "AccessControlType",
+                                                    "Source"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ShareId",
+                                                  "Identity",
+                                                  "Rights",
+                                                  "AccessControlType",
+                                                  "Source"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "acl_entries.csv",
+                            "Exists":  true,
+                            "RowCount":  41278,
+                            "ExpectedColumns":  [
+                                                    "ItemId",
+                                                    "ShareId",
+                                                    "FullPath",
+                                                    "Identity",
+                                                    "Rights",
+                                                    "AccessControlType",
+                                                    "IsInherited",
+                                                    "InheritanceFlags",
+                                                    "PropagationFlags",
+                                                    "Depth"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ItemId",
+                                                  "ShareId",
+                                                  "FullPath",
+                                                  "Identity",
+                                                  "Rights",
+                                                  "AccessControlType",
+                                                  "IsInherited",
+                                                  "InheritanceFlags",
+                                                  "PropagationFlags",
+                                                  "Depth"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "identities.csv",
+                            "Exists":  true,
+                            "RowCount":  763,
+                            "ExpectedColumns":  [
+                                                    "Identity",
+                                                    "SamAccountName",
+                                                    "DisplayName",
+                                                    "ObjectClass",
+                                                    "EmployeeId",
+                                                    "EmployeeNumber",
+                                                    "UserPrincipalName",
+                                                    "Mail",
+                                                    "Department",
+                                                    "Title",
+                                                    "Company",
+                                                    "Office",
+                                                    "AccountEnabled",
+                                                    "Manager",
+                                                    "ManagerLevel1",
+                                                    "ManagerLevel2",
+                                                    "ObsPath",
+                                                    "ObsAttribute",
+                                                    "DistinguishedName"
+                                                ],
+                            "ActualColumns":  [
+                                                  "Identity",
+                                                  "SamAccountName",
+                                                  "DisplayName",
+                                                  "ObjectClass",
+                                                  "EmployeeId",
+                                                  "EmployeeNumber",
+                                                  "UserPrincipalName",
+                                                  "Mail",
+                                                  "Department",
+                                                  "Title",
+                                                  "Company",
+                                                  "Office",
+                                                  "AccountEnabled",
+                                                  "Manager",
+                                                  "ManagerLevel1",
+                                                  "ManagerLevel2",
+                                                  "ObsPath",
+                                                  "ObsAttribute",
+                                                  "DistinguishedName"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "group_edges.csv",
+                            "Exists":  true,
+                            "RowCount":  1253,
+                            "ExpectedColumns":  [
+                                                    "ParentGroup",
+                                                    "ChildIdentity",
+                                                    "ChildObjectClass",
+                                                    "Depth",
+                                                    "IsCycle",
+                                                    "IsTruncated"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ParentGroup",
+                                                  "ChildIdentity",
+                                                  "ChildObjectClass",
+                                                  "Depth",
+                                                  "IsCycle",
+                                                  "IsTruncated"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "permissioned_groups.csv",
+                            "Exists":  true,
+                            "RowCount":  500,
+                            "ExpectedColumns":  [
+                                                    "Group",
+                                                    "DisplayName",
+                                                    "ObjectClass",
+                                                    "ObsPath",
+                                                    "ManagerLevel1",
+                                                    "ShareAssignments",
+                                                    "NtfsAssignments",
+                                                    "ExpandedMembers",
+                                                    "MaxDepth",
+                                                    "HasCycle",
+                                                    "IsTruncated",
+                                                    "Rights",
+                                                    "ShareId",
+                                                    "ShareIds",
+                                                    "Sources",
+                                                    "FullPath",
+                                                    "ExamplePath"
+                                                ],
+                            "ActualColumns":  [
+                                                  "Group",
+                                                  "DisplayName",
+                                                  "ObjectClass",
+                                                  "ObsPath",
+                                                  "ManagerLevel1",
+                                                  "ShareAssignments",
+                                                  "NtfsAssignments",
+                                                  "ExpandedMembers",
+                                                  "MaxDepth",
+                                                  "HasCycle",
+                                                  "IsTruncated",
+                                                  "Rights",
+                                                  "ShareId",
+                                                  "ShareIds",
+                                                  "Sources",
+                                                  "FullPath",
+                                                  "ExamplePath"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "org_chains.csv",
+                            "Exists":  true,
+                            "RowCount":  753,
+                            "ExpectedColumns":  [
+                                                    "Identity",
+                                                    "EmployeeId",
+                                                    "EmployeeNumber",
+                                                    "Department",
+                                                    "Title",
+                                                    "Company",
+                                                    "ManagerLevel1",
+                                                    "ManagerLevel2",
+                                                    "ObsPath",
+                                                    "ObsAttribute"
+                                                ],
+                            "ActualColumns":  [
+                                                  "Identity",
+                                                  "EmployeeId",
+                                                  "EmployeeNumber",
+                                                  "Department",
+                                                  "Title",
+                                                  "Company",
+                                                  "ManagerLevel1",
+                                                  "ManagerLevel2",
+                                                  "ObsPath",
+                                                  "ObsAttribute"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "owner_mappings.csv",
+                            "Exists":  true,
+                            "RowCount":  250,
+                            "ExpectedColumns":  [
+                                                    "Pattern",
+                                                    "Owner",
+                                                    "BusinessUnit",
+                                                    "Source"
+                                                ],
+                            "ActualColumns":  [
+                                                  "Pattern",
+                                                  "Owner",
+                                                  "BusinessUnit",
+                                                  "Source"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "owner_risk_pivots.csv",
+                            "Exists":  true,
+                            "RowCount":  250,
+                            "ExpectedColumns":  [
+                                                    "BusinessUnit",
+                                                    "Owner",
+                                                    "Pattern",
+                                                    "Source",
+                                                    "MatchingItems",
+                                                    "Directories",
+                                                    "Files",
+                                                    "FindingCount",
+                                                    "ConflictCount",
+                                                    "PartialShareCount",
+                                                    "DirectIdentityCount",
+                                                    "DirectGroupCount",
+                                                    "ExpandedMemberCount",
+                                                    "RiskLevel"
+                                                ],
+                            "ActualColumns":  [
+                                                  "BusinessUnit",
+                                                  "Owner",
+                                                  "Pattern",
+                                                  "Source",
+                                                  "MatchingItems",
+                                                  "Directories",
+                                                  "Files",
+                                                  "FindingCount",
+                                                  "ConflictCount",
+                                                  "PartialShareCount",
+                                                  "DirectIdentityCount",
+                                                  "DirectGroupCount",
+                                                  "ExpandedMemberCount",
+                                                  "RiskLevel"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "related_data_areas.csv",
+                            "Exists":  true,
+                            "RowCount":  250,
+                            "ExpectedColumns":  [
+                                                    "RelatedAreaId",
+                                                    "RelatedDataArea",
+                                                    "BusinessUnit",
+                                                    "Owner",
+                                                    "Pattern",
+                                                    "Source",
+                                                    "RiskLevel",
+                                                    "MigrationReadiness",
+                                                    "MatchingShares",
+                                                    "MatchingItems",
+                                                    "Directories",
+                                                    "Files",
+                                                    "FindingCount",
+                                                    "ConflictCount",
+                                                    "ReviewItemCount",
+                                                    "PartialShareCount",
+                                                    "DirectIdentityCount",
+                                                    "DirectGroupCount",
+                                                    "ExpandedMemberCount",
+                                                    "RelatedBecause",
+                                                    "SuggestedNextAction"
+                                                ],
+                            "ActualColumns":  [
+                                                  "RelatedAreaId",
+                                                  "RelatedDataArea",
+                                                  "BusinessUnit",
+                                                  "Owner",
+                                                  "Pattern",
+                                                  "Source",
+                                                  "RiskLevel",
+                                                  "MigrationReadiness",
+                                                  "MatchingShares",
+                                                  "MatchingItems",
+                                                  "Directories",
+                                                  "Files",
+                                                  "FindingCount",
+                                                  "ConflictCount",
+                                                  "ReviewItemCount",
+                                                  "PartialShareCount",
+                                                  "DirectIdentityCount",
+                                                  "DirectGroupCount",
+                                                  "ExpandedMemberCount",
+                                                  "RelatedBecause",
+                                                  "SuggestedNextAction"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "owner_review_packets.csv",
+                            "Exists":  true,
+                            "RowCount":  250,
+                            "ExpectedColumns":  [
+                                                    "ReviewPacketId",
+                                                    "BusinessUnit",
+                                                    "Owner",
+                                                    "Pattern",
+                                                    "Source",
+                                                    "RiskLevel",
+                                                    "ReviewStatus",
+                                                    "WhyReview",
+                                                    "WhatToReviewFirst",
+                                                    "SuggestedNextAction",
+                                                    "MatchingItems",
+                                                    "Directories",
+                                                    "Files",
+                                                    "FindingCount",
+                                                    "ConflictCount",
+                                                    "PartialShareCount",
+                                                    "DirectIdentityCount",
+                                                    "DirectGroupCount",
+                                                    "ExpandedMemberCount",
+                                                    "MigrationReadiness",
+                                                    "RelatedDataAreaCount"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ReviewPacketId",
+                                                  "BusinessUnit",
+                                                  "Owner",
+                                                  "Pattern",
+                                                  "Source",
+                                                  "RiskLevel",
+                                                  "ReviewStatus",
+                                                  "WhyReview",
+                                                  "WhatToReviewFirst",
+                                                  "SuggestedNextAction",
+                                                  "MatchingItems",
+                                                  "Directories",
+                                                  "Files",
+                                                  "FindingCount",
+                                                  "ConflictCount",
+                                                  "PartialShareCount",
+                                                  "DirectIdentityCount",
+                                                  "DirectGroupCount",
+                                                  "ExpandedMemberCount",
+                                                  "MigrationReadiness",
+                                                  "RelatedDataAreaCount"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "conflicts.csv",
+                            "Exists":  true,
+                            "RowCount":  32309,
+                            "ExpectedColumns":  [
+                                                    "ConflictId",
+                                                    "ConflictType",
+                                                    "ShareId",
+                                                    "ItemId",
+                                                    "Identity",
+                                                    "ShareRights",
+                                                    "NtfsRights",
+                                                    "Severity",
+                                                    "Message"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ConflictId",
+                                                  "ConflictType",
+                                                  "ShareId",
+                                                  "ItemId",
+                                                  "Identity",
+                                                  "ShareRights",
+                                                  "NtfsRights",
+                                                  "Severity",
+                                                  "Message"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "findings.csv",
+                            "Exists":  true,
+                            "RowCount":  263,
+                            "ExpectedColumns":  [
+                                                    "FindingId",
+                                                    "FindingType",
+                                                    "Severity",
+                                                    "ShareId",
+                                                    "ItemId",
+                                                    "FullPath",
+                                                    "Identity",
+                                                    "ObservedValue",
+                                                    "PolicyValue",
+                                                    "Message"
+                                                ],
+                            "ActualColumns":  [
+                                                  "FindingId",
+                                                  "FindingType",
+                                                  "Severity",
+                                                  "ShareId",
+                                                  "ItemId",
+                                                  "FullPath",
+                                                  "Identity",
+                                                  "ObservedValue",
+                                                  "PolicyValue",
+                                                  "Message"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "collection_errors.csv",
+                            "Exists":  true,
+                            "RowCount":  4,
+                            "ExpectedColumns":  [
+                                                    "ErrorId",
+                                                    "ShareId",
+                                                    "ItemId",
+                                                    "FullPath",
+                                                    "ErrorType",
+                                                    "Severity",
+                                                    "Source",
+                                                    "Message",
+                                                    "Detail"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ErrorId",
+                                                  "ShareId",
+                                                  "ItemId",
+                                                  "FullPath",
+                                                  "ErrorType",
+                                                  "Severity",
+                                                  "Source",
+                                                  "Message",
+                                                  "Detail"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "scan_events.csv",
+                            "Exists":  true,
+                            "RowCount":  504,
+                            "ExpectedColumns":  [
+                                                    "EventId",
+                                                    "Timestamp",
+                                                    "Level",
+                                                    "EventType",
+                                                    "Source",
+                                                    "ShareId",
+                                                    "ItemId",
+                                                    "Message",
+                                                    "Detail"
+                                                ],
+                            "ActualColumns":  [
+                                                  "EventId",
+                                                  "Timestamp",
+                                                  "Level",
+                                                  "EventType",
+                                                  "Source",
+                                                  "ShareId",
+                                                  "ItemId",
+                                                  "Message",
+                                                  "Detail"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        },
+                        {
+                            "FileName":  "scan_manifest.csv",
+                            "Exists":  true,
+                            "RowCount":  1,
+                            "ExpectedColumns":  [
+                                                    "ScanId",
+                                                    "GeneratedAt",
+                                                    "ExportVersion",
+                                                    "ObsAttribute",
+                                                    "SourceMode",
+                                                    "OperationalPathLengthThreshold",
+                                                    "AzurePathComponentLimit",
+                                                    "AzureFullPathLimit",
+                                                    "ExplicitAceDepthThreshold",
+                                                    "GroupExpansionMaxDepth",
+                                                    "AdLookupMode",
+                                                    "IncludeFiles"
+                                                ],
+                            "ActualColumns":  [
+                                                  "ScanId",
+                                                  "GeneratedAt",
+                                                  "ExportVersion",
+                                                  "ObsAttribute",
+                                                  "SourceMode",
+                                                  "OperationalPathLengthThreshold",
+                                                  "AzurePathComponentLimit",
+                                                  "AzureFullPathLimit",
+                                                  "ExplicitAceDepthThreshold",
+                                                  "GroupExpansionMaxDepth",
+                                                  "AdLookupMode",
+                                                  "IncludeFiles"
+                                              ],
+                            "MissingColumns":  [
+
+                                               ],
+                            "ExtraColumns":  [
+
+                                             ]
+                        }
+                    ]
+}

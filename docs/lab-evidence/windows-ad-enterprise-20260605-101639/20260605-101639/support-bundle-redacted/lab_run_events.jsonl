@@ -1,0 +1,23 @@
+﻿{"Timestamp":"2026-06-05T17:16:39.5458598Z","Phase":"Start","Level":"Info","Message":"ShareSurfer lab validation run started.","Detail":"ID-3ADAD72B863C"}
+{"Timestamp":"2026-06-05T17:16:39.5722704Z","Phase":"Plan","Level":"Info","Message":"Generating deterministic lab plan.","Detail":"ID-05825EFEB7B1"}
+{"Timestamp":"2026-06-05T17:16:57.1971797Z","Phase":"Plan","Level":"Info","Message":"Lab plan and owner mapping were written.","Detail":"ID-929B2D659909"}
+{"Timestamp":"2026-06-05T17:16:57.2014054Z","Phase":"Environment","Level":"Info","Message":"Capturing collector environment evidence.","Detail":"ID-E1C2AE52566A"}
+{"Timestamp":"2026-06-05T17:16:58.3224877Z","Phase":"Preflight","Level":"Info","Message":"Running lab validation preflight checks.","Detail":"ID-0D215B17D021"}
+{"Timestamp":"2026-06-05T17:17:10.4450641Z","Phase":"Preflight","Level":"Info","Message":"Lab validation preflight completed.","Detail":"ID-C1D8085FE62D"}
+{"Timestamp":"2026-06-05T17:17:10.4508604Z","Phase":"CreateLab","Level":"Info","Message":"Creating or updating live Windows/AD lab fixtures.","Detail":"ID-10F0F492D968"}
+{"Timestamp":"2026-06-05T17:24:38.6624548Z","Phase":"CreateLab","Level":"Info","Message":"Live lab fixture creation completed.","Detail":"ID-E9DA6EDA5C5A"}
+{"Timestamp":"2026-06-05T17:24:38.7019588Z","Phase":"Scan","Level":"Info","Message":"Starting ShareSurfer scan for planned lab shares.","Detail":"ID-72AB60C8E569"}
+{"Timestamp":"2026-06-05T17:41:42.5871885Z","Phase":"Scan","Level":"Info","Message":"ShareSurfer scan completed.","Detail":"ID-2319E74B4FA4"}
+{"Timestamp":"2026-06-05T17:41:42.5892050Z","Phase":"ExportValidation","Level":"Info","Message":"Validating normalized CSV export set.","Detail":"ID-2319E74B4FA4"}
+{"Timestamp":"2026-06-05T17:41:46.4760855Z","Phase":"ExportValidation","Level":"Info","Message":"Normalized CSV export validation passed.","Detail":"ID-E6786D205F4C"}
+{"Timestamp":"2026-06-05T17:41:46.4781036Z","Phase":"LabCriteria","Level":"Info","Message":"Measuring lab validation criteria from live evidence where available.","Detail":"ID-04D27BB3F1CB"}
+{"Timestamp":"2026-06-05T18:01:01.4565786Z","Phase":"LabCriteria","Level":"Info","Message":"Resuming lab validation criteria from completed live scan evidence.","Detail":"ID-04D27BB3F1CB"}
+{"Timestamp":"2026-06-05T18:01:12.1404435Z","Phase":"LabCriteria","Level":"Warning","Message":"Live evidence gate failed during resumed diagnostics.","Detail":"ID-2C7C43B605BB"}
+{"Timestamp":"2026-06-05T18:01:12.1424566Z","Phase":"LabCriteria","Level":"Info","Message":"Resumed lab validation criteria completed.","Detail":"ID-164AA722B35A"}
+{"Timestamp":"2026-06-05T18:01:12.1620812Z","Phase":"Report","Level":"Info","Message":"Generating offline HTML report from resumed evidence.","Detail":"ID-967DFFD15B92"}
+{"Timestamp":"2026-06-05T18:01:32.9888031Z","Phase":"SupportBundle","Level":"Info","Message":"Generating redacted support bundle from resumed evidence.","Detail":"ID-40EA0684C1D2"}
+{"Timestamp":"2026-06-05T18:26:19.7711991Z","Phase":"LabCriteria","Level":"Info","Message":"Resuming lab validation criteria from completed live scan evidence.","Detail":"ID-04D27BB3F1CB"}
+{"Timestamp":"2026-06-05T18:26:29.4493927Z","Phase":"LabCriteria","Level":"Warning","Message":"Live evidence gate failed during resumed diagnostics.","Detail":"ID-2C7C43B605BB"}
+{"Timestamp":"2026-06-05T18:26:29.4514056Z","Phase":"LabCriteria","Level":"Info","Message":"Resumed lab validation criteria completed.","Detail":"ID-164AA722B35A"}
+{"Timestamp":"2026-06-05T18:26:29.4831204Z","Phase":"Report","Level":"Info","Message":"Generating offline HTML report from resumed evidence.","Detail":"ID-967DFFD15B92"}
+{"Timestamp":"2026-06-05T18:26:50.1503784Z","Phase":"SupportBundle","Level":"Info","Message":"Generating redacted support bundle from resumed evidence.","Detail":"ID-40EA0684C1D2"}
