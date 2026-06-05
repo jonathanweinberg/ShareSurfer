@@ -1514,8 +1514,10 @@ $tests = @(
             $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
+            $summaryBuildResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance -SummaryPath $acceptanceSummaryPath
+            Assert-True $summaryBuildResult.IsValid 'Acceptance summary build should pass while the refreshed bundle is pending.'
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
-            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
+            $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence
             Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
             Assert-True (Test-Path -LiteralPath $acceptanceSummaryPath) 'Acceptance checker should write the concise acceptance summary when requested.'
             $acceptanceSummary = Get-Content -LiteralPath $acceptanceSummaryPath -Raw | ConvertFrom-Json
@@ -1546,7 +1548,12 @@ $tests = @(
             $bundleFilesPath = Join-Path $bundlePath 'support_bundle_files.csv'
             $bundleFiles = @(Import-Csv -LiteralPath $bundleFilesPath)
             Assert-True ($bundleFiles.FileName -contains 'v1_acceptance.json') 'Final lab support bundle should include the redacted acceptance summary.'
+            Assert-True ($bundleFiles.FileName -contains 'v1_acceptance_summary.json') 'Final lab support bundle should include the concise acceptance summary.'
             Assert-True ($bundleFiles.FileName -contains 'lab_run_events.jsonl') 'Final lab support bundle should include the redacted lab-run event log.'
+            $bundledAcceptanceSummary = Get-Content -LiteralPath (Join-Path $bundlePath 'v1_acceptance_summary.json') -Raw
+            Assert-True ($bundledAcceptanceSummary -notlike '*Synthetic acceptance proof*') 'Bundled acceptance summary should not include raw evidence detail values.'
+            $labRunDiagnostics = Get-Content -LiteralPath (Join-Path $bundlePath 'lab_run_diagnostics.json') -Raw | ConvertFrom-Json
+            Assert-Equal ([string]$labRunDiagnostics.AcceptanceSummary.IsValid) 'True' 'Lab-run diagnostics should summarize the bundled acceptance summary.'
             $goodBundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
             $badBundleManifest = @(
                 [pscustomobject]@{
@@ -1622,7 +1629,7 @@ $tests = @(
             Assert-True ($labValidationScript -like '*AcceptancePath*') 'Lab validation output should include the acceptance artifact path.'
             Assert-True ($labValidationScript -like '*v1-acceptance-summary.json*') 'Lab validation should write a concise acceptance summary artifact.'
             Assert-True ($labValidationScript -like '*AcceptanceSummaryPath*') 'Lab validation output should include the acceptance summary artifact path.'
-            Assert-True ($labValidationScript -like '*-SummaryPath $acceptanceSummaryPath*') 'Lab validation should write the summary during the final strict acceptance check.'
+            Assert-True ($labValidationScript -like '*-SummaryPath $acceptanceSummaryPath*') 'Lab validation should write the summary before refreshing the final support bundle.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
             Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'
