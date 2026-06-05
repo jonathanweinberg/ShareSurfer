@@ -442,6 +442,7 @@ function ConvertTo-ShareSurferReport {
         <button type="button" data-view="groups" aria-selected="false">Groups</button>
         <button type="button" data-view="diagnostics" aria-selected="false">Diagnostics</button>
         <button type="button" data-view="org" aria-selected="false">Org & Logs</button>
+        <button type="button" data-view="raw" aria-selected="false">Raw Evidence</button>
       </nav>
     </section>
 
@@ -651,6 +652,22 @@ function ConvertTo-ShareSurferReport {
           <span class="count" id="org-rollups-count"></span>
         </div>
         <div class="scroll"><table id="org-rollups"></table></div>
+      </div>
+    </section>
+
+    <section class="view-panel" id="view-raw" data-panel="raw">
+      <div class="panel">
+        <div class="table-header">
+          <h2>Raw Evidence Tables</h2>
+          <span class="count" id="raw-evidence-count"></span>
+        </div>
+        <p class="note">Use this secondary view when an operator needs the CSV evidence inside the offline report. Business owners should usually start with Overview, Migration, Findings, Conflicts, Owners, and Groups.</p>
+        <div class="controls">
+          <label for="raw-dataset-filter">Evidence Table</label>
+          <select id="raw-dataset-filter" aria-label="Choose raw evidence table"></select>
+          <span class="count" id="raw-evidence-summary"></span>
+        </div>
+        <div class="scroll"><table id="raw-evidence"></table></div>
       </div>
     </section>
   </main>
@@ -941,6 +958,42 @@ function ConvertTo-ShareSurferReport {
       populateSelect('business-unit-filter', sortedDistinct(owner_pivots, 'BusinessUnit'), 'All business units');
       populateSelect('owner-filter', sortedDistinct(owner_pivots, 'Owner'), 'All data owners');
       populateSelect('risk-filter', sortedDistinct(owner_pivots, 'RiskLevel'), 'All review risks');
+    }
+    const rawDatasetLabels = {
+      shares: 'shares.csv',
+      items: 'items.csv',
+      share_permissions: 'share_permissions.csv',
+      acl_entries: 'acl_entries.csv',
+      identities: 'identities.csv',
+      group_edges: 'group_edges.csv',
+      org_chains: 'org_chains.csv',
+      owner_mappings: 'owner_mappings.csv',
+      owner_risk_pivots: 'owner_risk_pivots.csv',
+      related_data_areas: 'related_data_areas.csv',
+      conflicts: 'conflicts.csv',
+      findings: 'findings.csv',
+      scan_events: 'scan_events.jsonl',
+      scan_manifest: 'scan_manifest.csv'
+    };
+    const rawDatasetKeys = Object.keys(data).filter(key => Array.isArray(data[key]));
+    function populateRawDatasetFilter() {
+      const select = document.getElementById('raw-dataset-filter');
+      select.textContent = '';
+      rawDatasetKeys.forEach(key => appendSelectOption(select, key, rawDatasetLabels[key] || key));
+      if (rawDatasetKeys.includes('findings')) {
+        select.value = 'findings';
+      }
+    }
+    function renderRawEvidence(state) {
+      const select = document.getElementById('raw-dataset-filter');
+      const key = select.value || rawDatasetKeys[0] || '';
+      const sourceRows = asRows(data[key]);
+      const filteredRows = sourceRows.filter(row => rowMatchesSearch(row, state));
+      const visibleRows = filteredRows.slice(0, 200);
+      const columnCount = sourceRows.length > 0 ? Object.keys(sourceRows[0]).length : 0;
+      const summary = document.getElementById('raw-evidence-summary');
+      summary.textContent = (rawDatasetLabels[key] || key || 'No dataset') + ': ' + String(sourceRows.length) + ' total row' + (sourceRows.length === 1 ? '' : 's') + ', ' + String(columnCount) + ' column' + (columnCount === 1 ? '' : 's') + '. Showing ' + String(visibleRows.length) + ' of ' + String(filteredRows.length) + ' matching row' + (filteredRows.length === 1 ? '' : 's') + '.';
+      renderTable('raw-evidence', visibleRows);
     }
     function updateFilterNote(state) {
       const labels = [];
@@ -1456,6 +1509,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('events', filterRows(data.scan_events, state, false));
       renderReviewWorkbench(state);
       renderMigrationDiscovery(state);
+      renderRawEvidence(state);
       applyGroupBrowser();
     }
     function showView(viewName) {
@@ -1474,7 +1528,9 @@ function ConvertTo-ShareSurferReport {
     document.getElementById('owner-filter').addEventListener('change', applyFilter);
     document.getElementById('risk-filter').addEventListener('change', applyFilter);
     document.getElementById('group-filter').addEventListener('input', applyGroupBrowser);
+    document.getElementById('raw-dataset-filter').addEventListener('change', applyFilter);
     populateDashboardFilters();
+    populateRawDatasetFilter();
     renderSummary();
     renderBarChart('finding-chart', finding_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'warning', viewName: 'findings' });
     renderBarChart('conflict-chart', conflict_chart_rows, { labelField: 'Label', valueField: 'Count', fillClass: 'high', viewName: 'conflicts' });
