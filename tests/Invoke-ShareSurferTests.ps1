@@ -292,6 +292,7 @@ $tests = @(
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnerReviewPackets') 'Enterprise lab plan should include owner review packet validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterprisePermissionGroupObsCoverage') 'Enterprise lab plan should include permission-group OBS coverage validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseCollectionErrors') 'Enterprise lab plan should include collection-error evidence validation.'
+            Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseOwnershipEvidence') 'Enterprise lab plan should include scanned ownership evidence validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseEmployeeIdentifierCoverage') 'Enterprise lab plan should include employee identifier coverage validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseManagerChainCoverage') 'Enterprise lab plan should include manager-chain coverage validation.'
             Assert-True ($plan.ValidationCriteria.Name -contains 'EnterpriseUserObsCoverage') 'Enterprise lab plan should include user OBS coverage validation.'
@@ -429,6 +430,7 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterpriseSharePermissions'; Required = $true; MinimumValue = 1; Unit = 'share permission rows'; Description = 'Share permissions' },
                     [pscustomobject]@{ Name = 'EnterpriseAclEntries'; Required = $true; MinimumValue = 2; Unit = 'acl rows'; Description = 'ACL rows' },
                     [pscustomobject]@{ Name = 'EnterpriseFileAclEntries'; Required = $true; MinimumValue = 1; Unit = 'file acl rows'; Description = 'File ACL rows' },
+                    [pscustomobject]@{ Name = 'EnterpriseOwnershipEvidence'; Required = $true; MinimumValue = 1; Unit = 'owned items'; Description = 'Ownership evidence' },
                     [pscustomobject]@{ Name = 'EnterpriseDeepExplicitAceFindings'; Required = $true; MinimumValue = 1; Unit = 'findings'; Description = 'Deep explicit ACE findings' },
                     [pscustomobject]@{ Name = 'EnterpriseBrokenInheritanceFindings'; Required = $true; MinimumValue = 1; Unit = 'findings'; Description = 'Broken inheritance findings' },
                     [pscustomobject]@{ Name = 'EnterpriseConflictFindings'; Required = $true; MinimumValue = 1; Unit = 'conflicts'; Description = 'Conflicts' },
@@ -464,6 +466,7 @@ $tests = @(
             $sharePermissionCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseSharePermissions' })[0]
             $aclCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseAclEntries' })[0]
             $fileAclCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseFileAclEntries' })[0]
+            $ownershipCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseOwnershipEvidence' })[0]
             $deepAceCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseDeepExplicitAceFindings' })[0]
             $brokenInheritanceCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseBrokenInheritanceFindings' })[0]
             $conflictCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseConflictFindings' })[0]
@@ -503,6 +506,9 @@ $tests = @(
             Assert-Equal $aclCriterion.EvidenceSource 'ScanExport:acl_entries.csv' 'ACL validation should identify ACL export evidence.'
             Assert-Equal ([int]$fileAclCriterion.ActualValue) 1 'File ACL validation should use file-specific ACL rows.'
             Assert-Equal $fileAclCriterion.EvidenceSource 'ScanExport:acl_entries.csv' 'File ACL validation should identify ACL export evidence.'
+            Assert-Equal ([int]$ownershipCriterion.ActualValue) 3 'Ownership validation should use scanned item owner rows.'
+            Assert-Equal $ownershipCriterion.EvidenceSource 'ScanExport:items.csv' 'Ownership validation should identify scanned item evidence.'
+            Assert-True ([string]$ownershipCriterion.EvidenceDetail -like '*OwnedItemRows=3*') 'Ownership evidence should record owned item row counts.'
             Assert-Equal ([int]$deepAceCriterion.ActualValue) 1 'Deep explicit ACE validation should use findings.'
             Assert-Equal $deepAceCriterion.EvidenceSource 'ScanExport:findings.csv' 'Deep explicit ACE validation should identify findings evidence.'
             Assert-Equal ([int]$brokenInheritanceCriterion.ActualValue) 1 'Broken inheritance validation should use findings.'
@@ -1790,6 +1796,7 @@ $tests = @(
             $issueSixComment = Get-Content -LiteralPath $issueSixCommentPath -Raw
             Assert-True ($issueOneComment -like '*EnterpriseUserPopulation*') 'Issue #1 comment should summarize lab fixture population evidence.'
             Assert-True ($issueThreeComment -like '*EnterpriseAclEntries*') 'Issue #3 comment should summarize scanner ACL evidence.'
+            Assert-True ($issueThreeComment -like '*EnterpriseOwnershipEvidence*') 'Issue #3 comment should summarize scanner ownership evidence.'
             Assert-True ($issueFiveComment -like '*EnterpriseGroupExpansion*') 'Issue #5 comment should summarize group expansion evidence.'
             Assert-True ($issueSixComment -like '*OwnerReviewPackets*') 'Issue #6 comment should summarize dashboard and owner review evidence.'
             $postCommands = Get-Content -LiteralPath (Join-Path $issueCommentDirectory 'post-commands.txt') -Raw

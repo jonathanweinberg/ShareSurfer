@@ -410,6 +410,7 @@ function Measure-ShareSurferLabValidationEvidence {
     $relatedDataAreas = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'related_data_areas.csv'))
     $ownerReviewPackets = @(Import-ShareSurferLabValidationCsv -Path (Join-Path $ExportPath 'owner_review_packets.csv'))
     $scannedFiles = @($items | Where-Object { $_.ItemType -eq 'File' })
+    $ownedItems = @($items | Where-Object { [string]$_.Owner -ne '' })
     $scannedDeepItems = @($items | Where-Object {
         $depth = 0
         [void][int]::TryParse([string]$_.Depth, [ref]$depth)
@@ -510,6 +511,7 @@ function Measure-ShareSurferLabValidationEvidence {
         ScannedShareCount = $shares.Count
         ScannedItemCount = $items.Count
         ScannedFileItemCount = $scannedFiles.Count
+        OwnedItemCount = $ownedItems.Count
         ScannedDeepItemCount = $scannedDeepItems.Count
         LongPathFindingCount = $longPathFindings.Count
         DeepExplicitAceFindingCount = $deepExplicitAceFindings.Count
@@ -708,6 +710,11 @@ function New-ShareSurferLabValidationCriteriaRows {
                 $actual = [int64]$evidence.FileAclEntryCount
                 $source = 'ScanExport:acl_entries.csv'
                 $detail = 'FileAclRows={0}; ScannedFileItems={1}' -f $evidence.FileAclEntryCount, $evidence.ScannedFileItemCount
+            }
+            'EnterpriseOwnershipEvidence' {
+                $actual = [int64]$evidence.OwnedItemCount
+                $source = 'ScanExport:items.csv'
+                $detail = 'OwnedItemRows={0}' -f $evidence.OwnedItemCount
             }
             'EnterpriseDeepExplicitAceFindings' {
                 $actual = [int64]$evidence.DeepExplicitAceFindingCount

@@ -338,6 +338,14 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes file-specific ACL evidence.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseOwnershipEvidence'
+            MinimumValue = 1
+            ActualPlanValue = @($aclScenarios | Where-Object { $_.PSObject.Properties['OwnerIdentity'] -and [string]$_.OwnerIdentity -ne '' }).Count
+            Unit = 'owned items'
+            Required = $true
+            Description = 'Enterprise validation includes collected ownership evidence for folders and files.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseDeepExplicitAceFindings'
             MinimumValue = 1
             ActualPlanValue = @($aclScenarios | Where-Object { $_.Depth -gt 2 -and -not $_.IsInherited }).Count
