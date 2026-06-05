@@ -696,17 +696,11 @@ function Measure-ShareSurferLabValidationEvidence {
     $actualFileCount = $null
     $actualBytes = $null
     $actualDeepFileCount = $null
-    if (Test-Path -LiteralPath $LabRoot) {
-        $actualFiles = @(Get-ChildItem -LiteralPath $LabRoot -Recurse -File -ErrorAction SilentlyContinue)
-        $actualFileCount = $actualFiles.Count
-        $actualBytes = [int64]0
-        foreach ($file in $actualFiles) {
-            $actualBytes += [int64]$file.Length
-        }
-        $actualDeepFileCount = @($actualFiles | Where-Object {
-            $relative = $_.FullName.Substring($LabRoot.Length).TrimStart('\', '/')
-            @($relative -split '[\\/]').Count -ge 6
-        }).Count
+    $fileEvidence = Get-ShareSurferLabValidationFileEvidence -LabRoot $LabRoot
+    if ($fileEvidence.Available) {
+        $actualFileCount = $fileEvidence.FileCount
+        $actualBytes = $fileEvidence.TotalBytes
+        $actualDeepFileCount = $fileEvidence.DeepFileCount
     }
 
     [pscustomobject]@{
@@ -750,6 +744,89 @@ function Measure-ShareSurferLabValidationEvidence {
         ManifestIncludeFiles = $manifestIncludeFiles
         CreateLab = [bool]$CreateLab
     }
+}
+
+function Get-ShareSurferLabValidationFileEvidence {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $LabRoot
+    )
+
+    $result = [ordered]@{
+        Available = $false
+        FileCount = $null
+        DeepFileCount = $null
+        TotalBytes = $null
+    }
+
+    $displayRoot = ConvertFrom-ShareSurferLabValidationFilesystemPath -Path $LabRoot
+    $filesystemRoot = ConvertTo-ShareSurferLabValidationFilesystemPath -Path $LabRoot
+    if (-not [System.IO.Directory]::Exists($filesystemRoot)) {
+        return [pscustomobject]$result
+    }
+
+    $fileCount = [int64]0
+    $deepFileCount = [int64]0
+    $totalBytes = [int64]0
+
+    foreach ($path in [System.IO.Directory]::EnumerateFiles($filesystemRoot, '*', [System.IO.SearchOption]::AllDirectories)) {
+        $displayPath = ConvertFrom-ShareSurferLabValidationFilesystemPath -Path ([string]$path)
+        $fileCount++
+        $fileInfo = New-Object System.IO.FileInfo($path)
+        $totalBytes += [int64]$fileInfo.Length
+        if ($displayPath.Length -ge $displayRoot.Length) {
+            $relative = $displayPath.Substring($displayRoot.Length).TrimStart('\', '/')
+            if (@($relative -split '[\\/]' | Where-Object { $_ -ne '' }).Count -ge 6) {
+                $deepFileCount++
+            }
+        }
+    }
+
+    $result.Available = $true
+    $result.FileCount = $fileCount
+    $result.DeepFileCount = $deepFileCount
+    $result.TotalBytes = $totalBytes
+    [pscustomobject]$result
+}
+
+function ConvertTo-ShareSurferLabValidationFilesystemPath {
+    param(
+        [string] $Path = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or $Path.StartsWith('\\?\', [System.StringComparison]::Ordinal)) {
+        return $Path
+    }
+
+    if ($Path.StartsWith('\\', [System.StringComparison]::Ordinal)) {
+        return '\\?\UNC\{0}' -f $Path.TrimStart('\')
+    }
+
+    if ($Path -match '^[A-Za-z]:[\\/]') {
+        return '\\?\{0}' -f $Path
+    }
+
+    $Path
+}
+
+function ConvertFrom-ShareSurferLabValidationFilesystemPath {
+    param(
+        [string] $Path = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $Path
+    }
+
+    if ($Path.StartsWith('\\?\UNC\', [System.StringComparison]::Ordinal)) {
+        return '\\{0}' -f $Path.Substring(8)
+    }
+
+    if ($Path.StartsWith('\\?\', [System.StringComparison]::Ordinal)) {
+        return $Path.Substring(4)
+    }
+
+    $Path
 }
 
 function Get-ShareSurferLabValidationDirectoryCounts {

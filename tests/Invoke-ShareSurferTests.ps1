@@ -354,6 +354,8 @@ $tests = @(
             New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
             New-Item -ItemType Directory -Path (Join-Path $labRoot 'Share001\Deep\Path') -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $labRoot 'Share001\Deep\Path\file01.txt') -Value 'evidence file' -Encoding UTF8
+            New-Item -ItemType Directory -Path (Join-Path $labRoot 'Share001\A\B\C\D\E') -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $labRoot 'Share001\A\B\C\D\E\deep-file.txt') -Value 'deep evidence file' -Encoding UTF8
 
             @(
                 [pscustomobject]@{ ShareId = 'share-001'; Source = 'SMB'; ComputerName = 'files01'; ShareName = 'Share001'; UNCPath = '\\files01\Share001'; LocalPath = (Join-Path $labRoot 'Share001'); Description = ''; PartialData = 'False'; PartialReason = '' },
@@ -468,6 +470,15 @@ $tests = @(
                     EvidenceDetail = 'MockedDirectoryUsers=4; MockedDirectoryGroups=2'
                 }
             }
+
+            $fileEvidence = Get-ShareSurferLabValidationFileEvidence -LabRoot $labRoot
+            Assert-True ([bool]$fileEvidence.Available) 'Validation file evidence helper should enumerate the lab root when it exists.'
+            Assert-Equal ([int]$fileEvidence.FileCount) 2 'Validation file evidence helper should count real filesystem files.'
+            Assert-Equal ([int]$fileEvidence.DeepFileCount) 1 'Validation file evidence helper should count deep filesystem files using display paths.'
+            Assert-True ([int64]$fileEvidence.TotalBytes -gt 0) 'Validation file evidence helper should sum real file bytes.'
+            Assert-Equal (ConvertTo-ShareSurferLabValidationFilesystemPath -Path 'C:\ShareSurferLab\Finance') '\\?\C:\ShareSurferLab\Finance' 'Validation helper should convert Windows drive paths to extended-length paths.'
+            Assert-Equal (ConvertTo-ShareSurferLabValidationFilesystemPath -Path '\\files01\Finance') '\\?\UNC\files01\Finance' 'Validation helper should convert UNC paths to extended-length paths.'
+            Assert-Equal (ConvertFrom-ShareSurferLabValidationFilesystemPath -Path '\\?\UNC\files01\Finance') '\\files01\Finance' 'Validation helper should restore display UNC paths.'
 
             $criteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
             $userCriterion = @($criteria | Where-Object { $_.Name -eq 'EnterpriseUserPopulation' })[0]
