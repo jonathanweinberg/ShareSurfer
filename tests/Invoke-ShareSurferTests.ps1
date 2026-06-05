@@ -293,6 +293,11 @@ $tests = @(
             Assert-True ($initializerScript -like '*already exists outside the ShareSurferLab OU*') 'Lab directory initializer should fail clearly on same-name objects outside the lab OU.'
             Assert-True ($initializerScript -like '*Set-ADUser -Identity $managedUser.DistinguishedName -Manager $manager.DistinguishedName*') 'Lab directory initializer should set managers using lab OU distinguished names.'
             Assert-True ($initializerScript -like '*Add-ADGroupMember -Identity $labGroup.DistinguishedName -Members $memberObject.DistinguishedName*') 'Lab directory initializer should add group members using lab OU distinguished names.'
+
+            $fixtureScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Public/New-ShareSurferLabFixture.ps1') -Raw
+            Assert-True ($fixtureScript -like '*Assert-ShareSurferLabSmbSharePath -ShareName $share.ShareName -ExistingShare $existing -PlannedPath $share.LocalPath*') 'Lab fixture should validate existing SMB share paths before reusing share names.'
+            Assert-True ($fixtureScript -like '*already exists at*but the lab plan expects*') 'Lab fixture should fail clearly when a planned SMB share name points at another path.'
+            Assert-True ($fixtureScript -like '*ConvertTo-ShareSurferLabComparablePath*') 'Lab fixture should normalize paths before comparing existing and planned SMB share paths.'
         }
     },
     @{
