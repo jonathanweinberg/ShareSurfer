@@ -2179,6 +2179,13 @@ $tests = @(
             Assert-True ($result.Checks.Name -contains 'CollectorEnvironment') 'Acceptance checks should include collector environment evidence.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceGate') 'Acceptance checks should include live evidence gate output.'
             Assert-True ($result.Checks.Name -contains 'LiveEvidenceReview') 'Acceptance checks should include the operator live evidence review CSV.'
+            $allowedMissingBundlePath = Join-Path $runRoot 'not-generated-support-bundle'
+            $allowedMissingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -SupportBundlePath $allowedMissingBundlePath -AllowMissingSupportBundle
+            Assert-True $allowedMissingBundleResult.IsValid 'Acceptance checker should allow the optional rich support bundle to be skipped for enterprise lab proof runs.'
+            Assert-True (@($allowedMissingBundleResult.Checks | Where-Object { $_.Name -eq 'RedactedSupportBundle' -and $_.Passed }).Count -gt 0) 'Acceptance checker should mark skipped optional support bundle evidence as passed.'
+            Assert-True (@($allowedMissingBundleResult.Checks | Where-Object { $_.Name -eq 'LabRunSupportBundleEvidence' -and $_.Passed }).Count -gt 0) 'Acceptance checker should mark skipped optional lab-run bundle diagnostics as passed.'
+            Assert-True (@($allowedMissingBundleResult.Checks | Where-Object { $_.Name -eq 'BundledValidationIssueComments' -and $_.Passed }).Count -gt 0) 'Acceptance checker should allow bundled issue-comment artifacts to be absent when the support bundle is skipped.'
+            Assert-True (@($allowedMissingBundleResult.Checks | Where-Object { $_.Name -eq 'BundledValidationCloseoutChecklist' -and $_.Passed }).Count -gt 0) 'Acceptance checker should allow bundled closeout artifacts to be absent when the support bundle is skipped.'
             $bundleFilesAfterIssueSummary = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'support_bundle_files.csv'))
             Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
             Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'dashboard_review.md') 'Final lab support bundle should include the dashboard review artifact.'
@@ -2339,6 +2346,8 @@ $tests = @(
 
             $labValidationScript = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-ShareSurferLabValidation.ps1') -Raw
             Assert-True ($labValidationScript -like '*Test-ShareSurferV1Acceptance.ps1*') 'Lab validation should run the V1 acceptance checker automatically.'
+            Assert-True ($labValidationScript -like '*IncludeRedactedSupportBundle*') 'Lab validation should expose rich redacted lab support bundles as an explicit opt-in.'
+            Assert-True ($labValidationScript -like '*AllowMissingSupportBundle*') 'Lab validation should allow optional support-bundle evidence to be skipped by default for enterprise proof runs.'
             Assert-True ($labValidationScript -like '*-AllowMissingBundledAcceptance*') 'Lab validation should allow bundled acceptance to be pending only for the first acceptance pass.'
             Assert-True ($labValidationScript -like '*-AllowMissingIssueComments*') 'Lab validation should allow issue-comment evidence to be pending only for staged acceptance passes.'
             Assert-True ($labValidationScript -like '*$finishedPackageAcceptance = & $acceptanceScriptPath*') 'Lab validation should verify the finished bundle after strict acceptance is bundled.'
@@ -2375,14 +2384,14 @@ $tests = @(
             Assert-True ($labValidationScript -like '*validation-closeout-checklist.md*') 'Lab validation should write the validation closeout checklist artifact.'
             Assert-True ($labValidationScript -like '*CloseoutChecklistPath*') 'Lab validation output should include the closeout checklist artifact path.'
             Assert-True ($labValidationScript -like '*Live evidence gate failed; continuing to generate diagnostics before final failure*') 'Lab validation should keep generating diagnostics when live evidence is not ready.'
-            Assert-True ($labValidationScript -like '*Finished V1 acceptance package is not ready; refreshing final redacted support bundle before final failure*') 'Lab validation should refresh the final bundle before reporting a failed proof package.'
+            Assert-True ($labValidationScript -like '*Finished V1 acceptance package is not ready; continuing to final proof-package decision*') 'Lab validation should report a failed proof package without forcing optional support-bundle regeneration.'
             Assert-True ($labValidationScript -like '*final validation package is not ready for proof review*') 'Lab validation should fail clearly after producing closeout diagnostics.'
             Assert-True ($labValidationScript -like '*refreshing final redacted support bundle with issue summary*') 'Lab validation should refresh the final support bundle after the issue summary exists.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'
             Assert-True ($labValidationScript -like '*live-evidence-review.csv*') 'Lab validation should write an operator-friendly live evidence review CSV.'
             Assert-True ($labValidationScript -like '*LiveEvidenceReviewPath*') 'Lab validation output should include the live evidence review artifact path.'
-            Assert-True ($labValidationScript -like '*-RunRoot $runRoot*') 'Lab validation should include redacted lab-run evidence in generated support bundles.'
+            Assert-True ($labValidationScript -like '*-RunRoot $runRoot*') 'Lab validation should include redacted lab-run evidence in generated support bundles when requested.'
             Assert-True ((Get-Content -LiteralPath (Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md') -Raw) -like '*New-ShareSurferValidationIssueSummary.ps1*') 'Lab readiness checklist should document the validation issue summary script.'
         }
     },
