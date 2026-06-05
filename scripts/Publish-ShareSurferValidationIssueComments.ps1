@@ -10,6 +10,8 @@ param(
 
     [switch] $Post,
 
+    [switch] $SkipReadyCheck,
+
     [switch] $SkipReadback
 )
 
@@ -100,6 +102,28 @@ function New-ShareSurferIssueCommentPublishResult {
     }
 }
 
+function Test-ShareSurferProofReviewReady {
+    param(
+        [string] $RunRoot = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RunRoot)) {
+        return $true
+    }
+
+    $closeoutPath = Join-Path $RunRoot 'validation-closeout-checklist.md'
+    if (-not (Test-Path -LiteralPath $closeoutPath)) {
+        throw ('Validation closeout checklist not found. Run New-ShareSurferValidationCloseoutChecklist.ps1 or Invoke-ShareSurferLabValidation.ps1 before posting proof comments: {0}' -f $closeoutPath)
+    }
+
+    $closeoutText = Get-Content -LiteralPath $closeoutPath -Raw
+    if ($closeoutText -notlike '*Ready for proof review: `True`*') {
+        throw ('Validation closeout checklist is not ready for proof review. Review validation-closeout-checklist.md and rerun validation before posting, or use -SkipReadyCheck only for a deliberate manual override: {0}' -f $closeoutPath)
+    }
+
+    $true
+}
+
 $resolvedIssueCommentPath = Resolve-ShareSurferIssueCommentPath -RunRoot $RunRoot -IssueCommentPath $IssueCommentPath
 if (-not (Test-Path -LiteralPath $resolvedIssueCommentPath)) {
     throw ('Issue comment path not found: {0}' -f $resolvedIssueCommentPath)
@@ -128,6 +152,10 @@ $selectedRows = foreach ($row in @($manifestRows)) {
 
 if (@($selectedRows).Count -eq 0) {
     throw 'No issue comments matched the requested issue filter.'
+}
+
+if ($Post -and -not $SkipReadyCheck) {
+    [void](Test-ShareSurferProofReviewReady -RunRoot $RunRoot)
 }
 
 if ($Post -and $null -eq (Get-Command gh -ErrorAction SilentlyContinue)) {

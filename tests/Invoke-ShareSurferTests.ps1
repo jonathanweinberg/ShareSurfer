@@ -1908,6 +1908,18 @@ $tests = @(
             $publisherScriptText = Get-Content -LiteralPath $issueCommentPublisherScript -Raw
             Assert-True ($publisherScriptText -like '*gh issue comment*--body-file*') 'Publisher should post issue comments with the body-file pattern.'
             Assert-True ($publisherScriptText -like '*gh api*issues/comments*') 'Publisher should read back posted comments by comment id.'
+            Assert-True ($publisherScriptText -like '*SkipReadyCheck*') 'Publisher should expose an explicit override for the closeout readiness guard.'
+            $readyGuardMessage = ''
+            $goodCloseoutChecklistText = Get-Content -LiteralPath $closeoutChecklistPath -Raw
+            Set-Content -LiteralPath $closeoutChecklistPath -Value ($goodCloseoutChecklistText -replace 'Ready for proof review: `True`', 'Ready for proof review: `False`') -Encoding UTF8
+            try {
+                & $issueCommentPublisherScript -RunRoot $runRoot -Repository 'jonathanweinberg/ShareSurfer' -IssueNumber 3 -Post | Out-Null
+            }
+            catch {
+                $readyGuardMessage = $_.Exception.Message
+            }
+            Assert-True ($readyGuardMessage -like '*not ready for proof review*') 'Publisher should refuse to post from a run folder when the closeout checklist is not ready.'
+            Set-Content -LiteralPath $closeoutChecklistPath -Value $goodCloseoutChecklistText -Encoding UTF8
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $result = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -SummaryPath $acceptanceSummaryPath
             Assert-True $result.IsValid 'Complete synthetic run package should pass acceptance checks.'
