@@ -322,6 +322,14 @@ function New-ShareSurferLabPlan {
             Description = 'Enterprise validation includes share-vs-NTFS conflict evidence.'
         })
         [void]$validationCriteria.Add([pscustomobject]@{
+            Name = 'EnterpriseCollectionErrors'
+            MinimumValue = 0
+            ActualPlanValue = 0
+            Unit = 'collection error rows'
+            Required = $true
+            Description = 'Enterprise validation surfaces collection-error export evidence for partial-data and scanner-gap review; zero rows can be valid for a clean scan.'
+        })
+        [void]$validationCriteria.Add([pscustomobject]@{
             Name = 'EnterpriseGroupExpansion'
             MinimumValue = 1
             ActualPlanValue = @($groups | Where-Object { @($_.Members).Count -gt 0 }).Count
