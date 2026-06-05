@@ -454,6 +454,39 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan marks shares partial when collection errors are recorded'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $inventory = New-TestInventory
+            $inventory | Add-Member -MemberType NoteProperty -Name ScanErrors -Value @(
+                [pscustomobject]@{
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Denied'
+                    ErrorType = 'AclReadError'
+                    Message = 'Access denied while reading ACL.'
+                },
+                [pscustomobject]@{
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Hidden'
+                    ErrorType = 'EnumerationError'
+                    Message = 'Access denied while enumerating children.'
+                }
+            )
+
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+            $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
+
+            Assert-Equal $shares[0].PartialData 'True' 'Share rows should be partial when collection errors were recorded for the share.'
+            Assert-True ($shares[0].PartialReason -like '*AclReadError=1*') 'Partial reason should summarize ACL read errors.'
+            Assert-True ($shares[0].PartialReason -like '*EnumerationError=1*') 'Partial reason should summarize enumeration errors.'
+            Assert-True ($findings.FindingType -contains 'CollectionError') 'Findings should preserve collection errors for troubleshooting.'
+            Assert-True ($findings.FindingType -contains 'PartialSharePermissionData') 'Findings should include a partial-share row for business review.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan enriches identities and recursive group edges from an inventory directory graph'
         Body = {
             Import-Module $moduleManifest -Force

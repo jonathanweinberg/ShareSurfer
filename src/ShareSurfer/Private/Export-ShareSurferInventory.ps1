@@ -50,6 +50,42 @@ function Export-ShareSurferInventory {
         $orgChains = @(ConvertTo-ShareSurferArray $identityInventory.OrgChains)
     }
 
+    if ($scanErrors.Count -gt 0) {
+        foreach ($share in $shares) {
+            $shareId = [string]$share.ShareId
+            if ($shareId -eq '') {
+                continue
+            }
+
+            $shareErrors = @($scanErrors | Where-Object { [string]$_.ShareId -eq $shareId })
+            if ($shareErrors.Count -eq 0) {
+                continue
+            }
+
+            $errorSummary = @($shareErrors |
+                Group-Object -Property ErrorType |
+                Sort-Object Name |
+                ForEach-Object {
+                    $errorType = if ([string]::IsNullOrWhiteSpace([string]$_.Name)) { 'UnknownError' } else { [string]$_.Name }
+                    '{0}={1}' -f $errorType, $_.Count
+                }) -join '; '
+
+            $scanErrorReason = 'Scan errors recorded: {0}' -f $errorSummary
+            $existingReason = ''
+            if ($null -ne $share.PSObject.Properties['PartialReason']) {
+                $existingReason = [string]$share.PartialReason
+            }
+
+            $share.PartialData = $true
+            if ([string]::IsNullOrWhiteSpace($existingReason)) {
+                $share.PartialReason = $scanErrorReason
+            }
+            elseif ($existingReason -notlike ('*{0}*' -f $scanErrorReason)) {
+                $share.PartialReason = '{0}; {1}' -f $existingReason.TrimEnd('.', ';', ' '), $scanErrorReason
+            }
+        }
+    }
+
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
     $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
     $manifest = @(

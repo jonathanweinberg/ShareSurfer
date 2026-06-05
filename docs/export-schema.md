@@ -46,7 +46,7 @@ Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with t
 
 Expected columns: `ShareId`, `Source`, `ComputerName`, `ShareName`, `UNCPath`, `LocalPath`, `Description`, `PartialData`, `PartialReason`.
 
-Use `PartialData=True` when ShareSurfer could identify the share but could not fully collect metadata. Put the practical reason in `PartialReason`.
+Use `PartialData=True` when ShareSurfer could identify the share but could not fully collect metadata. This includes missing share-level permissions and recorded collection errors such as folder enumeration failures or ACL read failures. Put the practical reason in `PartialReason`; scan-error summaries use counts such as `AclReadError=1` so support reviewers can see the shape of the gap without opening raw logs first.
 
 ### `items.csv`
 

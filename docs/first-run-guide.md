@@ -165,7 +165,7 @@ The most important CSVs for a first review are:
 | File | First thing to look for |
 | --- | --- |
 | `scan_manifest.csv` | Scan settings, OBS attribute, thresholds, and lookup mode. |
-| `shares.csv` | Which shares were scanned and whether data was partial. |
+| `shares.csv` | Which shares were scanned and whether data was partial. Partial rows may mean share-level permissions were unavailable, folder enumeration failed, or ACL reads failed for part of the tree. |
 | `items.csv` | Folders and files found under each share. |
 | `share_permissions.csv` | The share-level access gate. |
 | `acl_entries.csv` | Folder and file permissions. |
@@ -256,7 +256,7 @@ For a migration review:
 
 | Symptom | What to check |
 | --- | --- |
-| The scan shows partial data | Confirm your account can read share metadata, folders, files, and ACLs. |
+| The scan shows partial data | Open `shares.csv` and read `PartialReason`. Confirm your account can read share metadata, folders, files, and ACLs, then check `findings.csv` for `CollectionError` rows. |
 | Identity details are missing | Confirm directory read access and the selected `-AdLookupMode`. |
 | OBS values are blank | Confirm the correct `-ObsAttribute`, such as `extensionAttribute10`. |
 | Group expansion is incomplete | Increase `-GroupExpansionMaxDepth` or check for directory lookup errors. |
