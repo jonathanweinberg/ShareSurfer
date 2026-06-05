@@ -670,14 +670,21 @@ function Measure-ShareSurferLabValidationEvidence {
         [string]$_.ObsPath -ne '' -and
         ([string]$_.ObsAttribute -eq '' -or [string]$_.ObsAttribute -eq [string]$Plan.ObsAttribute)
     }).Count
+    $identityHasManagerLevel3Column = @($identities | Where-Object { $_.PSObject.Properties['ManagerLevel3'] }).Count -gt 0
+    $orgHasManagerLevel3Column = @($orgChains | Where-Object { $_.PSObject.Properties['ManagerLevel3'] }).Count -gt 0
+    $managerChainEvidenceMode = if ($identityHasManagerLevel3Column -or $orgHasManagerLevel3Column) { 'ThreeLevel' } else { 'LegacyTwoLevel' }
     $identityManagerChainCount = @($identities | Where-Object {
+        $managerLevel3 = if ($_.PSObject.Properties['ManagerLevel3']) { [string]$_.ManagerLevel3 } else { '' }
         [string]$_.ObjectClass -eq 'user' -and
         [string]$_.ManagerLevel1 -ne '' -and
-        [string]$_.ManagerLevel2 -ne ''
+        [string]$_.ManagerLevel2 -ne '' -and
+        ($managerChainEvidenceMode -eq 'LegacyTwoLevel' -or $managerLevel3 -ne '')
     }).Count
     $orgManagerChainCount = @($orgChains | Where-Object {
+        $managerLevel3 = if ($_.PSObject.Properties['ManagerLevel3']) { [string]$_.ManagerLevel3 } else { '' }
         [string]$_.ManagerLevel1 -ne '' -and
-        [string]$_.ManagerLevel2 -ne ''
+        [string]$_.ManagerLevel2 -ne '' -and
+        ($managerChainEvidenceMode -eq 'LegacyTwoLevel' -or $managerLevel3 -ne '')
     }).Count
     $identityPermissionGroupObsMap = @{}
     foreach ($identity in @($identities)) {
@@ -726,6 +733,7 @@ function Measure-ShareSurferLabValidationEvidence {
         IdentityUserObsCount = $identityUserObsCount
         IdentityManagerChainCount = $identityManagerChainCount
         OrgManagerChainCount = $orgManagerChainCount
+        ManagerChainEvidenceMode = $managerChainEvidenceMode
         PlannedPermissionGroupObsCount = $plannedPermissionGroupsWithObs.Count
         IdentityPermissionGroupObsCount = $identityPermissionGroupObsMap.Count
         ScannedShareCount = $shares.Count
@@ -947,7 +955,8 @@ function New-ShareSurferLabValidationCriteriaRows {
                     $actual = [Math]::Max([int64]$evidence.IdentityManagerChainCount, [int64]$evidence.OrgManagerChainCount)
                     $source = if ([int64]$evidence.IdentityManagerChainCount -gt 0) { 'ScanExport:identities.csv' } else { 'ScanExport:org_chains.csv' }
                 }
-                $detail = 'IdentityTwoLevelManagerChains={0}; OrgChainTwoLevelManagerChains={1}' -f $evidence.IdentityManagerChainCount, $evidence.OrgManagerChainCount
+                $managerChainLabel = if ([string]$evidence.ManagerChainEvidenceMode -eq 'LegacyTwoLevel') { 'LegacyTwoLevel' } else { 'ThreeLevel' }
+                $detail = 'ManagerChainEvidenceMode={0}; Identity{0}ManagerChains={1}; OrgChain{0}ManagerChains={2}' -f $managerChainLabel, $evidence.IdentityManagerChainCount, $evidence.OrgManagerChainCount
             }
             'EnterpriseUserObsCoverage' {
                 if ([int64]$evidence.IdentityUserObsCount -gt 0) {

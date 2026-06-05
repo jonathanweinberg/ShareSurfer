@@ -335,7 +335,7 @@ $issueDefinitions = @(
         IssueNumber = 5
         Slug = 'identity-group-live-proof'
         Title = 'identity enrichment and recursive security group expansion'
-        Focus = 'Prove directory-backed identity enrichment, employee identifiers, manager chains, runtime OBS/OID coverage, recursive group expansion, and permission-bearing group OBS/OID coverage from live evidence.'
+        Focus = 'Prove directory-backed identity enrichment, runtime-selected OBS/OID coverage, employee identifiers, title and office fields when populated, potential service-account flags, three-level manager chains, recursive group expansion, and permission-bearing group OBS/OID coverage from live evidence.'
         Criteria = @('EnterpriseUserPopulation', 'EnterpriseEmployeeIdentifierCoverage', 'EnterpriseManagerChainCoverage', 'EnterpriseUserObsCoverage', 'EnterpriseGroupExpansion', 'EnterprisePermissionGroupObsCoverage')
         Checks = @('NormalizedCsvExport', 'LiveEvidenceReview', 'LiveEvidenceGate')
     },

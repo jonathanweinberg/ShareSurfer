@@ -26,16 +26,27 @@ function Get-ShareSurferDirectoryIdentity {
             $user = Get-ShareSurferAdUserWithOptionalProperties -SamAccountName $sam -Properties $properties -OptionalProperties @('employeeNumber', $ObsAttribute)
             $managerLevel1 = ''
             $managerLevel2 = ''
+            $managerLevel3 = ''
             if ($user.Manager) {
                 $managerLevel1 = [string]$user.Manager
                 try {
                     $manager = Get-ADUser -Identity $user.Manager -Properties manager -ErrorAction Stop
                     if ($manager.Manager) {
                         $managerLevel2 = [string]$manager.Manager
+                        try {
+                            $manager2 = Get-ADUser -Identity $manager.Manager -Properties manager -ErrorAction Stop
+                            if ($manager2.Manager) {
+                                $managerLevel3 = [string]$manager2.Manager
+                            }
+                        }
+                        catch {
+                            $managerLevel3 = ''
+                        }
                     }
                 }
                 catch {
                     $managerLevel2 = ''
+                    $managerLevel3 = ''
                 }
             }
 
@@ -56,6 +67,7 @@ function Get-ShareSurferDirectoryIdentity {
                 Manager = [string]$user.Manager
                 ManagerLevel1 = $managerLevel1
                 ManagerLevel2 = $managerLevel2
+                ManagerLevel3 = $managerLevel3
                 ObsPath = Get-ShareSurferAdObjectPropertyValue -Object $user -Name $ObsAttribute
                 ObsAttribute = $ObsAttribute
                 Members = @()
@@ -94,6 +106,7 @@ function Get-ShareSurferDirectoryIdentity {
                     Manager = [string]$group.ManagedBy
                     ManagerLevel1 = [string]$group.ManagedBy
                     ManagerLevel2 = ''
+                    ManagerLevel3 = ''
                     ObsPath = Get-ShareSurferAdObjectPropertyValue -Object $group -Name $ObsAttribute
                     ObsAttribute = $ObsAttribute
                     Members = @($members)
@@ -140,7 +153,8 @@ function Get-ShareSurferDirectoryIdentity {
 
         $managerLevel1 = Get-ShareSurferLdapPropertyValue -Properties $props -Name 'manager'
         $managerLevel2 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel1
-        New-ShareSurferLdapIdentityRecord -Identity $Identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2
+        $managerLevel3 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel2
+        New-ShareSurferLdapIdentityRecord -Identity $Identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2 -ManagerLevel3 $managerLevel3
     }
     catch {
         $null

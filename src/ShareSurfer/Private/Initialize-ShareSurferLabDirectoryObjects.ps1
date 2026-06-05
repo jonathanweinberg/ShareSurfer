@@ -27,6 +27,12 @@ function Initialize-ShareSurferLabDirectoryObjects {
         if ($canWriteEmployeeNumber) {
             $otherAttributes.employeeNumber = [string]$user.EmployeeNumber
         }
+        if ($user.PSObject.Properties['Title']) {
+            $otherAttributes.title = [string]$user.Title
+        }
+        if ($user.PSObject.Properties['Office']) {
+            $otherAttributes.physicalDeliveryOfficeName = [string]$user.Office
+        }
         $otherAttributes[$Plan.ObsAttribute] = [string]$user.PSObject.Properties[$Plan.ObsAttribute].Value
 
         if ($null -eq $existingUser) {

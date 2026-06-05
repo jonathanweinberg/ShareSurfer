@@ -98,6 +98,18 @@ function New-TestInventory {
                 InheritanceFlags = 'ContainerInherit,ObjectInherit'
                 PropagationFlags = 'None'
                 Depth = 3
+            },
+            [pscustomobject]@{
+                ItemId = 'item-root'
+                ShareId = 'share-finance'
+                FullPath = '\\files01\Finance'
+                Identity = 'CONTOSO\svc.ShareBot'
+                Rights = 'Read'
+                AccessControlType = 'Allow'
+                IsInherited = $false
+                InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                PropagationFlags = 'None'
+                Depth = 1
             }
         )
         Identities = @(
@@ -118,8 +130,10 @@ function New-TestInventory {
                 Manager = ''
                 ManagerLevel1 = ''
                 ManagerLevel2 = ''
+                ManagerLevel3 = ''
                 ObsPath = 'CORP.FIN'
                 ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
                 DistinguishedName = 'CN=Finance Readers Group,OU=Groups,DC=example,DC=test'
             },
             [pscustomobject]@{
@@ -140,8 +154,10 @@ function New-TestInventory {
                 Manager = ''
                 ManagerLevel1 = ''
                 ManagerLevel2 = ''
+                ManagerLevel3 = ''
                 ObsPath = 'CORP.FIN.AP'
                 ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
             }
         )
         GroupEdges = @(
@@ -158,10 +174,17 @@ function New-TestInventory {
             [pscustomobject]@{
                 Identity = 'CONTOSO\Ava.Accounting'
                 EmployeeId = 'E1001'
+                EmployeeNumber = '1001'
+                Department = 'Accounts Payable'
+                Title = 'Accounting Analyst'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
                 ManagerLevel1 = 'CONTOSO\Morgan.Manager'
                 ManagerLevel2 = 'CONTOSO\Riley.Director'
+                ManagerLevel3 = 'CONTOSO\Jordan.VP'
                 ObsPath = 'CORP.FIN.AP'
                 ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
             }
         )
         OwnerMappings = @(
@@ -183,8 +206,10 @@ function New-TestInventory {
                 Manager = ''
                 ManagerLevel1 = ''
                 ManagerLevel2 = ''
+                ManagerLevel3 = ''
                 ObsPath = 'CORP.FIN.AP'
                 ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
                 Members = @('CN=Ava Human Name,OU=Users,DC=example,DC=test', 'CN=Finance Readers Group,OU=Groups,DC=example,DC=test')
             },
             [pscustomobject]@{
@@ -198,8 +223,10 @@ function New-TestInventory {
                 Manager = ''
                 ManagerLevel1 = ''
                 ManagerLevel2 = ''
+                ManagerLevel3 = ''
                 ObsPath = 'CORP.FIN'
                 ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
                 Members = @('CN=Ava Human Name,OU=Users,DC=example,DC=test')
             },
             [pscustomobject]@{
@@ -220,8 +247,34 @@ function New-TestInventory {
                 Manager = 'CONTOSO\Morgan.Manager'
                 ManagerLevel1 = 'CONTOSO\Morgan.Manager'
                 ManagerLevel2 = 'CONTOSO\Riley.Director'
+                ManagerLevel3 = 'CONTOSO\Jordan.VP'
                 ObsPath = 'CORP.FIN.AP'
                 ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\svc.ShareBot'
+                SamAccountName = 'svc.ShareBot'
+                DistinguishedName = 'CN=svc ShareBot,OU=Service Accounts,DC=example,DC=test'
+                DisplayName = 'svc ShareBot'
+                ObjectClass = 'user'
+                EmployeeId = ''
+                EmployeeNumber = ''
+                UserPrincipalName = ''
+                Mail = ''
+                Department = ''
+                Title = 'Automation Account'
+                Company = 'Contoso Finance'
+                Office = ''
+                AccountEnabled = 'True'
+                Manager = ''
+                ManagerLevel1 = ''
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = ''
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $true
                 Members = @()
             }
         )
@@ -389,13 +442,13 @@ $tests = @(
                 [pscustomobject]@{ ParentGroup = 'CONTOSO\Readers'; ChildIdentity = 'CONTOSO\SSUser00001'; ChildObjectClass = 'user'; Depth = '1'; IsCycle = 'False'; IsTruncated = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'group_edges.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ Identity = 'CONTOSO\Readers'; SamAccountName = 'Readers'; DisplayName = 'Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.READ'; ObsAttribute = 'extensionAttribute10' },
-                [pscustomobject]@{ Identity = 'CONTOSO\Editors'; SamAccountName = 'Editors'; DisplayName = 'Editors'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.MODIFY'; ObsAttribute = 'extensionAttribute10' },
-                [pscustomobject]@{ Identity = 'CONTOSO\FileReaders'; SamAccountName = 'FileReaders'; DisplayName = 'File Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ObsPath = 'CORP.TEST.FILE'; ObsAttribute = 'extensionAttribute10' },
-                [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; SamAccountName = 'SSUser00001'; DisplayName = 'ShareSurfer User 00001'; ObjectClass = 'user'; EmployeeId = 'E0000001'; EmployeeNumber = '0000001'; Manager = 'CONTOSO\Manager01'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10' }
+                [pscustomobject]@{ Identity = 'CONTOSO\Readers'; SamAccountName = 'Readers'; DisplayName = 'Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.TEST.READ'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' },
+                [pscustomobject]@{ Identity = 'CONTOSO\Editors'; SamAccountName = 'Editors'; DisplayName = 'Editors'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.TEST.MODIFY'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' },
+                [pscustomobject]@{ Identity = 'CONTOSO\FileReaders'; SamAccountName = 'FileReaders'; DisplayName = 'File Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.TEST.FILE'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' },
+                [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; SamAccountName = 'SSUser00001'; DisplayName = 'ShareSurfer User 00001'; ObjectClass = 'user'; EmployeeId = 'E0000001'; EmployeeNumber = '0000001'; Manager = 'CONTOSO\Manager01'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ManagerLevel3 = 'CONTOSO\VP01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'identities.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; EmployeeId = 'E0000001'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10' }
+                [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; EmployeeId = 'E0000001'; EmployeeNumber = '0000001'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ManagerLevel3 = 'CONTOSO\VP01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'org_chains.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RiskLevel = 'High' }
@@ -440,7 +493,7 @@ $tests = @(
                     [pscustomobject]@{ Name = 'EnterpriseUserPopulation'; Required = $true; MinimumValue = 3; Unit = 'users'; Description = 'Users' },
                     [pscustomobject]@{ Name = 'EnterpriseGroupPopulation'; Required = $true; MinimumValue = 2; Unit = 'groups'; Description = 'Groups' },
                     [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with employee identifiers'; Description = 'Employee identifiers' },
-                    [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; Unit = 'two-level manager chains'; Description = 'Manager chains' },
+                    [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; Unit = 'three-level manager chains'; Description = 'Manager chains' },
                     [pscustomobject]@{ Name = 'EnterpriseUserObsCoverage'; Required = $true; MinimumValue = 1; Unit = 'users with OBS'; Description = 'User OBS coverage' },
                     [pscustomobject]@{ Name = 'EnterpriseSharePopulation'; Required = $true; MinimumValue = 2; Unit = 'shares'; Description = 'Shares' },
                     [pscustomobject]@{ Name = 'EnterpriseRealFiles'; Required = $true; MinimumValue = 3; Unit = 'file fixtures'; Description = 'Files' },
@@ -518,9 +571,9 @@ $tests = @(
             Assert-Equal ([int]$employeeIdentifierCriterion.ActualValue) 1 'Employee identifier validation should count enriched user identities.'
             Assert-Equal $employeeIdentifierCriterion.EvidenceSource 'ScanExport:identities.csv' 'Employee identifier validation should identify identity export evidence.'
             Assert-True ([string]$employeeIdentifierCriterion.EvidenceDetail -like '*UsersWithEmployeeIdentifiers=1*') 'Employee identifier evidence should record enriched user counts.'
-            Assert-Equal ([int]$managerChainCriterion.ActualValue) 1 'Manager-chain validation should count two-level manager evidence.'
+            Assert-Equal ([int]$managerChainCriterion.ActualValue) 1 'Manager-chain validation should count three-level manager evidence.'
             Assert-Equal $managerChainCriterion.EvidenceSource 'ScanExport:identities.csv' 'Manager-chain validation should prefer identity export evidence when present.'
-            Assert-True ([string]$managerChainCriterion.EvidenceDetail -like '*OrgChainTwoLevelManagerChains=1*') 'Manager-chain evidence should record org-chain export counts.'
+            Assert-True ([string]$managerChainCriterion.EvidenceDetail -like '*OrgChainThreeLevelManagerChains=1*') 'Manager-chain evidence should record org-chain export counts.'
             Assert-Equal ([int]$userObsCriterion.ActualValue) 1 'User OBS validation should count enriched user OBS values.'
             Assert-Equal $userObsCriterion.EvidenceSource 'ScanExport:identities.csv' 'User OBS validation should identify identity export evidence.'
             Assert-True ([string]$userObsCriterion.EvidenceDetail -like '*ObsAttribute=extensionAttribute10*') 'User OBS evidence should record the runtime OBS attribute.'
@@ -850,6 +903,15 @@ $tests = @(
             Assert-True ($findings.FindingType -contains 'DeepExplicitAce') 'Findings should include explicit ACEs deeper than level 2.'
             Assert-True ($findings.FindingType -contains 'BrokenInheritance') 'Findings should include broken inheritance.'
 
+            $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
+            $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
+            foreach ($columnName in @('Title', 'Office', 'ManagerLevel3', 'PotentialServiceAccount')) {
+                Assert-True ($identities[0].PSObject.Properties.Name -contains $columnName) ("Identity export should include {0} for owner and service-account review." -f $columnName)
+            }
+            foreach ($columnName in @('Office', 'ManagerLevel3', 'PotentialServiceAccount')) {
+                Assert-True ($orgChains[0].PSObject.Properties.Name -contains $columnName) ("Org chain export should include {0} for owner and service-account review." -f $columnName)
+            }
+
             $conflicts = Import-Csv -LiteralPath (Join-Path $outputPath 'conflicts.csv')
             Assert-True ($conflicts.ConflictType -contains 'NtfsIdentityMissingShareGate') 'Conflicts should show NTFS identities missing at the share gate.'
 
@@ -1058,6 +1120,7 @@ $tests = @(
             $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
             $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
+            $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
 
             Assert-True ($identities.Identity -contains 'CONTOSO\Ava.Accounting') 'Identity enrichment should include user members discovered through group expansion.'
             $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
@@ -1068,11 +1131,19 @@ $tests = @(
             Assert-Equal $avaIdentity.Company 'Contoso Finance' 'Identity enrichment should export company for owner correlation.'
             Assert-Equal $avaIdentity.Office 'HQ-4' 'Identity enrichment should export office for owner correlation.'
             Assert-Equal $avaIdentity.AccountEnabled 'True' 'Identity enrichment should export account enabled status when known.'
+            Assert-Equal $avaIdentity.ManagerLevel3 'CONTOSO\Jordan.VP' 'Identity enrichment should export third-level manager context for owner escalation.'
+            Assert-Equal $avaIdentity.PotentialServiceAccount 'False' 'Identity enrichment should not flag users with employee and OBS data as potential service accounts.'
             Assert-True ($avaIdentity.DistinguishedName -like 'CN=Ava Human Name*') 'Identity enrichment should export distinguished names for directory correlation.'
+            $serviceIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\svc.ShareBot' })[0]
+            Assert-Equal $serviceIdentity.PotentialServiceAccount 'True' 'Identity enrichment should flag users with no OBS and no employee identifiers as potential service account candidates.'
+            Assert-Equal $serviceIdentity.Title 'Automation Account' 'Identity enrichment should still preserve optional title when a potential service account is flagged.'
             Assert-True ($groupEdges.ParentGroup -contains 'CONTOSO\FinanceEditors') 'Group expansion should include the top-level permission group.'
             Assert-True ($orgChains.Identity -contains 'CONTOSO\Ava.Accounting') 'Org chains should include enriched user manager and OBS data.'
             $avaOrgChain = @($orgChains | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
             Assert-Equal $avaOrgChain.Department 'Accounts Payable' 'Org chains should carry department for manager and OBS rollups.'
+            Assert-Equal $avaOrgChain.ManagerLevel3 'CONTOSO\Jordan.VP' 'Org chains should pursue manager context three levels deep.'
+            Assert-True ($orgChains.Identity -contains 'CONTOSO\svc.ShareBot') 'Org chains should include potential service account candidates so report pivots can surface them.'
+            Assert-True ($findings.FindingType -contains 'PotentialServiceAccount') 'Findings should flag potential service accounts for report review.'
         }
     },
     @{
@@ -1081,18 +1152,19 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
 
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles -ObsAttribute 'info' | Out-Null
 
             $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
 
             Assert-Equal $manifest[0].AdLookupMode 'DirectoryOnly' 'Scan manifest should record the requested AD lookup mode.'
+            Assert-Equal $manifest[0].ObsAttribute 'info' 'Scan manifest should record the operator-selected OBS attribute.'
             Assert-Equal $manifest[0].IncludeFiles 'True' 'Scan manifest should record whether file objects were requested.'
             Assert-True (@($groupEdges | Where-Object { $_.ParentGroup -eq 'CONTOSO\FinanceEditors' -and $_.IsTruncated -eq 'True' }).Count -gt 0) 'Group expansion should mark edges truncated at the configured max depth.'
         }
     },
     @{
-        Name = 'LDAP identity normalization preserves two-level manager chains and OBS attributes'
+        Name = 'LDAP identity normalization preserves three-level manager chains and OBS attributes'
         Body = {
             Import-Module $moduleManifest -Force
             . (Join-Path $repoRoot 'src/ShareSurfer/Private/ConvertTo-ShareSurferArray.ps1')
@@ -1116,10 +1188,11 @@ $tests = @(
                 extensionattribute10 = @('CORP.FIN.AP')
             }
 
-            $user = New-ShareSurferLdapIdentityRecord -Identity 'CONTOSO\Ava.Accounting' -Properties $userProperties -ObsAttribute 'extensionAttribute10' -ManagerLevel2 'CN=Taylor Director,OU=Users,DC=example,DC=test'
+            $user = New-ShareSurferLdapIdentityRecord -Identity 'CONTOSO\Ava.Accounting' -Properties $userProperties -ObsAttribute 'extensionAttribute10' -ManagerLevel2 'CN=Taylor Director,OU=Users,DC=example,DC=test' -ManagerLevel3 'CN=Jordan VP,OU=Users,DC=example,DC=test'
             Assert-Equal $user.ObjectClass 'user' 'LDAP user record should identify user object class.'
             Assert-Equal $user.ManagerLevel1 'CN=Morgan Manager,OU=Users,DC=example,DC=test' 'LDAP user record should preserve direct manager DN.'
             Assert-Equal $user.ManagerLevel2 'CN=Taylor Director,OU=Users,DC=example,DC=test' 'LDAP user record should preserve manager manager DN.'
+            Assert-Equal $user.ManagerLevel3 'CN=Jordan VP,OU=Users,DC=example,DC=test' 'LDAP user record should preserve third-level manager DN.'
             Assert-Equal $user.ObsPath 'CORP.FIN.AP' 'LDAP user record should read the configured OBS attribute.'
             Assert-Equal $user.EmployeeId 'E1001' 'LDAP user record should preserve employee ID.'
             Assert-Equal $user.UserPrincipalName 'ava.accounting@example.test' 'LDAP user record should preserve UPN.'
@@ -1143,7 +1216,7 @@ $tests = @(
             Assert-True ($group.Members -contains 'CONTOSO\Ava.Accounting') 'LDAP group record should preserve resolved members.'
 
             $ldapScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferDirectoryIdentity.ps1') -Raw
-            Assert-True ($ldapScript -like '*Get-ShareSurferLdapManagerLevel2*') 'LDAP fallback should resolve manager manager for org-chain rollups.'
+            Assert-True ($ldapScript -like '*ManagerLevel3*') 'LDAP fallback should resolve third-level manager context for org-chain rollups.'
             $dnResolverScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Resolve-ShareSurferDistinguishedNameIdentity.ps1') -Raw
             foreach ($propertyName in @('userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'userAccountControl', 'distinguishedName')) {
                 Assert-True ($dnResolverScript -like ('*{0}*' -f $propertyName)) ('LDAP DN member resolution should load {0} for group-expanded identity correlation.' -f $propertyName)
@@ -1370,6 +1443,10 @@ $tests = @(
             Assert-True ($report -like '*Finding Rollups*') 'Report should expose finding rollups for business-unit triage.'
             Assert-True ($report -like '*Conflict Rollups*') 'Report should expose conflict rollups for access-model triage.'
             Assert-True ($report -like '*Org Chain Rollups*') 'Report should expose manager and OBS rollups.'
+            Assert-True ($report -like '*Potential Service Accounts*') 'Report should expose potential service account candidates for review.'
+            Assert-True ($report -like '*potential-service-accounts*') 'Report should render a potential service accounts table.'
+            Assert-True ($report -like '*buildPotentialServiceAccountRows*') 'Report should dynamically build potential service account rows from identity exports.'
+            Assert-True ($report -like '*ManagerLevel3*') 'Report should include third-level manager context in org rollups.'
             Assert-True ($report -like '*Group Browser*') 'Report should expose a group expansion browsing view.'
             Assert-True ($report -like '*buildRollups*') 'Report should build dynamic rollup tables from CSV exports.'
             Assert-True ($report -like '*Business Review Dashboard*') 'Report should present as a business-review dashboard.'
@@ -1989,7 +2066,7 @@ $tests = @(
                 [pscustomobject]@{ Name = 'EnterpriseConflictFindings'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'conflict rows'; Passed = $true; EvidenceSource = 'ScanExport:conflicts.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Conflicts' },
                 [pscustomobject]@{ Name = 'EnterpriseCollectionErrors'; Required = $true; MinimumValue = 0; ActualValue = 0; Unit = 'collection error rows'; Passed = $true; EvidenceSource = 'ScanExport:collection_errors.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Collection errors' },
                 [pscustomobject]@{ Name = 'EnterpriseEmployeeIdentifierCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users with employee identifiers'; Passed = $true; EvidenceSource = 'ScanExport:identities.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Employee identifiers' },
-                [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'two-level manager chains'; Passed = $true; EvidenceSource = 'ScanExport:org_chains.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Manager chains' },
+                [pscustomobject]@{ Name = 'EnterpriseManagerChainCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'three-level manager chains'; Passed = $true; EvidenceSource = 'ScanExport:org_chains.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Manager chains' },
                 [pscustomobject]@{ Name = 'EnterpriseUserObsCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'users with OBS'; Passed = $true; EvidenceSource = 'ScanExport:identities.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'User OBS coverage' },
                 [pscustomobject]@{ Name = 'EnterpriseGroupExpansion'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'group edges'; Passed = $true; EvidenceSource = 'ScanExport:group_edges.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Group expansion' },
                 [pscustomobject]@{ Name = 'EnterprisePermissionGroupObsCoverage'; Required = $true; MinimumValue = 1; ActualValue = 1; Unit = 'groups with OBS'; Passed = $true; EvidenceSource = 'ScanExport:identities.csv'; EvidenceDetail = 'Synthetic acceptance proof'; Description = 'Permission group OBS coverage' }

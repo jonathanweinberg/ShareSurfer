@@ -41,6 +41,84 @@ foreach ($requiredPath in @($planPath, $exportPath, $criteriaPath)) {
 
 New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
 
+function Convert-ShareSurferArchivedCsvToSchema {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string[]] $Columns
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return
+    }
+
+    $rows = @(Import-Csv -LiteralPath $Path)
+    if ($rows.Count -eq 0) {
+        return
+    }
+
+    $normalizedRows = foreach ($row in $rows) {
+        $record = [ordered]@{}
+        foreach ($column in $Columns) {
+            if ($row.PSObject.Properties[$column]) {
+                $record[$column] = [string]$row.PSObject.Properties[$column].Value
+            }
+            else {
+                $record[$column] = ''
+            }
+        }
+        [pscustomobject]$record
+    }
+
+    $normalizedRows | Export-Csv -LiteralPath $Path -NoTypeInformation -Encoding UTF8
+}
+
+$outputExportPath = Join-Path $OutputPath 'export'
+if (Test-Path -LiteralPath $outputExportPath) {
+    Remove-Item -LiteralPath $outputExportPath -Recurse -Force
+}
+Copy-Item -LiteralPath $exportPath -Destination $outputExportPath -Recurse -Force
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'identities.csv') -Columns @(
+    'Identity',
+    'SamAccountName',
+    'DisplayName',
+    'ObjectClass',
+    'EmployeeId',
+    'EmployeeNumber',
+    'UserPrincipalName',
+    'Mail',
+    'Department',
+    'Title',
+    'Company',
+    'Office',
+    'AccountEnabled',
+    'Manager',
+    'ManagerLevel1',
+    'ManagerLevel2',
+    'ManagerLevel3',
+    'ObsPath',
+    'ObsAttribute',
+    'PotentialServiceAccount',
+    'DistinguishedName'
+)
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'org_chains.csv') -Columns @(
+    'Identity',
+    'EmployeeId',
+    'EmployeeNumber',
+    'Department',
+    'Title',
+    'Company',
+    'Office',
+    'ManagerLevel1',
+    'ManagerLevel2',
+    'ManagerLevel3',
+    'ObsPath',
+    'ObsAttribute',
+    'PotentialServiceAccount'
+)
+
 $plan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
 $existingCriteria = @(Import-Csv -LiteralPath $criteriaPath)
 $refreshedCriteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot ([string]$plan.RootPath) -CreateLab -IncludeFiles)
@@ -87,6 +165,7 @@ $liveEvidenceReview | Export-Csv -LiteralPath $outputLiveEvidenceReviewPath -NoT
 
 $acceptance = & $acceptanceScriptPath `
     -RunRoot $RunRoot `
+    -ExportPath $outputExportPath `
     -CriteriaPath $outputCriteriaPath `
     -LiveEvidencePath $outputLiveEvidencePath `
     -LiveEvidenceReviewPath $outputLiveEvidenceReviewPath `

@@ -57,18 +57,18 @@ function Get-ShareSurferLdapPropertyValue {
     [string]$values[0]
 }
 
-function Get-ShareSurferLdapManagerLevel2 {
+function Get-ShareSurferLdapManager {
     param(
-        [string] $ManagerDistinguishedName = ''
+        [string] $DistinguishedName = ''
     )
 
-    if ([string]::IsNullOrWhiteSpace($ManagerDistinguishedName)) {
+    if ([string]::IsNullOrWhiteSpace($DistinguishedName)) {
         return ''
     }
 
     try {
         $searcher = New-Object System.DirectoryServices.DirectorySearcher
-        $escapedDn = $ManagerDistinguishedName.Replace('\', '\5c').Replace('(', '\28').Replace(')', '\29')
+        $escapedDn = $DistinguishedName.Replace('\', '\5c').Replace('(', '\28').Replace(')', '\29')
         $searcher.Filter = "(distinguishedName=$escapedDn)"
         [void]$searcher.PropertiesToLoad.Add('manager')
         $result = $searcher.FindOne()
@@ -81,6 +81,14 @@ function Get-ShareSurferLdapManagerLevel2 {
     catch {
         ''
     }
+}
+
+function Get-ShareSurferLdapManagerLevel2 {
+    param(
+        [string] $ManagerDistinguishedName = ''
+    )
+
+    Get-ShareSurferLdapManager -DistinguishedName $ManagerDistinguishedName
 }
 
 function Get-ShareSurferLdapAccountEnabled {
@@ -118,6 +126,8 @@ function New-ShareSurferLdapIdentityRecord {
 
         [string] $ManagerLevel2 = '',
 
+        [string] $ManagerLevel3 = '',
+
         [string] $DistinguishedName = ''
     )
 
@@ -151,6 +161,7 @@ function New-ShareSurferLdapIdentityRecord {
         Manager = $managerLevel1
         ManagerLevel1 = $managerLevel1
         ManagerLevel2 = $ManagerLevel2
+        ManagerLevel3 = $ManagerLevel3
         ObsPath = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name $ObsAttribute
         ObsAttribute = $ObsAttribute
         Members = @($Members)

@@ -1214,6 +1214,7 @@ function Test-ShareSurferRedactionAuditValue {
         'GroupExpansionMaxDepth',
         'AdLookupMode',
         'ObsAttribute',
+        'PotentialServiceAccount',
         'GeneratedAt'
     )
     $structuralColumns = @(
@@ -1235,6 +1236,7 @@ function Test-ShareSurferRedactionAuditValue {
         'DeepExplicitAce',
         'GroupExpansionTruncated',
         'PartialSharePermissionData',
+        'PotentialServiceAccount',
         'CollectionError'
     )
 
