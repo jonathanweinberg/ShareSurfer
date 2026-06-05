@@ -371,8 +371,8 @@ $tests = @(
                     [pscustomobject]@{ Name = 'UnassignedRecursive'; extensionAttribute10 = 'CORP.TEST.UNASSIGNED' }
                 )
                 Shares = @(
-                    [pscustomobject]@{ ShareName = 'Share001'; SharePermissions = @([pscustomobject]@{ Identity = 'CONTOSO\Readers'; Rights = 'Read' }) },
-                    [pscustomobject]@{ ShareName = 'Share002'; SharePermissions = @() }
+                    [pscustomobject]@{ ShareName = 'Share001'; LocalPath = (Join-Path $labRoot 'Share001'); SharePermissions = @([pscustomobject]@{ Identity = 'CONTOSO\Readers'; Rights = 'Read' }) },
+                    [pscustomobject]@{ ShareName = 'Share002'; LocalPath = (Join-Path $labRoot 'Share002'); SharePermissions = @() }
                 )
                 FileFixtures = @(
                     [pscustomobject]@{ ShareName = 'Share001'; RelativePath = 'Deep\Path\file01.txt'; SizeBytes = 512 }
@@ -513,8 +513,39 @@ $tests = @(
             Assert-True ($preflightRows.Name -contains 'PlanDiskBudget') 'Preflight should report plan disk budget readiness.'
             Assert-True ($preflightRows.Name -contains 'WindowsPathComponents') 'Preflight should report Windows path component safety.'
             Assert-True ($preflightRows.Name -contains 'EnterpriseIncludeFiles') 'Preflight should report enterprise IncludeFiles readiness.'
+            Assert-True ($preflightRows.Name -contains 'SmbSharePathCollisions') 'Preflight should report SMB share path collision readiness.'
             $includeFilesPreflight = @($preflightRows | Where-Object { $_.Name -eq 'EnterpriseIncludeFiles' })[0]
             Assert-True ([bool]$includeFilesPreflight.Passed) 'Enterprise IncludeFiles preflight should pass when IncludeFiles is set.'
+
+            try {
+                function global:Get-SmbShare {
+                    param(
+                        [string] $Name
+                    )
+
+                    if ($Name -eq 'Share001') {
+                        return [pscustomobject]@{ Name = 'Share001'; Path = (Join-Path $labRoot 'Share001') }
+                    }
+                    if ($Name -eq 'Share002') {
+                        return [pscustomobject]@{ Name = 'Share002'; Path = (Join-Path $labRoot 'WrongShare002') }
+                    }
+                    $null
+                }
+
+                $smbPathResult = Test-ShareSurferLabValidationSmbSharePaths -Plan $plan
+                Assert-True (-not $smbPathResult.Passed) 'SMB share path preflight should fail when an existing share name points at another path.'
+                Assert-Equal ([int]$smbPathResult.CheckedShareCount) 2 'SMB share path preflight should count existing shares it checked.'
+                Assert-Equal ([int]$smbPathResult.CollisionCount) 1 'SMB share path preflight should count mismatched share paths.'
+                Assert-True ([string]$smbPathResult.Evidence -like '*Share002*WrongShare002*') 'SMB share path preflight evidence should identify the colliding share.'
+
+                $smbCollisionPreflight = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $labRoot -RunRoot $exportPath -CreateLab -IncludeFiles | Where-Object { $_.Name -eq 'SmbSharePathCollisions' })[0]
+                Assert-True (-not [bool]$smbCollisionPreflight.Passed) 'CreateLab preflight should fail on SMB share path collisions.'
+                Assert-True ([bool]$smbCollisionPreflight.Required) 'CreateLab preflight should make SMB share path collisions required evidence.'
+                Assert-True ([string]$smbCollisionPreflight.NextAction -like '*Rename or remove*') 'SMB share collision preflight should give a clear operator next action.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+            }
         }
     },
     @{
