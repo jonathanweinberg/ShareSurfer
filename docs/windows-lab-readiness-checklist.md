@@ -146,6 +146,7 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `live-evidence.json` has `FallbackCount` set to `0`.
 - `lab-validation-criteria.csv` has no failed required criteria.
 - `live-evidence-review.csv` has no required rows marked `PlanOnly`, `EvidenceUnavailable`, `MissingEvidenceSource`, or `Failed`.
+- `export\scan_manifest.csv` has `IncludeFiles=True` for enterprise runs, and the real-file criteria detail agrees with that setting.
 - `support-bundle-redacted\support_bundle_manifest.csv` has `ValidationIsValid=True`.
 - `support-bundle-redacted\support_bundle_manifest.csv` has `RedactionLeakCount=0`.
 - `support-bundle-redacted\v1_acceptance_summary.json` exists.

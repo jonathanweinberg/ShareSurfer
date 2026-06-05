@@ -164,7 +164,7 @@ The most important CSVs for a first review are:
 
 | File | First thing to look for |
 | --- | --- |
-| `scan_manifest.csv` | Scan settings, OBS attribute, thresholds, and lookup mode. |
+| `scan_manifest.csv` | Scan settings, OBS attribute, thresholds, lookup mode, and whether file objects were included. |
 | `shares.csv` | Which shares were scanned and whether data was partial. Partial rows may mean a target path could not be resolved, share-level permissions were unavailable, folder enumeration failed, or ACL reads failed for part of the tree. |
 | `items.csv` | Folders and files found under each share. |
 | `share_permissions.csv` | The share-level access gate. |
