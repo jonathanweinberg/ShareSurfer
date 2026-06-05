@@ -90,6 +90,26 @@ function Join-ShareSurferCloseoutNames {
     $names -join ', '
 }
 
+function Test-ShareSurferCloseoutAcceptanceCheck {
+    param(
+        $AcceptanceSummary,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    if ($null -eq $AcceptanceSummary -or -not $AcceptanceSummary.PSObject.Properties['Checks']) {
+        return $false
+    }
+
+    $matchingRows = @($AcceptanceSummary.Checks | Where-Object { [string]$_.Name -eq $Name })
+    if ($matchingRows.Count -eq 0) {
+        return $false
+    }
+
+    ConvertTo-ShareSurferCloseoutBool $matchingRows[0].Passed
+}
+
 if (-not (Test-Path -LiteralPath $RunRoot)) {
     throw ('Run root not found: {0}' -f $RunRoot)
 }
@@ -107,11 +127,13 @@ $bundleManifestRows = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $supportBund
 
 $acceptanceValid = $false
 $acceptanceFailedCount = 0
+$scanManifestIncludeFilesPassed = $false
 if ($null -ne $acceptanceSummary) {
     $acceptanceValid = ConvertTo-ShareSurferCloseoutBool $acceptanceSummary.IsValid
     if ($acceptanceSummary.PSObject.Properties['FailedCheckCount']) {
         $acceptanceFailedCount = [int]$acceptanceSummary.FailedCheckCount
     }
+    $scanManifestIncludeFilesPassed = Test-ShareSurferCloseoutAcceptanceCheck -AcceptanceSummary $acceptanceSummary -Name 'ScanManifestIncludeFiles'
 }
 
 $liveEvidenceValid = $false
@@ -150,6 +172,7 @@ $missingPublishIssueLabel = if ($missingPublishIssueNumbers.Count -eq 0) { 'None
 
 $readyForProofReview = (
     $acceptanceValid -and
+    $scanManifestIncludeFilesPassed -and
     $liveEvidenceValid -and
     $failedPreflightRows.Count -eq 0 -and
     $failedCriteriaRows.Count -eq 0 -and
@@ -159,6 +182,7 @@ $readyForProofReview = (
     $issueCommentsReady -and
     $publishPreviewReady
 )
+$scanManifestIncludeFilesLabel = if ($scanManifestIncludeFilesPassed) { 'Passed' } else { 'Review ScanManifestIncludeFiles' }
 
 $lines = New-Object System.Collections.ArrayList
 Add-ShareSurferCloseoutLine -Lines $lines -Text 'ShareSurfer live validation closeout checklist.'
@@ -169,6 +193,7 @@ Add-ShareSurferCloseoutLine -Lines $lines -Text '- Close GitHub proof issues onl
 Add-ShareSurferCloseoutLine -Lines $lines
 Add-ShareSurferCloseoutLine -Lines $lines -Text '**Go Gates**'
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} V1 acceptance passed with `{1}` failed checks.' -f (Get-ShareSurferCloseoutStatus -Passed $acceptanceValid), $acceptanceFailedCount)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Scan manifest proves file-object scanning when live evidence is required.' -f (Get-ShareSurferCloseoutStatus -Passed $scanManifestIncludeFilesPassed))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Live evidence gate passed with `{1}` fallback criteria.' -f (Get-ShareSurferCloseoutStatus -Passed $liveEvidenceValid), $fallbackCount)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Required preflight blockers: `{1}`.' -f (Get-ShareSurferCloseoutStatus -Passed ($failedPreflightRows.Count -eq 0)), $failedPreflightRows.Count)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Failed required validation criteria: `{1}`.' -f (Get-ShareSurferCloseoutStatus -Passed ($failedCriteriaRows.Count -eq 0)), $failedCriteriaRows.Count)
@@ -180,6 +205,7 @@ Add-ShareSurferCloseoutLine -Lines $lines
 Add-ShareSurferCloseoutLine -Lines $lines -Text '**Review If Not Ready**'
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Preflight blockers: `{0}`' -f (Join-ShareSurferCloseoutNames -Rows $failedPreflightRows))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Failed criteria: `{0}`' -f (Join-ShareSurferCloseoutNames -Rows $failedCriteriaRows))
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Scan manifest file-object check: `{0}`' -f $scanManifestIncludeFilesLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Blocking live-evidence criteria: `{0}`' -f (Join-ShareSurferCloseoutNames -Rows $blockingReviewRows))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Missing issue comment targets: `{0}`' -f $missingIssueLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- Missing publish preview targets: `{0}`' -f $missingPublishIssueLabel)
