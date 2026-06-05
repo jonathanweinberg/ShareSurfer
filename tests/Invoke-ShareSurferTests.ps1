@@ -2141,6 +2141,8 @@ $tests = @(
             Assert-True ($publisherScriptText -like '*SkipReadyCheck*') 'Publisher should expose an explicit override for the closeout readiness guard.'
             Assert-True ($publisherScriptText.Contains('Ready for proof review: `True`')) 'Publisher should use a literal closeout readiness marker that preserves Markdown backticks.'
             Assert-True ($publisherScriptText.Contains('$closeoutText.Contains')) 'Publisher readiness guard should avoid wildcard matching against Markdown backticks.'
+            Assert-True ($publisherScriptText.Contains('$readbackBodyLines')) 'Publisher should preserve multiline GitHub comment readback output.'
+            Assert-True ($publisherScriptText.Contains('$readbackBodyLines -join "`n"')) 'Publisher should compare multiline GitHub comment readback with newline joins.'
             $readyGuardMessage = ''
             $goodCloseoutChecklistText = Get-Content -LiteralPath $closeoutChecklistPath -Raw
             Set-Content -LiteralPath $closeoutChecklistPath -Value ($goodCloseoutChecklistText -replace 'Ready for proof review: `True`', 'Ready for proof review: `False`') -Encoding UTF8

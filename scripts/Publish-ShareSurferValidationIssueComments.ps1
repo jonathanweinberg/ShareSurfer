@@ -197,7 +197,8 @@ foreach ($row in @($selectedRows)) {
             }
             else {
                 $bodyText = Get-Content -LiteralPath $bodyFile -Raw
-                $readbackBody = [string](& gh api ('repos/{0}/issues/comments/{1}' -f $Repository, $commentId) --jq '.body' 2>&1)
+                $readbackBodyLines = @(& gh api ('repos/{0}/issues/comments/{1}' -f $Repository, $commentId) --jq '.body' 2>&1)
+                $readbackBody = [string]($readbackBodyLines -join "`n")
                 if ($LASTEXITCODE -eq 0 -and $readbackBody.Trim() -eq $bodyText.Trim()) {
                     $readbackVerified = $true
                     $detail = 'Readback body matched the posted body file.'
