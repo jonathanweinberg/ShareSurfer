@@ -451,6 +451,14 @@ function ConvertTo-ShareSurferReport {
         <h2>Executive Summary</h2>
         <div class="summary" id="summary"></div>
       </div>
+      <div class="panel">
+        <div class="table-header">
+          <h2>What Needs Review First</h2>
+          <span class="count" id="owner-review-queue-count"></span>
+        </div>
+        <p class="note">Start here when briefing business owners. Each row is a plain-language review packet built from owner mappings, access sizing, findings, conflicts, scan gaps, and migration readiness.</p>
+        <div class="scroll"><table id="owner-review-queue"></table></div>
+      </div>
       <div class="panel" id="review-workbench">
         <div class="table-header">
           <h2>Review Workbench</h2>
@@ -953,6 +961,94 @@ function ConvertTo-ShareSurferReport {
     }
     function filterOwnerPivots(rows, state) {
       return asRows(rows).filter(row => rowMatchesSearch(row, state) && pivotMatchesState(row, state));
+    }
+    function packetMatchesState(packet, state) {
+      return rowMatchesSearch(packet, state) &&
+        (!state.businessUnit || String(packet.BusinessUnit || '') === state.businessUnit) &&
+        (!state.owner || String(packet.Owner || '') === state.owner) &&
+        (!state.riskLevel || String(packet.RiskLevel || '') === state.riskLevel || String(packet.ReviewStatus || '') === state.riskLevel || String(packet.MigrationReadiness || '') === state.riskLevel);
+    }
+    function getOwnerReviewStatusFromPivot(pivot) {
+      if (Number(pivot.PartialShareCount || 0) > 0) { return 'Blocked by scan gaps'; }
+      if (String(pivot.RiskLevel || '') === 'High') { return 'High priority review'; }
+      if (String(pivot.RiskLevel || '') === 'Review') { return 'Needs review'; }
+      return 'Monitor';
+    }
+    function getOwnerReviewReasonFromPivot(pivot) {
+      const reasons = [];
+      if (String(pivot.RiskLevel || '') === 'High') { reasons.push('high-priority access or migration risk'); }
+      if (Number(pivot.ConflictCount || 0) > 0) { reasons.push('share-vs-file permission mismatch'); }
+      if (Number(pivot.FindingCount || 0) > 0) { reasons.push('migration or governance finding'); }
+      if (Number(pivot.PartialShareCount || 0) > 0) { reasons.push('incomplete collection evidence'); }
+      if (Number(pivot.DirectGroupCount || 0) > 0) { reasons.push('permission-bearing security groups'); }
+      return reasons.length > 0 ? reasons.join('; ') : 'owner mapping should be confirmed before migration or audit work';
+    }
+    function getOwnerReviewStartFromPivot(pivot) {
+      const starts = [];
+      if (Number(pivot.PartialShareCount || 0) > 0) { starts.push('resolve scan gaps'); }
+      if (Number(pivot.ConflictCount || 0) > 0) { starts.push('access conflicts'); }
+      if (Number(pivot.FindingCount || 0) > 0) { starts.push('findings'); }
+      if (Number(pivot.DirectGroupCount || 0) > 0) { starts.push('permissioned groups'); }
+      if (Number(pivot.ExpandedMemberCount || 0) > 0) { starts.push('expanded members'); }
+      return starts.length > 0 ? starts.join('; ') : 'owner mapping confirmation';
+    }
+    function buildOwnerReviewPackets() {
+      const riskOrder = { High: 0, Review: 1, Monitor: 2 };
+      const statusOrder = { 'Blocked by scan gaps': 0, 'High priority review': 1, 'Needs review': 2, Monitor: 3 };
+      const rows = Array.isArray(data.owner_review_packets) && data.owner_review_packets.length > 0
+        ? data.owner_review_packets.map(row => ({
+          ReviewPacketId: row.ReviewPacketId || '',
+          BusinessUnit: row.BusinessUnit || '',
+          Owner: row.Owner || '',
+          RiskLevel: row.RiskLevel || '',
+          ReviewStatus: row.ReviewStatus || '',
+          WhyReview: row.WhyReview || '',
+          WhatToReviewFirst: row.WhatToReviewFirst || '',
+          SuggestedNextAction: row.SuggestedNextAction || '',
+          MatchingItems: Number(row.MatchingItems || 0),
+          Findings: Number(row.FindingCount || 0),
+          Conflicts: Number(row.ConflictCount || 0),
+          PartialShares: Number(row.PartialShareCount || 0),
+          DirectGroups: Number(row.DirectGroupCount || 0),
+          ExpandedMembers: Number(row.ExpandedMemberCount || 0),
+          MigrationReadiness: row.MigrationReadiness || '',
+          Pattern: row.Pattern || ''
+        }))
+        : owner_pivots.map((pivot, index) => ({
+          ReviewPacketId: 'owner-review-fallback-' + String(index + 1).padStart(4, '0'),
+          BusinessUnit: pivot.BusinessUnit || '',
+          Owner: pivot.Owner || '',
+          RiskLevel: pivot.RiskLevel || '',
+          ReviewStatus: getOwnerReviewStatusFromPivot(pivot),
+          WhyReview: getOwnerReviewReasonFromPivot(pivot),
+          WhatToReviewFirst: getOwnerReviewStartFromPivot(pivot),
+          SuggestedNextAction: getMigrationNextAction(getMigrationReadiness(pivot)),
+          MatchingItems: Number(pivot.MatchingItems || 0),
+          Findings: Number(pivot.FindingCount || 0),
+          Conflicts: Number(pivot.ConflictCount || 0),
+          PartialShares: Number(pivot.PartialShareCount || 0),
+          DirectGroups: Number(pivot.DirectGroupCount || 0),
+          ExpandedMembers: Number(pivot.ExpandedMemberCount || 0),
+          MigrationReadiness: getMigrationReadiness(pivot),
+          Pattern: pivot.Pattern || ''
+        }));
+      return rows.sort((a, b) => Number(statusOrder[a.ReviewStatus] ?? 99) - Number(statusOrder[b.ReviewStatus] ?? 99) || Number(riskOrder[a.RiskLevel] ?? 99) - Number(riskOrder[b.RiskLevel] ?? 99) || Number(b.Findings + b.Conflicts + b.PartialShares) - Number(a.Findings + a.Conflicts + a.PartialShares) || String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
+    }
+    function focusOwnerReviewPacket(packet) {
+      setSelectValueIfPresent('business-unit-filter', packet.BusinessUnit);
+      setSelectValueIfPresent('owner-filter', packet.Owner);
+      setSelectValueIfPresent('risk-filter', packet.RiskLevel);
+      document.getElementById('filter').value = '';
+      applyFilter();
+      showView('overview');
+      document.getElementById('review-workbench').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    function renderOwnerReviewQueue(state) {
+      const rows = owner_review_packets.filter(packet => packetMatchesState(packet, state));
+      renderTable('owner-review-queue', rows, {
+        rowAction: row => focusOwnerReviewPacket(row),
+        rowTitle: row => 'Focus review workbench for ' + [row.BusinessUnit, row.Owner].filter(Boolean).join(' / ')
+      });
     }
     function populateDashboardFilters() {
       populateSelect('business-unit-filter', sortedDistinct(owner_pivots, 'BusinessUnit'), 'All business units');
@@ -1459,6 +1555,7 @@ function ConvertTo-ShareSurferReport {
       });
     }
     const owner_pivots = buildOwnerPivots();
+    const owner_review_packets = buildOwnerReviewPackets();
     const collection_errors = data.findings.filter(row => row.FindingType === 'CollectionError');
     const finding_rollups = buildRollups(data.findings, ['FindingType', 'Severity']);
     const conflict_rollups = buildRollups(data.conflicts, ['ConflictType', 'Severity']);
@@ -1499,6 +1596,7 @@ function ConvertTo-ShareSurferReport {
       renderTable('conflict-rollups', filterRows(conflict_rollups, state, false));
       renderTable('owners', filterRows(data.owner_mappings, state, true));
       renderTable('owner-pivots', filterOwnerPivots(owner_pivots, state));
+      renderOwnerReviewQueue(state);
       renderTable('permissioned-groups', buildPermissionedGroupRows(state), {
         rowAction: row => focusGroupExpansion(row.Group),
         rowTitle: row => 'Show expanded membership for ' + String(row.Group || 'this group')

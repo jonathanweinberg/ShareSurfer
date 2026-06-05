@@ -909,6 +909,11 @@ $tests = @(
             Assert-True ($report -like '*focusDashboardValue*') 'Report should support chart-driven drilldown filtering.'
             Assert-True ($report -like '*getRowSearchText*') 'Report should search readable cell text instead of JSON-escaped rows.'
             Assert-True ($report -like '*Review Workbench*') 'Report should include an owner/business-unit review workbench.'
+            Assert-True ($report -like '*What Needs Review First*') 'Report should include an owner review packet queue.'
+            Assert-True ($report -like '*owner-review-queue*') 'Report should render owner review packet rows in a first-class table.'
+            Assert-True ($report -like '*buildOwnerReviewPackets*') 'Report should build owner review packet rows from normalized exports.'
+            Assert-True ($report -like '*focusOwnerReviewPacket*') 'Report should let packet rows focus the review workbench.'
+            Assert-True ($report -like '*owner-review-fallback*') 'Report should gracefully fall back to owner risk pivots when packet exports are empty.'
             Assert-True ($report -like '*workbench-stats*') 'Report should include workbench context stats.'
             Assert-True ($report -like '*Direct Identities*') 'Report should summarize direct identity counts in the workbench.'
             Assert-True ($report -like '*Expanded Members*') 'Report should summarize expanded member counts in the workbench.'
@@ -1344,6 +1349,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*visuals/report-dashboard-migration.png*') 'First-run guide should show an example migration discovery screenshot.'
             Assert-True ($firstRunText -like '*Raw Evidence Tables*') 'First-run guide should explain the raw evidence report view.'
             Assert-True ($firstRunText -like '*owner_review_packets.csv*') 'First-run guide should explain owner review packet exports.'
+            Assert-True ($firstRunText -like '*What Needs Review First*') 'First-run guide should point users to the owner review queue.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -1368,6 +1374,7 @@ $tests = @(
             ) -join "`n"
             Assert-True ($publicText -like '*Test-ShareSurferV1Acceptance.ps1*') 'Operator documentation should include the final V1 acceptance checker.'
             Assert-True ($publicText -like '*ScanExport:owner_review_packets.csv*') 'Operator documentation should call out owner review packet live evidence.'
+            Assert-True ($publicText -like '*What Needs Review First*') 'Operator documentation should tell users to start with the owner review queue.'
             Assert-True ($publicText -like '*Raw Evidence Tables*') 'Operator documentation should mention the report raw evidence view.'
             $oldLabToolPattern = 'pr' + 'lctl'
             $internalVisualPattern = '(?i)' + 'image' + '-gen2'
