@@ -179,7 +179,8 @@ function New-ShareSurferSupportBundle {
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.',
         'lab_run_events.jsonl is included when a lab validation run root was supplied and records redacted lab-validation phase events.',
         'lab_run_diagnostics.json is included when a lab validation run root was supplied.',
-        'issue_summary.md is included when a lab validation run has generated a public-safe issue summary.'
+        'issue_summary.md is included when a lab validation run has generated a public-safe issue summary.',
+        'issue_comments contains public-safe issue comment bodies when a lab validation run generated targeted issue updates.'
     ) -Encoding UTF8
 
     [pscustomobject]@{
@@ -217,6 +218,9 @@ function New-ShareSurferSupportBundleLabRunEvidence {
     $includedFiles = New-Object System.Collections.ArrayList
     $issueSummaryIncluded = $false
     $issueSummaryLineCount = 0
+    $issueCommentCount = 0
+    $issueCommentManifestIncluded = $false
+    $issueCommentPostCommandsIncluded = $false
     $preflightRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-preflight.csv') -DestinationPath (Join-Path $BundlePath 'lab_preflight.csv') -RedactColumns @('Evidence') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($preflightRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_preflight.csv'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_preflight.csv') -FileName 'lab_preflight.csv' -RowCount $preflightRows.Count))
@@ -269,6 +273,63 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         $issueSummaryIncluded = $true
     }
 
+    $issueCommentSourceDirectory = Join-Path $RunRoot 'issue-comments'
+    if (Test-Path -LiteralPath $issueCommentSourceDirectory) {
+        $issueCommentBundleDirectory = Join-Path $BundlePath 'issue_comments'
+        New-Item -ItemType Directory -Path $issueCommentBundleDirectory -Force | Out-Null
+        $issueCommentFiles = @(Get-ChildItem -LiteralPath $issueCommentSourceDirectory -Filter 'issue-*.md' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+        foreach ($issueCommentFile in @($issueCommentFiles)) {
+            $destinationPath = Join-Path $issueCommentBundleDirectory $issueCommentFile.Name
+            Copy-Item -LiteralPath $issueCommentFile.FullName -Destination $destinationPath -Force
+            $bundleFileName = 'issue_comments/{0}' -f $issueCommentFile.Name
+            $lineCount = @((Get-Content -LiteralPath $destinationPath -ErrorAction SilentlyContinue)).Count
+            [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $destinationPath -FileName $bundleFileName -RowCount $lineCount))
+            [void]$includedFiles.Add($bundleFileName)
+            $issueCommentCount++
+        }
+
+        $issueCommentManifestPath = Join-Path $issueCommentSourceDirectory 'issue-comment-manifest.csv'
+        if (Test-Path -LiteralPath $issueCommentManifestPath) {
+            $manifestRows = @(Import-Csv -LiteralPath $issueCommentManifestPath)
+            $safeManifestRows = foreach ($row in @($manifestRows)) {
+                $fileName = [string]$row.FileName
+                [pscustomobject]@{
+                    IssueNumber = [string]$row.IssueNumber
+                    FileName = $fileName
+                    BundledFileName = if ([string]::IsNullOrWhiteSpace($fileName)) { '' } else { 'issue_comments/{0}' -f $fileName }
+                    CriteriaPassed = [string]$row.CriteriaPassed
+                    AcceptanceChecksPassed = [string]$row.AcceptanceChecksPassed
+                    BlockingLiveReviewRows = [string]$row.BlockingLiveReviewRows
+                }
+            }
+            $bundleManifestPath = Join-Path $issueCommentBundleDirectory 'issue_comment_manifest.csv'
+            @($safeManifestRows) | Export-Csv -LiteralPath $bundleManifestPath -NoTypeInformation -Encoding UTF8
+            [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $bundleManifestPath -FileName 'issue_comments/issue_comment_manifest.csv' -RowCount @($safeManifestRows).Count))
+            [void]$includedFiles.Add('issue_comments/issue_comment_manifest.csv')
+            $issueCommentManifestIncluded = $true
+
+            $repository = 'jonathanweinberg/ShareSurfer'
+            $sourcePostCommandsPath = Join-Path $issueCommentSourceDirectory 'post-commands.txt'
+            if (Test-Path -LiteralPath $sourcePostCommandsPath) {
+                $sourceCommandText = Get-Content -LiteralPath $sourcePostCommandsPath -Raw -ErrorAction SilentlyContinue
+                $repositoryMatch = [regex]::Match([string]$sourceCommandText, '--repo\s+([^\s]+)')
+                if ($repositoryMatch.Success) {
+                    $repository = $repositoryMatch.Groups[1].Value.Trim('"')
+                }
+            }
+            $safePostCommands = @($safeManifestRows | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.IssueNumber) -and -not [string]::IsNullOrWhiteSpace([string]$_.BundledFileName) } | ForEach-Object {
+                'gh issue comment {0} --repo {1} --body-file "{2}"' -f [string]$_.IssueNumber, $repository, [string]$_.BundledFileName
+            })
+            if ($safePostCommands.Count -gt 0) {
+                $bundlePostCommandsPath = Join-Path $issueCommentBundleDirectory 'post_commands.txt'
+                Set-Content -LiteralPath $bundlePostCommandsPath -Value $safePostCommands -Encoding UTF8
+                [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $bundlePostCommandsPath -FileName 'issue_comments/post_commands.txt' -RowCount $safePostCommands.Count))
+                [void]$includedFiles.Add('issue_comments/post_commands.txt')
+                $issueCommentPostCommandsIncluded = $true
+            }
+        }
+    }
+
     $labRunEvents = @(New-ShareSurferRedactedLabRunEvents -SourcePath (Join-Path $RunRoot 'lab-run-events.jsonl') -DestinationPath (Join-Path $BundlePath 'lab_run_events.jsonl') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($labRunEvents.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_run_events.jsonl'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_run_events.jsonl') -FileName 'lab_run_events.jsonl' -RowCount $labRunEvents.Count))
@@ -304,6 +365,13 @@ function New-ShareSurferSupportBundleLabRunEvidence {
             Included = [bool]$issueSummaryIncluded
             FileName = if ($issueSummaryIncluded) { 'issue_summary.md' } else { '' }
             LineCount = [int]$issueSummaryLineCount
+        }
+        IssueComments = [ordered]@{
+            Included = ([int]$issueCommentCount -gt 0)
+            Directory = if ([int]$issueCommentCount -gt 0) { 'issue_comments' } else { '' }
+            CommentCount = [int]$issueCommentCount
+            ManifestIncluded = [bool]$issueCommentManifestIncluded
+            PostCommandsIncluded = [bool]$issueCommentPostCommandsIncluded
         }
         Notes = @(
             'This file summarizes lab validation evidence from redacted bundle artifacts.',
