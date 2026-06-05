@@ -29,7 +29,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `items.csv` | One row per file or folder | Defines filesystem items under each share. |
 | `share_permissions.csv` | One row per share permission ACE | Captures the share-level access gate. |
 | `acl_entries.csv` | One row per NTFS ACL ACE | Captures item-level filesystem permissions. |
-| `identities.csv` | One row per enriched identity | Normalizes user, group, and service identity metadata. |
+| `identities.csv` | One row per enriched identity | Normalizes user, group, and service identity metadata, including extra directory fields that help correlate owners and business units. |
 | `group_edges.csv` | One row per group membership edge | Represents nested group expansion. |
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
@@ -72,9 +72,11 @@ Use `IsInherited=False` plus a high `Depth` to identify explicit ACEs buried dee
 
 ### `identities.csv`
 
-Expected columns: `Identity`, `SamAccountName`, `DisplayName`, `ObjectClass`, `EmployeeId`, `EmployeeNumber`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ObsPath`, `ObsAttribute`.
+Expected columns: `Identity`, `SamAccountName`, `DisplayName`, `ObjectClass`, `EmployeeId`, `EmployeeNumber`, `UserPrincipalName`, `Mail`, `Department`, `Title`, `Company`, `Office`, `AccountEnabled`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ObsPath`, `ObsAttribute`, `DistinguishedName`.
 
 `ObsAttribute` records which directory attribute supplied the OBS value, for example `extensionAttribute10`.
+
+Use the extra directory fields as correlation clues, not as approval by themselves. They help identify likely data owners, business units, manager chains, and related groups when path naming alone is not enough.
 
 ### `group_edges.csv`
 
@@ -84,7 +86,7 @@ Use `IsCycle=True` for detected group loops. Use `IsTruncated=True` when expansi
 
 ### `org_chains.csv`
 
-Expected columns: `Identity`, `EmployeeId`, `ManagerLevel1`, `ManagerLevel2`, `ObsPath`, `ObsAttribute`.
+Expected columns: `Identity`, `EmployeeId`, `EmployeeNumber`, `Department`, `Title`, `Company`, `ManagerLevel1`, `ManagerLevel2`, `ObsPath`, `ObsAttribute`.
 
 Implementations may add more manager-level columns, but V1 reports should handle at least the first two levels.
 

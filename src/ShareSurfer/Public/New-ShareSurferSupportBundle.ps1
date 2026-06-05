@@ -1015,6 +1015,7 @@ function Test-ShareSurferRedactionAuditValue {
         'InheritanceEnabled',
         'PartialData',
         'PartialReason',
+        'AccountEnabled',
         'MigrationReadiness',
         'MatchingShares',
         'MatchingItems',

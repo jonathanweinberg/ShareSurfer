@@ -22,7 +22,7 @@ function Get-ShareSurferDirectoryIdentity {
 
     if ($AdLookupMode -ne 'Ldap' -and $null -ne $getAdUser -and $null -ne $getAdGroup) {
         try {
-            $properties = @('employeeID', 'employeeNumber', 'manager', 'displayName', $ObsAttribute)
+            $properties = @('employeeID', 'employeeNumber', 'manager', 'displayName', 'userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'distinguishedName', $ObsAttribute)
             $user = Get-ADUser -Identity $sam -Properties $properties -ErrorAction Stop
             $managerLevel1 = ''
             $managerLevel2 = ''
@@ -46,17 +46,25 @@ function Get-ShareSurferDirectoryIdentity {
                 ObjectClass = 'user'
                 EmployeeId = [string]$user.EmployeeID
                 EmployeeNumber = [string]$user.employeeNumber
+                UserPrincipalName = [string]$user.UserPrincipalName
+                Mail = [string]$user.Mail
+                Department = [string]$user.Department
+                Title = [string]$user.Title
+                Company = [string]$user.Company
+                Office = [string]$user.physicalDeliveryOfficeName
+                AccountEnabled = if ($null -ne $user.PSObject.Properties['Enabled'] -and $null -ne $user.Enabled) { [string]$user.Enabled } else { '' }
                 Manager = [string]$user.Manager
                 ManagerLevel1 = $managerLevel1
                 ManagerLevel2 = $managerLevel2
                 ObsPath = [string]$user.$ObsAttribute
                 ObsAttribute = $ObsAttribute
                 Members = @()
+                DistinguishedName = [string]$user.DistinguishedName
             }
         }
         catch {
             try {
-                $group = Get-ADGroup -Identity $sam -Properties displayName, $ObsAttribute -ErrorAction Stop
+                $group = Get-ADGroup -Identity $sam -Properties displayName, mail, managedBy, description, distinguishedName, $ObsAttribute -ErrorAction Stop
                 $members = @()
                 if ($null -ne $getAdGroupMember) {
                     $members = @(Get-ADGroupMember -Identity $group.SamAccountName -ErrorAction SilentlyContinue | ForEach-Object {
@@ -76,12 +84,20 @@ function Get-ShareSurferDirectoryIdentity {
                     ObjectClass = 'group'
                     EmployeeId = ''
                     EmployeeNumber = ''
-                    Manager = ''
-                    ManagerLevel1 = ''
+                    UserPrincipalName = ''
+                    Mail = [string]$group.Mail
+                    Department = ''
+                    Title = ''
+                    Company = ''
+                    Office = ''
+                    AccountEnabled = ''
+                    Manager = [string]$group.ManagedBy
+                    ManagerLevel1 = [string]$group.ManagedBy
                     ManagerLevel2 = ''
                     ObsPath = [string]$group.$ObsAttribute
                     ObsAttribute = $ObsAttribute
                     Members = @($members)
+                    DistinguishedName = [string]$group.DistinguishedName
                 }
             }
             catch {
@@ -98,7 +114,7 @@ function Get-ShareSurferDirectoryIdentity {
         $searcher = New-Object System.DirectoryServices.DirectorySearcher
         $escapedSam = $sam.Replace('\', '\5c').Replace('(', '\28').Replace(')', '\29')
         $searcher.Filter = "(sAMAccountName=$escapedSam)"
-        foreach ($property in @('sAMAccountName', 'displayName', 'objectClass', 'employeeID', 'employeeNumber', 'manager', 'member', $ObsAttribute)) {
+        foreach ($property in @('sAMAccountName', 'displayName', 'objectClass', 'employeeID', 'employeeNumber', 'userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'userAccountControl', 'distinguishedName', 'manager', 'member', $ObsAttribute)) {
             [void]$searcher.PropertiesToLoad.Add($property)
         }
         $result = $searcher.FindOne()

@@ -48,11 +48,19 @@ function Get-ShareSurferExportSchema {
             'ObjectClass',
             'EmployeeId',
             'EmployeeNumber',
+            'UserPrincipalName',
+            'Mail',
+            'Department',
+            'Title',
+            'Company',
+            'Office',
+            'AccountEnabled',
             'Manager',
             'ManagerLevel1',
             'ManagerLevel2',
             'ObsPath',
-            'ObsAttribute'
+            'ObsAttribute',
+            'DistinguishedName'
         )
         'group_edges.csv' = @(
             'ParentGroup',
@@ -65,6 +73,10 @@ function Get-ShareSurferExportSchema {
         'org_chains.csv' = @(
             'Identity',
             'EmployeeId',
+            'EmployeeNumber',
+            'Department',
+            'Title',
+            'Company',
             'ManagerLevel1',
             'ManagerLevel2',
             'ObsPath',

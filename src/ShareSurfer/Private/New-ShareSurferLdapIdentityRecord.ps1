@@ -83,6 +83,26 @@ function Get-ShareSurferLdapManagerLevel2 {
     }
 }
 
+function Get-ShareSurferLdapAccountEnabled {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Properties
+    )
+
+    $userAccountControl = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'userAccountControl'
+    if ($userAccountControl -eq '') {
+        return ''
+    }
+
+    try {
+        $flags = [int]$userAccountControl
+        [string](($flags -band 2) -eq 0)
+    }
+    catch {
+        ''
+    }
+}
+
 function New-ShareSurferLdapIdentityRecord {
     param(
         [string] $Identity = '',
@@ -121,12 +141,19 @@ function New-ShareSurferLdapIdentityRecord {
         ObjectClass = $objectClass
         EmployeeId = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'employeeID'
         EmployeeNumber = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'employeeNumber'
+        UserPrincipalName = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'userPrincipalName'
+        Mail = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'mail'
+        Department = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'department'
+        Title = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'title'
+        Company = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'company'
+        Office = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'physicalDeliveryOfficeName'
+        AccountEnabled = Get-ShareSurferLdapAccountEnabled -Properties $Properties
         Manager = $managerLevel1
         ManagerLevel1 = $managerLevel1
         ManagerLevel2 = $ManagerLevel2
         ObsPath = Get-ShareSurferLdapPropertyValue -Properties $Properties -Name $ObsAttribute
         ObsAttribute = $ObsAttribute
         Members = @($Members)
-        DistinguishedName = $DistinguishedName
+        DistinguishedName = if ($DistinguishedName -ne '') { $DistinguishedName } else { Get-ShareSurferLdapPropertyValue -Properties $Properties -Name 'distinguishedName' }
     }
 }
