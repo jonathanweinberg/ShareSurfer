@@ -177,6 +177,7 @@ function New-ShareSurferSupportBundle {
         'support_bundle_diagnostics.json summarizes redacted scan settings, export counts, findings, conflicts, partial shares, and collection errors.',
         'support_bundle_redaction_audit.csv records checked source-value tokens and leak status without storing raw source values.',
         'scan_events.jsonl is a redacted JSON Lines event log for support tools that prefer append-friendly logs.',
+        'collector_environment.json is included when a lab validation run root was supplied and summarizes the collector environment with sensitive host values redacted.',
         'lab_run_events.jsonl is included when a lab validation run root was supplied and records redacted lab-validation phase events.',
         'lab_run_diagnostics.json is included when a lab validation run root was supplied.',
         'dashboard_review.md is included when a lab validation run generated dashboard review evidence.',
@@ -229,6 +230,7 @@ function New-ShareSurferSupportBundleLabRunEvidence {
     $issueCommentPublishPreviewRowCount = 0
     $dashboardReviewIncluded = $false
     $dashboardReviewLineCount = 0
+    $collectorEnvironmentIncluded = $false
     $preflightRows = @(New-ShareSurferRedactedLabCsv -SourcePath (Join-Path $RunRoot 'lab-preflight.csv') -DestinationPath (Join-Path $BundlePath 'lab_preflight.csv') -RedactColumns @('Evidence') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt)
     if ($preflightRows.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $BundlePath 'lab_preflight.csv'))) {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path (Join-Path $BundlePath 'lab_preflight.csv') -FileName 'lab_preflight.csv' -RowCount $preflightRows.Count))
@@ -279,6 +281,15 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $dashboardReviewPath -FileName 'dashboard_review.md' -RowCount $dashboardReviewLineCount))
         [void]$includedFiles.Add('dashboard_review.md')
         $dashboardReviewIncluded = $true
+    }
+
+    $collectorEnvironment = New-ShareSurferRedactedCollectorEnvironment -SourcePath (Join-Path $RunRoot 'collector-environment.json') -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+    if ($null -ne $collectorEnvironment) {
+        $collectorEnvironmentPath = Join-Path $BundlePath 'collector_environment.json'
+        $collectorEnvironment | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $collectorEnvironmentPath -Encoding UTF8
+        [void]$fileDiagnostics.Add((New-ShareSurferSupportBundleFileDiagnostic -Path $collectorEnvironmentPath -FileName 'collector_environment.json' -RowCount 1))
+        [void]$includedFiles.Add('collector_environment.json')
+        $collectorEnvironmentIncluded = $true
     }
 
     $issueSummarySourcePath = Join-Path $RunRoot 'issue-summary.md'
@@ -423,6 +434,10 @@ function New-ShareSurferSupportBundleLabRunEvidence {
         LiveEvidence = if ($null -eq $liveEvidence) { $null } else { [ordered]@{ IsValid = $liveEvidence.IsValid; FallbackCount = $liveEvidence.FallbackCount } }
         Acceptance = if ($null -eq $acceptance) { $null } else { [ordered]@{ IsValid = $acceptance.IsValid; FailedCheckCount = $acceptance.FailedCheckCount } }
         AcceptanceSummary = if ($null -eq $acceptanceSummary) { $null } else { [ordered]@{ IsValid = $acceptanceSummary.IsValid; FailedCheckCount = $acceptanceSummary.FailedCheckCount; CheckCount = $acceptanceSummary.CheckCount } }
+        CollectorEnvironment = [ordered]@{
+            Included = [bool]$collectorEnvironmentIncluded
+            FileName = if ($collectorEnvironmentIncluded) { 'collector_environment.json' } else { '' }
+        }
         DashboardReview = [ordered]@{
             Included = [bool]$dashboardReviewIncluded
             FileName = if ($dashboardReviewIncluded) { 'dashboard_review.md' } else { '' }
@@ -497,6 +512,50 @@ function New-ShareSurferRedactedLabCsv {
 
     @($redactedRows) | Export-Csv -LiteralPath $DestinationPath -NoTypeInformation -Encoding UTF8
     @($redactedRows)
+}
+
+function New-ShareSurferRedactedCollectorEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [ValidateSet('StableToken', 'Strict')]
+        [string] $RedactionMode = 'StableToken',
+
+        [string] $RedactionSalt = 'ShareSurfer'
+    )
+
+    if (-not (Test-Path -LiteralPath $SourcePath)) {
+        return $null
+    }
+
+    $source = Get-Content -LiteralPath $SourcePath -Raw | ConvertFrom-Json
+    [ordered]@{
+        ArtifactType = [string]$source.ArtifactType
+        GeneratedAt = [string]$source.GeneratedAt
+        IsWindows = [bool]$source.IsWindows
+        OSDescription = [string]$source.OSDescription
+        OSArchitecture = [string]$source.OSArchitecture
+        ComputerName = Protect-ShareSurferValue -Value $source.ComputerName -ColumnName 'ComputerName' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+        UserDomain = Protect-ShareSurferValue -Value $source.UserDomain -ColumnName 'Identity' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+        UserName = Protect-ShareSurferValue -Value $source.UserName -ColumnName 'Identity' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+        PowerShell = $source.PowerShell
+        Modules = @($source.Modules | ForEach-Object {
+            [ordered]@{
+                Name = [string]$_.Name
+                Available = [bool]$_.Available
+                Version = [string]$_.Version
+                Path = Protect-ShareSurferValue -Value $_.Path -ColumnName 'FullPath' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+            }
+        })
+        Commands = @($source.Commands | ForEach-Object {
+            [ordered]@{
+                Name = [string]$_.Name
+                Available = [bool]$_.Available
+                Source = Protect-ShareSurferValue -Value $_.Source -ColumnName 'FullPath' -RedactionMode $RedactionMode -RedactionSalt $RedactionSalt
+            }
+        })
+    }
 }
 
 function New-ShareSurferRedactedLabRunEvents {

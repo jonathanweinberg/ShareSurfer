@@ -67,6 +67,7 @@ $reportPath = Join-Path $runRoot 'report.html'
 $dashboardReviewPath = Join-Path $runRoot 'dashboard-review.md'
 $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
 $preflightPath = Join-Path $runRoot 'lab-preflight.csv'
+$collectorEnvironmentPath = Join-Path $runRoot 'collector-environment.json'
 $criteriaPath = Join-Path $runRoot 'lab-validation-criteria.csv'
 $liveEvidencePath = Join-Path $runRoot 'live-evidence.json'
 $liveEvidenceReviewPath = Join-Path $runRoot 'live-evidence-review.csv'
@@ -93,6 +94,10 @@ $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot '
 @($plan.OwnerMappings) | Export-Csv -LiteralPath $ownerMappingPath -NoTypeInformation -Encoding UTF8
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Plan' -Message 'Lab plan and owner mapping were written.' -Detail ('PlanPath={0}; OwnerMappingPath={1}; PlannedShares={2}; PlannedUsers={3}; EstimatedLabBytes={4}' -f (Join-Path $runRoot 'lab-plan.json'), $ownerMappingPath, @($plan.Shares).Count, @($plan.Users).Count, $plan.EstimatedLabBytes)
 
+$collectorEnvironmentScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferCollectorEnvironment.ps1'
+Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Environment' -Message 'Capturing collector environment evidence.' -Detail ('CollectorEnvironmentPath={0}' -f $collectorEnvironmentPath)
+& $collectorEnvironmentScriptPath -OutputPath $collectorEnvironmentPath | Out-Null
+
 Add-ShareSurferLabRunEvent -EventPath $labRunEventPath -Phase 'Preflight' -Message 'Running lab validation preflight checks.' -Detail ('PreflightPath={0}' -f $preflightPath)
 $preflightRows = @(New-ShareSurferLabValidationPreflight -Plan $plan -LabRoot $LabRoot -RunRoot $runRoot -CreateLab:$CreateLab -IncludeFiles:$IncludeFiles -RequireLiveEvidence:$RequireLiveEvidence)
 $preflightRows | Export-Csv -LiteralPath $preflightPath -NoTypeInformation -Encoding UTF8
@@ -104,6 +109,7 @@ if ($PreflightOnly) {
         RunRoot = $runRoot
         PreflightOnly = $true
         LabRunEventPath = $labRunEventPath
+        CollectorEnvironmentPath = $collectorEnvironmentPath
         PreflightPath = $preflightPath
         PreflightPassed = ($failedPreflightRows.Count -eq 0)
         PreflightFailedCount = $failedPreflightRows.Count
@@ -224,6 +230,7 @@ if (-not $finishedPackageAcceptance.IsValid) {
     ValidationPath = Join-Path $runRoot 'validation.json'
     PreflightPath = $preflightPath
     CriteriaPath = $criteriaPath
+    CollectorEnvironmentPath = $collectorEnvironmentPath
     LabRunEventPath = $labRunEventPath
     LiveEvidencePath = $liveEvidencePath
     LiveEvidenceReviewPath = $liveEvidenceReviewPath
