@@ -78,7 +78,7 @@ function New-ShareSurferLabPlan {
     $groups = @(
         New-ShareSurferLabGroupRecord -Name 'SS-Finance-Readers' -Members @('Ava.Accounting', 'Noah.Payroll') -Description 'Finance share read access' -ObsAttribute $ObsAttribute -Obs 'CORP.FIN.ACCESS.READ'
         New-ShareSurferLabGroupRecord -Name 'SS-Finance-Editors' -Members @('SS-Finance-Readers', 'Morgan.Manager') -Description 'Finance NTFS modify access' -ObsAttribute $ObsAttribute -Obs 'CORP.FIN.ACCESS.MODIFY'
-        New-ShareSurferLabGroupRecord -Name 'SS-Engineering-Readers' -Members @('Mia.Engineering', 'Parker.Manager') -Description 'Engineering share read access' -ObsAttribute $ObsAttribute -Obs 'CORP.ENG.ACCESS.READ'
+        New-ShareSurferLabGroupRecord -Name 'SS-Eng-Readers' -Members @('Mia.Engineering', 'Parker.Manager') -Description 'Engineering share read access' -ObsAttribute $ObsAttribute -Obs 'CORP.ENG.ACCESS.READ'
         New-ShareSurferLabGroupRecord -Name 'SS-Operations-Owners' -Members @('Leo.Operations', 'Quinn.Manager') -Description 'Operations share full control' -ObsAttribute $ObsAttribute -Obs 'CORP.OPS.ACCESS.OWNER'
         New-ShareSurferLabGroupRecord -Name 'SS-Recursive-A' -Members @('SS-Recursive-B') -Description 'Cycle test group A' -ObsAttribute $ObsAttribute -Obs 'CORP.TEST.RECURSIVE'
         New-ShareSurferLabGroupRecord -Name 'SS-Recursive-B' -Members @('SS-Recursive-A') -Description 'Cycle test group B' -ObsAttribute $ObsAttribute -Obs 'CORP.TEST.RECURSIVE'
@@ -98,7 +98,7 @@ function New-ShareSurferLabPlan {
             LocalPath = Join-ShareSurferLabPlanPath -RootPath $RootPath -ChildPath 'Engineering'
             Description = 'Engineering lab share with normal inherited permissions'
             SharePermissions = @(
-                [pscustomobject]@{ Identity = "$DomainNetBiosName\SS-Engineering-Readers"; Rights = 'Read' }
+                [pscustomobject]@{ Identity = "$DomainNetBiosName\SS-Eng-Readers"; Rights = 'Read' }
             )
         },
         [pscustomobject]@{
@@ -112,7 +112,7 @@ function New-ShareSurferLabPlan {
     )
 
     $aclScenarios = @(
-        [pscustomobject]@{ Name = 'InheritedBaseline'; ShareName = 'SSEngineering'; RelativePath = 'Projects'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Engineering-Readers"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $true; Depth = 1; OwnerIdentity = '' },
+        [pscustomobject]@{ Name = 'InheritedBaseline'; ShareName = 'SSEngineering'; RelativePath = 'Projects'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Eng-Readers"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $true; Depth = 1; OwnerIdentity = '' },
         [pscustomobject]@{ Name = 'BrokenInheritance'; ShareName = 'SSOperations'; RelativePath = 'Restricted'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Operations-Owners"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 1; OwnerIdentity = "$DomainNetBiosName\Quinn.Manager" },
         [pscustomobject]@{ Name = 'DeepExplicitAce'; ShareName = 'SSFinance'; RelativePath = 'AP\Vendor\Archive'; TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 3; OwnerIdentity = '' },
         [pscustomobject]@{ Name = 'LongPath'; ShareName = 'SSFinance'; RelativePath = ('AP\LongPath\' + ('A' * 125) + '\' + ('B' * 125)); TargetType = 'Directory'; Identity = "$DomainNetBiosName\SS-Finance-Editors"; Rights = 'ReadAndExecute'; AccessControlType = 'Allow'; IsInherited = $false; Depth = 4; OwnerIdentity = '' },
