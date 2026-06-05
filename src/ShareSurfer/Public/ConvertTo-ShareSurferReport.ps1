@@ -415,6 +415,7 @@ function ConvertTo-ShareSurferReport {
           <h2>Business Unit Pivots</h2>
           <span class="count" id="owner-pivots-count"></span>
         </div>
+        <p class="note">Owner Risk Pivots combine mapped paths with item, finding, conflict, and partial-share counts so each business unit can see why it is being asked to review access.</p>
         <div class="scroll"><table id="owner-pivots"></table></div>
       </div>
     </section>
@@ -669,8 +670,35 @@ function ConvertTo-ShareSurferReport {
     }
     function buildOwnerPivots() {
       const pivots = new Map();
+      const riskOrder = { High: 0, Review: 1, Monitor: 2 };
       data.owner_mappings.forEach(mapping => {
         const matchedItems = data.items.filter(item => wildcardMatch(mapping.Pattern, item.FullPath));
+        const matchedItemIds = new Set(matchedItems.map(item => String(item.ItemId || '')).filter(Boolean));
+        const matchedShareIds = new Set(matchedItems.map(item => String(item.ShareId || '')).filter(Boolean));
+        data.shares.forEach(share => {
+          const sharePaths = [share.UNCPath, share.LocalPath].map(value => String(value || '')).filter(Boolean);
+          if (sharePaths.some(path => wildcardMatch(mapping.Pattern, path))) {
+            const shareId = String(share.ShareId || '');
+            if (shareId) { matchedShareIds.add(shareId); }
+          }
+        });
+        const mappedFindings = data.findings.filter(finding => {
+          const itemId = String(finding.ItemId || '');
+          const shareId = String(finding.ShareId || '');
+          const fullPath = String(finding.FullPath || '');
+          return (itemId && matchedItemIds.has(itemId)) ||
+            (shareId && matchedShareIds.has(shareId)) ||
+            (fullPath && wildcardMatch(mapping.Pattern, fullPath));
+        });
+        const mappedConflicts = data.conflicts.filter(conflict => {
+          const itemId = String(conflict.ItemId || '');
+          const shareId = String(conflict.ShareId || '');
+          return (itemId && matchedItemIds.has(itemId)) ||
+            (shareId && matchedShareIds.has(shareId));
+        });
+        const partialShares = data.shares.filter(share => matchedShareIds.has(String(share.ShareId || '')) && String(share.PartialData) === 'True');
+        const highRiskCount = mappedFindings.filter(isHighRisk).length + mappedConflicts.filter(isHighRisk).length;
+        const riskLevel = highRiskCount > 0 ? 'High' : ((mappedFindings.length + mappedConflicts.length + partialShares.length) > 0 ? 'Review' : 'Monitor');
         const key = [mapping.BusinessUnit || '', mapping.Owner || '', mapping.Pattern || ''].join('|');
         pivots.set(key, {
           BusinessUnit: mapping.BusinessUnit || '',
@@ -679,10 +707,14 @@ function ConvertTo-ShareSurferReport {
           Source: mapping.Source || '',
           MatchingItems: matchedItems.length,
           Directories: matchedItems.filter(item => item.ItemType === 'Directory').length,
-          Files: matchedItems.filter(item => item.ItemType === 'File').length
+          Files: matchedItems.filter(item => item.ItemType === 'File').length,
+          FindingCount: mappedFindings.length,
+          ConflictCount: mappedConflicts.length,
+          PartialShareCount: partialShares.length,
+          RiskLevel: riskLevel
         });
       });
-      return Array.from(pivots.values()).sort((a, b) => String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
+      return Array.from(pivots.values()).sort((a, b) => Number(riskOrder[a.RiskLevel] ?? 99) - Number(riskOrder[b.RiskLevel] ?? 99) || String(a.BusinessUnit).localeCompare(String(b.BusinessUnit)) || String(a.Owner).localeCompare(String(b.Owner)));
     }
     function buildRollups(rows, fields) {
       const rollups = new Map();
