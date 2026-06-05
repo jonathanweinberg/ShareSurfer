@@ -2,7 +2,7 @@
 
 This folder contains a derived review of an existing lab run. It preserves the historical run folder and writes refreshed validation artifacts separately.
 
-Generated at: `2026-06-05T17:18:00.3851020Z`
+Generated at: `2026-06-05T17:28:07.4468450Z`
 Strengthened criteria: `FocusedAclScenarios`
 Live evidence valid: `True`
 Live evidence fallback count: `0`

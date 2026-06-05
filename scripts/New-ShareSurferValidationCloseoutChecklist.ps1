@@ -3,7 +3,18 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $RunRoot,
 
+    [string] $AcceptanceSummaryPath = '',
+    [string] $LiveEvidencePath = '',
+    [string] $LiveEvidenceReviewPath = '',
+    [string] $CriteriaPath = '',
+    [string] $PreflightPath = '',
+    [string] $IssueCommentDirectory = '',
+    [string] $IssueCommentPublishPreviewPath = '',
+    [string] $SupportBundlePath = '',
+
     [string] $OutputPath = '',
+
+    [switch] $AllowMissingSupportBundle,
 
     [switch] $PassThru
 )
@@ -137,15 +148,40 @@ if (-not (Test-Path -LiteralPath $RunRoot)) {
     throw ('Run root not found: {0}' -f $RunRoot)
 }
 
-$acceptanceSummary = Get-ShareSurferCloseoutJson -Path (Join-Path $RunRoot 'v1-acceptance-summary.json')
-$liveEvidence = Get-ShareSurferCloseoutJson -Path (Join-Path $RunRoot 'live-evidence.json')
-$liveEvidenceReview = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $RunRoot 'live-evidence-review.csv'))
-$criteriaRows = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $RunRoot 'lab-validation-criteria.csv'))
-$preflightRows = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $RunRoot 'lab-preflight.csv'))
-$issueCommentDirectory = Join-Path $RunRoot 'issue-comments'
+if ([string]::IsNullOrWhiteSpace($AcceptanceSummaryPath)) {
+    $AcceptanceSummaryPath = Join-Path $RunRoot 'v1-acceptance-summary.json'
+}
+if ([string]::IsNullOrWhiteSpace($LiveEvidencePath)) {
+    $LiveEvidencePath = Join-Path $RunRoot 'live-evidence.json'
+}
+if ([string]::IsNullOrWhiteSpace($LiveEvidenceReviewPath)) {
+    $LiveEvidenceReviewPath = Join-Path $RunRoot 'live-evidence-review.csv'
+}
+if ([string]::IsNullOrWhiteSpace($CriteriaPath)) {
+    $CriteriaPath = Join-Path $RunRoot 'lab-validation-criteria.csv'
+}
+if ([string]::IsNullOrWhiteSpace($PreflightPath)) {
+    $PreflightPath = Join-Path $RunRoot 'lab-preflight.csv'
+}
+if ([string]::IsNullOrWhiteSpace($IssueCommentDirectory)) {
+    $IssueCommentDirectory = Join-Path $RunRoot 'issue-comments'
+}
+if ([string]::IsNullOrWhiteSpace($IssueCommentPublishPreviewPath)) {
+    $IssueCommentPublishPreviewPath = Join-Path $RunRoot 'issue-comment-publish-preview.csv'
+}
+if ([string]::IsNullOrWhiteSpace($SupportBundlePath)) {
+    $SupportBundlePath = Join-Path $RunRoot 'support-bundle-redacted'
+}
+
+$acceptanceSummary = Get-ShareSurferCloseoutJson -Path $AcceptanceSummaryPath
+$liveEvidence = Get-ShareSurferCloseoutJson -Path $LiveEvidencePath
+$liveEvidenceReview = @(Get-ShareSurferCloseoutCsv -Path $LiveEvidenceReviewPath)
+$criteriaRows = @(Get-ShareSurferCloseoutCsv -Path $CriteriaPath)
+$preflightRows = @(Get-ShareSurferCloseoutCsv -Path $PreflightPath)
+$issueCommentDirectory = $IssueCommentDirectory
 $issueCommentRows = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $issueCommentDirectory 'issue-comment-manifest.csv'))
-$publishPreviewRows = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $RunRoot 'issue-comment-publish-preview.csv'))
-$supportBundleDirectory = Join-Path $RunRoot 'support-bundle-redacted'
+$publishPreviewRows = @(Get-ShareSurferCloseoutCsv -Path $IssueCommentPublishPreviewPath)
+$supportBundleDirectory = $SupportBundlePath
 $bundleManifestRows = @(Get-ShareSurferCloseoutCsv -Path (Join-Path $supportBundleDirectory 'support_bundle_manifest.csv'))
 
 $acceptanceValid = $false
@@ -183,6 +219,8 @@ if ($bundleManifestRows.Count -gt 0) {
     $bundleValid = ConvertTo-ShareSurferCloseoutBool $bundleManifestRows[0].ValidationIsValid
     [void][int]::TryParse([string]$bundleManifestRows[0].RedactionLeakCount, [ref]$bundleLeakCount)
 }
+$supportBundleGatePassed = (($bundleValid -and $bundleLeakCount -eq 0) -or ($AllowMissingSupportBundle -and $bundleManifestRows.Count -eq 0))
+$supportBundleGateLabel = if ($AllowMissingSupportBundle -and $bundleManifestRows.Count -eq 0) { 'Optional rich support bundle skipped' } else { '{0} redaction leaks' -f $bundleLeakCount }
 
 $identityDirectoryCriteria = @('EnterpriseEmployeeIdentifierCoverage', 'EnterpriseManagerChainCoverage', 'EnterpriseUserObsCoverage')
 $groupExpansionCriteria = @('EnterpriseGroupExpansion', 'EnterprisePermissionGroupObsCoverage')
@@ -228,8 +266,7 @@ $readyForProofReview = (
     $failedPreflightRows.Count -eq 0 -and
     $failedCriteriaRows.Count -eq 0 -and
     $blockingReviewRows.Count -eq 0 -and
-    $bundleValid -and
-    $bundleLeakCount -eq 0 -and
+    $supportBundleGatePassed -and
     $issueCommentsReady -and
     $publishPreviewReady
 )
@@ -267,7 +304,7 @@ Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Live evidence gate passe
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Required preflight blockers: `{1}`.' -f (Get-ShareSurferCloseoutStatus -Passed ($failedPreflightRows.Count -eq 0)), $failedPreflightRows.Count)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Failed required validation criteria: `{1}`.' -f (Get-ShareSurferCloseoutStatus -Passed ($failedCriteriaRows.Count -eq 0)), $failedCriteriaRows.Count)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Blocking live-evidence review rows: `{1}`.' -f (Get-ShareSurferCloseoutStatus -Passed ($blockingReviewRows.Count -eq 0)), $blockingReviewRows.Count)
-Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Redacted support bundle validation passed with `{1}` redaction leaks.' -f (Get-ShareSurferCloseoutStatus -Passed ($bundleValid -and $bundleLeakCount -eq 0)), $bundleLeakCount)
+Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Redacted support bundle gate: `{1}`.' -f (Get-ShareSurferCloseoutStatus -Passed $supportBundleGatePassed), $supportBundleGateLabel)
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Issue comment bodies exist for issues #1, #3, #5, and #6.' -f (Get-ShareSurferCloseoutStatus -Passed $issueCommentsReady))
 Add-ShareSurferCloseoutLine -Lines $lines -Text ('- {0} Issue comment publish preview is dry-run only and has no posted URLs.' -f (Get-ShareSurferCloseoutStatus -Passed $publishPreviewReady))
 Add-ShareSurferCloseoutLine -Lines $lines
@@ -291,7 +328,7 @@ Add-ShareSurferCloseoutLine -Lines $lines
 Add-ShareSurferCloseoutLine -Lines $lines -Text '**Next Actions**'
 Add-ShareSurferCloseoutLine -Lines $lines -Text '- If ready, review every generated issue comment Markdown file before posting.'
 Add-ShareSurferCloseoutLine -Lines $lines -Text '- Post proof comments with the publish helper after review, then read back the GitHub comments.'
-Add-ShareSurferCloseoutLine -Lines $lines -Text '- Keep raw run folders inside the trusted lab environment. Share only the redacted support bundle outside that environment.'
+Add-ShareSurferCloseoutLine -Lines $lines -Text '- Keep raw run folders inside the trusted lab environment. When a redacted support bundle is generated, share only the redacted bundle outside that environment.'
 Add-ShareSurferCloseoutLine -Lines $lines -Text '- If not ready, fix the rows named above and rerun the validation from a fresh timestamped output folder.'
 Add-ShareSurferCloseoutLine -Lines $lines
 Add-ShareSurferCloseoutLine -Lines $lines -Text '**Safe Sharing Note**'

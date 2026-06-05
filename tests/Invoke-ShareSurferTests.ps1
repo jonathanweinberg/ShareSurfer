@@ -2412,10 +2412,17 @@ $tests = @(
             Assert-Equal ([int]$refreshResult.LiveEvidenceFallbackCount) 0 'Refreshed archived enterprise evidence should have no fallback criteria.'
             Assert-True (@($refreshResult.StrengthenedCriteria | Where-Object { [string]$_.Name -eq 'FocusedAclScenarios' }).Count -eq 1) 'Refresh should strengthen the stale FocusedAclScenarios row.'
             Assert-True (Test-Path -LiteralPath ([string]$refreshResult.SummaryPath)) 'Refresh should write a human-readable summary.'
+            Assert-True (Test-Path -LiteralPath ([string]$refreshResult.IssueSummaryPath)) 'Refresh should write a public-safe issue summary.'
+            Assert-True (Test-Path -LiteralPath ([string]$refreshResult.CloseoutChecklistPath)) 'Refresh should write a validation closeout checklist.'
+            Assert-True (Test-Path -LiteralPath ([string]$refreshResult.IssueCommentPublishPreviewPath)) 'Refresh should write a dry-run issue-comment publish preview.'
+            Assert-True (Test-Path -LiteralPath (Join-Path ([string]$refreshResult.IssueCommentDirectory) 'issue-1-lab-fixture-live-proof.md')) 'Refresh should write issue #1 proof comment body.'
 
             $refreshedFocused = @(Import-Csv -LiteralPath ([string]$refreshResult.CriteriaPath) | Where-Object { [string]$_.Name -eq 'FocusedAclScenarios' })[0]
             Assert-Equal ([string]$refreshedFocused.EvidenceSource) 'ScanExport:acl_entries.csv;findings.csv;conflicts.csv;items.csv' 'Focused ACL scenario refresh should use scan/export evidence.'
             Assert-True ([string]$refreshedFocused.EvidenceDetail -like '*DeepExplicitAceFindings=251*') 'Focused ACL scenario refresh should preserve deep explicit ACE evidence counts from the archived export.'
+            $refreshCloseout = Get-Content -LiteralPath ([string]$refreshResult.CloseoutChecklistPath) -Raw
+            Assert-True ($refreshCloseout.Contains('Ready for proof review: `True`')) 'Refreshed closeout checklist should mark the archived proof review ready.'
+            Assert-True ($refreshCloseout -like '*Optional rich support bundle skipped*') 'Refreshed closeout checklist should explain the optional rich support bundle was skipped.'
         }
     },
     @{

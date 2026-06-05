@@ -3,7 +3,15 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $RunRoot,
 
+    [string] $AcceptanceSummaryPath = '',
+    [string] $LiveEvidencePath = '',
+    [string] $LiveEvidenceReviewPath = '',
+    [string] $CriteriaPath = '',
+    [string] $SupportBundlePath = '',
+
     [string] $OutputPath = '',
+
+    [switch] $AllowMissingSupportBundle,
 
     [switch] $PassThru
 )
@@ -78,11 +86,27 @@ if (-not (Test-Path -LiteralPath $RunRoot)) {
     throw ('Run root not found: {0}' -f $RunRoot)
 }
 
-$acceptanceSummary = Get-ShareSurferSummaryJson -Path (Join-Path $RunRoot 'v1-acceptance-summary.json')
-$liveEvidence = Get-ShareSurferSummaryJson -Path (Join-Path $RunRoot 'live-evidence.json')
-$liveEvidenceReview = @(Get-ShareSurferSummaryCsv -Path (Join-Path $RunRoot 'live-evidence-review.csv'))
-$criteriaRows = @(Get-ShareSurferSummaryCsv -Path (Join-Path $RunRoot 'lab-validation-criteria.csv'))
-$supportBundlePath = Join-Path $RunRoot 'support-bundle-redacted'
+if ([string]::IsNullOrWhiteSpace($AcceptanceSummaryPath)) {
+    $AcceptanceSummaryPath = Join-Path $RunRoot 'v1-acceptance-summary.json'
+}
+if ([string]::IsNullOrWhiteSpace($LiveEvidencePath)) {
+    $LiveEvidencePath = Join-Path $RunRoot 'live-evidence.json'
+}
+if ([string]::IsNullOrWhiteSpace($LiveEvidenceReviewPath)) {
+    $LiveEvidenceReviewPath = Join-Path $RunRoot 'live-evidence-review.csv'
+}
+if ([string]::IsNullOrWhiteSpace($CriteriaPath)) {
+    $CriteriaPath = Join-Path $RunRoot 'lab-validation-criteria.csv'
+}
+if ([string]::IsNullOrWhiteSpace($SupportBundlePath)) {
+    $SupportBundlePath = Join-Path $RunRoot 'support-bundle-redacted'
+}
+
+$acceptanceSummary = Get-ShareSurferSummaryJson -Path $AcceptanceSummaryPath
+$liveEvidence = Get-ShareSurferSummaryJson -Path $LiveEvidencePath
+$liveEvidenceReview = @(Get-ShareSurferSummaryCsv -Path $LiveEvidenceReviewPath)
+$criteriaRows = @(Get-ShareSurferSummaryCsv -Path $CriteriaPath)
+$supportBundlePath = $SupportBundlePath
 $bundleManifestRows = @(Get-ShareSurferSummaryCsv -Path (Join-Path $supportBundlePath 'support_bundle_manifest.csv'))
 
 $acceptanceValid = $false
@@ -114,6 +138,10 @@ $bundleLeakCount = 'Unknown'
 if ($bundleManifestRows.Count -gt 0) {
     $bundleValidation = [string]$bundleManifestRows[0].ValidationIsValid
     $bundleLeakCount = [string]$bundleManifestRows[0].RedactionLeakCount
+}
+elseif ($AllowMissingSupportBundle) {
+    $bundleValidation = 'SkippedOptional'
+    $bundleLeakCount = '0'
 }
 
 $lines = New-Object System.Collections.ArrayList

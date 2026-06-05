@@ -81,7 +81,7 @@ The derived review under `20260605-101639/refreshed-evidence/` was generated fro
   -AllowMissingIssueComments
 ```
 
-That refresh preserves the original AD, filesystem, and scan evidence rows, strengthens only the stale `FocusedAclScenarios` row when the archived CSV export proves it, then writes refreshed criteria, live-evidence, live-evidence-review, and V1 acceptance artifacts.
+That refresh preserves the original AD, filesystem, and scan evidence rows, strengthens only the stale `FocusedAclScenarios` row when the archived CSV export proves it, then writes refreshed criteria, live-evidence, live-evidence-review, V1 acceptance, issue-summary, closeout-checklist, issue-comment, and dry-run publish-preview artifacts.
 
 `20260605-101639/refreshed-evidence/v1-acceptance-summary.json` reports:
 
@@ -95,6 +95,16 @@ That refresh preserves the original AD, filesystem, and scan evidence rows, stre
 - `FallbackCount`: `0`
 
 The strengthened `FocusedAclScenarios` row is backed by `ScanExport:acl_entries.csv;findings.csv;conflicts.csv;items.csv` with `41,278` ACL rows, `11,244` file ACL rows, `251` deep explicit ACE findings, `4` broken inheritance findings, `2` long-path findings, and `32,309` conflict rows.
+
+The refreshed proof pack also includes:
+
+- `20260605-101639/refreshed-evidence/issue-summary.md`
+- `20260605-101639/refreshed-evidence/validation-closeout-checklist.md`
+- `20260605-101639/refreshed-evidence/issue-comments/issue-1-lab-fixture-live-proof.md`
+- `20260605-101639/refreshed-evidence/issue-comments/issue-3-scanner-live-proof.md`
+- `20260605-101639/refreshed-evidence/issue-comments/issue-5-identity-group-live-proof.md`
+- `20260605-101639/refreshed-evidence/issue-comments/issue-6-dashboard-live-proof.md`
+- `20260605-101639/refreshed-evidence/issue-comment-publish-preview.csv`
 
 ## Support Bundle Status
 
