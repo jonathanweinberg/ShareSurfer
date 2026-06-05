@@ -65,6 +65,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [Azure Files path policy](docs/azure-files-path-policy.md)
 - [Redacted support bundles](docs/redacted-support-bundles.md)
 - [Scaled lab generator spec](docs/scaled-lab-generator-spec.md)
+- [Windows lab readiness checklist](docs/windows-lab-readiness-checklist.md)
 - [Workflow visuals](docs/workflow-visuals.md)
 
 ## Tests
