@@ -1442,6 +1442,8 @@ $tests = @(
             $labValidationScript = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts/Invoke-ShareSurferLabValidation.ps1') -Raw
             Assert-True ($labValidationScript -like '*Test-ShareSurferV1Acceptance.ps1*') 'Lab validation should run the V1 acceptance checker automatically.'
             Assert-True ($labValidationScript -like '*-AllowMissingBundledAcceptance*') 'Lab validation should allow bundled acceptance to be pending only for the first acceptance pass.'
+            Assert-True ($labValidationScript -like '*$finishedPackageAcceptance = & $acceptanceScriptPath*') 'Lab validation should verify the finished bundle after strict acceptance is bundled.'
+            Assert-True ($labValidationScript -like '*ShareSurfer finished support bundle validation failed*') 'Lab validation should fail clearly if the final refreshed support bundle is invalid.'
             Assert-True ($labValidationScript -like '*lab-preflight.csv*') 'Lab validation should write a preflight readiness CSV.'
             Assert-True ($labValidationScript -like '*PreflightPath*') 'Lab validation output should include the preflight artifact path.'
             Assert-True ($labValidationScript -like '*v1-acceptance.json*') 'Lab validation should write an acceptance result artifact.'
