@@ -347,7 +347,7 @@ Live acceptance on a disposable Windows/AD lab host must additionally prove:
 - share permissions are applied.
 - NTFS ACL scenarios are applied, including broken inheritance, deny collision, deep explicit ACE, owner examples, and file-specific ACLs.
 - scanning the generated shares produces CSV exports, report data, owner/business-unit pivots, related data area rows, group expansion rows, long-path findings, deep explicit ACE findings, share-vs-NTFS conflict evidence, and collection-error evidence. A clean Windows run may show `0` collection error rows; partial-data or best-effort paths should show the count in `lab-validation-criteria.csv`.
-- redacted support bundle generation succeeds against the enterprise export.
+- optional redacted support bundle generation remains available for troubleshooting, but rich enterprise lab-run bundles are not a phase-1 proof blocker unless `-IncludeRedactedSupportBundle` is selected.
 
 ## Implementation Notes
 

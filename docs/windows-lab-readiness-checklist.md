@@ -2,7 +2,7 @@
 
 Use this checklist before the live ShareSurfer enterprise validation run. It is written for an operator who may be running ShareSurfer for the first time.
 
-The goal is simple: prove ShareSurfer can create the lab, scan it, export the evidence, generate the dashboard, and produce a redacted support bundle without relying on plan-only counts.
+The goal is simple: prove ShareSurfer can create the lab, scan it, export the evidence, and generate the dashboard without relying on plan-only counts. A redacted support bundle can still be generated for troubleshooting, but the richer enterprise lab-run bundle is optional for phase-1 proof.
 
 ## Before You Start
 
@@ -16,7 +16,7 @@ You need:
 - Permission to create or update objects under the `ShareSurferLab` OU.
 - Permission to create local folders and SMB shares under the selected lab root.
 - Permission to read the created SMB shares, file and folder ACLs, owners, and share permissions.
-- At least 2 GiB available for the default generated file-data budget, plus room for CSVs, logs, report HTML, and support bundles.
+- At least 2 GiB available for the default generated file-data budget, plus room for CSVs, logs, report HTML, and any optional support bundles.
 - A trusted output folder for raw evidence, for example `C:\ShareSurfer\lab-validation`.
 
 The default enterprise profile uses small files and should stay far below the 2 GiB generated file-data budget. The 8 GiB value is only for an explicit stress run.
@@ -37,7 +37,7 @@ Change `$domain` to the NetBIOS name of the test domain.
 
 ## Run Preflight First
 
-Run preflight before creating users, groups, shares, files, reports, or support bundles. Use `-CreateLab` with `-PreflightOnly` so ShareSurfer checks the same creation blockers the full run will use, while still stopping before it changes anything.
+Run preflight before creating users, groups, shares, files, reports, or optional support bundles. Use `-CreateLab` with `-PreflightOnly` so ShareSurfer checks the same creation blockers the full run will use, while still stopping before it changes anything.
 
 ```powershell
 .\scripts\Invoke-ShareSurferLabValidation.ps1 `
@@ -90,7 +90,7 @@ After preflight passes, run the full validation:
   -RequireLiveEvidence
 ```
 
-The command should create or update the lab, scan the planned shares, validate the CSV export set, generate the offline report, create a redacted support bundle, and run V1 acceptance.
+The command should create or update the lab, scan the planned shares, validate the CSV export set, generate the offline report, create public-safe issue and closeout artifacts, and run V1 acceptance. Add `-IncludeRedactedSupportBundle` only when you also need the richer redacted lab-run bundle for troubleshooting.
 
 ## Expected Artifacts
 
@@ -137,7 +137,7 @@ Use these files first:
 - `scripts\Publish-ShareSurferValidationIssueComments.ps1`: preview or post the generated issue comments after you review them. Posting from a run folder requires `validation-closeout-checklist.md` to say `Ready for proof review: True` unless you deliberately use `-SkipReadyCheck`.
 - `report.html`: offline business review dashboard.
 
-Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md`, `validation_closeout_checklist.md`, and a sanitized `issue_comments` folder as shareable copies of the public-safe issue update artifacts. Do not attach raw run folders outside the trusted lab environment.
+Use the `support-bundle-redacted` folder for bug reports or external troubleshooting when you ran validation with `-IncludeRedactedSupportBundle` or created a bundle separately with `New-ShareSurferSupportBundle`. When that optional folder is generated, it also includes `issue_summary.md`, `validation_closeout_checklist.md`, and a sanitized `issue_comments` folder as shareable copies of the public-safe issue update artifacts. Do not attach raw run folders outside the trusted lab environment.
 
 ## Go Gates
 
@@ -158,12 +158,15 @@ Treat the run as ready for phase-1 evidence review only when all of these are tr
 - `lab-validation-criteria.csv` shows passing identity criteria for employee identifiers, two-level manager chains, and the runtime OBS/OID attribute.
 - `lab-validation-criteria.csv` shows passing security group criteria for recursive group expansion and OBS/OID coverage on permission-bearing groups.
 - `collector-environment.json` exists so reviewers can confirm the collector host, PowerShell version, module availability, and command availability used for the run.
+- `report.html` opens locally and shows the ShareSurfer Business Review Dashboard.
+- `dashboard-review.md` has `Dashboard review status: Pass`, then the operator confirms the live dashboard views render and respond to filters.
+
+If you generated the optional rich redacted lab-run support bundle, also confirm:
+
 - `support-bundle-redacted\support_bundle_manifest.csv` has `ValidationIsValid=True`.
 - `support-bundle-redacted\support_bundle_manifest.csv` has `RedactionLeakCount=0`.
 - `support-bundle-redacted\v1_acceptance_summary.json` exists.
 - `support-bundle-redacted\collector_environment.json` exists and contains only redacted host/user/path values.
-- `report.html` opens locally and shows the ShareSurfer Business Review Dashboard.
-- `dashboard-review.md` has `Dashboard review status: Pass`, then the operator confirms the live dashboard views render and respond to filters.
 
 ## Stop Gates
 
@@ -171,15 +174,15 @@ Stop and review before sharing evidence if any of these happen:
 
 - Preflight has a required blocker.
 - The run stops before writing `v1-acceptance-summary.json`.
-- `collector-environment.json` is missing from the raw run folder or redacted support bundle.
+- `collector-environment.json` is missing from the raw run folder.
 - V1 acceptance fails.
 - Live evidence falls back to `LabPlan` for a required enterprise criterion.
-- The redacted support bundle reports a redaction leak.
+- The optional redacted support bundle reports a redaction leak.
 - The dashboard is blank, unreadable, or missing expected owner, group, findings, diagnostics, or migration discovery views.
 - `dashboard-review.md` is missing or says the dashboard needs review.
 - The run creates more lab data than the configured budget.
 
-If a `-RequireLiveEvidence` run fails after scanning, still check the generated `validation-closeout-checklist.md`, `live-evidence-review.csv`, and `support-bundle-redacted` folder. ShareSurfer attempts to finish those diagnostics before returning the final not-ready error so you can see what to fix before rerunning.
+If a `-RequireLiveEvidence` run fails after scanning, still check the generated `validation-closeout-checklist.md` and `live-evidence-review.csv`. If you selected `-IncludeRedactedSupportBundle`, also check the `support-bundle-redacted` folder. ShareSurfer attempts to finish those diagnostics before returning the final not-ready error so you can see what to fix before rerunning.
 
 ## What To Attach To Issues
 
@@ -188,10 +191,10 @@ For GitHub issue updates, prefer concise evidence:
 - Commit SHA or PR link when a code change was needed.
 - `v1-acceptance-summary.json` status fields.
 - A short summary of `live-evidence-review.csv` blocking rows, if any.
-- The redacted support bundle manifest status.
+- The optional redacted support bundle manifest status, if a bundle was generated.
 - Known follow-up, especially any failed live criteria or partial collection areas.
 
-Do not paste raw paths, raw identities, employee identifiers, manager chains, or raw support-bundle contents into public comments. Use the redacted support bundle when external troubleshooting needs files.
+Do not paste raw paths, raw identities, employee identifiers, manager chains, or raw support-bundle contents into public comments. Use a redacted support bundle when external troubleshooting needs files.
 
 To generate a public-safe Markdown summary from a completed run folder, use:
 
@@ -201,7 +204,7 @@ To generate a public-safe Markdown summary from a completed run folder, use:
   -OutputPath 'C:\ShareSurfer\lab-validation\20260605-120000\issue-summary.md'
 ```
 
-Review `issue-summary.md` before posting. It summarizes acceptance, live evidence, failed criteria, and redacted support bundle status while intentionally omitting raw paths, identities, employee identifiers, manager chains, and evidence detail values.
+Review `issue-summary.md` before posting. It summarizes acceptance, live evidence, failed criteria, and optional redacted support bundle status while intentionally omitting raw paths, identities, employee identifiers, manager chains, and evidence detail values.
 
 The full validation script also writes `issue-summary.md` automatically after final acceptance passes. Use the command above when you need to regenerate the summary for an archived run folder.
 
@@ -214,6 +217,6 @@ Start with these files:
 - `live-evidence-review.csv`
 - `v1-acceptance-summary.json`
 - `v1-acceptance.json`
-- `support-bundle-redacted\support_bundle_manifest.csv`
+- `support-bundle-redacted\support_bundle_manifest.csv`, if an optional support bundle was generated.
 
 Fix one blocker at a time and rerun the same command. Keep each run folder so changes can be compared later.

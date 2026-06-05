@@ -16,6 +16,7 @@ param(
 
     [switch] $AllowMissingBundledAcceptance,
     [switch] $AllowMissingIssueComments,
+    [switch] $AllowMissingSupportBundle,
 
     [switch] $RequireLiveEvidence
 )
@@ -233,7 +234,11 @@ $missingBundleFiles = @($requiredBundleFiles | Where-Object { -not (Test-Path -L
 $bundleManifestPath = Join-Path $SupportBundlePath 'support_bundle_manifest.csv'
 $bundleManifestPassed = $false
 $bundleManifestDetail = ''
-if ($missingBundleFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundleManifestPath)) {
+if ($AllowMissingSupportBundle -and -not (Test-Path -LiteralPath $bundleManifestPath)) {
+    $bundleManifestPassed = $true
+    $bundleManifestDetail = 'Optional lab support bundle was skipped for this acceptance run.'
+}
+elseif ($missingBundleFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundleManifestPath)) {
     $bundleManifest = @(Import-Csv -LiteralPath $bundleManifestPath)
     if ($bundleManifest.Count -gt 0) {
         $validationIsValid = [string]$bundleManifest[0].ValidationIsValid
@@ -249,7 +254,7 @@ if ($missingBundleFiles.Count -eq 0 -and (Test-Path -LiteralPath $bundleManifest
 else {
     $bundleManifestDetail = 'Required bundle files missing.'
 }
-$redactedSupportPassed = ($missingBundleFiles.Count -eq 0 -and $bundleManifestPassed)
+$redactedSupportPassed = (($AllowMissingSupportBundle -and -not (Test-Path -LiteralPath $bundleManifestPath)) -or ($missingBundleFiles.Count -eq 0 -and $bundleManifestPassed))
 [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'RedactedSupportBundle' -Passed $redactedSupportPassed -Detail ('Bundle={0}; Missing={1}; {2}' -f $SupportBundlePath, ($missingBundleFiles -join ', '), $bundleManifestDetail)))
 
 $labRunDiagnosticsPath = Join-Path $SupportBundlePath 'lab_run_diagnostics.json'
@@ -259,7 +264,12 @@ if (Test-Path -LiteralPath $labRunDiagnosticsPath) {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $labRunEvidencePassed -Detail ('LabRunDiagnostics={0}; IncludedFiles={1}' -f $labRunDiagnosticsPath, @($labRunDiagnostics.IncludedFiles).Count)))
 }
 else {
-    [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $false -Detail ('Lab run diagnostics not found in support bundle: {0}' -f $labRunDiagnosticsPath)))
+    if ($AllowMissingSupportBundle) {
+        [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $true -Detail ('Optional lab-run support bundle evidence was skipped: {0}' -f $labRunDiagnosticsPath)))
+    }
+    else {
+        [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'LabRunSupportBundleEvidence' -Passed $false -Detail ('Lab run diagnostics not found in support bundle: {0}' -f $labRunDiagnosticsPath)))
+    }
 }
 
 $requiredIssueCommentFiles = @(
@@ -369,7 +379,7 @@ if ($missingBundledIssueCommentFiles.Count -eq 0 -and (Test-Path -LiteralPath $b
 else {
     $bundledIssueCommentDetail = 'BundledIssueCommentPath={0}; Missing={1}' -f $bundledIssueCommentPath, ($missingBundledIssueCommentFiles -join ', ')
 }
-if ($AllowMissingIssueComments -and $missingBundledIssueCommentFiles.Count -gt 0) {
+if (($AllowMissingSupportBundle -or $AllowMissingIssueComments) -and $missingBundledIssueCommentFiles.Count -gt 0) {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationIssueComments' -Passed $true -Detail ('Bundled issue comments pending for staged acceptance: {0}' -f $bundledIssueCommentDetail)))
 }
 else {
@@ -409,7 +419,7 @@ if (Test-Path -LiteralPath $bundledCloseoutChecklistPath) {
 else {
     $bundledCloseoutChecklistDetail = 'Bundled closeout checklist not found: {0}' -f $bundledCloseoutChecklistPath
 }
-if ($AllowMissingIssueComments -and -not (Test-Path -LiteralPath $bundledCloseoutChecklistPath)) {
+if (($AllowMissingSupportBundle -or $AllowMissingIssueComments) -and -not (Test-Path -LiteralPath $bundledCloseoutChecklistPath)) {
     [void]$checks.Add((New-ShareSurferAcceptanceCheck -Name 'BundledValidationCloseoutChecklist' -Passed $true -Detail ('Bundled closeout checklist pending for staged acceptance: {0}' -f $bundledCloseoutChecklistDetail)))
 }
 else {
