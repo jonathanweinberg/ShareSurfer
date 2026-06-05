@@ -117,7 +117,9 @@ The refreshed proof comments were posted to GitHub and read back against their s
 
 Issue #1 also has the publisher closeout note: <https://github.com/jonathanweinberg/ShareSurfer/issues/1#issuecomment-4634045570>
 
-The GitHub proof issues remain open for human review. Close them only after a reviewer agrees the live run and refreshed proof pack satisfy the issue acceptance criteria.
+Issue #5 also has the human-review closeout note for the follow-up identity requirements: <https://github.com/jonathanweinberg/ShareSurfer/issues/5#issuecomment-4635064013>
+
+Issues #1, #3, #5, and #6 are now closed after human review. The archived issue-comment Markdown files in `20260605-101639/refreshed-evidence/issue-comments/` are preserved as generated proof artifacts from the validation run, so some of those bodies still use pre-closeout review language.
 
 ## Support Bundle Status
 
@@ -141,4 +143,4 @@ Preserve the live lab for any reviewer who wants a fresh host-side rerun or deep
 1. Use the refreshed evidence folder as the current archived-export proof.
 2. Leave `-IncludeRedactedSupportBundle` off unless troubleshooting specifically needs the richer redacted lab-run bundle.
 3. Rerun validation against the existing lab with `-ObsAttribute info`, `-IncludeFiles`, and `-RequireLiveEvidence` only when reviewers need new host-side AD, filesystem, or collector evidence.
-4. Close issues #1, #3, #5, and #6 only after human review accepts the posted proof comments.
+4. Treat the accepted proof issues as closed unless new evidence is requested or an error is found in the archived proof pack.
