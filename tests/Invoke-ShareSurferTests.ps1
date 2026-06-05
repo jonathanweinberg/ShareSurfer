@@ -1478,11 +1478,13 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $acceptanceScript = Join-Path $repoRoot 'scripts/Test-ShareSurferV1Acceptance.ps1'
             $issueSummaryScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueSummary.ps1'
+            $issueCommentScript = Join-Path $repoRoot 'scripts/New-ShareSurferValidationIssueComments.ps1'
             $runRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferAcceptance-' + [guid]::NewGuid().ToString('N'))
             $exportPath = Join-Path $runRoot 'export'
             $reportPath = Join-Path $runRoot 'report.html'
             $bundlePath = Join-Path $runRoot 'support-bundle-redacted'
             $acceptanceSummaryPath = Join-Path $runRoot 'v1-acceptance-summary.json'
+            $issueCommentDirectory = Join-Path $runRoot 'issue-comments'
             New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
 
             Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
@@ -1513,6 +1515,7 @@ $tests = @(
 
             Assert-True (Test-Path -LiteralPath $acceptanceScript) 'Acceptance checker script should exist.'
             Assert-True (Test-Path -LiteralPath $issueSummaryScript) 'Validation issue summary script should exist.'
+            Assert-True (Test-Path -LiteralPath $issueCommentScript) 'Validation issue comment generator script should exist.'
             $pendingBundleResult = & $acceptanceScript -RunRoot $runRoot -RequireLiveEvidence -AllowMissingBundledAcceptance
             Assert-True $pendingBundleResult.IsValid 'First acceptance pass should allow the bundled acceptance summary to be pending.'
             $pendingBundleResult | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $runRoot 'v1-acceptance.json') -Encoding UTF8
@@ -1552,6 +1555,36 @@ $tests = @(
             Assert-True ($issueSummaryText -like '*issue #6*') 'Validation issue summary should point to the remaining dashboard proof issue.'
             Assert-True ($issueSummaryText -notlike '*Synthetic acceptance proof*') 'Validation issue summary should not include raw evidence detail values.'
             Assert-True ($issueSummaryText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Validation issue summary should not include raw lab-run detail values.'
+            $issueCommentManifest = & $issueCommentScript -RunRoot $runRoot -OutputDirectory $issueCommentDirectory -Repository 'jonathanweinberg/ShareSurfer' -PassThru
+            Assert-Equal @($issueCommentManifest).Count 4 'Validation issue comment generator should write one comment body for each remaining proof issue.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $issueCommentDirectory 'issue-comment-manifest.csv')) 'Validation issue comments should include a manifest CSV.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $issueCommentDirectory 'post-commands.txt')) 'Validation issue comments should include body-file post commands.'
+            foreach ($issueNumber in @(1, 3, 5, 6)) {
+                Assert-True (@($issueCommentManifest | Where-Object { [int]$_.IssueNumber -eq $issueNumber }).Count -eq 1) ('Validation issue comments should include issue #{0}.' -f $issueNumber)
+            }
+            $issueOneCommentPath = Join-Path $issueCommentDirectory 'issue-1-lab-fixture-live-proof.md'
+            $issueThreeCommentPath = Join-Path $issueCommentDirectory 'issue-3-scanner-live-proof.md'
+            $issueFiveCommentPath = Join-Path $issueCommentDirectory 'issue-5-identity-group-live-proof.md'
+            $issueSixCommentPath = Join-Path $issueCommentDirectory 'issue-6-dashboard-live-proof.md'
+            foreach ($commentPath in @($issueOneCommentPath, $issueThreeCommentPath, $issueFiveCommentPath, $issueSixCommentPath)) {
+                Assert-True (Test-Path -LiteralPath $commentPath) ('Validation issue comment file should exist: {0}' -f $commentPath)
+                $commentText = Get-Content -LiteralPath $commentPath -Raw
+                Assert-True ($commentText -like '*ShareSurfer live validation update for issue*') 'Validation issue comment should include a recognizable title.'
+                Assert-True ($commentText -like '*Safe Sharing Note*') 'Validation issue comment should include safe-sharing wording.'
+                Assert-True ($commentText -notlike '*Synthetic acceptance proof*') 'Validation issue comment should not include raw evidence detail values.'
+                Assert-True ($commentText -notlike '*RunRoot=C:\ShareSurfer\acceptance*') 'Validation issue comment should not include raw lab-run detail values.'
+            }
+            $issueOneComment = Get-Content -LiteralPath $issueOneCommentPath -Raw
+            $issueThreeComment = Get-Content -LiteralPath $issueThreeCommentPath -Raw
+            $issueFiveComment = Get-Content -LiteralPath $issueFiveCommentPath -Raw
+            $issueSixComment = Get-Content -LiteralPath $issueSixCommentPath -Raw
+            Assert-True ($issueOneComment -like '*EnterpriseUserPopulation*') 'Issue #1 comment should summarize lab fixture population evidence.'
+            Assert-True ($issueThreeComment -like '*EnterpriseAclEntries*') 'Issue #3 comment should summarize scanner ACL evidence.'
+            Assert-True ($issueFiveComment -like '*EnterpriseGroupExpansion*') 'Issue #5 comment should summarize group expansion evidence.'
+            Assert-True ($issueSixComment -like '*OwnerReviewPackets*') 'Issue #6 comment should summarize dashboard and owner review evidence.'
+            $postCommands = Get-Content -LiteralPath (Join-Path $issueCommentDirectory 'post-commands.txt') -Raw
+            Assert-True ($postCommands -like '*gh issue comment 1 --repo jonathanweinberg/ShareSurfer --body-file*') 'Post commands should use the body-file issue comment pattern.'
+            Assert-True ($postCommands -like '*issue-6-dashboard-live-proof.md*') 'Post commands should include the dashboard proof issue body file.'
             New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'acceptance-test' -IncludeReport -RunRoot $runRoot | Out-Null
             $bundleFilesAfterIssueSummary = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'support_bundle_files.csv'))
             Assert-True ($bundleFilesAfterIssueSummary.FileName -contains 'issue_summary.md') 'Final lab support bundle should include the public-safe issue summary.'
@@ -1662,6 +1695,9 @@ $tests = @(
             Assert-True ($labValidationScript -like '*New-ShareSurferValidationIssueSummary.ps1*') 'Lab validation should call the validation issue summary generator automatically.'
             Assert-True ($labValidationScript -like '*IssueSummaryPath*') 'Lab validation output should include the issue summary artifact path.'
             Assert-True ($labValidationScript -like '*IssueSummary*') 'Lab validation should record issue summary generation events.'
+            Assert-True ($labValidationScript -like '*New-ShareSurferValidationIssueComments.ps1*') 'Lab validation should call the validation issue comment generator automatically.'
+            Assert-True ($labValidationScript -like '*IssueCommentDirectory*') 'Lab validation output should include the issue comment artifact directory.'
+            Assert-True ($labValidationScript -like '*IssueComments*') 'Lab validation should record issue comment generation events.'
             Assert-True ($labValidationScript -like '*refreshing final redacted support bundle with issue summary*') 'Lab validation should refresh the final support bundle after the issue summary exists.'
             Assert-True ($labValidationScript -like '*owner-mapping.csv*') 'Lab validation should write a deterministic owner mapping CSV.'
             Assert-True ($labValidationScript -like '*-OwnerMappingPath $ownerMappingPath*') 'Lab validation should pass owner mappings into the scan.'

@@ -105,6 +105,12 @@ Keep these raw files inside the trusted lab environment:
 - `v1-acceptance.json`
 - `v1-acceptance-summary.json`
 - `issue-summary.md`
+- `issue-comments\issue-1-lab-fixture-live-proof.md`
+- `issue-comments\issue-3-scanner-live-proof.md`
+- `issue-comments\issue-5-identity-group-live-proof.md`
+- `issue-comments\issue-6-dashboard-live-proof.md`
+- `issue-comments\issue-comment-manifest.csv`
+- `issue-comments\post-commands.txt`
 - `report.html`
 - `export\*.csv`
 - `export\scan_events.jsonl`
@@ -116,6 +122,8 @@ Use these files first:
 - `v1-acceptance-summary.json`: quick pass/fail summary.
 - `v1-acceptance.json`: detailed acceptance evidence.
 - `issue-summary.md`: public-safe Markdown starting point for GitHub issue updates.
+- `issue-comments\*.md`: public-safe targeted body-file comments for the remaining proof issues.
+- `issue-comments\post-commands.txt`: exact `gh issue comment --body-file` commands for posting those targeted comments after review.
 - `report.html`: offline business review dashboard.
 
 Use the `support-bundle-redacted` folder for bug reports or external troubleshooting. When the full validation script completes, that redacted folder also includes `issue_summary.md` as the shareable copy of the public-safe issue summary. Do not attach raw run folders outside the trusted lab environment.
