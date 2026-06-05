@@ -233,6 +233,62 @@ function ConvertTo-ShareSurferLabValidationAdFilterValue {
     $Value -replace "'", "''"
 }
 
+function Test-ShareSurferLabValidationTargetVolumeFreeSpace {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Plan,
+
+        [Parameter(Mandatory = $true)]
+        [string] $LabRoot
+    )
+
+    $requiredBytes = [int64]0
+    if ($Plan.PSObject.Properties['MaxLabBytes']) {
+        $requiredBytes = [int64]$Plan.MaxLabBytes
+    }
+    if ($requiredBytes -le 0 -and $Plan.PSObject.Properties['EstimatedLabBytes']) {
+        $requiredBytes = [int64]$Plan.EstimatedLabBytes
+    }
+
+    try {
+        $root = [System.IO.Path]::GetPathRoot($LabRoot)
+        if ([string]::IsNullOrWhiteSpace($root)) {
+            return [pscustomobject]@{
+                Passed = $false
+                FreeBytes = $null
+                RequiredBytes = $requiredBytes
+                Evidence = 'Unable to resolve a filesystem root for LabRoot={0}.' -f $LabRoot
+            }
+        }
+
+        $drive = New-Object System.IO.DriveInfo($root)
+        if (-not $drive.IsReady) {
+            return [pscustomobject]@{
+                Passed = $false
+                FreeBytes = $null
+                RequiredBytes = $requiredBytes
+                Evidence = 'Target drive is not ready: {0}' -f $root
+            }
+        }
+
+        $freeBytes = [int64]$drive.AvailableFreeSpace
+        [pscustomobject]@{
+            Passed = ($requiredBytes -gt 0 -and $freeBytes -ge $requiredBytes)
+            FreeBytes = $freeBytes
+            RequiredBytes = $requiredBytes
+            Evidence = 'LabRoot={0}; Volume={1}; FreeBytes={2}; RequiredBytes={3}' -f $LabRoot, $drive.Name, $freeBytes, $requiredBytes
+        }
+    }
+    catch {
+        [pscustomobject]@{
+            Passed = $false
+            FreeBytes = $null
+            RequiredBytes = $requiredBytes
+            Evidence = 'Unable to measure target volume free space for LabRoot={0}: {1}' -f $LabRoot, $_.Exception.Message
+        }
+    }
+}
+
 function New-ShareSurferLabValidationPreflight {
     param(
         [Parameter(Mandatory = $true)]
@@ -303,6 +359,9 @@ function New-ShareSurferLabValidationPreflight {
     }
     $diskPlanPassed = ($maxLabBytes -gt 0 -and $estimatedLabBytes -le $maxLabBytes)
     [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'PlanDiskBudget' -Required $true -Passed $diskPlanPassed -Evidence ('EstimatedBytes={0}; MaxLabBytes={1}' -f $estimatedLabBytes, $maxLabBytes) -NextAction 'Reduce enterprise shares/files per share or raise MaxLabBytes before creating the lab.'))
+
+    $targetVolumeResult = Test-ShareSurferLabValidationTargetVolumeFreeSpace -Plan $Plan -LabRoot $LabRoot
+    [void]$rows.Add((New-ShareSurferLabValidationPreflightRow -Name 'TargetVolumeFreeSpace' -Required ([bool]$CreateLab) -Passed ([bool]$targetVolumeResult.Passed) -Evidence $targetVolumeResult.Evidence -NextAction 'Choose a lab root on a volume with enough free space for the configured MaxLabBytes, or lower the lab data budget before creating the lab.'))
 
     $failedPlanCriteria = @($Plan.ValidationCriteria | Where-Object {
         $actualPlanValue = 0

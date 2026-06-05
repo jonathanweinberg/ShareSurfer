@@ -533,12 +533,21 @@ $tests = @(
             Assert-True ($preflightRows.Name -contains 'ActiveDirectoryModule') 'Preflight should report Active Directory module readiness.'
             Assert-True ($preflightRows.Name -contains 'SmbShareCommands') 'Preflight should report SMBShare command readiness.'
             Assert-True ($preflightRows.Name -contains 'PlanDiskBudget') 'Preflight should report plan disk budget readiness.'
+            Assert-True ($preflightRows.Name -contains 'TargetVolumeFreeSpace') 'Preflight should report target volume free-space readiness.'
             Assert-True ($preflightRows.Name -contains 'WindowsPathComponents') 'Preflight should report Windows path component safety.'
             Assert-True ($preflightRows.Name -contains 'EnterpriseIncludeFiles') 'Preflight should report enterprise IncludeFiles readiness.'
             Assert-True ($preflightRows.Name -contains 'AdObjectNameCollisions') 'Preflight should report AD object name collision readiness.'
             Assert-True ($preflightRows.Name -contains 'SmbSharePathCollisions') 'Preflight should report SMB share path collision readiness.'
             $includeFilesPreflight = @($preflightRows | Where-Object { $_.Name -eq 'EnterpriseIncludeFiles' })[0]
             Assert-True ([bool]$includeFilesPreflight.Passed) 'Enterprise IncludeFiles preflight should pass when IncludeFiles is set.'
+            $targetVolumePreflight = @($preflightRows | Where-Object { $_.Name -eq 'TargetVolumeFreeSpace' })[0]
+            Assert-True ([string]$targetVolumePreflight.Evidence -like '*FreeBytes=*') 'Target volume preflight should include available byte evidence when the root is measurable.'
+            Assert-True (-not [bool]$targetVolumePreflight.Required) 'Target volume preflight should be advisory until live lab creation is requested.'
+
+            $tinyVolumePlan = [pscustomobject]@{ MaxLabBytes = [int64]1; EstimatedLabBytes = [int64]1 }
+            $targetVolumeResult = Test-ShareSurferLabValidationTargetVolumeFreeSpace -Plan $tinyVolumePlan -LabRoot $labRoot
+            Assert-True ([bool]$targetVolumeResult.Passed) 'Target volume helper should pass when available free space is greater than the configured byte budget.'
+            Assert-True ([string]$targetVolumeResult.Evidence -like '*RequiredBytes=1*') 'Target volume helper should record the configured byte requirement.'
 
             try {
                 function global:Get-SmbShare {
