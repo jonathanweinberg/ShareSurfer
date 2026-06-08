@@ -8,13 +8,13 @@ This page gives operators and business reviewers a visual map of the V1 workflow
 
 ## Locked-Down Collection
 
-![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.svg)
 
 Use this visual when explaining collection from a nonpermissive Windows environment. The collector stays read-only, writes CSV/report evidence, and keeps the raw dataset inside the trusted boundary until transfer is approved.
 
 ## Dataset Transfer and Dashboard Review
 
-![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.png)
+![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.svg)
 
 Use this visual when explaining the two-host workflow: collect in the restricted network, move the validated dataset by an approved process, and open the report or packaged standalone dashboard on a more permissive review workstation.
 

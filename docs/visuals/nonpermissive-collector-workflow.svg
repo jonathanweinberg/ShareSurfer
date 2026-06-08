@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">ShareSurfer nonpermissive collector workflow</title>
+  <desc id="desc">A labeled workflow showing read-only collection from file servers and Active Directory inside a restricted network, validation of the CSV export set, and approved package transfer.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .zone { fill: #eef6ff; stroke: #2563eb; stroke-width: 3; stroke-dasharray: 10 8; }
+      .zone2 { fill: #f0fdfa; stroke: #0f766e; stroke-width: 3; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .card-blue { fill: #eff6ff; stroke: #60a5fa; stroke-width: 2; }
+      .card-green { fill: #ecfdf5; stroke: #34d399; stroke-width: 2; }
+      .card-amber { fill: #fffbeb; stroke: #f59e0b; stroke-width: 2; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #334155; }
+      .h { font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .t { font-family: Arial, Helvetica, sans-serif; font-size: 16px; fill: #334155; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #475569; }
+      .tiny { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #64748b; }
+      .step { font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; fill: #ffffff; }
+      .badge { fill: #1d4ed8; }
+      .badge-green { fill: #0f766e; }
+      .badge-amber { fill: #b45309; }
+      .arrow { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .arrow-green { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrowGreen); }
+      .arrow-amber { stroke: #b45309; stroke-width: 3; fill: none; marker-end: url(#arrowAmber); }
+      .thin { stroke: #94a3b8; stroke-width: 1.5; fill: none; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f766e"/>
+    </marker>
+    <marker id="arrowAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1440" height="900"/>
+  <text x="56" y="58" class="title">Nonpermissive Collection: Read-Only Evidence Inside the Restricted Network</text>
+  <text x="56" y="88" class="subtitle">Collector stays simple: PowerShell 5.1, ShareSurfer module, read rights, no npm, no browser tooling, no internet required.</text>
+
+  <rect x="42" y="118" width="1180" height="720" rx="24" class="zone"/>
+  <text x="70" y="152" class="h">Restricted file-share environment</text>
+  <text x="70" y="176" class="small">Raw exports remain here until transfer is approved.</text>
+
+  <rect x="72" y="220" width="270" height="250" rx="18" class="card-blue"/>
+  <circle cx="106" cy="254" r="18" class="badge"/>
+  <text x="101" y="260" class="step">1</text>
+  <text x="132" y="260" class="h">Collector host</text>
+  <text x="96" y="298" class="t">Windows PowerShell 5.1</text>
+  <text x="96" y="324" class="t">ShareSurfer module</text>
+  <text x="96" y="350" class="t">Read access to scope</text>
+  <text x="96" y="376" class="t">Directory read access</text>
+  <text x="96" y="402" class="t">No data writes to targets</text>
+  <line x1="96" y1="424" x2="318" y2="424" class="thin"/>
+  <text x="96" y="448" class="small">Run Invoke-ShareSurferScan</text>
+
+  <rect x="72" y="500" width="270" height="220" rx="18" class="card"/>
+  <circle cx="106" cy="534" r="18" class="badge"/>
+  <text x="101" y="540" class="step">2</text>
+  <text x="132" y="540" class="h">Runtime inputs</text>
+  <text x="96" y="578" class="t">Targets: UNC or SMB share</text>
+  <text x="96" y="604" class="t">Owner mapping CSV</text>
+  <text x="96" y="630" class="t">Discounted principals CSV</text>
+  <text x="96" y="656" class="t">OBS attribute at runtime</text>
+  <text x="96" y="682" class="t">Depth and path thresholds</text>
+
+  <rect x="430" y="188" width="300" height="250" rx="18" class="card"/>
+  <circle cx="464" cy="222" r="18" class="badge"/>
+  <text x="459" y="228" class="step">3</text>
+  <text x="490" y="228" class="h">File servers and SMB shares</text>
+  <text x="454" y="266" class="t">Share permissions</text>
+  <text x="454" y="292" class="t">Folder and file ACLs</text>
+  <text x="454" y="318" class="t">Ownership</text>
+  <text x="454" y="344" class="t">Inheritance state</text>
+  <text x="454" y="370" class="t">Long paths and deep ACEs</text>
+  <text x="454" y="396" class="t">Collection gaps recorded</text>
+
+  <rect x="430" y="488" width="300" height="250" rx="18" class="card"/>
+  <circle cx="464" cy="522" r="18" class="badge"/>
+  <text x="459" y="528" class="step">4</text>
+  <text x="490" y="528" class="h">Active Directory lookup</text>
+  <text x="454" y="566" class="t">Users and groups</text>
+  <text x="454" y="592" class="t">Recursive group edges</text>
+  <text x="454" y="618" class="t">EmployeeId / EmployeeNumber</text>
+  <text x="454" y="644" class="t">Manager levels 1, 2, and 3</text>
+  <text x="454" y="670" class="t">OBS path from selected attribute</text>
+  <text x="454" y="696" class="t">Potential service-account flags</text>
+
+  <rect x="805" y="224" width="345" height="310" rx="18" class="card-green"/>
+  <circle cx="839" cy="258" r="18" class="badge-green"/>
+  <text x="834" y="264" class="step">5</text>
+  <text x="865" y="264" class="h">Validated export dataset</text>
+  <text x="829" y="302" class="t">CSV export set</text>
+  <text x="849" y="326" class="small">shares, items, share_permissions</text>
+  <text x="849" y="348" class="small">acl_entries, identities, group_edges</text>
+  <text x="849" y="370" class="small">owner packets, related data areas</text>
+  <text x="829" y="404" class="t">report.html</text>
+  <text x="829" y="430" class="t">scan_manifest.csv</text>
+  <text x="829" y="456" class="t">scan_events.jsonl</text>
+  <line x1="829" y1="476" x2="1122" y2="476" class="thin"/>
+  <text x="829" y="502" class="small">Gate: Test-ShareSurferExport</text>
+
+  <rect x="805" y="585" width="345" height="130" rx="18" class="card-amber"/>
+  <circle cx="839" cy="619" r="18" class="badge-amber"/>
+  <text x="834" y="625" class="step">6</text>
+  <text x="865" y="625" class="h">Transfer package</text>
+  <text x="829" y="663" class="t">Compress-Archive zip</text>
+  <text x="829" y="689" class="t">SHA256 hash with Get-FileHash</text>
+
+  <rect x="1248" y="250" width="170" height="360" rx="18" class="zone2"/>
+  <text x="1272" y="292" class="h">Approved</text>
+  <text x="1272" y="318" class="h">transfer</text>
+  <text x="1272" y="344" class="h">checkpoint</text>
+  <line x1="1272" y1="374" x2="1390" y2="374" class="thin"/>
+  <text x="1272" y="408" class="t">Policy review</text>
+  <text x="1272" y="434" class="t">Integrity hash</text>
+  <text x="1272" y="460" class="t">Raw data</text>
+  <text x="1272" y="486" class="t">stays trusted</text>
+  <text x="1272" y="532" class="small">If external:</text>
+  <text x="1272" y="556" class="small">use redacted</text>
+  <text x="1272" y="578" class="small">support bundle</text>
+
+  <path d="M342 330 C380 300 390 285 430 282" class="arrow"/>
+  <path d="M342 610 C382 610 392 610 430 610" class="arrow"/>
+  <path d="M730 315 C770 330 782 348 805 360" class="arrow-green"/>
+  <path d="M730 625 C770 610 784 585 805 520" class="arrow-green"/>
+  <path d="M978 534 L978 585" class="arrow-amber"/>
+  <path d="M1150 650 C1204 650 1216 430 1248 430" class="arrow-amber"/>
+
+  <rect x="72" y="758" width="1080" height="48" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="94" y="789" class="t">Core rule: ShareSurfer collects evidence only. It does not modify permissions, file contents, owners, groups, or AD objects during a scan.</text>
+</svg>

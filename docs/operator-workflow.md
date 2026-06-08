@@ -229,7 +229,7 @@ New-ShareSurferSupportBundle `
 
 Use this workflow when the collector has the privileged network position, but not the tooling or policy freedom needed for richer dashboard review.
 
-![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.svg)
 
 On the collector host:
 
@@ -256,7 +256,7 @@ Get-FileHash -LiteralPath $zipPath -Algorithm SHA256 |
 
 Move the zip and hash through an approved transfer process. Keep raw exports inside the trusted boundary unless the organization has approved the transfer. Raw exports can include server names, share names, full paths, identities, employee identifiers, manager chains, and OBS values.
 
-![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.png)
+![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.svg)
 
 On the dashboard host:
 

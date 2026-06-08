@@ -32,7 +32,7 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 
 The most common production pattern is two-host review:
 
-![Dataset transfer to dashboard host](docs/visuals/dataset-transfer-dashboard-workflow.png)
+![Dataset transfer to dashboard host](docs/visuals/dataset-transfer-dashboard-workflow.svg)
 
 1. Run the collector inside the restricted file-share environment.
 2. Validate the raw CSV export set.
