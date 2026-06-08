@@ -221,6 +221,61 @@ New-ShareSurferSupportBundle `
   -RedactionMode StableToken
 ```
 
+## Nonpermissive Collector to Dashboard Host
+
+Use this workflow when the collector has the privileged network position, but not the tooling or policy freedom needed for richer dashboard review.
+
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+
+On the collector host:
+
+1. Import the ShareSurfer module.
+2. Run `Invoke-ShareSurferScan` with the correct target, owner mapping, discounted principal list, thresholds, and `-ObsAttribute`.
+3. Run `Test-ShareSurferExport`.
+4. Run `ConvertTo-ShareSurferReport` so the dataset always includes the baseline offline report.
+5. Package the export folder and hash the package.
+
+```powershell
+$scanId = 'scan-2026-06-04-finance'
+$exportPath = "C:\ShareSurfer\exports\$scanId"
+$zipPath = "C:\ShareSurfer\packages\$scanId.zip"
+New-Item -ItemType Directory -Path (Split-Path -Parent $zipPath) -Force | Out-Null
+
+if (Test-Path -LiteralPath $zipPath) {
+  Remove-Item -LiteralPath $zipPath -Force
+}
+
+Compress-Archive -LiteralPath (Join-Path $exportPath '*') -DestinationPath $zipPath
+Get-FileHash -LiteralPath $zipPath -Algorithm SHA256 |
+  Export-Csv -LiteralPath "$zipPath.sha256.csv" -NoTypeInformation -Encoding UTF8
+```
+
+Move the zip and hash through an approved transfer process. Keep raw exports inside the trusted boundary unless the organization has approved the transfer. Raw exports can include server names, share names, full paths, identities, employee identifiers, manager chains, and OBS values.
+
+![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.png)
+
+On the dashboard host:
+
+```powershell
+$reviewRoot = 'D:\ShareSurfer\reviews\scan-2026-06-04-finance'
+New-Item -ItemType Directory -Path $reviewRoot -Force
+Expand-Archive -LiteralPath 'D:\Intake\scan-2026-06-04-finance.zip' -DestinationPath $reviewRoot
+Start-Process (Join-Path $reviewRoot 'report.html')
+```
+
+If the standalone dashboard assets have been built on the dashboard host, package the transferred export for a richer static review experience:
+
+```powershell
+pwsh -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
+  -ExportPath $reviewRoot `
+  -OutputPath "$reviewRoot\standalone-dashboard" `
+  -Force
+```
+
+The packaged standalone dashboard opens from `standalone-dashboard\index.html` and does not need npm, Vite, a server, internet access, or browser `fetch` permissions after packaging.
+
+See [Nonpermissive Collector to Dashboard Host Workflow](nonpermissive-collection-dashboard-workflow.md) for the first-time-operator version of this procedure.
+
 ## Operator Checklist
 
 1. Confirm the scan scope, account, OBS attribute, and output path.

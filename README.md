@@ -18,6 +18,29 @@ V1 is PowerShell-first and designed for airgapped or tightly controlled environm
 - `New-ShareSurferSupportBundle`
 - `Test-ShareSurferExport`
 
+## Basic Use Cases
+
+ShareSurfer is useful when access data is too complex for business owners to review directly from Windows tools.
+
+| Use case | Start here | Output to review |
+| --- | --- | --- |
+| First business-owner review | Scan one known share with owner mapping | `owner_review_packets.csv`, `owner_risk_pivots.csv`, and `report.html` |
+| Migration discovery | Scan related shares with file/folder evidence and owner mappings | `related_data_areas.csv`, long-path findings, inheritance breaks, and share-vs-NTFS conflicts |
+| Nonpermissive collector workflow | Collect on a locked-down Windows host, then transfer the validated dataset to a dashboard host | Validated CSV export folder, `report.html`, optional standalone dashboard folder |
+| Broad admin or HelpDesk access cleanup | Provide a discounted principals CSV | Visible access evidence that does not inflate Migration Discovery relatedness |
+| Support or bug report | Create a redacted support bundle after export validation | Stable-token CSVs, manifests, and optional redacted report |
+
+The most common production pattern is two-host review:
+
+![Dataset transfer to dashboard host](docs/visuals/dataset-transfer-dashboard-workflow.png)
+
+1. Run the collector inside the restricted file-share environment.
+2. Validate the raw CSV export set.
+3. Package the export folder and move it by an approved transfer process.
+4. Open `report.html` or package the standalone dashboard on a more permissive review workstation.
+
+See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md) for a full walkthrough.
+
 ## Quick Start
 
 For a first-time walkthrough, start with the [First-run guide](docs/first-run-guide.md). It explains prerequisites, target selection, collector commands, CSV outputs, reports, and redacted support bundles for operators who are new to ShareSurfer or new to Windows file-share auditing.
@@ -32,6 +55,41 @@ Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath 'C:\ShareSurfer\support\scan-001-redacted'
 ```
+
+To keep broad operational access visible without letting it drive Migration Discovery, pass a discounted principal CSV:
+
+```powershell
+Invoke-ShareSurferScan -TargetPath '\\files01\Finance' -OutputPath $exportPath -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv'
+```
+
+The CSV must include `Identity` and can include `Reason` and `Scope`. Discounted means visible access evidence that is not used for migration relatedness; it does not mean ignored, safe, approved, or remediated.
+
+## Standalone Dashboard Prototype
+
+ShareSurfer also includes a React/Vite standalone dashboard prototype for richer local review. It is build-time tooling only; packaged dashboard output is static, offline, and opens from `index.html` on Windows or macOS without npm, Vite, a server, or internet access.
+
+Run the dashboard during development:
+
+```powershell
+npm --prefix interface/standalone-dashboard run dev
+```
+
+Build the static dashboard assets:
+
+```powershell
+npm --prefix interface/standalone-dashboard run build
+```
+
+Package a validated export folder as a standalone dashboard:
+
+```powershell
+pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+```
+
+Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The package uses relative assets and `sharesurfer-data.js`, so it can be copied, zipped, or opened directly from disk.
 
 ## Lab Fixture
 
@@ -61,6 +119,8 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [First-run guide](docs/first-run-guide.md)
 - [Management overview](docs/management-overview.md)
 - [Offline management overview slide](docs/management-overview.html)
+- [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)
+- [Standalone dashboard interface spec](docs/standalone-dashboard-interface-spec.md)
 - [V1 phase-1 acceptance audit](docs/v1-phase1-acceptance-audit.md)
 - [Export schema](docs/export-schema.md)
 - [Azure Files path policy](docs/azure-files-path-policy.md)

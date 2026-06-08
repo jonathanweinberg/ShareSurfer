@@ -101,9 +101,24 @@ Use a new output folder for every scan. A dated folder keeps results easy to com
 ```powershell
 $exportPath = 'C:\ShareSurfer\exports\scan-2026-06-04-finance'
 New-Item -ItemType Directory -Path $exportPath -Force
+New-Item -ItemType Directory -Path 'C:\ShareSurfer\inputs' -Force
 ```
 
 Keep raw exports internal. They can contain real paths, server names, user names, group names, employee IDs, manager names, and OBS values.
+
+If broad operational groups have access almost everywhere, create a discounted principals CSV before the scan:
+
+```powershell
+@(
+  [pscustomobject]@{
+    Identity = 'CONTOSO\HelpDeskOps'
+    Reason = 'Broad HelpDesk access'
+    Scope = 'Global'
+  }
+) | Export-Csv -LiteralPath 'C:\ShareSurfer\inputs\discounted-principals.csv' -NoTypeInformation -Encoding UTF8
+```
+
+Use this for admin, HelpDesk, scanner, backup, or platform access that should stay visible in the evidence but should not make unrelated areas look related in Migration Discovery.
 
 ## Step 4: Run the Collector
 
@@ -116,6 +131,7 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```
@@ -131,6 +147,7 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```
@@ -235,6 +252,59 @@ Use the dashboard to review:
 
 Path note: Microsoft documents Azure Files limits of 255-character path components and 2,048-character full paths. ShareSurfer's default warning for full paths over 256 characters is an operational migration policy warning, not a claim that Azure Files cannot store the path.
 
+## Optional: Move the Dataset to a Dashboard Host
+
+Use this when the collector host is locked down but reviewers can use a more permissive workstation for dashboard review.
+
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+
+The collector host only needs Windows PowerShell 5.1, ShareSurfer, and read access to the targets. It does not need npm, Vite, Playwright, internet access, or a local web server.
+
+Package the validated export folder:
+
+```powershell
+$scanId = 'scan-2026-06-04-finance'
+$packageRoot = 'C:\ShareSurfer\packages'
+New-Item -ItemType Directory -Path $packageRoot -Force
+
+$zipPath = Join-Path $packageRoot "$scanId.zip"
+Compress-Archive -LiteralPath (Join-Path $exportPath '*') -DestinationPath $zipPath -Force
+Get-FileHash -LiteralPath $zipPath -Algorithm SHA256 |
+  Export-Csv -LiteralPath "$zipPath.sha256.csv" -NoTypeInformation -Encoding UTF8
+```
+
+Move the zip and hash by your approved transfer process. On the dashboard host, unpack the dataset and open the report:
+
+```powershell
+$reviewRoot = 'D:\ShareSurfer\reviews\scan-2026-06-04-finance'
+New-Item -ItemType Directory -Path $reviewRoot -Force
+Expand-Archive -LiteralPath 'D:\Intake\scan-2026-06-04-finance.zip' -DestinationPath $reviewRoot
+Start-Process (Join-Path $reviewRoot 'report.html')
+```
+
+For the longer version, see the [nonpermissive collector to dashboard host workflow](nonpermissive-collection-dashboard-workflow.md).
+
+## Optional: Generate the Standalone Dashboard
+
+The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. Maintainers can also build and package the React/Vite standalone dashboard when they want the richer novice-admin and business-owner interface.
+
+Build the dashboard assets from Windows PowerShell, PowerShell 7, Terminal, or any shell with Node and npm:
+
+```powershell
+npm --prefix interface/standalone-dashboard run build
+```
+
+Package the current export into a standalone static folder:
+
+```powershell
+pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+```
+
+Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The folder is self-contained: it uses relative bundled assets, `sharesurfer-data.js`, and `dashboard-manifest.json`; it does not need npm, Vite, a server, internet access, or browser `fetch` permissions.
+
 ## Step 8: Create a Redacted Support Bundle
 
 Only create a support bundle after the raw export validates.
@@ -299,6 +369,7 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 
