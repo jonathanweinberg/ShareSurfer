@@ -1099,6 +1099,7 @@ function ConvertTo-ShareSurferReport {
     let activeDashboardView = 'overview';
     let selectedMigrationAreaKey = '';
     let selectedMigrationEvidenceRow = null;
+    const migrationEvidenceDrawerDisplayLimit = 75;
     function getDashboardFilterState() {
       return {
         query: document.getElementById('filter').value.toLowerCase(),
@@ -1981,9 +1982,6 @@ function ConvertTo-ShareSurferReport {
         RawCsvRow: JSON.stringify(row)
       };
     }
-    function getRowsForSelectedCluster(sourceRows, cluster, shareIds, itemIds) {
-      return asRows(sourceRows).filter(row => rowMatchesSelectedCluster(row, cluster, shareIds, itemIds));
-    }
     function getClusterDiscountedIdentityKeys(cluster) {
       return new Set(splitSignals(cluster.DiscountedPrincipals || '').map(normalizeIdentity).filter(Boolean));
     }
@@ -1993,40 +1991,77 @@ function ConvertTo-ShareSurferReport {
       if (discountedKeys.size === 0) { return false; }
       return discountedKeys.has(normalizeIdentity(row.Identity || row.Group || ''));
     }
-    function buildSelectedClusterEvidenceRows(cluster, evidenceType) {
-      if (!cluster) { return []; }
+    function newClusterEvidenceAccumulator(displayLimit) {
+      const parsedLimit = Number(displayLimit);
+      return {
+        Rows: [],
+        TotalMatchedRows: 0,
+        DisplayLimit: Number.isFinite(parsedLimit) && parsedLimit >= 0 ? parsedLimit : migrationEvidenceDrawerDisplayLimit
+      };
+    }
+    function appendClusterEvidenceSource(accumulator, sourceRows, cluster, shareIds, itemIds, evidenceType, sourceLabel, rowFilter) {
+      asRows(sourceRows).forEach(row => {
+        if (!rowMatchesSelectedCluster(row, cluster, shareIds, itemIds)) { return; }
+        if (typeof rowFilter === 'function' && !rowFilter(row)) { return; }
+        accumulator.TotalMatchedRows += 1;
+        if (accumulator.Rows.length < accumulator.DisplayLimit) {
+          accumulator.Rows.push(newClusterEvidenceRow(evidenceType, sourceLabel, row));
+        }
+      });
+      return accumulator;
+    }
+    function mergeClusterEvidenceResult(target, source) {
+      target.TotalMatchedRows += Number(source.TotalMatchedRows || 0);
+      asRows(source.Rows).forEach(row => {
+        if (target.Rows.length < target.DisplayLimit) {
+          target.Rows.push(row);
+        }
+      });
+      return target;
+    }
+    function buildSelectedClusterEvidenceRows(cluster, evidenceType, displayLimit) {
+      if (!cluster) { return newClusterEvidenceAccumulator(displayLimit); }
       const shareIds = getClusterMatchedShareIds(cluster);
       const itemIds = getClusterMatchedItemIds(cluster);
       const selectedType = evidenceType || 'relationship';
+      const accumulator = newClusterEvidenceAccumulator(displayLimit);
       if (selectedType === 'raw') {
-        return ['relationship', 'access', 'blockers', 'discounted'].reduce((allRows, typeName) => allRows.concat(buildSelectedClusterEvidenceRows(cluster, typeName)), []);
+        return ['relationship', 'access', 'blockers', 'discounted'].reduce((target, typeName) => {
+          const remainingDisplayRows = Math.max(0, target.DisplayLimit - target.Rows.length);
+          return mergeClusterEvidenceResult(target, buildSelectedClusterEvidenceRows(cluster, typeName, remainingDisplayRows));
+        }, accumulator);
       }
       if (selectedType === 'relationship') {
-        return []
-          .concat(getRowsForSelectedCluster(data.related_data_areas, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Relationship proof', 'related_data_areas.csv', row)))
-          .concat(getRowsForSelectedCluster(data.owner_review_packets, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Relationship proof', 'owner_review_packets.csv', row)))
-          .concat(getRowsForSelectedCluster(asRows(data.owner_risk_pivots).length > 0 ? data.owner_risk_pivots : owner_pivots, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Relationship proof', 'owner_risk_pivots.csv', row)));
+        appendClusterEvidenceSource(accumulator, data.related_data_areas, cluster, shareIds, itemIds, 'Relationship proof', 'related_data_areas.csv');
+        appendClusterEvidenceSource(accumulator, data.owner_review_packets, cluster, shareIds, itemIds, 'Relationship proof', 'owner_review_packets.csv');
+        appendClusterEvidenceSource(accumulator, asRows(data.owner_risk_pivots).length > 0 ? data.owner_risk_pivots : owner_pivots, cluster, shareIds, itemIds, 'Relationship proof', 'owner_risk_pivots.csv');
+        return accumulator;
       }
       if (selectedType === 'access') {
-        return []
-          .concat(getRowsForSelectedCluster(data.permissioned_groups, cluster, shareIds, itemIds).filter(row => !rowIsDiscountedForCluster(row, cluster)).map(row => newClusterEvidenceRow('Access proof', 'permissioned_groups.csv', row)))
-          .concat(getRowsForSelectedCluster(data.share_permissions, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Access proof', 'share_permissions.csv', row)))
-          .concat(getRowsForSelectedCluster(data.acl_entries, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Access proof', 'acl_entries.csv', row)));
+        appendClusterEvidenceSource(accumulator, data.permissioned_groups, cluster, shareIds, itemIds, 'Access proof', 'permissioned_groups.csv', row => !rowIsDiscountedForCluster(row, cluster));
+        appendClusterEvidenceSource(accumulator, data.share_permissions, cluster, shareIds, itemIds, 'Access proof', 'share_permissions.csv');
+        appendClusterEvidenceSource(accumulator, data.acl_entries, cluster, shareIds, itemIds, 'Access proof', 'acl_entries.csv');
+        return accumulator;
       }
       if (selectedType === 'blockers') {
-        return []
-          .concat(getRowsForSelectedCluster(data.findings, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Migration blockers', 'findings.csv', row)))
-          .concat(getRowsForSelectedCluster(data.conflicts, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Migration blockers', 'conflicts.csv', row)))
-          .concat(getRowsForSelectedCluster(collection_errors, cluster, shareIds, itemIds).map(row => newClusterEvidenceRow('Migration blockers', 'collection_errors.csv', row)));
+        appendClusterEvidenceSource(accumulator, data.findings, cluster, shareIds, itemIds, 'Migration blockers', 'findings.csv');
+        appendClusterEvidenceSource(accumulator, data.conflicts, cluster, shareIds, itemIds, 'Migration blockers', 'conflicts.csv');
+        appendClusterEvidenceSource(accumulator, collection_errors, cluster, shareIds, itemIds, 'Migration blockers', 'collection_errors.csv');
+        return accumulator;
       }
       if (selectedType === 'discounted') {
         const discountedKeys = getClusterDiscountedIdentityKeys(cluster);
         const discountedPrincipalRows = asRows(data.discounted_principals).filter(row => discountedKeys.has(normalizeIdentity(row.Identity)) || (discountedKeys.size === 0 && Number(cluster.DiscountedPrincipalCount || 0) > 0));
-        return []
-          .concat(getRowsForSelectedCluster(data.permissioned_groups, cluster, shareIds, itemIds).filter(row => rowIsDiscountedForCluster(row, cluster)).map(row => newClusterEvidenceRow('Discounted access', 'permissioned_groups.csv', row)))
-          .concat(discountedPrincipalRows.map(row => newClusterEvidenceRow('Discounted access', 'discounted_principals.csv', row)));
+        appendClusterEvidenceSource(accumulator, data.permissioned_groups, cluster, shareIds, itemIds, 'Discounted access', 'permissioned_groups.csv', row => rowIsDiscountedForCluster(row, cluster));
+        discountedPrincipalRows.forEach(row => {
+          accumulator.TotalMatchedRows += 1;
+          if (accumulator.Rows.length < accumulator.DisplayLimit) {
+            accumulator.Rows.push(newClusterEvidenceRow('Discounted access', 'discounted_principals.csv', row));
+          }
+        });
+        return accumulator;
       }
-      return [];
+      return accumulator;
     }
     function renderMigrationEvidenceDrawer(row) {
       selectedMigrationEvidenceRow = row || null;
@@ -2041,14 +2076,14 @@ function ConvertTo-ShareSurferReport {
       }
       const evidenceType = select ? (select.value || 'relationship') : 'relationship';
       const selectedLabel = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex].textContent : 'Relationship proof';
-      const rows = buildSelectedClusterEvidenceRows(row, evidenceType);
-      const visibleRows = rows.slice(0, 75);
+      const evidenceResult = buildSelectedClusterEvidenceRows(row, evidenceType, migrationEvidenceDrawerDisplayLimit);
+      const visibleRows = evidenceResult.Rows;
       if (context) {
         context.textContent = row.RelatedDataArea + ': ' + selectedLabel + ' from filtered export rows for this selected cluster.';
       }
       renderTable('migration-evidence-rows', visibleRows);
       if (count) {
-        count.textContent = 'Showing ' + String(visibleRows.length) + ' of ' + String(rows.length) + ' filtered row' + (rows.length === 1 ? '' : 's');
+        count.textContent = 'Showing ' + String(visibleRows.length) + ' of ' + String(evidenceResult.TotalMatchedRows) + ' filtered row' + (evidenceResult.TotalMatchedRows === 1 ? '' : 's');
       }
     }
     function renderMigrationPacket(rows) {

@@ -56,6 +56,12 @@ function Convert-ShareSurferArchivedCsvToSchema {
 
     $rows = @(Import-Csv -LiteralPath $Path)
     if ($rows.Count -eq 0) {
+        $headerRecord = [ordered]@{}
+        foreach ($column in $Columns) {
+            $headerRecord[$column] = ''
+        }
+        $header = @([pscustomobject]$headerRecord | ConvertTo-Csv -NoTypeInformation)[0]
+        Set-Content -LiteralPath $Path -Value $header -Encoding UTF8
         return
     }
 

@@ -1732,6 +1732,9 @@ $tests = @(
             Assert-True ($report -like '*buildSelectedClusterEvidenceRows*') 'Raw evidence drawer should derive filtered evidence rows for the selected cluster.'
             Assert-True ($report -like '*renderMigrationEvidenceDrawer*') 'Raw evidence drawer should rerender when the selected cluster or evidence type changes.'
             Assert-True ($report -like '*getClusterMatchedShareIds*') 'Raw evidence drawer should filter exact export rows through selected-cluster share/item context.'
+            Assert-True ($report -like '*migrationEvidenceDrawerDisplayLimit = 75*') 'Raw evidence drawer should declare a fixed display cap.'
+            Assert-True ($report -like '*TotalMatchedRows*') 'Raw evidence drawer should track total filtered rows separately from displayed rows.'
+            Assert-True ($report -like '*appendClusterEvidenceSource*') 'Raw evidence drawer should cap row construction before building display rows.'
             Assert-True ($report -like '*relationship-signal-filter*') 'Report should include a first-class relationship signal filter.'
             Assert-True ($report -like '*readiness-signal-filter*') 'Report should include a first-class readiness signal filter.'
             Assert-True ($report -like '*buildMigrationDiscoveryRows*') 'Report should dynamically derive related data areas from existing CSV exports.'
@@ -2718,6 +2721,37 @@ $tests = @(
             $refreshCloseout = Get-Content -LiteralPath ([string]$refreshResult.CloseoutChecklistPath) -Raw
             Assert-True ($refreshCloseout.Contains('Ready for proof review: `True`')) 'Refreshed closeout checklist should mark the archived proof review ready.'
             Assert-True ($refreshCloseout -like '*Optional rich support bundle skipped*') 'Refreshed closeout checklist should explain the optional rich support bundle was skipped.'
+        }
+    },
+    @{
+        Name = 'Archived evidence refresh normalizes empty legacy CSV headers'
+        Body = {
+            $refreshScript = Join-Path $repoRoot 'scripts/New-ShareSurferArchivedEvidenceRefresh.ps1'
+            $tokens = $null
+            $parseErrors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($refreshScript, [ref]$tokens, [ref]$parseErrors)
+            Assert-True (@($parseErrors).Count -eq 0) 'Archived refresh script should parse before extracting helper function.'
+            $functionAst = $ast.Find({
+                    param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Convert-ShareSurferArchivedCsvToSchema'
+                }, $true)
+            Assert-True ($null -ne $functionAst) 'Archived refresh script should define the schema conversion helper.'
+            . ([scriptblock]::Create($functionAst.Extent.Text))
+
+            $legacyCsv = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferEmptyLegacyCsv-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $legacyCsv -Value '"Group","DisplayName"' -Encoding UTF8
+
+            Convert-ShareSurferArchivedCsvToSchema -Path $legacyCsv -Columns @(
+                'Group',
+                'DisplayName',
+                'DiscountedPrincipal',
+                'DiscountReason',
+                'DiscountScope'
+            )
+
+            $header = Get-Content -LiteralPath $legacyCsv -First 1
+            Assert-Equal $header '"Group","DisplayName","DiscountedPrincipal","DiscountReason","DiscountScope"' 'Empty legacy CSV should be rewritten with the expected current schema header.'
+            Assert-Equal (@(Import-Csv -LiteralPath $legacyCsv).Count) 0 'Header-only legacy CSV should remain a zero-row CSV after schema normalization.'
         }
     },
     @{
