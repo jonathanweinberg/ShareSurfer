@@ -67,6 +67,6 @@ Reviewers accepted these before issues #1, #3, #5, and #6 were closed:
 These are follow-up feature areas, not blockers for the current phase-1 proof:
 
 - Richer enterprise-scale redacted support-bundle performance and diagnostics.
-- Deeper dashboard polish such as detail drawers, virtualized large tables, and per-owner export packets.
+- Deeper dashboard polish such as virtualized large tables and per-owner export packets. The current selected Related Data Area view already includes a guided evidence stack with a raw evidence drawer for filtered cluster rows.
 - Additional Samba-style SMB lab coverage once a public or reusable Samba test environment is available.
 - Fresh live Windows/AD reruns when reviewers want newly collected host-side evidence.

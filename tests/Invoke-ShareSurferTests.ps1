@@ -1717,6 +1717,21 @@ $tests = @(
             Assert-True ($report -like '*Progressive Chips*') 'Report should expose progressive chip semantics for migration discovery rows.'
             Assert-True ($report -like '*Core Five*') 'Report should mention Core Five chips in the selected detail behavior.'
             Assert-True ($report -like '*Narrative Plus Evidence Blocks*') 'Report should use the accepted selected-cluster detail model.'
+            $migrationDetailMatch = [regex]::Match($report, '<section class="view-panel" id="view-migration"[\s\S]*?<section class="view-panel" id="view-access"')
+            Assert-True $migrationDetailMatch.Success 'Selected related data area detail should use an attached migration detail layout.'
+            $migrationDetailHtml = $migrationDetailMatch.Value
+            Assert-True ($migrationDetailHtml -like '*migration-guided-evidence*') 'Selected detail should include stacked guided evidence sections.'
+            Assert-True ($migrationDetailHtml -like '*migration-raw-evidence-drawer*') 'Selected detail should include a right-side raw evidence drawer.'
+            Assert-True ($migrationDetailHtml -like '*Evidence Type Selector*') 'Raw evidence drawer should expose the accepted evidence type selector model.'
+            foreach ($evidenceType in @('Relationship proof', 'Access proof', 'Migration blockers', 'Discounted access', 'Raw CSV rows')) {
+                Assert-True ($migrationDetailHtml -like ('*{0}*' -f $evidenceType)) ("Raw evidence drawer should include evidence type option {0}." -f $evidenceType)
+            }
+            foreach ($sectionId in @('migration-evidence-cluster-summary', 'migration-evidence-relationship', 'migration-evidence-readiness', 'migration-evidence-discounted', 'migration-evidence-shortcuts')) {
+                Assert-True ($migrationDetailHtml -like ('*{0}*' -f $sectionId)) ("Guided evidence stack should include section {0}." -f $sectionId)
+            }
+            Assert-True ($report -like '*buildSelectedClusterEvidenceRows*') 'Raw evidence drawer should derive filtered evidence rows for the selected cluster.'
+            Assert-True ($report -like '*renderMigrationEvidenceDrawer*') 'Raw evidence drawer should rerender when the selected cluster or evidence type changes.'
+            Assert-True ($report -like '*getClusterMatchedShareIds*') 'Raw evidence drawer should filter exact export rows through selected-cluster share/item context.'
             Assert-True ($report -like '*relationship-signal-filter*') 'Report should include a first-class relationship signal filter.'
             Assert-True ($report -like '*readiness-signal-filter*') 'Report should include a first-class readiness signal filter.'
             Assert-True ($report -like '*buildMigrationDiscoveryRows*') 'Report should dynamically derive related data areas from existing CSV exports.'
