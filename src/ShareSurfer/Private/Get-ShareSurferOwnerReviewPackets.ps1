@@ -18,6 +18,12 @@ function Get-ShareSurferOwnerReviewPackets {
         $partialShareCount = [int]$pivot.PartialShareCount
         $directGroupCount = [int]$pivot.DirectGroupCount
         $expandedMemberCount = [int]$pivot.ExpandedMemberCount
+        $readinessSignals = if ($null -ne $pivot.PSObject.Properties['ReadinessSignals']) { [string]$pivot.ReadinessSignals } else { '' }
+        $discountedPrincipal = if ($null -ne $pivot.PSObject.Properties['DiscountedPrincipal']) { [bool]$pivot.DiscountedPrincipal } else { $false }
+        $discountedPrincipalCount = if ($null -ne $pivot.PSObject.Properties['DiscountedPrincipalCount']) { [int]$pivot.DiscountedPrincipalCount } else { 0 }
+        $discountedGroupCount = if ($null -ne $pivot.PSObject.Properties['DiscountedGroupCount']) { [int]$pivot.DiscountedGroupCount } else { 0 }
+        $discountedPrincipals = if ($null -ne $pivot.PSObject.Properties['DiscountedPrincipals']) { [string]$pivot.DiscountedPrincipals } else { '' }
+        $discountReason = if ($null -ne $pivot.PSObject.Properties['DiscountReason']) { [string]$pivot.DiscountReason } else { '' }
 
         $relatedMatches = @($relatedRows | Where-Object {
             [string]$_.BusinessUnit -eq $businessUnit -and
@@ -25,6 +31,8 @@ function Get-ShareSurferOwnerReviewPackets {
                 ([string]$_.Pattern -eq $pattern -or [string]$_.Pattern -eq '')
         })
         $migrationReadiness = Get-ShareSurferOwnerPacketMigrationReadiness -RiskLevel $riskLevel -RelatedRows $relatedMatches
+        $relatednessStrength = Get-ShareSurferOwnerPacketRelatednessStrength -RelatedRows $relatedMatches
+        $relationshipSignalCount = Get-ShareSurferOwnerPacketRelationshipSignalCount -RelatedRows $relatedMatches
         $reviewStatus = Get-ShareSurferOwnerPacketReviewStatus -RiskLevel $riskLevel -PartialShareCount $partialShareCount
         $whyReview = Get-ShareSurferOwnerPacketWhyReview -RiskLevel $riskLevel -FindingCount $findingCount -ConflictCount $conflictCount -PartialShareCount $partialShareCount -DirectGroupCount $directGroupCount
         $whatToReviewFirst = Get-ShareSurferOwnerPacketReviewStart -FindingCount $findingCount -ConflictCount $conflictCount -PartialShareCount $partialShareCount -DirectGroupCount $directGroupCount -ExpandedMemberCount $expandedMemberCount
@@ -52,6 +60,14 @@ function Get-ShareSurferOwnerReviewPackets {
             ExpandedMemberCount = $expandedMemberCount
             MigrationReadiness = $migrationReadiness
             RelatedDataAreaCount = $relatedMatches.Count
+            RelatednessStrength = $relatednessStrength
+            RelationshipSignalCount = $relationshipSignalCount
+            ReadinessSignals = $readinessSignals
+            DiscountedPrincipal = $discountedPrincipal
+            DiscountedPrincipalCount = $discountedPrincipalCount
+            DiscountedGroupCount = $discountedGroupCount
+            DiscountedPrincipals = $discountedPrincipals
+            DiscountReason = $discountReason
         })
     }
 
@@ -178,4 +194,39 @@ function Get-ShareSurferOwnerPacketMigrationReadiness {
         return 'Candidate'
     }
     'Not assessed'
+}
+
+function Get-ShareSurferOwnerPacketRelatednessStrength {
+    param(
+        $RelatedRows = @()
+    )
+
+    $rank = @{
+        'Strong' = 0
+        'Possible' = 1
+        'Needs Evidence' = 2
+    }
+    $strengths = @($RelatedRows | ForEach-Object { [string]$_.RelatednessStrength } | Where-Object { $_ -ne '' })
+    if ($strengths.Count -eq 0) {
+        return 'Needs Evidence'
+    }
+
+    @($strengths | Sort-Object { if ($rank.ContainsKey($_)) { $rank[$_] } else { 99 } })[0]
+}
+
+function Get-ShareSurferOwnerPacketRelationshipSignalCount {
+    param(
+        $RelatedRows = @()
+    )
+
+    $counts = @($RelatedRows | ForEach-Object {
+        if ($null -ne $_.PSObject.Properties['RelationshipSignalCount'] -and [string]$_.RelationshipSignalCount -ne '') {
+            [int]$_.RelationshipSignalCount
+        }
+    })
+    if ($counts.Count -eq 0) {
+        return 0
+    }
+
+    @($counts | Sort-Object -Descending)[0]
 }

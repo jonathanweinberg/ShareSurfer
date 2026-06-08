@@ -449,12 +449,48 @@ function ConvertTo-ShareSurferReport {
       line-height: 1.45;
       margin: 0 0 12px;
     }
+    .migration-detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .guided-evidence-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .evidence-section {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+    .evidence-section:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .evidence-section p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .raw-evidence-drawer {
+      border-left: 3px solid var(--blue);
+      background: #f8fafc;
+      padding: 12px;
+      position: sticky;
+      top: 12px;
+    }
+    .drawer-controls {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0;
+    }
     @media (max-width: 940px) {
       header { padding: 26px 20px 18px; }
       main { padding: 18px 20px 28px; }
-      .hero-grid, .toolbar, .filter-grid, .two-column, .workbench-grid { grid-template-columns: 1fr; }
+      .hero-grid, .toolbar, .filter-grid, .two-column, .workbench-grid, .migration-detail-layout { grid-template-columns: 1fr; }
       .summary, .visual-grid { grid-template-columns: 1fr; }
       .view-tabs { justify-content: flex-start; }
+      .raw-evidence-drawer { position: static; }
       h1 { font-size: 28px; }
     }
   </style>
@@ -487,6 +523,18 @@ function ConvertTo-ShareSurferReport {
         <div>
           <label for="risk-filter">Review Risk</label>
           <select id="risk-filter" aria-label="Filter by review risk"></select>
+        </div>
+        <div>
+          <label for="relationship-signal-filter">Relationship Signal</label>
+          <select id="relationship-signal-filter" aria-label="Filter by relationship signal"></select>
+        </div>
+        <div>
+          <label for="readiness-signal-filter">Readiness Signal</label>
+          <select id="readiness-signal-filter" aria-label="Filter by readiness signal"></select>
+        </div>
+        <div>
+          <label for="migration-readiness-filter">Migration Readiness</label>
+          <select id="migration-readiness-filter" aria-label="Filter by migration readiness"></select>
         </div>
       </div>
       <nav class="view-tabs" aria-label="Dashboard views">
@@ -600,21 +648,52 @@ function ConvertTo-ShareSurferReport {
           <h2>Migration Discovery</h2>
           <span class="count" id="migration-areas-count"></span>
         </div>
-        <p class="note">Use this view before migration planning to avoid splitting related data across waves. These shares and folders appear to belong to the same business area because the scan found shared ownership, business-unit, path, permission-group, or review-risk signals.</p>
+        <p class="note">Use this C Hybrid ranked list before migration planning to avoid splitting related data across waves. Filter first by relationship signals and readiness signals; Adaptive Rows use Progressive Chips for the Core Five, and the selected cluster detail uses Narrative Plus Evidence Blocks to explain full why, readiness, and visible-but-discounted access evidence.</p>
         <div class="scroll"><table id="migration-areas"></table></div>
       </div>
       <div class="panel">
-        <h2>Migration Candidate Packet</h2>
+        <h2>Selected Related Data Area Detail</h2>
         <p class="packet-note" id="migration-packet-context">Select a related data area to review its migration packet.</p>
-        <div class="workbench-grid">
-          <div>
-            <h3>Packet Snapshot</h3>
-            <dl class="workbench-stats" id="migration-packet-stats"></dl>
+        <div class="migration-detail-layout">
+          <div class="guided-evidence-stack" id="migration-guided-evidence">
+            <section class="evidence-section" id="migration-evidence-cluster-summary">
+              <h3>Cluster Summary</h3>
+              <dl class="workbench-stats" id="migration-packet-stats"></dl>
+              <p id="migration-cluster-summary-text"></p>
+            </section>
+            <section class="evidence-section" id="migration-evidence-relationship">
+              <h3>Relationship Evidence</h3>
+              <p id="migration-relationship-evidence-text"></p>
+            </section>
+            <section class="evidence-section" id="migration-evidence-readiness">
+              <h3>Readiness Before Migration Review</h3>
+              <p id="migration-readiness-evidence-text"></p>
+            </section>
+            <section class="evidence-section" id="migration-evidence-discounted">
+              <h3>Visible-But-Discounted Access Principals</h3>
+              <p id="migration-discounted-evidence-text"></p>
+            </section>
+            <section class="evidence-section" id="migration-evidence-shortcuts">
+              <h3>Raw Evidence Shortcuts</h3>
+              <p id="migration-shortcuts-evidence-text"></p>
+            </section>
           </div>
-          <div>
-            <h3>What To Do Next</h3>
-            <ul class="actions" id="migration-packet-actions"></ul>
-          </div>
+          <aside class="raw-evidence-drawer" id="migration-raw-evidence-drawer" aria-label="Selected cluster raw evidence drawer">
+            <h3>Raw Evidence Drawer</h3>
+            <p class="note" id="migration-drawer-context">Select a related data area to inspect filtered source rows.</p>
+            <div class="drawer-controls">
+              <label for="migration-evidence-type-selector">Evidence Type Selector</label>
+              <select id="migration-evidence-type-selector" aria-label="Select related data area evidence type">
+                <option value="relationship">Relationship proof</option>
+                <option value="access">Access proof</option>
+                <option value="blockers">Migration blockers</option>
+                <option value="discounted">Discounted access</option>
+                <option value="raw">Raw CSV rows</option>
+              </select>
+              <span class="count" id="migration-evidence-rows-count"></span>
+            </div>
+            <div class="scroll compact-scroll"><table id="migration-evidence-rows"></table></div>
+          </aside>
         </div>
       </div>
     </section>
@@ -912,15 +991,40 @@ function ConvertTo-ShareSurferReport {
       const tbody = document.createElement('tbody');
       safeRows.forEach(row => {
         const tr = document.createElement('tr');
-        if (typeof tableOptions.rowAction === 'function') {
+        const hasRowAction = typeof tableOptions.rowAction === 'function';
+        const hasRowExpansion = typeof tableOptions.rowExpansion === 'function';
+        if (hasRowAction || hasRowExpansion) {
           tr.className = 'clickable-row';
           tr.tabIndex = 0;
           tr.title = typeof tableOptions.rowTitle === 'function' ? tableOptions.rowTitle(row) : 'Open related rows';
-          tr.addEventListener('click', () => tableOptions.rowAction(row));
+          const activateRow = () => {
+            if (hasRowAction) {
+              tableOptions.rowAction(row);
+            }
+            if (hasRowExpansion) {
+              const existing = tbody.querySelector('[data-expansion-row="true"]');
+              const existingKey = existing ? existing.getAttribute('data-expansion-key') : '';
+              if (existing) {
+                existing.remove();
+              }
+              const rowKey = typeof tableOptions.rowKey === 'function' ? tableOptions.rowKey(row) : getRowSearchText(row);
+              if (existingKey !== rowKey) {
+                const expansion = document.createElement('tr');
+                expansion.setAttribute('data-expansion-row', 'true');
+                expansion.setAttribute('data-expansion-key', rowKey);
+                const td = document.createElement('td');
+                td.colSpan = columns.length;
+                td.textContent = String(tableOptions.rowExpansion(row) || '');
+                expansion.appendChild(td);
+                tr.insertAdjacentElement('afterend', expansion);
+              }
+            }
+          };
+          tr.addEventListener('click', activateRow);
           tr.addEventListener('keydown', event => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
-              tableOptions.rowAction(row);
+              activateRow();
             }
           });
         }
@@ -993,12 +1097,18 @@ function ConvertTo-ShareSurferReport {
     const shareById = new Map(data.shares.map(share => [String(share.ShareId || ''), share]));
     const dashboardStateKey = 'ShareSurferDashboardState';
     let activeDashboardView = 'overview';
+    let selectedMigrationAreaKey = '';
+    let selectedMigrationEvidenceRow = null;
+    const migrationEvidenceDrawerDisplayLimit = 75;
     function getDashboardFilterState() {
       return {
         query: document.getElementById('filter').value.toLowerCase(),
         businessUnit: document.getElementById('business-unit-filter').value,
         owner: document.getElementById('owner-filter').value,
-        riskLevel: document.getElementById('risk-filter').value
+        riskLevel: document.getElementById('risk-filter').value,
+        relationshipSignal: document.getElementById('relationship-signal-filter').value,
+        readinessSignal: document.getElementById('readiness-signal-filter').value,
+        migrationReadiness: document.getElementById('migration-readiness-filter').value
       };
     }
     function hasOwnerContextFilter(state) {
@@ -1132,10 +1242,27 @@ function ConvertTo-ShareSurferReport {
         rowTitle: row => 'Focus review workbench for ' + [row.BusinessUnit, row.Owner].filter(Boolean).join(' / ')
       });
     }
+    function sortedDistinctDelimited(rows, fieldName) {
+      const values = new Set();
+      asRows(rows).forEach(row => {
+        String(row[fieldName] || '').split(';').map(value => value.trim()).filter(Boolean).forEach(value => values.add(value));
+      });
+      return Array.from(values).sort((a, b) => a.localeCompare(b));
+    }
+    function getMigrationRowsForFilterOptions() {
+      if (Array.isArray(data.related_data_areas) && data.related_data_areas.length > 0) {
+        return data.related_data_areas.map(normalizeMigrationDiscoveryRow);
+      }
+      return owner_pivots.map(pivot => normalizeMigrationDiscoveryRow(pivot));
+    }
     function populateDashboardFilters() {
+      const migrationRows = getMigrationRowsForFilterOptions();
       populateSelect('business-unit-filter', sortedDistinct(owner_pivots, 'BusinessUnit'), 'All business units');
       populateSelect('owner-filter', sortedDistinct(owner_pivots, 'Owner'), 'All data owners');
       populateSelect('risk-filter', sortedDistinct(owner_pivots, 'RiskLevel'), 'All review risks');
+      populateSelect('relationship-signal-filter', sortedDistinctDelimited(migrationRows, 'RelationshipSignals'), 'All relationship signals');
+      populateSelect('readiness-signal-filter', sortedDistinctDelimited(migrationRows, 'ReadinessSignals'), 'All readiness signals');
+      populateSelect('migration-readiness-filter', sortedDistinct(migrationRows, 'MigrationReadiness'), 'All migration readiness');
     }
     const rawDatasetLabels = {
       shares: 'shares.csv',
@@ -1144,6 +1271,7 @@ function ConvertTo-ShareSurferReport {
       acl_entries: 'acl_entries.csv',
       identities: 'identities.csv',
       group_edges: 'group_edges.csv',
+      discounted_principals: 'discounted_principals.csv',
       permissioned_groups: 'permissioned_groups.csv',
       org_chains: 'org_chains.csv',
       owner_mappings: 'owner_mappings.csv',
@@ -1207,6 +1335,9 @@ function ConvertTo-ShareSurferReport {
       if (state.businessUnit) { chips.push(createFilterChip('Business Unit', state.businessUnit, 'businessUnit')); }
       if (state.owner) { chips.push(createFilterChip('Data Owner', state.owner, 'owner')); }
       if (state.riskLevel) { chips.push(createFilterChip('Review Risk', state.riskLevel, 'riskLevel')); }
+      if (state.relationshipSignal) { chips.push(createFilterChip('Relationship Signal', state.relationshipSignal, 'relationshipSignal')); }
+      if (state.readinessSignal) { chips.push(createFilterChip('Readiness Signal', state.readinessSignal, 'readinessSignal')); }
+      if (state.migrationReadiness) { chips.push(createFilterChip('Migration Readiness', state.migrationReadiness, 'migrationReadiness')); }
       if (chips.length === 0) {
         const empty = document.createElement('span');
         empty.className = 'note';
@@ -1227,6 +1358,9 @@ function ConvertTo-ShareSurferReport {
       if (key === 'businessUnit') { document.getElementById('business-unit-filter').value = ''; }
       if (key === 'owner') { document.getElementById('owner-filter').value = ''; }
       if (key === 'riskLevel') { document.getElementById('risk-filter').value = ''; }
+      if (key === 'relationshipSignal') { document.getElementById('relationship-signal-filter').value = ''; }
+      if (key === 'readinessSignal') { document.getElementById('readiness-signal-filter').value = ''; }
+      if (key === 'migrationReadiness') { document.getElementById('migration-readiness-filter').value = ''; }
       applyFilter();
     }
     function clearAllDashboardFilters() {
@@ -1234,6 +1368,9 @@ function ConvertTo-ShareSurferReport {
       document.getElementById('business-unit-filter').value = '';
       document.getElementById('owner-filter').value = '';
       document.getElementById('risk-filter').value = '';
+      document.getElementById('relationship-signal-filter').value = '';
+      document.getElementById('readiness-signal-filter').value = '';
+      document.getElementById('migration-readiness-filter').value = '';
       applyFilter();
       document.getElementById('filter').focus();
     }
@@ -1246,6 +1383,9 @@ function ConvertTo-ShareSurferReport {
         businessUnit: state.businessUnit || '',
         owner: state.owner || '',
         riskLevel: state.riskLevel || '',
+        relationshipSignal: state.relationshipSignal || '',
+        readinessSignal: state.readinessSignal || '',
+        migrationReadiness: state.migrationReadiness || '',
         rawDataset: rawDataset
       };
     }
@@ -1261,6 +1401,9 @@ function ConvertTo-ShareSurferReport {
         if (state.businessUnit) { params.set('bu', state.businessUnit); }
         if (state.owner) { params.set('owner', state.owner); }
         if (state.riskLevel) { params.set('risk', state.riskLevel); }
+        if (state.relationshipSignal) { params.set('relationship', state.relationshipSignal); }
+        if (state.readinessSignal) { params.set('readinessSignal', state.readinessSignal); }
+        if (state.migrationReadiness) { params.set('readiness', state.migrationReadiness); }
         if (state.rawDataset && activeDashboardView === 'raw') { params.set('raw', state.rawDataset); }
         const nextHash = params.toString() ? ('#' + params.toString()) : '';
         if (window.history && window.history.replaceState) {
@@ -1279,6 +1422,9 @@ function ConvertTo-ShareSurferReport {
           businessUnit: params.get('bu') || '',
           owner: params.get('owner') || '',
           riskLevel: params.get('risk') || '',
+          relationshipSignal: params.get('relationship') || '',
+          readinessSignal: params.get('readinessSignal') || '',
+          migrationReadiness: params.get('readiness') || '',
           rawDataset: params.get('raw') || ''
         };
       } catch (error) {
@@ -1304,6 +1450,9 @@ function ConvertTo-ShareSurferReport {
       setSelectValueIfPresent('business-unit-filter', state.businessUnit);
       setSelectValueIfPresent('owner-filter', state.owner);
       setSelectValueIfPresent('risk-filter', state.riskLevel);
+      setSelectValueIfPresent('relationship-signal-filter', state.relationshipSignal);
+      setSelectValueIfPresent('readiness-signal-filter', state.readinessSignal);
+      setSelectValueIfPresent('migration-readiness-filter', state.migrationReadiness);
       setSelectValueIfPresent('raw-dataset-filter', state.rawDataset);
       const requestedView = String(state.view || 'overview');
       activeDashboardView = isKnownDashboardView(requestedView) ? requestedView : 'overview';
@@ -1342,6 +1491,9 @@ function ConvertTo-ShareSurferReport {
     }
     function isGroupIdentity(identity) {
       return String(getObjectClass(identity) || '').toLowerCase() === 'group' || groupParentKeys.has(normalizeIdentity(identity));
+    }
+    function isDiscountedPrincipal(identity) {
+      return discountedPrincipalKeys.has(normalizeIdentity(identity));
     }
     function countExpandedMembers(identity) {
       const start = normalizeIdentity(identity);
@@ -1500,7 +1652,10 @@ function ConvertTo-ShareSurferReport {
           Rights: row.Rights || '',
           ShareIds: row.ShareIds || '',
           Sources: row.Sources || '',
-          ExamplePath: row.ExamplePath || row.FullPath || ''
+          ExamplePath: row.ExamplePath || row.FullPath || '',
+          DiscountedPrincipal: row.DiscountedPrincipal || '',
+          DiscountReason: row.DiscountReason || '',
+          DiscountScope: row.DiscountScope || ''
         })).sort((a, b) => Number(b.ExpandedMembers || 0) - Number(a.ExpandedMembers || 0) || String(a.Group).localeCompare(String(b.Group)));
       }
 
@@ -1559,12 +1714,72 @@ function ConvertTo-ShareSurferReport {
     function getMigrationGroupsForPivot(pivot) {
       const groups = new Set();
       data.share_permissions.filter(row => rowMatchesPivot(row, pivot)).forEach(row => {
-        if (isGroupIdentity(row.Identity)) { groups.add(String(row.Identity || '')); }
+        if (isGroupIdentity(row.Identity) && !isDiscountedPrincipal(row.Identity)) { groups.add(String(row.Identity || '')); }
       });
       data.acl_entries.filter(row => rowMatchesPivot(row, pivot)).forEach(row => {
-        if (isGroupIdentity(row.Identity)) { groups.add(String(row.Identity || '')); }
+        if (isGroupIdentity(row.Identity) && !isDiscountedPrincipal(row.Identity)) { groups.add(String(row.Identity || '')); }
       });
       return Array.from(groups).sort((a, b) => a.localeCompare(b));
+    }
+    function splitSignals(value) {
+      return String(value || '').split(';').map(signal => signal.trim()).filter(Boolean);
+    }
+    function signalFieldContains(value, signal) {
+      if (!signal) { return true; }
+      return splitSignals(value).some(item => item === signal);
+    }
+    function getFallbackRelationshipSignals(row) {
+      const signals = [];
+      if (String(row.Owner || '')) { signals.push('same owner'); }
+      if (String(row.BusinessUnit || '')) { signals.push('same business unit'); }
+      if (Number(row.DirectGroupCount || 0) > 0) { signals.push('shared non-discounted business permission group'); }
+      return signals;
+    }
+    function getFallbackSupportingEvidence(row) {
+      return String(row.Pattern || '') ? ['path/share/folder naming similarity'] : [];
+    }
+    function getFallbackReadinessSignals(row) {
+      const signals = [];
+      if (Number(row.FindingCount || 0) > 0) { signals.push('finding'); }
+      if (Number(row.ConflictCount || 0) > 0) { signals.push('conflicts'); }
+      if (Number(row.PartialShareCount || 0) > 0) { signals.push('partial data'); }
+      return signals;
+    }
+    function getRelatednessStrength(relationshipSignalCount, supportingSignalCount) {
+      if (Number(relationshipSignalCount || 0) >= 2) { return 'Strong'; }
+      if (Number(relationshipSignalCount || 0) === 1 && Number(supportingSignalCount || 0) > 0) { return 'Possible'; }
+      return 'Needs Evidence';
+    }
+    function confidenceRank(value) {
+      const ranks = { Strong: 0, Possible: 1, 'Needs Evidence': 2 };
+      return Number(ranks[value] ?? 99);
+    }
+    function readinessRank(value) {
+      const ranks = { 'Blocked by scan gaps': 0, Review: 1, Candidate: 2 };
+      return Number(ranks[value] ?? 99);
+    }
+    function buildProgressiveChips(row) {
+      const evidence = Number(row.ReadinessSignalCount || splitSignals(row.ReadinessSignals).length || 0) > 0 ? 'Evidence: readiness review' : 'Evidence: complete enough';
+      const relationshipSummary = splitSignals(row.RelationshipSignals).slice(0, 2).join(' + ') || 'relationship needs evidence';
+      const discountedCount = Number(row.DiscountedPrincipalCount || 0);
+      const discounted = discountedCount > 0 || row.DiscountedOperationalAccess ? ('Discounted access: ' + String(discountedCount || 'present')) : 'Discounted access: none';
+      return [
+        'Confidence: ' + (row.Confidence || 'Needs Evidence'),
+        'Relationship: ' + relationshipSummary,
+        'Readiness: ' + (row.MigrationReadiness || 'Not assessed'),
+        discounted,
+        evidence
+      ].join(' | ');
+    }
+    function buildExpandedSignalSummary(row) {
+      const pieces = [];
+      pieces.push('All relationship signals: ' + (row.RelationshipSignals || 'none'));
+      pieces.push('All readiness signals: ' + (row.ReadinessSignals || 'none'));
+      if (row.DiscountedOperationalAccess) {
+        pieces.push('Discounted access evidence: ' + (row.DiscountReason || 'visible access evidence, not used for relatedness'));
+      }
+      pieces.push('Related because: ' + (row.RelatedBecauseShort || row.RelatedBecause || 'needs more relationship evidence'));
+      return pieces.join(' ');
     }
     function getMigrationReadiness(pivot) {
       const partialShares = Number(pivot.PartialShareCount || 0);
@@ -1575,40 +1790,67 @@ function ConvertTo-ShareSurferReport {
       return 'Candidate';
     }
     function getMigrationNextAction(readiness) {
-      if (readiness === 'Blocked by scan gaps') { return 'Review collection errors and rerun the scan before final migration planning.'; }
-      if (readiness === 'Review') { return 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.'; }
-      return 'Confirm ownership and mark as migration-ready when the business owner agrees.';
+      if (readiness === 'Blocked by scan gaps') { return 'Review collection-error evidence before using this area for migration planning.'; }
+      if (readiness === 'Review') { return 'Review ownership, access groups, findings, and conflicts before migration planning.'; }
+      return 'Review ownership and access evidence with the business owner before migration planning.';
     }
     function normalizeMigrationDiscoveryRow(row) {
-      return {
+      const relationshipSignals = row.RelationshipSignals || getFallbackRelationshipSignals(row).join('; ');
+      const supportingEvidence = row.SupportingEvidence || getFallbackSupportingEvidence(row).join('; ');
+      const readinessSignals = row.ReadinessSignals || getFallbackReadinessSignals(row).join('; ');
+      const relationshipSignalCount = Number(row.RelationshipSignalCount || splitSignals(relationshipSignals).length || 0);
+      const supportingSignalCount = Number(row.SupportingSignalCount || splitSignals(supportingEvidence).length || 0);
+      const readinessSignalCount = Number(row.ReadinessSignalCount || splitSignals(readinessSignals).length || 0);
+      const confidence = row.RelatednessStrength || getRelatednessStrength(relationshipSignalCount, supportingSignalCount);
+      const discountedCount = Number(row.DiscountedPrincipalCount || 0);
+      const discountedAccess = isTruthy(row.DiscountedPrincipal) || discountedCount > 0;
+      const relatedBecause = row.RelatedBecause || [confidence + ' confidence'].concat(splitSignals(relationshipSignals), splitSignals(supportingEvidence)).join('; ');
+      const normalized = {
+        CoreFiveChips: '',
         RelatedAreaId: row.RelatedAreaId || '',
         RelatedDataArea: row.RelatedDataArea || [row.BusinessUnit || 'Unmapped', row.Owner || 'Unassigned owner'].filter(Boolean).join(' / '),
+        Confidence: confidence,
         BusinessUnit: row.BusinessUnit || '',
         Owner: row.Owner || '',
         RiskLevel: row.RiskLevel || '',
         MigrationReadiness: row.MigrationReadiness || getMigrationReadiness(row),
+        RelationshipSignals: relationshipSignals,
+        ReadinessSignals: readinessSignals,
+        SupportingEvidence: supportingEvidence,
+        RelationshipSignalCount: relationshipSignalCount,
+        ReadinessSignalCount: readinessSignalCount,
         Shares: Number(row.Shares || row.MatchingShares || 0),
         Folders: Number(row.Folders || row.Directories || 0),
         Files: Number(row.Files || 0),
         ReviewItems: Number(row.ReviewItems || row.ReviewItemCount || 0),
         PermissionedGroups: Number(row.PermissionedGroups || row.DirectGroupCount || 0),
-        RelatedBecause: row.RelatedBecause || '',
+        RelatedBecause: relatedBecause,
+        RelatedBecauseShort: row.RelatedBecauseShort || (relatedBecause + '.'),
         SuggestedNextAction: row.SuggestedNextAction || getMigrationNextAction(row.MigrationReadiness || getMigrationReadiness(row)),
+        DiscountedOperationalAccess: discountedAccess ? 'Visible access evidence, not used for relatedness' : '',
+        DiscountedPrincipalCount: discountedCount,
+        DiscountedPrincipals: row.DiscountedPrincipals || '',
+        DiscountReason: row.DiscountReason || '',
         Pattern: row.Pattern || ''
       };
+      normalized.CoreFiveChips = buildProgressiveChips(normalized);
+      return normalized;
     }
     function relatedDataAreaMatchesState(row, state) {
       return rowMatchesSearch(row, state) &&
         (!state.businessUnit || String(row.BusinessUnit || '') === state.businessUnit) &&
         (!state.owner || String(row.Owner || '') === state.owner) &&
-        (!state.riskLevel || String(row.RiskLevel || '') === state.riskLevel || String(row.MigrationReadiness || '') === state.riskLevel);
+        (!state.riskLevel || String(row.RiskLevel || '') === state.riskLevel || String(row.MigrationReadiness || '') === state.riskLevel) &&
+        (!state.relationshipSignal || signalFieldContains(row.RelationshipSignals, state.relationshipSignal)) &&
+        (!state.readinessSignal || signalFieldContains(row.ReadinessSignals, state.readinessSignal)) &&
+        (!state.migrationReadiness || String(row.MigrationReadiness || '') === state.migrationReadiness);
     }
     function buildMigrationDiscoveryRows(state) {
       if (Array.isArray(data.related_data_areas) && data.related_data_areas.length > 0) {
         return data.related_data_areas
           .filter(row => relatedDataAreaMatchesState(row, state))
           .map(normalizeMigrationDiscoveryRow)
-          .sort((a, b) => String(a.MigrationReadiness).localeCompare(String(b.MigrationReadiness)) || Number(b.ReviewItems || 0) - Number(a.ReviewItems || 0) || String(a.RelatedDataArea).localeCompare(String(b.RelatedDataArea)));
+          .sort((a, b) => readinessRank(a.MigrationReadiness) - readinessRank(b.MigrationReadiness) || confidenceRank(a.Confidence) - confidenceRank(b.Confidence) || Number(b.ReviewItems || 0) - Number(a.ReviewItems || 0) || String(a.RelatedDataArea).localeCompare(String(b.RelatedDataArea)));
       }
       return filterOwnerPivots(owner_pivots, state).map(pivot => {
         const permissionGroups = getMigrationGroupsForPivot(pivot);
@@ -1622,25 +1864,36 @@ function ConvertTo-ShareSurferReport {
           if (shareId) { matchedShareIds.add(shareId); }
         });
         const readiness = getMigrationReadiness(pivot);
-        const reasons = ['same owner mapping', 'same business unit', 'matching path pattern'];
-        if (permissionGroups.length > 0) { reasons.push('shared permission group'); }
-        if (Number(pivot.FindingCount || 0) + Number(pivot.ConflictCount || 0) > 0) { reasons.push('shared review risk'); }
-        if (Number(pivot.PartialShareCount || 0) > 0) { reasons.push('partial collection gap'); }
+        const relationshipSignals = getFallbackRelationshipSignals(Object.assign({}, pivot, { DirectGroupCount: permissionGroups.length }));
+        const supportingEvidence = getFallbackSupportingEvidence(pivot);
+        const readinessSignals = getFallbackReadinessSignals(pivot);
+        const confidence = getRelatednessStrength(relationshipSignals.length, supportingEvidence.length);
+        const relatedBecause = [confidence + ' confidence'].concat(relationshipSignals, supportingEvidence).join('; ');
         return {
           RelatedDataArea: [pivot.BusinessUnit || 'Unmapped', pivot.Owner || 'Unassigned owner'].filter(Boolean).join(' / '),
           BusinessUnit: pivot.BusinessUnit || '',
           Owner: pivot.Owner || '',
+          Confidence: confidence,
           MigrationReadiness: readiness,
+          RelationshipSignals: relationshipSignals.join('; '),
+          ReadinessSignals: readinessSignals.join('; '),
+          SupportingEvidence: supportingEvidence.join('; '),
+          RelationshipSignalCount: relationshipSignals.length,
+          SupportingSignalCount: supportingEvidence.length,
+          ReadinessSignalCount: readinessSignals.length,
           Shares: Math.max(Number(pivot.PartialShareCount || 0), matchedShareIds.size),
           Folders: Number(pivot.Directories || 0),
           Files: Number(pivot.Files || 0),
           ReviewItems: Number(pivot.FindingCount || 0) + Number(pivot.ConflictCount || 0),
           PermissionedGroups: permissionGroups.length,
-          RelatedBecause: reasons.join('; '),
+          RelatedBecause: relatedBecause,
+          RelatedBecauseShort: relatedBecause + '.',
           SuggestedNextAction: getMigrationNextAction(readiness),
           Pattern: pivot.Pattern || ''
         };
-      }).sort((a, b) => String(a.MigrationReadiness).localeCompare(String(b.MigrationReadiness)) || Number(b.ReviewItems || 0) - Number(a.ReviewItems || 0) || String(a.RelatedDataArea).localeCompare(String(b.RelatedDataArea)));
+      }).map(normalizeMigrationDiscoveryRow)
+        .filter(row => relatedDataAreaMatchesState(row, state))
+        .sort((a, b) => readinessRank(a.MigrationReadiness) - readinessRank(b.MigrationReadiness) || confidenceRank(a.Confidence) - confidenceRank(b.Confidence) || Number(b.ReviewItems || 0) - Number(a.ReviewItems || 0) || String(a.RelatedDataArea).localeCompare(String(b.RelatedDataArea)));
     }
     function setSelectValueIfPresent(id, value) {
       const select = document.getElementById(id);
@@ -1649,44 +1902,239 @@ function ConvertTo-ShareSurferReport {
         select.value = target;
       }
     }
+    function getMigrationAreaKey(row) {
+      return String(row.RelatedAreaId || [row.RelatedDataArea || '', row.BusinessUnit || '', row.Owner || '', row.Pattern || ''].join('|'));
+    }
     function focusMigrationArea(row) {
-      setSelectValueIfPresent('business-unit-filter', row.BusinessUnit);
-      setSelectValueIfPresent('owner-filter', row.Owner);
-      document.getElementById('risk-filter').value = '';
-      document.getElementById('filter').value = '';
-      applyFilter();
+      selectedMigrationAreaKey = getMigrationAreaKey(row);
+      renderMigrationPacket(buildMigrationDiscoveryRows(getDashboardFilterState()));
       showView('migration');
+    }
+    function setMigrationEvidenceText(id, value) {
+      const target = document.getElementById(id);
+      if (target) {
+        target.textContent = String(value || '');
+      }
+    }
+    function splitDelimitedIds(value) {
+      return String(value || '').split(/[;,]/).map(part => part.trim()).filter(Boolean);
+    }
+    function getClusterMatchedItems(row) {
+      return asRows(data.items).filter(item => rowMatchesPivot(item, row));
+    }
+    function getClusterMatchedItemIds(row) {
+      return new Set(getClusterMatchedItems(row).map(item => String(item.ItemId || '')).filter(Boolean));
+    }
+    function getClusterMatchedShareIds(row) {
+      const shareIds = new Set();
+      getClusterMatchedItems(row).forEach(item => {
+        const shareId = String(item.ShareId || '');
+        if (shareId) { shareIds.add(shareId); }
+      });
+      asRows(data.shares).filter(share => rowMatchesPivot(share, row)).forEach(share => {
+        const shareId = String(share.ShareId || '');
+        if (shareId) { shareIds.add(shareId); }
+      });
+      return shareIds;
+    }
+    function rowMatchesSelectedCluster(rawRow, cluster, shareIds, itemIds) {
+      if (!rawRow || !cluster) { return false; }
+      if (rowMatchesPivot(rawRow, cluster)) { return true; }
+      const pattern = String(cluster.Pattern || '');
+      const examplePath = String(rawRow.ExamplePath || rawRow.FullPath || '');
+      if (pattern && examplePath && wildcardMatch(pattern, examplePath)) { return true; }
+      const itemId = String(rawRow.ItemId || '');
+      if (itemId && itemIds.has(itemId)) { return true; }
+      const shareId = String(rawRow.ShareId || '');
+      if (shareId && shareIds.has(shareId)) { return true; }
+      const shareIdFields = splitDelimitedIds(rawRow.ShareIds || rawRow.ShareId || '');
+      if (shareIdFields.some(value => shareIds.has(value))) { return true; }
+      const rawAreaKey = getMigrationAreaKey(normalizeMigrationDiscoveryRow(rawRow));
+      return rawAreaKey && rawAreaKey === getMigrationAreaKey(cluster);
+    }
+    function summarizeClusterEvidenceRow(sourceLabel, row) {
+      if (!row) { return ''; }
+      if (sourceLabel === 'related_data_areas.csv') { return row.RelatedBecause || row.RelationshipSignals || row.SupportingEvidence || row.RelatedDataArea || ''; }
+      if (sourceLabel === 'owner_review_packets.csv') { return row.WhyReview || row.WhatToReviewFirst || row.ReviewStatus || ''; }
+      if (sourceLabel === 'owner_risk_pivots.csv') { return ['Risk=' + String(row.RiskLevel || ''), 'Findings=' + String(row.FindingCount || 0), 'Conflicts=' + String(row.ConflictCount || 0)].join('; '); }
+      if (sourceLabel === 'permissioned_groups.csv') { return ['Rights=' + String(row.Rights || ''), 'Sources=' + String(row.Sources || ''), 'Discounted=' + String(row.DiscountedPrincipal || '')].join('; '); }
+      if (sourceLabel === 'share_permissions.csv') { return ['Rights=' + String(row.Rights || ''), 'Access=' + String(row.AccessControlType || '')].join('; '); }
+      if (sourceLabel === 'acl_entries.csv') { return ['Rights=' + String(row.Rights || ''), 'Access=' + String(row.AccessControlType || ''), 'Inherited=' + String(row.IsInherited || '')].join('; '); }
+      if (sourceLabel === 'findings.csv') { return [row.FindingType || '', row.Severity || '', row.Message || ''].filter(Boolean).join('; '); }
+      if (sourceLabel === 'conflicts.csv') { return [row.ConflictType || '', row.Severity || '', row.Message || ''].filter(Boolean).join('; '); }
+      if (sourceLabel === 'collection_errors.csv') { return [row.ErrorType || row.ObservedValue || '', row.Severity || '', row.Message || ''].filter(Boolean).join('; '); }
+      if (sourceLabel === 'discounted_principals.csv') { return [row.Reason || '', row.Scope || '', row.MatchType || ''].filter(Boolean).join('; '); }
+      return Object.keys(row).slice(0, 4).map(key => key + '=' + String(row[key] ?? '')).join('; ');
+    }
+    function getEvidenceIdentity(row) {
+      return String(row.Identity || row.Group || row.ParentGroup || row.ChildIdentity || '');
+    }
+    function getEvidencePath(row) {
+      return String(row.FullPath || row.ExamplePath || row.Pattern || row.UNCPath || row.LocalPath || '');
+    }
+    function newClusterEvidenceRow(evidenceType, sourceLabel, row) {
+      return {
+        EvidenceType: evidenceType,
+        Source: sourceLabel,
+        Summary: summarizeClusterEvidenceRow(sourceLabel, row),
+        Identity: getEvidenceIdentity(row),
+        Path: getEvidencePath(row),
+        RawCsvRow: JSON.stringify(row)
+      };
+    }
+    function getClusterDiscountedIdentityKeys(cluster) {
+      return new Set(splitSignals(cluster.DiscountedPrincipals || '').map(normalizeIdentity).filter(Boolean));
+    }
+    function rowIsDiscountedForCluster(row, cluster) {
+      if (String(row.DiscountedPrincipal || '').toLowerCase() === 'true') { return true; }
+      const discountedKeys = getClusterDiscountedIdentityKeys(cluster);
+      if (discountedKeys.size === 0) { return false; }
+      return discountedKeys.has(normalizeIdentity(row.Identity || row.Group || ''));
+    }
+    function newClusterEvidenceAccumulator(displayLimit) {
+      const parsedLimit = Number(displayLimit);
+      return {
+        Rows: [],
+        TotalMatchedRows: 0,
+        DisplayLimit: Number.isFinite(parsedLimit) && parsedLimit >= 0 ? parsedLimit : migrationEvidenceDrawerDisplayLimit
+      };
+    }
+    function appendClusterEvidenceSource(accumulator, sourceRows, cluster, shareIds, itemIds, evidenceType, sourceLabel, rowFilter) {
+      asRows(sourceRows).forEach(row => {
+        if (!rowMatchesSelectedCluster(row, cluster, shareIds, itemIds)) { return; }
+        if (typeof rowFilter === 'function' && !rowFilter(row)) { return; }
+        accumulator.TotalMatchedRows += 1;
+        if (accumulator.Rows.length < accumulator.DisplayLimit) {
+          accumulator.Rows.push(newClusterEvidenceRow(evidenceType, sourceLabel, row));
+        }
+      });
+      return accumulator;
+    }
+    function mergeClusterEvidenceResult(target, source) {
+      target.TotalMatchedRows += Number(source.TotalMatchedRows || 0);
+      asRows(source.Rows).forEach(row => {
+        if (target.Rows.length < target.DisplayLimit) {
+          target.Rows.push(row);
+        }
+      });
+      return target;
+    }
+    function buildSelectedClusterEvidenceRows(cluster, evidenceType, displayLimit) {
+      if (!cluster) { return newClusterEvidenceAccumulator(displayLimit); }
+      const shareIds = getClusterMatchedShareIds(cluster);
+      const itemIds = getClusterMatchedItemIds(cluster);
+      const selectedType = evidenceType || 'relationship';
+      const accumulator = newClusterEvidenceAccumulator(displayLimit);
+      if (selectedType === 'raw') {
+        return ['relationship', 'access', 'blockers', 'discounted'].reduce((target, typeName) => {
+          const remainingDisplayRows = Math.max(0, target.DisplayLimit - target.Rows.length);
+          return mergeClusterEvidenceResult(target, buildSelectedClusterEvidenceRows(cluster, typeName, remainingDisplayRows));
+        }, accumulator);
+      }
+      if (selectedType === 'relationship') {
+        appendClusterEvidenceSource(accumulator, data.related_data_areas, cluster, shareIds, itemIds, 'Relationship proof', 'related_data_areas.csv');
+        appendClusterEvidenceSource(accumulator, data.owner_review_packets, cluster, shareIds, itemIds, 'Relationship proof', 'owner_review_packets.csv');
+        appendClusterEvidenceSource(accumulator, asRows(data.owner_risk_pivots).length > 0 ? data.owner_risk_pivots : owner_pivots, cluster, shareIds, itemIds, 'Relationship proof', 'owner_risk_pivots.csv');
+        return accumulator;
+      }
+      if (selectedType === 'access') {
+        appendClusterEvidenceSource(accumulator, data.permissioned_groups, cluster, shareIds, itemIds, 'Access proof', 'permissioned_groups.csv', row => !rowIsDiscountedForCluster(row, cluster));
+        appendClusterEvidenceSource(accumulator, data.share_permissions, cluster, shareIds, itemIds, 'Access proof', 'share_permissions.csv');
+        appendClusterEvidenceSource(accumulator, data.acl_entries, cluster, shareIds, itemIds, 'Access proof', 'acl_entries.csv');
+        return accumulator;
+      }
+      if (selectedType === 'blockers') {
+        appendClusterEvidenceSource(accumulator, data.findings, cluster, shareIds, itemIds, 'Migration blockers', 'findings.csv');
+        appendClusterEvidenceSource(accumulator, data.conflicts, cluster, shareIds, itemIds, 'Migration blockers', 'conflicts.csv');
+        appendClusterEvidenceSource(accumulator, collection_errors, cluster, shareIds, itemIds, 'Migration blockers', 'collection_errors.csv');
+        return accumulator;
+      }
+      if (selectedType === 'discounted') {
+        const discountedKeys = getClusterDiscountedIdentityKeys(cluster);
+        const discountedPrincipalRows = asRows(data.discounted_principals).filter(row => discountedKeys.has(normalizeIdentity(row.Identity)) || (discountedKeys.size === 0 && Number(cluster.DiscountedPrincipalCount || 0) > 0));
+        appendClusterEvidenceSource(accumulator, data.permissioned_groups, cluster, shareIds, itemIds, 'Discounted access', 'permissioned_groups.csv', row => rowIsDiscountedForCluster(row, cluster));
+        discountedPrincipalRows.forEach(row => {
+          accumulator.TotalMatchedRows += 1;
+          if (accumulator.Rows.length < accumulator.DisplayLimit) {
+            accumulator.Rows.push(newClusterEvidenceRow('Discounted access', 'discounted_principals.csv', row));
+          }
+        });
+        return accumulator;
+      }
+      return accumulator;
+    }
+    function renderMigrationEvidenceDrawer(row) {
+      selectedMigrationEvidenceRow = row || null;
+      const context = document.getElementById('migration-drawer-context');
+      const select = document.getElementById('migration-evidence-type-selector');
+      const count = document.getElementById('migration-evidence-rows-count');
+      if (!row) {
+        if (context) { context.textContent = 'No selected related data area.'; }
+        renderTable('migration-evidence-rows', []);
+        if (count) { count.textContent = '0 filtered rows'; }
+        return;
+      }
+      const evidenceType = select ? (select.value || 'relationship') : 'relationship';
+      const selectedLabel = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex].textContent : 'Relationship proof';
+      const evidenceResult = buildSelectedClusterEvidenceRows(row, evidenceType, migrationEvidenceDrawerDisplayLimit);
+      const visibleRows = evidenceResult.Rows;
+      if (context) {
+        context.textContent = row.RelatedDataArea + ': ' + selectedLabel + ' from filtered export rows for this selected cluster.';
+      }
+      renderTable('migration-evidence-rows', visibleRows);
+      if (count) {
+        count.textContent = 'Showing ' + String(visibleRows.length) + ' of ' + String(evidenceResult.TotalMatchedRows) + ' filtered row' + (evidenceResult.TotalMatchedRows === 1 ? '' : 's');
+      }
     }
     function renderMigrationPacket(rows) {
       const context = document.getElementById('migration-packet-context');
       const stats = document.getElementById('migration-packet-stats');
-      const actions = document.getElementById('migration-packet-actions');
       stats.textContent = '';
-      actions.textContent = '';
       if (rows.length === 0) {
         context.textContent = 'No related data areas match the active dashboard filters.';
-        addPriorityAction(actions, 'warning', 'Adjust discovery filters', 'Clear a filter or broaden the owner/business-unit selection to find related data areas.');
+        setMigrationEvidenceText('migration-cluster-summary-text', 'Clear a filter or broaden the owner/business-unit selection to find related data areas.');
+        setMigrationEvidenceText('migration-relationship-evidence-text', 'No selected cluster relationship evidence.');
+        setMigrationEvidenceText('migration-readiness-evidence-text', 'No selected cluster readiness evidence.');
+        setMigrationEvidenceText('migration-discounted-evidence-text', 'No selected cluster discounted access evidence.');
+        setMigrationEvidenceText('migration-shortcuts-evidence-text', 'Select a cluster to inspect filtered raw export rows in the drawer.');
+        renderMigrationEvidenceDrawer(null);
         return;
       }
-      const row = rows[0];
-      context.textContent = 'Migration readiness is not approval. It shows whether ShareSurfer found blockers that should be reviewed before planning this related data area: ' + row.RelatedDataArea + '.';
+      let row = rows.find(candidate => getMigrationAreaKey(candidate) === selectedMigrationAreaKey) || rows[0];
+      selectedMigrationAreaKey = getMigrationAreaKey(row);
+      selectedMigrationEvidenceRow = row;
+      context.textContent = row.RelatedDataArea + ' appears together because ' + String(row.RelatedBecause || 'ShareSurfer found related ownership, naming, or access signals').replace(/\.$/, '') + '.';
       renderWorkbenchStats([
+        { label: 'Confidence', value: row.Confidence },
         { label: 'Shares', value: row.Shares },
-        { label: 'Folders', value: row.Folders },
-        { label: 'Files', value: row.Files },
+        { label: 'Relationship Signals', value: row.RelationshipSignalCount },
         { label: 'Review Items', value: row.ReviewItems },
-        { label: 'Permissioned Groups', value: row.PermissionedGroups },
-        { label: 'Readiness', value: row.MigrationReadiness }
+        { label: 'Readiness', value: row.MigrationReadiness },
+        { label: 'Discounted Access', value: row.DiscountedPrincipalCount || 0 },
+        { label: 'Evidence', value: row.ReadinessSignalCount > 0 ? 'Review' : 'Complete' }
       ], stats);
-      addPriorityAction(actions, row.MigrationReadiness === 'Candidate' ? 'good' : 'warning', 'Why these are related', row.RelatedBecause + '.');
-      addPriorityAction(actions, row.MigrationReadiness === 'Blocked by scan gaps' ? 'high' : 'warning', 'Suggested next action', row.SuggestedNextAction);
-      addPriorityAction(actions, 'good', 'Use with migration waves', 'Keep this related data area together until ownership, access groups, and scan gaps are confirmed.');
+      setMigrationEvidenceText('migration-cluster-summary-text', row.RelatedDataArea + ' has ' + row.Confidence + ' confidence, ' + String(row.Shares) + ' share(s), and ' + String(row.ReviewItems) + ' review item(s).');
+      setMigrationEvidenceText('migration-relationship-evidence-text', row.RelationshipSignals || 'No relationship signals were exported for this cluster.');
+      setMigrationEvidenceText('migration-readiness-evidence-text', (row.ReadinessSignals || 'No readiness risks were exported for this cluster.') + ' Suggested next action: ' + String(row.SuggestedNextAction || 'Review evidence before migration planning.'));
+      if (row.DiscountedOperationalAccess) {
+        setMigrationEvidenceText('migration-discounted-evidence-text', (row.DiscountReason || 'Discounted operational access is visible access evidence but is not used for relatedness.') + ' Principals: ' + (row.DiscountedPrincipals || 'not listed'));
+      }
+      else {
+        setMigrationEvidenceText('migration-discounted-evidence-text', 'No discounted operational access principals were marked for this cluster.');
+      }
+      setMigrationEvidenceText('migration-shortcuts-evidence-text', 'Use the right-side drawer for filtered rows tied to this cluster. The Raw Evidence tab still exposes the full CSV exports: related_data_areas.csv, permissioned_groups.csv, share_permissions.csv, acl_entries.csv, findings.csv, conflicts.csv, collection_errors.csv, and discounted_principals.csv.');
+      renderMigrationEvidenceDrawer(row);
     }
     function renderMigrationDiscovery(state) {
       const rows = buildMigrationDiscoveryRows(state);
+      if (rows.length > 0 && !rows.some(row => getMigrationAreaKey(row) === selectedMigrationAreaKey)) {
+        selectedMigrationAreaKey = getMigrationAreaKey(rows[0]);
+      }
       renderTable('migration-areas', rows, {
         rowAction: row => focusMigrationArea(row),
-        rowTitle: row => 'Focus owner review for ' + String(row.RelatedDataArea || 'this related data area')
+        rowExpansion: row => buildExpandedSignalSummary(row),
+        rowKey: row => getMigrationAreaKey(row),
+        rowTitle: row => 'Select and expand adaptive row for ' + String(row.RelatedDataArea || 'this related data area')
       });
       renderMigrationPacket(rows);
     }
@@ -1893,6 +2341,7 @@ function ConvertTo-ShareSurferReport {
     const potential_service_accounts = buildPotentialServiceAccountRows();
     const group_browser_rows = buildGroupBrowserRows();
     const identityByKey = new Map(data.identities.map(identity => [normalizeIdentity(identity.Identity || identity.SamAccountName || ''), identity]));
+    const discountedPrincipalKeys = new Set(asRows(data.discounted_principals).map(row => normalizeIdentity(row.Identity)).filter(Boolean));
     const groupEdgesByParent = new Map();
     data.group_edges.forEach(edge => {
       const parent = normalizeIdentity(edge.ParentGroup);
@@ -1969,8 +2418,12 @@ function ConvertTo-ShareSurferReport {
     document.getElementById('business-unit-filter').addEventListener('change', applyFilter);
     document.getElementById('owner-filter').addEventListener('change', applyFilter);
     document.getElementById('risk-filter').addEventListener('change', applyFilter);
+    document.getElementById('relationship-signal-filter').addEventListener('change', applyFilter);
+    document.getElementById('readiness-signal-filter').addEventListener('change', applyFilter);
+    document.getElementById('migration-readiness-filter').addEventListener('change', applyFilter);
     document.getElementById('group-filter').addEventListener('input', applyGroupBrowser);
     document.getElementById('raw-dataset-filter').addEventListener('change', applyFilter);
+    document.getElementById('migration-evidence-type-selector').addEventListener('change', () => renderMigrationEvidenceDrawer(selectedMigrationEvidenceRow));
     populateDashboardFilters();
     populateRawDatasetFilter();
     const restoredDashboardView = restoreDashboardState();

@@ -56,6 +56,12 @@ function Convert-ShareSurferArchivedCsvToSchema {
 
     $rows = @(Import-Csv -LiteralPath $Path)
     if ($rows.Count -eq 0) {
+        $headerRecord = [ordered]@{}
+        foreach ($column in $Columns) {
+            $headerRecord[$column] = ''
+        }
+        $header = @([pscustomobject]$headerRecord | ConvertTo-Csv -NoTypeInformation)[0]
+        Set-Content -LiteralPath $Path -Value $header -Encoding UTF8
         return
     }
 
@@ -117,6 +123,122 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'org_c
     'ObsPath',
     'ObsAttribute',
     'PotentialServiceAccount'
+)
+if (-not (Test-Path -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv'))) {
+    Set-Content -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv') -Value '"Identity","Reason","Scope","MatchType"' -Encoding UTF8
+}
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'permissioned_groups.csv') -Columns @(
+    'Group',
+    'DisplayName',
+    'ObjectClass',
+    'ObsPath',
+    'ManagerLevel1',
+    'ShareAssignments',
+    'NtfsAssignments',
+    'ExpandedMembers',
+    'MaxDepth',
+    'HasCycle',
+    'IsTruncated',
+    'Rights',
+    'ShareId',
+    'ShareIds',
+    'Sources',
+    'FullPath',
+    'ExamplePath',
+    'DiscountedPrincipal',
+    'DiscountReason',
+    'DiscountScope'
+)
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'owner_risk_pivots.csv') -Columns @(
+    'BusinessUnit',
+    'Owner',
+    'Pattern',
+    'Source',
+    'MatchingItems',
+    'Directories',
+    'Files',
+    'FindingCount',
+    'ConflictCount',
+    'PartialShareCount',
+    'DirectIdentityCount',
+    'DirectGroupCount',
+    'ExpandedMemberCount',
+    'RiskLevel',
+    'ReadinessSignals',
+    'DiscountedPrincipal',
+    'DiscountedPrincipalCount',
+    'DiscountedGroupCount',
+    'DiscountedPrincipals',
+    'DiscountReason'
+)
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'related_data_areas.csv') -Columns @(
+    'RelatedAreaId',
+    'RelatedDataArea',
+    'BusinessUnit',
+    'Owner',
+    'Pattern',
+    'Source',
+    'RelatednessStrength',
+    'RelationshipSignalCount',
+    'SupportingSignalCount',
+    'ReadinessSignalCount',
+    'RelationshipSignals',
+    'SupportingEvidence',
+    'ReadinessSignals',
+    'CoreFiveChips',
+    'EvidenceCompleteness',
+    'RiskLevel',
+    'MigrationReadiness',
+    'MatchingShares',
+    'MatchingItems',
+    'Directories',
+    'Files',
+    'FindingCount',
+    'ConflictCount',
+    'ReviewItemCount',
+    'PartialShareCount',
+    'DirectIdentityCount',
+    'DirectGroupCount',
+    'ExpandedMemberCount',
+    'RelatedBecauseShort',
+    'RelatedBecause',
+    'SuggestedNextAction',
+    'DiscountedPrincipal',
+    'DiscountedPrincipalCount',
+    'DiscountedGroupCount',
+    'DiscountedPrincipals',
+    'DiscountReason'
+)
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'owner_review_packets.csv') -Columns @(
+    'ReviewPacketId',
+    'BusinessUnit',
+    'Owner',
+    'Pattern',
+    'Source',
+    'RiskLevel',
+    'ReviewStatus',
+    'WhyReview',
+    'WhatToReviewFirst',
+    'SuggestedNextAction',
+    'MatchingItems',
+    'Directories',
+    'Files',
+    'FindingCount',
+    'ConflictCount',
+    'PartialShareCount',
+    'DirectIdentityCount',
+    'DirectGroupCount',
+    'ExpandedMemberCount',
+    'MigrationReadiness',
+    'RelatedDataAreaCount',
+    'RelatednessStrength',
+    'RelationshipSignalCount',
+    'ReadinessSignals',
+    'DiscountedPrincipal',
+    'DiscountedPrincipalCount',
+    'DiscountedGroupCount',
+    'DiscountedPrincipals',
+    'DiscountReason'
 )
 
 $plan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
