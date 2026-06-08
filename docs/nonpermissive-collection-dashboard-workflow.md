@@ -2,7 +2,7 @@
 
 Use this workflow when the file-share environment is locked down, but reviewers need a richer dashboard experience on another workstation. The collector can stay simple and restricted. The dashboard host can be more permissive.
 
-![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.svg)
 
 ## When To Use This
 
@@ -126,7 +126,7 @@ Do not send raw exports outside the trusted boundary unless your organization ha
 
 ## 4. Open on the Dashboard Host
 
-![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.png)
+![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.svg)
 
 Unpack the dataset:
 

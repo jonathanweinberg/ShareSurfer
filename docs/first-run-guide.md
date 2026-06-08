@@ -256,7 +256,7 @@ Path note: Microsoft documents Azure Files limits of 255-character path componen
 
 Use this when the collector host is locked down but reviewers can use a more permissive workstation for dashboard review.
 
-![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.svg)
 
 The collector host only needs Windows PowerShell 5.1, ShareSurfer, and read access to the targets. It does not need npm, Vite, Playwright, internet access, or a local web server.
 

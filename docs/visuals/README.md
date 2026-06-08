@@ -9,13 +9,13 @@ The report screenshots use synthetic CONTOSO-style demo data. They are meant to 
 The current workflow illustrations are:
 
 - `share-surfer-workflow-concept.png`
-- `nonpermissive-collector-workflow.png`
-- `dataset-transfer-dashboard-workflow.png`
+- `nonpermissive-collector-workflow.svg`
+- `dataset-transfer-dashboard-workflow.svg`
 - `collector-to-report.svg`
 - `enterprise-lab-validation.svg`
 - `support-bundle-diagnostics.svg`
 
-Use `nonpermissive-collector-workflow.png` when explaining read-only collection inside a restricted network. Use `dataset-transfer-dashboard-workflow.png` when explaining how a validated dataset moves to a separate dashboard review workstation.
+Use `nonpermissive-collector-workflow.svg` when explaining read-only collection inside a restricted network. Use `dataset-transfer-dashboard-workflow.svg` when explaining how a validated dataset moves to a separate dashboard review workstation. These diagrams are intentionally text-rich so a first-time operator can understand the steps, gates, and outputs without extra context.
 
 ## Report Screenshots
 
