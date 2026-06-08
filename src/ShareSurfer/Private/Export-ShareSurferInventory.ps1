@@ -15,6 +15,7 @@ function Export-ShareSurferInventory {
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
         [string] $AdLookupMode = 'Auto',
         [string] $SourceMode = 'InputObject',
+        [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles
     )
@@ -32,6 +33,7 @@ function Export-ShareSurferInventory {
     $groupEdges = @(ConvertTo-ShareSurferArray $Inventory.GroupEdges)
     $orgChains = @(ConvertTo-ShareSurferArray $Inventory.OrgChains)
     $ownerMappings = @(ConvertTo-ShareSurferArray $Inventory.OwnerMappings)
+    $discountedPrincipals = @(Import-ShareSurferDiscountedPrincipals -Path $DiscountedPrincipalPath)
     $scanErrors = @()
     if ($null -ne $Inventory.PSObject.Properties['ScanErrors']) {
         $scanErrors = @(ConvertTo-ShareSurferArray $Inventory.ScanErrors)
@@ -118,8 +120,8 @@ function Export-ShareSurferInventory {
 
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
     $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
-    $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges)
-    $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts)
+    $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges -DiscountedPrincipals $discountedPrincipals)
+    $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts -DiscountedPrincipals $discountedPrincipals)
     $relatedDataAreas = @(Get-ShareSurferRelatedDataAreas -OwnerRiskPivots $ownerRiskPivots -Items $items -Shares $shares)
     $ownerReviewPackets = @(Get-ShareSurferOwnerReviewPackets -OwnerRiskPivots $ownerRiskPivots -RelatedDataAreas $relatedDataAreas)
     $manifest = @(
@@ -147,6 +149,7 @@ function Export-ShareSurferInventory {
         'acl_entries.csv' = $aclEntries
         'identities.csv' = $identities
         'group_edges.csv' = $groupEdges
+        'discounted_principals.csv' = $discountedPrincipals
         'permissioned_groups.csv' = $permissionedGroups
         'org_chains.csv' = $orgChains
         'owner_mappings.csv' = $ownerMappings
@@ -178,6 +181,7 @@ function Export-ShareSurferInventory {
         Findings = $findings.Count
         Conflicts = $conflicts.Count
         CollectionErrors = @($collectionErrors).Count
+        DiscountedPrincipals = $discountedPrincipals.Count
         PermissionedGroups = $permissionedGroups.Count
         RelatedDataAreas = $relatedDataAreas.Count
         OwnerReviewPackets = $ownerReviewPackets.Count

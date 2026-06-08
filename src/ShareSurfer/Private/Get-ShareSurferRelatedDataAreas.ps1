@@ -37,7 +37,31 @@ function Get-ShareSurferRelatedDataAreas {
         $partialShareCount = [int]$pivot.PartialShareCount
         $reviewItems = $findingCount + $conflictCount
         $readiness = Get-ShareSurferMigrationReadiness -RiskLevel ([string]$pivot.RiskLevel) -FindingCount $findingCount -ConflictCount $conflictCount -PartialShareCount $partialShareCount
-        $reasons = New-ShareSurferRelatedDataAreaReasons -PermissionedGroupCount ([int]$pivot.DirectGroupCount) -ReviewItemCount $reviewItems -PartialShareCount $partialShareCount
+        $relationshipSignals = New-Object System.Collections.ArrayList
+        $supportingEvidence = New-Object System.Collections.ArrayList
+        if (-not [string]::IsNullOrWhiteSpace([string]$pivot.Owner)) {
+            [void]$relationshipSignals.Add('same owner')
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$pivot.BusinessUnit)) {
+            [void]$relationshipSignals.Add('same business unit')
+        }
+        if ([int]$pivot.DirectGroupCount -gt 0) {
+            [void]$relationshipSignals.Add('shared non-discounted business permission group')
+        }
+        if (-not [string]::IsNullOrWhiteSpace($pattern)) {
+            [void]$supportingEvidence.Add('path/share/folder naming similarity')
+        }
+        $readinessSignals = @()
+        if ($null -ne $pivot.PSObject.Properties['ReadinessSignals'] -and -not [string]::IsNullOrWhiteSpace([string]$pivot.ReadinessSignals)) {
+            $readinessSignals = @([string]$pivot.ReadinessSignals -split '; ' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        }
+        $relatednessStrength = Get-ShareSurferRelatednessStrength -RelationshipSignalCount $relationshipSignals.Count -SupportingSignalCount $supportingEvidence.Count
+        $reasons = New-ShareSurferRelatedDataAreaReasons -RelatednessStrength $relatednessStrength -RelationshipSignals $relationshipSignals -SupportingEvidence $supportingEvidence
+        $evidenceCompleteness = Get-ShareSurferEvidenceCompleteness -ReadinessSignalCount @($readinessSignals).Count -PartialShareCount $partialShareCount
+        $discountedPrincipalCount = if ($null -ne $pivot.PSObject.Properties['DiscountedPrincipalCount']) { [int]$pivot.DiscountedPrincipalCount } else { 0 }
+        $relationshipSummary = if ($relationshipSignals.Count -gt 0) { (@($relationshipSignals) | Select-Object -First 2) -join ' + ' } else { 'relationship needs evidence' }
+        $coreFiveChips = 'Confidence: {0} | Relationship: {1} | Readiness: {2} | Discounted access: {3} | Evidence: {4}' -f $relatednessStrength, $relationshipSummary, $readiness, $discountedPrincipalCount, $evidenceCompleteness
+        $relatedBecauseShort = 'This area appears together because {0}.' -f $reasons.ToLowerInvariant()
 
         [void]$rows.Add([pscustomobject]@{
             RelatedAreaId = 'related-area-{0:D4}' -f $index
@@ -46,6 +70,15 @@ function Get-ShareSurferRelatedDataAreas {
             Owner = [string]$pivot.Owner
             Pattern = $pattern
             Source = [string]$pivot.Source
+            RelatednessStrength = $relatednessStrength
+            RelationshipSignalCount = $relationshipSignals.Count
+            SupportingSignalCount = $supportingEvidence.Count
+            ReadinessSignalCount = @($readinessSignals).Count
+            RelationshipSignals = (@($relationshipSignals) | Sort-Object) -join '; '
+            SupportingEvidence = (@($supportingEvidence) | Sort-Object) -join '; '
+            ReadinessSignals = (@($readinessSignals) | Sort-Object) -join '; '
+            CoreFiveChips = $coreFiveChips
+            EvidenceCompleteness = $evidenceCompleteness
             RiskLevel = [string]$pivot.RiskLevel
             MigrationReadiness = $readiness
             MatchingShares = [Math]::Max($matchedShareIds.Count, $partialShareCount)
@@ -59,8 +92,14 @@ function Get-ShareSurferRelatedDataAreas {
             DirectIdentityCount = [int]$pivot.DirectIdentityCount
             DirectGroupCount = [int]$pivot.DirectGroupCount
             ExpandedMemberCount = [int]$pivot.ExpandedMemberCount
+            RelatedBecauseShort = $relatedBecauseShort
             RelatedBecause = $reasons
             SuggestedNextAction = Get-ShareSurferMigrationNextAction -MigrationReadiness $readiness
+            DiscountedPrincipal = if ($null -ne $pivot.PSObject.Properties['DiscountedPrincipal']) { [bool]$pivot.DiscountedPrincipal } else { $false }
+            DiscountedPrincipalCount = $discountedPrincipalCount
+            DiscountedGroupCount = if ($null -ne $pivot.PSObject.Properties['DiscountedGroupCount']) { [int]$pivot.DiscountedGroupCount } else { 0 }
+            DiscountedPrincipals = if ($null -ne $pivot.PSObject.Properties['DiscountedPrincipals']) { [string]$pivot.DiscountedPrincipals } else { '' }
+            DiscountReason = if ($null -ne $pivot.PSObject.Properties['DiscountReason']) { [string]$pivot.DiscountReason } else { '' }
         })
         $index++
     }
@@ -100,32 +139,63 @@ function Get-ShareSurferMigrationNextAction {
     )
 
     switch ($MigrationReadiness) {
-        'Blocked by scan gaps' { 'Review collection errors and rerun the scan before final migration planning.'; break }
-        'Review' { 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.'; break }
-        default { 'Confirm ownership and mark as migration-ready when the business owner agrees.' }
+        'Blocked by scan gaps' { 'Review collection-error evidence before using this area for migration planning.'; break }
+        'Review' { 'Review ownership, access groups, findings, and conflicts before migration planning.'; break }
+        default { 'Review ownership and access evidence with the business owner before migration planning.' }
     }
 }
 
 function New-ShareSurferRelatedDataAreaReasons {
     param(
-        [int] $PermissionedGroupCount = 0,
-        [int] $ReviewItemCount = 0,
-        [int] $PartialShareCount = 0
+        [string] $RelatednessStrength = '',
+        $RelationshipSignals = @(),
+        $SupportingEvidence = @()
     )
 
     $reasons = New-Object System.Collections.ArrayList
-    [void]$reasons.Add('same owner mapping')
-    [void]$reasons.Add('same business unit')
-    [void]$reasons.Add('matching path pattern')
-    if ($PermissionedGroupCount -gt 0) {
-        [void]$reasons.Add('shared permission group')
+    if (-not [string]::IsNullOrWhiteSpace($RelatednessStrength)) {
+        [void]$reasons.Add(('{0} confidence' -f $RelatednessStrength))
     }
-    if ($ReviewItemCount -gt 0) {
-        [void]$reasons.Add('shared review risk')
+    foreach ($signal in @(ConvertTo-ShareSurferArray $RelationshipSignals)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$signal)) {
+            Add-ShareSurferUniqueValue -Values $reasons -Value ([string]$signal)
+        }
     }
-    if ($PartialShareCount -gt 0) {
-        [void]$reasons.Add('partial collection gap')
+    foreach ($signal in @(ConvertTo-ShareSurferArray $SupportingEvidence)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$signal)) {
+            Add-ShareSurferUniqueValue -Values $reasons -Value ([string]$signal)
+        }
     }
 
     @($reasons) -join '; '
+}
+
+function Get-ShareSurferRelatednessStrength {
+    param(
+        [int] $RelationshipSignalCount = 0,
+        [int] $SupportingSignalCount = 0
+    )
+
+    if ($RelationshipSignalCount -ge 2) {
+        return 'Strong'
+    }
+    if ($RelationshipSignalCount -eq 1 -and $SupportingSignalCount -gt 0) {
+        return 'Possible'
+    }
+    'Needs Evidence'
+}
+
+function Get-ShareSurferEvidenceCompleteness {
+    param(
+        [int] $ReadinessSignalCount = 0,
+        [int] $PartialShareCount = 0
+    )
+
+    if ($PartialShareCount -gt 0) {
+        return 'Partial data'
+    }
+    if ($ReadinessSignalCount -gt 0) {
+        return 'Complete with readiness review'
+    }
+    'Complete enough'
 }
