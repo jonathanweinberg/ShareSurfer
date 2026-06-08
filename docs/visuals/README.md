@@ -4,6 +4,19 @@ This folder contains user-facing workflow visuals and current example screenshot
 
 The report screenshots use synthetic CONTOSO-style demo data. They are meant to show first-time operators and management readers what the dashboard looks like before they run ShareSurfer. They are not live customer evidence or future-design mockups.
 
+## Workflow Illustrations
+
+The current workflow illustrations are:
+
+- `share-surfer-workflow-concept.png`
+- `nonpermissive-collector-workflow.png`
+- `dataset-transfer-dashboard-workflow.png`
+- `collector-to-report.svg`
+- `enterprise-lab-validation.svg`
+- `support-bundle-diagnostics.svg`
+
+Use `nonpermissive-collector-workflow.png` when explaining read-only collection inside a restricted network. Use `dataset-transfer-dashboard-workflow.png` when explaining how a validated dataset moves to a separate dashboard review workstation.
+
 ## Report Screenshots
 
 The current report screenshots are:

@@ -1598,6 +1598,42 @@ $tests = @(
         }
     },
     @{
+        Name = 'New-ShareSurferStandaloneDashboard packages a standalone static dashboard snapshot'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $standalonePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStandaloneDashboard-' + [guid]::NewGuid().ToString('N'))
+            $assetPath = Join-Path $buildPath 'assets'
+            New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script><link rel="stylesheet" href="./assets/index-demo.css"></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferStandaloneLoaded = true;' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.css') -Value 'body { color: #0f172a; }' -Encoding UTF8
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+
+            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -ExportPath $exportPath -DashboardBuildPath $buildPath -OutputPath $standalonePath -PassThru
+
+            Assert-True $result.IsValid 'Standalone dashboard wrapper should report a valid output.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'index.html')) 'Standalone dashboard should include index.html.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js')) 'Standalone dashboard should include snapshot script.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json')) 'Standalone dashboard should include a manifest.'
+            Assert-True (Test-Path -LiteralPath (Join-Path (Join-Path $standalonePath 'assets') 'index-demo.js')) 'Standalone dashboard should copy relative assets.'
+
+            $index = Get-Content -LiteralPath (Join-Path $standalonePath 'index.html') -Raw
+            $dataScript = Get-Content -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js') -Raw
+            $manifest = Get-Content -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json') -Raw | ConvertFrom-Json
+
+            Assert-True ($index -like '*src="./sharesurfer-data.js"*') 'Standalone dashboard index should load snapshot through a relative script tag.'
+            Assert-True ($index -like '*src="./assets/index-demo.js"*') 'Standalone dashboard index should keep relative asset paths.'
+            Assert-True ($dataScript -like 'window.__SHARESURFER_SNAPSHOT__ = *') 'Snapshot script should assign the dashboard data on window.'
+            Assert-True ($dataScript -notlike '*fetch(*') 'Snapshot script should not require fetch or a local server.'
+            Assert-True ([int]$manifest.rowCounts.shares -gt 0) 'Dashboard manifest should include export row counts.'
+            Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
+        }
+    },
+    @{
         Name = 'ConvertTo-ShareSurferReport generates an offline static report with Azure path policy language'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2767,11 +2803,17 @@ $tests = @(
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
             $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
+            $nonpermissiveWorkflow = Join-Path $repoRoot 'docs/nonpermissive-collection-dashboard-workflow.md'
             $readme = Join-Path $repoRoot 'README.md'
             $expectedVisuals = @(
                 'collector-to-report.svg',
                 'enterprise-lab-validation.svg',
                 'support-bundle-diagnostics.svg'
+            )
+            $expectedWorkflowPngs = @(
+                'share-surfer-workflow-concept.png',
+                'nonpermissive-collector-workflow.png',
+                'dataset-transfer-dashboard-workflow.png'
             )
             $expectedScreenshots = @(
                 'report-dashboard-overview.png',
@@ -2783,8 +2825,12 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $visualDoc) 'Workflow visual documentation should exist.'
             $visualDocText = Get-Content -LiteralPath $visualDoc -Raw
             Assert-True ($visualDocText -like '*Workflow Overview*') 'Workflow visual documentation should include the overview section.'
-            Assert-True (Test-Path -LiteralPath (Join-Path $visualRoot 'share-surfer-workflow-concept.png')) 'Workflow visuals should include the overview PNG.'
-            Assert-True ($visualDocText -like '*visuals/share-surfer-workflow-concept.png*') 'Workflow visual doc should reference the overview PNG.'
+            foreach ($workflowPng in $expectedWorkflowPngs) {
+                $path = Join-Path $visualRoot $workflowPng
+                Assert-True (Test-Path -LiteralPath $path) ("Missing workflow PNG {0}" -f $workflowPng)
+                Assert-True ((Get-Item -LiteralPath $path).Length -gt 10000) ("Workflow PNG {0} should be a real image asset." -f $workflowPng)
+                Assert-True ($visualDocText -like ("*visuals/{0}*" -f $workflowPng)) ("Workflow visual doc should reference {0}" -f $workflowPng)
+            }
             foreach ($visual in $expectedVisuals) {
                 $path = Join-Path $visualRoot $visual
                 Assert-True (Test-Path -LiteralPath $path) ("Missing workflow visual {0}" -f $visual)
@@ -2804,6 +2850,9 @@ $tests = @(
             Assert-True ($visualReadmeText -like '*-SkipBrowserCapture*') 'Visual README should document dry-run report generation.'
             foreach ($screenshot in $expectedScreenshots) {
                 Assert-True ($visualReadmeText -like ("*{0}*" -f $screenshot)) ("Visual README should name screenshot {0}." -f $screenshot)
+            }
+            foreach ($workflowPng in $expectedWorkflowPngs) {
+                Assert-True ($visualReadmeText -like ("*{0}*" -f $workflowPng)) ("Visual README should name workflow PNG {0}." -f $workflowPng)
             }
 
             Assert-True (Test-Path -LiteralPath $screenshotScript) 'Repository should include a script to refresh dashboard screenshots from demo report output.'
@@ -2833,6 +2882,10 @@ $tests = @(
             Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
+            Assert-True ($readmeText -like '*Basic Use Cases*') 'README should present basic use cases.'
+            Assert-True ($readmeText -like '*Nonpermissive collector workflow*') 'README should present the nonpermissive collector use case.'
+            Assert-True ($readmeText -like '*docs/nonpermissive-collection-dashboard-workflow.md*') 'README should link the nonpermissive collection workflow.'
+            Assert-True ($readmeText -like '*docs/visuals/dataset-transfer-dashboard-workflow.png*') 'README should show the dataset transfer dashboard visual.'
 
             Assert-True (Test-Path -LiteralPath $acceptanceAudit) 'Documentation should include a V1 phase-1 acceptance audit.'
             $acceptanceAuditText = Get-Content -LiteralPath $acceptanceAudit -Raw
@@ -2863,6 +2916,19 @@ $tests = @(
             Assert-True ($firstRunText -like '*What Needs Review First*') 'First-run guide should point users to the owner review queue.'
             Assert-True ($firstRunText -like '*Access Model*') 'First-run guide should point users to the access model view.'
             Assert-True ($firstRunText -like '*choose an attribute that exists on both users and groups*') 'First-run guide should explain OBS attribute schema fallback.'
+            Assert-True ($firstRunText -like '*Move the Dataset to a Dashboard Host*') 'First-run guide should explain the two-host dashboard workflow.'
+            Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.png*') 'First-run guide should show the nonpermissive collector workflow visual.'
+
+            Assert-True (Test-Path -LiteralPath $nonpermissiveWorkflow) 'Documentation should include a nonpermissive collector to dashboard host workflow.'
+            $nonpermissiveText = Get-Content -LiteralPath $nonpermissiveWorkflow -Raw
+            Assert-True ($nonpermissiveText -like '*Collector host*') 'Nonpermissive workflow should define the collector host role.'
+            Assert-True ($nonpermissiveText -like '*Dashboard host*') 'Nonpermissive workflow should define the dashboard host role.'
+            Assert-True ($nonpermissiveText -like '*Compress-Archive*') 'Nonpermissive workflow should explain dataset packaging.'
+            Assert-True ($nonpermissiveText -like '*Get-FileHash*') 'Nonpermissive workflow should explain hash generation.'
+            Assert-True ($nonpermissiveText -like '*approved transfer process*') 'Nonpermissive workflow should require approved transfer handling.'
+            Assert-True ($nonpermissiveText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Nonpermissive workflow should show dashboard packaging on the review host.'
+            Assert-True ($nonpermissiveText -like '*visuals/nonpermissive-collector-workflow.png*') 'Nonpermissive workflow should reference the collector visual.'
+            Assert-True ($nonpermissiveText -like '*visuals/dataset-transfer-dashboard-workflow.png*') 'Nonpermissive workflow should reference the dashboard-transfer visual.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -2904,6 +2970,7 @@ $tests = @(
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw
+                Get-Content -LiteralPath $nonpermissiveWorkflow -Raw
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
                 Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
             ) -join "`n"

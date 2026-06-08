@@ -6,6 +6,18 @@ This page gives operators and business reviewers a visual map of the V1 workflow
 
 ![ShareSurfer workflow overview](visuals/share-surfer-workflow-concept.png)
 
+## Locked-Down Collection
+
+![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.png)
+
+Use this visual when explaining collection from a nonpermissive Windows environment. The collector stays read-only, writes CSV/report evidence, and keeps the raw dataset inside the trusted boundary until transfer is approved.
+
+## Dataset Transfer and Dashboard Review
+
+![Dataset transfer to dashboard host](visuals/dataset-transfer-dashboard-workflow.png)
+
+Use this visual when explaining the two-host workflow: collect in the restricted network, move the validated dataset by an approved process, and open the report or packaged standalone dashboard on a more permissive review workstation.
+
 ## Collector To Report
 
 ![Collector to report workflow](visuals/collector-to-report.svg)
