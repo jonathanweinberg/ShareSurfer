@@ -33,6 +33,14 @@ ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\rep
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath 'C:\ShareSurfer\support\scan-001-redacted'
 ```
 
+To keep broad operational access visible without letting it drive Migration Discovery, pass a discounted principal CSV:
+
+```powershell
+Invoke-ShareSurferScan -TargetPath '\\files01\Finance' -OutputPath $exportPath -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv'
+```
+
+The CSV must include `Identity` and can include `Reason` and `Scope`. Discounted means visible access evidence that is not used for migration relatedness; it does not mean ignored, safe, approved, or remediated.
+
 ## Lab Fixture
 
 Plan the lab first:

@@ -105,6 +105,20 @@ New-Item -ItemType Directory -Path $exportPath -Force
 
 Keep raw exports internal. They can contain real paths, server names, user names, group names, employee IDs, manager names, and OBS values.
 
+If broad operational groups have access almost everywhere, create a discounted principals CSV before the scan:
+
+```powershell
+@(
+  [pscustomobject]@{
+    Identity = 'CONTOSO\HelpDeskOps'
+    Reason = 'Broad HelpDesk access'
+    Scope = 'Global'
+  }
+) | Export-Csv -LiteralPath 'C:\ShareSurfer\inputs\discounted-principals.csv' -NoTypeInformation -Encoding UTF8
+```
+
+Use this for admin, HelpDesk, scanner, backup, or platform access that should stay visible in the evidence but should not make unrelated areas look related in Migration Discovery.
+
 ## Step 4: Run the Collector
 
 For a first scan by UNC path:
@@ -116,6 +130,7 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```
@@ -131,6 +146,7 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```

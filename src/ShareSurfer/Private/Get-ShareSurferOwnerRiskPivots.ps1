@@ -8,9 +8,11 @@ function Get-ShareSurferOwnerRiskPivots {
         $Identities = @(),
         $GroupEdges = @(),
         $Findings = @(),
-        $Conflicts = @()
+        $Conflicts = @(),
+        $DiscountedPrincipals = @()
     )
 
+    $discountedPrincipalLookup = New-ShareSurferDiscountedPrincipalLookup -DiscountedPrincipals $DiscountedPrincipals
     $identityClassByName = @{}
     foreach ($identity in @(ConvertTo-ShareSurferArray $Identities)) {
         $name = [string]$identity.Identity
@@ -86,11 +88,25 @@ function Get-ShareSurferOwnerRiskPivots {
         })
 
         $directIdentityMap = @{}
+        $discountedIdentityMap = @{}
+        $discountedGroupMap = @{}
+        $discountSummaries = New-Object System.Collections.ArrayList
         foreach ($permission in @(ConvertTo-ShareSurferArray $SharePermissions)) {
             $shareId = [string]$permission.ShareId
             $identity = [string]$permission.Identity
             if ($identity -ne '' -and $shareId -ne '' -and $matchedShareIds.ContainsKey($shareId)) {
-                $directIdentityMap[$identity.ToUpperInvariant()] = $identity
+                $identityKey = $identity.ToUpperInvariant()
+                $discountedPrincipal = Get-ShareSurferDiscountedPrincipal -Identity $identity -DiscountedPrincipalLookup $discountedPrincipalLookup
+                if ($null -ne $discountedPrincipal) {
+                    $discountedIdentityMap[$identityKey] = $identity
+                    Add-ShareSurferDiscountSummary -Values $discountSummaries -Principal $discountedPrincipal
+                    if ($identityClassByName.ContainsKey($identityKey) -and ([string]$identityClassByName[$identityKey]).ToLowerInvariant() -eq 'group') {
+                        $discountedGroupMap[$identityKey] = $identity
+                    }
+                }
+                else {
+                    $directIdentityMap[$identityKey] = $identity
+                }
             }
         }
         foreach ($entry in @(ConvertTo-ShareSurferArray $AclEntries)) {
@@ -101,7 +117,18 @@ function Get-ShareSurferOwnerRiskPivots {
                 continue
             }
             if (($itemId -ne '' -and $matchedItemIds.ContainsKey($itemId)) -or ($shareId -ne '' -and $matchedShareIds.ContainsKey($shareId))) {
-                $directIdentityMap[$identity.ToUpperInvariant()] = $identity
+                $identityKey = $identity.ToUpperInvariant()
+                $discountedPrincipal = Get-ShareSurferDiscountedPrincipal -Identity $identity -DiscountedPrincipalLookup $discountedPrincipalLookup
+                if ($null -ne $discountedPrincipal) {
+                    $discountedIdentityMap[$identityKey] = $identity
+                    Add-ShareSurferDiscountSummary -Values $discountSummaries -Principal $discountedPrincipal
+                    if ($identityClassByName.ContainsKey($identityKey) -and ([string]$identityClassByName[$identityKey]).ToLowerInvariant() -eq 'group') {
+                        $discountedGroupMap[$identityKey] = $identity
+                    }
+                }
+                else {
+                    $directIdentityMap[$identityKey] = $identity
+                }
             }
         }
 
@@ -109,9 +136,33 @@ function Get-ShareSurferOwnerRiskPivots {
             $identityClassByName.ContainsKey($_) -and ([string]$identityClassByName[$_]).ToLowerInvariant() -eq 'group'
         })
         $expandedMemberCount = Get-ShareSurferExpandedMemberCount -GroupKeys $directGroupKeys -GroupEdges $GroupEdges
+        $discountedPrincipalsText = (@($discountedIdentityMap.Values) | Sort-Object) -join '; '
+        $discountReason = New-ShareSurferDiscountReason -Reason ((@($discountSummaries) | Sort-Object) -join '; ')
 
         $highRiskFindings = @($mappedFindings | Where-Object { Test-ShareSurferHighRiskSeverity -Severity ([string]$_.Severity) })
         $highRiskConflicts = @($mappedConflicts | Where-Object { Test-ShareSurferHighRiskSeverity -Severity ([string]$_.Severity) })
+        $readinessSignals = New-Object System.Collections.ArrayList
+        foreach ($findingType in @($mappedFindings | ForEach-Object { [string]$_.FindingType } | Sort-Object -Unique)) {
+            switch ($findingType) {
+                'LongPathOperationalPolicy' { Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'long path'; break }
+                'AzurePathComponentLimit' { Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'long path'; break }
+                'AzureFullPathLimit' { Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'long path'; break }
+                'BrokenInheritance' { Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'broken inheritance'; break }
+                'DeepExplicitAce' { Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'deep explicit ACE'; break }
+                default {
+                    if (-not [string]::IsNullOrWhiteSpace($findingType)) {
+                        Add-ShareSurferUniqueValue -Values $readinessSignals -Value ('finding: {0}' -f $findingType)
+                    }
+                    break
+                }
+            }
+        }
+        if ($mappedConflicts.Count -gt 0) {
+            Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'conflicts'
+        }
+        if ($partialShares.Count -gt 0) {
+            Add-ShareSurferUniqueValue -Values $readinessSignals -Value 'partial data'
+        }
         $riskLevel = 'Monitor'
         if (($highRiskFindings.Count + $highRiskConflicts.Count) -gt 0) {
             $riskLevel = 'High'
@@ -135,6 +186,12 @@ function Get-ShareSurferOwnerRiskPivots {
             DirectGroupCount = @($directGroupKeys).Count
             ExpandedMemberCount = $expandedMemberCount
             RiskLevel = $riskLevel
+            ReadinessSignals = (@($readinessSignals) | Sort-Object) -join '; '
+            DiscountedPrincipal = [bool]($discountedIdentityMap.Count -gt 0)
+            DiscountedPrincipalCount = $discountedIdentityMap.Count
+            DiscountedGroupCount = $discountedGroupMap.Count
+            DiscountedPrincipals = $discountedPrincipalsText
+            DiscountReason = $discountReason
         })
     }
 

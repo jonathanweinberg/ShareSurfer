@@ -90,9 +90,11 @@ function Get-ShareSurferPermissionedGroups {
         $AclEntries = @(),
         $Items = @(),
         $Identities = @(),
-        $GroupEdges = @()
+        $GroupEdges = @(),
+        $DiscountedPrincipals = @()
     )
 
+    $discountedPrincipalLookup = New-ShareSurferDiscountedPrincipalLookup -DiscountedPrincipals $DiscountedPrincipals
     $identityByKey = @{}
     foreach ($identity in @(ConvertTo-ShareSurferArray $Identities)) {
         $identityValue = ''
@@ -217,6 +219,7 @@ function Get-ShareSurferPermissionedGroups {
 
     @($groups.Values | ForEach-Object {
         $summary = Get-ShareSurferGroupExpansionSummary -Group ([string]$_.Group) -EdgesByParent $edgesByParent
+        $discountedPrincipal = Get-ShareSurferDiscountedPrincipal -Identity ([string]$_.Group) -DiscountedPrincipalLookup $discountedPrincipalLookup
         [pscustomobject]@{
             Group = [string]$_.Group
             DisplayName = [string]$_.DisplayName
@@ -235,6 +238,9 @@ function Get-ShareSurferPermissionedGroups {
             Sources = (@($_.Sources) | Sort-Object) -join '; '
             FullPath = [string]$_.ExamplePath
             ExamplePath = [string]$_.ExamplePath
+            DiscountedPrincipal = [bool]($null -ne $discountedPrincipal)
+            DiscountReason = if ($null -ne $discountedPrincipal -and $null -ne $discountedPrincipal.PSObject.Properties['Reason']) { [string]$discountedPrincipal.Reason } else { '' }
+            DiscountScope = if ($null -ne $discountedPrincipal -and $null -ne $discountedPrincipal.PSObject.Properties['Scope']) { [string]$discountedPrincipal.Scope } else { '' }
         }
     } | Sort-Object @{ Expression = 'ExpandedMembers'; Descending = $true }, Group)
 }

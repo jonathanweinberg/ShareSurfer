@@ -171,16 +171,20 @@ Use a dated export path for each run.
 
 ```powershell
 $exportPath = 'C:\ShareSurfer\exports\scan-2026-06-04'
+$discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
 
 Invoke-ShareSurferScan `
   -TargetPath '\\files01\Finance' `
   -OutputPath $exportPath `
   -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
+  -DiscountedPrincipalPath $discountedPrincipalPath `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
 ```
+
+Use `-DiscountedPrincipalPath` for broad admin, HelpDesk, scanner, backup, or platform groups that should stay visible as access evidence but should not create Migration Discovery relatedness. The CSV shape is `Identity`, optional `Reason`, and optional `Scope`. Discounted does not mean ignored, safe, or approved; `share_permissions.csv`, `acl_entries.csv`, `permissioned_groups.csv`, and the report still show the access.
 
 When the Windows SMB cmdlets can resolve the share directly, scan by computer and share name:
 
@@ -244,7 +248,8 @@ Use the report dashboard as a triage guide, not as the only source of truth.
 - `scan_events` records collection and export events, including partial-data and collection-error context.
 - `identities`, `group_edges`, and `org_chains` explain who an identity is, how group access expands, where the owner sits in the organization, and which user accounts may be service-account candidates because OBS and employee identifiers are missing.
 - Start with the executive summary, What Needs Review First queue, Review Workbench, Access Model, Migration Discovery, Direct Access Review table, priority actions, and dashboard filters, then use finding, conflict, owner, and org-chain rollups to identify the business unit or manager area that needs attention.
-- Use Migration Discovery before migration planning to find shares, folders, and files that appear to belong together by owner, business unit, path pattern, shared permission group, or review-risk signal.
+- Use Migration Discovery before migration planning to find shares, folders, and files that appear to belong together. The hybrid view is a single ranked list with top filters for Relationship Signals and Readiness Signals. Adaptive Rows show Progressive Chips with the Core Five: confidence, relationship summary, migration readiness, discounted access count, and evidence completeness. Expanding a row shows all relationship/readiness signal chips plus a short related-because sentence. The selected Related Data Area detail uses Narrative Plus Evidence Blocks for cluster summary, relationship evidence, readiness review, visible-but-discounted access principals, and raw evidence shortcuts.
+- Readiness or risk signals such as long paths, conflicts, broken inheritance, deep explicit ACEs, and partial data affect review priority and migration readiness, but they do not create relatedness by themselves. Planning state such as owner confirmed, cleanup needed, rerun needed, or migration candidate is a later roadmap feature, not current scan output.
 - Use the business-unit, data-owner, and review-risk filters to narrow mapped findings and conflicts before sending review queues to business owners.
 - Use the visual risk rollups to quickly filter the dashboard by finding type, conflict type, owner, or business unit before opening the detailed rows.
 - Use the Permissioned Group Review when a security group is assigned rights. Select a group row to focus the Group Browser on that expanded membership path.

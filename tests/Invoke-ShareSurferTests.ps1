@@ -281,6 +281,127 @@ function New-TestInventory {
     }
 }
 
+function New-TestDiscountedPrincipalInventory {
+    [pscustomobject]@{
+        Shares = @(
+            [pscustomobject]@{
+                ShareId = 'share-finance'
+                Source = 'Fixture'
+                ComputerName = 'files01'
+                ShareName = 'Finance'
+                UNCPath = '\\files01\Finance'
+                LocalPath = 'C:\ShareSurferLab\Finance'
+                Description = 'Finance test share'
+                PartialData = $false
+                PartialReason = ''
+            },
+            [pscustomobject]@{
+                ShareId = 'share-legal'
+                Source = 'Fixture'
+                ComputerName = 'files01'
+                ShareName = 'Legal'
+                UNCPath = '\\files01\Legal'
+                LocalPath = 'C:\ShareSurferLab\Legal'
+                Description = 'Legal test share'
+                PartialData = $false
+                PartialReason = ''
+            }
+        )
+        Items = @(
+            [pscustomobject]@{
+                ItemId = 'item-finance-root'
+                ShareId = 'share-finance'
+                ItemType = 'Directory'
+                FullPath = '\\files01\Finance'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\FinanceOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-legal-root'
+                ShareId = 'share-legal'
+                ItemType = 'Directory'
+                FullPath = '\\files01\Legal'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\LegalOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            }
+        )
+        SharePermissions = @(
+            [pscustomobject]@{
+                ShareId = 'share-finance'
+                Identity = 'CONTOSO\HelpDeskOps'
+                Rights = 'Full'
+                AccessControlType = 'Allow'
+                Source = 'Get-SmbShareAccess'
+            },
+            [pscustomobject]@{
+                ShareId = 'share-legal'
+                Identity = 'CONTOSO\HelpDeskOps'
+                Rights = 'Full'
+                AccessControlType = 'Allow'
+                Source = 'Get-SmbShareAccess'
+            }
+        )
+        AclEntries = @()
+        Identities = @(
+            [pscustomobject]@{
+                Identity = 'CONTOSO\HelpDeskOps'
+                SamAccountName = 'HelpDeskOps'
+                DisplayName = 'HelpDesk Operators'
+                ObjectClass = 'group'
+                EmployeeId = ''
+                EmployeeNumber = ''
+                UserPrincipalName = ''
+                Mail = 'helpdesk@example.test'
+                Department = 'Technology Support'
+                Title = ''
+                Company = 'Contoso'
+                Office = 'HQ-IT'
+                AccountEnabled = ''
+                Manager = ''
+                ManagerLevel1 = 'CONTOSO\IT.Manager'
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.IT.HELPDESK'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                DistinguishedName = 'CN=HelpDesk Operators,OU=Groups,DC=example,DC=test'
+            }
+        )
+        GroupEdges = @(
+            [pscustomobject]@{
+                ParentGroup = 'CONTOSO\HelpDeskOps'
+                ChildIdentity = 'CONTOSO\Casey.Support'
+                ChildObjectClass = 'user'
+                Depth = 1
+                IsCycle = $false
+                IsTruncated = $false
+            }
+        )
+        OrgChains = @()
+        OwnerMappings = @(
+            [pscustomobject]@{
+                Pattern = '\\files01\Finance*'
+                Owner = 'Finance Operations'
+                BusinessUnit = 'Finance'
+                Source = 'unit-test'
+            },
+            [pscustomobject]@{
+                Pattern = '\\files01\Legal*'
+                Owner = 'Legal Operations'
+                BusinessUnit = 'Legal'
+                Source = 'unit-test'
+            }
+        )
+        IdentityDirectory = @()
+    }
+}
+
 $tests = @(
     @{
         Name = 'New-ShareSurferLabFixture returns a deterministic AD and share fixture plan without mutating when OutputPlanOnly is used'
@@ -441,6 +562,7 @@ $tests = @(
             @(
                 [pscustomobject]@{ ParentGroup = 'CONTOSO\Readers'; ChildIdentity = 'CONTOSO\SSUser00001'; ChildObjectClass = 'user'; Depth = '1'; IsCycle = 'False'; IsTruncated = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'group_edges.csv') -NoTypeInformation -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $exportPath 'discounted_principals.csv') -Value '"Identity","Reason","Scope","MatchType"' -Encoding UTF8
             @(
                 [pscustomobject]@{ Identity = 'CONTOSO\Readers'; SamAccountName = 'Readers'; DisplayName = 'Readers'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.TEST.READ'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' },
                 [pscustomobject]@{ Identity = 'CONTOSO\Editors'; SamAccountName = 'Editors'; DisplayName = 'Editors'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.TEST.MODIFY'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' },
@@ -451,13 +573,13 @@ $tests = @(
                 [pscustomobject]@{ Identity = 'CONTOSO\SSUser00001'; EmployeeId = 'E0000001'; EmployeeNumber = '0000001'; ManagerLevel1 = 'CONTOSO\Manager01'; ManagerLevel2 = 'CONTOSO\Director01'; ManagerLevel3 = 'CONTOSO\VP01'; ObsPath = 'CORP.TEST.USER'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'org_chains.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RiskLevel = 'High' }
+                [pscustomobject]@{ BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RiskLevel = 'High'; ReadinessSignals = 'broken inheritance; conflicts; deep explicit ACE; long path'; DiscountedPrincipal = 'False'; DiscountedPrincipalCount = '0'; DiscountedGroupCount = '0'; DiscountedPrincipals = ''; DiscountReason = '' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_risk_pivots.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ RelatedAreaId = 'related-area-0001'; RelatedDataArea = 'Finance / Finance Operations'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; MigrationReadiness = 'Review'; MatchingShares = '1'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; ReviewItemCount = '4'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RelatedBecause = 'same owner mapping; same business unit; matching path pattern; shared permission group; shared review risk'; SuggestedNextAction = 'Confirm ownership, review access groups, and clean up findings or conflicts before migration.' }
+                [pscustomobject]@{ RelatedAreaId = 'related-area-0001'; RelatedDataArea = 'Finance / Finance Operations'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RelatednessStrength = 'Strong'; RelationshipSignalCount = '3'; SupportingSignalCount = '1'; ReadinessSignalCount = '4'; RelationshipSignals = 'same business unit; same owner; shared non-discounted business permission group'; SupportingEvidence = 'path/share/folder naming similarity'; ReadinessSignals = 'broken inheritance; conflicts; deep explicit ACE; long path'; CoreFiveChips = 'Confidence: Strong | Relationship: same owner + same business unit | Readiness: Review | Discounted access: 0 | Evidence: Complete with readiness review'; EvidenceCompleteness = 'Complete with readiness review'; RiskLevel = 'High'; MigrationReadiness = 'Review'; MatchingShares = '1'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; ReviewItemCount = '4'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; RelatedBecauseShort = 'This area appears together because strong confidence; same owner; same business unit; shared non-discounted business permission group; path/share/folder naming similarity.'; RelatedBecause = 'Strong confidence; same owner; same business unit; shared non-discounted business permission group; path/share/folder naming similarity'; SuggestedNextAction = 'Review ownership, access groups, findings, and conflicts before migration planning.'; DiscountedPrincipal = 'False'; DiscountedPrincipalCount = '0'; DiscountedGroupCount = '0'; DiscountedPrincipals = ''; DiscountReason = '' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'related_data_areas.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ ReviewPacketId = 'owner-review-0001'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; ReviewStatus = 'High priority review'; WhyReview = 'high-priority access or migration risk; permission-bearing security groups'; WhatToReviewFirst = 'access conflicts; findings; permissioned groups'; SuggestedNextAction = 'Confirm ownership, review assigned groups, and document the remediation decision.'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; MigrationReadiness = 'Review'; RelatedDataAreaCount = '1' }
+                [pscustomobject]@{ ReviewPacketId = 'owner-review-0001'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; ReviewStatus = 'High priority review'; WhyReview = 'high-priority access or migration risk; permission-bearing security groups'; WhatToReviewFirst = 'access conflicts; findings; permissioned groups'; SuggestedNextAction = 'Confirm ownership, review assigned groups, and document the remediation decision.'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; MigrationReadiness = 'Review'; RelatedDataAreaCount = '1'; RelatednessStrength = 'Strong'; RelationshipSignalCount = '3'; ReadinessSignals = 'broken inheritance; conflicts; deep explicit ACE; long path'; DiscountedPrincipal = 'False'; DiscountedPrincipalCount = '0'; DiscountedGroupCount = '0'; DiscountedPrincipals = ''; DiscountReason = '' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
@@ -877,6 +999,7 @@ $tests = @(
                 'acl_entries.csv',
                 'identities.csv',
                 'group_edges.csv',
+                'discounted_principals.csv',
                 'permissioned_groups.csv',
                 'org_chains.csv',
                 'owner_mappings.csv',
@@ -933,6 +1056,15 @@ $tests = @(
             Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'MigrationReadiness') 'Related data area CSV should include migration readiness.'
             Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'RelatedBecause') 'Related data area CSV should include explainable grouping reasons.'
             Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'SuggestedNextAction') 'Related data area CSV should include suggested next actions.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'RelatednessStrength') 'Related data area CSV should classify balanced relatedness strength.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'RelationshipSignalCount') 'Related data area CSV should count relationship signals separately from readiness signals.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'ReadinessSignals') 'Related data area CSV should explain readiness risks separately from relatedness.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'CoreFiveChips') 'Related data area CSV should include Progressive Chips Core Five summary.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'EvidenceCompleteness') 'Related data area CSV should include evidence completeness for adaptive rows.'
+            Assert-True ($relatedDataAreas[0].PSObject.Properties.Name -contains 'RelatedBecauseShort') 'Related data area CSV should include an adaptive-row short related-because sentence.'
+            Assert-True ($relatedDataAreas[0].CoreFiveChips -like '*Confidence:*' -and $relatedDataAreas[0].CoreFiveChips -like '*Discounted access:*') 'Core Five chips should include confidence and discounted access presence.'
+            Assert-True ($relatedDataAreas[0].RelatedBecause -notlike '*shared review risk*') 'Readiness risks should not create relatedness explanations.'
+            Assert-True ($relatedDataAreas[0].ReadinessSignals -like '*finding*' -or $relatedDataAreas[0].ReadinessSignals -like '*conflict*') 'Readiness signals should preserve review-priority evidence.'
             Assert-True ([int]$relatedDataAreas[0].ReviewItemCount -ge 1) 'Related data areas should count findings and conflicts that need migration review.'
             Assert-True ([int]$relatedDataAreas[0].DirectGroupCount -ge 1) 'Related data areas should count permissioned groups.'
 
@@ -956,6 +1088,66 @@ $tests = @(
             $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
             Assert-True ($events.EventType -contains 'ScanStarted') 'Scan events should record scan start.'
             Assert-True ($events.EventType -contains 'ExportCompleted') 'Scan events should record export completion.'
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan keeps discounted broad access visible without migration relatedness inflation'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDiscountedExport-' + [guid]::NewGuid().ToString('N'))
+            $discountedPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDiscountedPrincipals-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    Identity = 'CONTOSO\HelpDeskOps'
+                    Reason = 'Broad helpdesk access'
+                    Scope = 'Global'
+                }
+            ) | Export-Csv -LiteralPath $discountedPath -NoTypeInformation -Encoding UTF8
+
+            Invoke-ShareSurferScan -InputObject (New-TestDiscountedPrincipalInventory) -OutputPath $outputPath -DiscountedPrincipalPath $discountedPath -SkipIdentityEnrichment | Out-Null
+
+            $rawSharePermissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
+            Assert-Equal (@($rawSharePermissions | Where-Object { $_.Identity -eq 'CONTOSO\HelpDeskOps' }).Count) 2 'Raw share permissions must preserve discounted HelpDesk access evidence.'
+
+            $discountedPrincipals = Import-Csv -LiteralPath (Join-Path $outputPath 'discounted_principals.csv')
+            Assert-Equal $discountedPrincipals[0].Identity 'CONTOSO\HelpDeskOps' 'Discounted principal export should preserve the configured identity.'
+            Assert-Equal $discountedPrincipals[0].Reason 'Broad helpdesk access' 'Discounted principal export should preserve the configured reason.'
+            Assert-Equal $discountedPrincipals[0].Scope 'Global' 'Discounted principal export should preserve optional scope metadata.'
+
+            $permissionedGroups = Import-Csv -LiteralPath (Join-Path $outputPath 'permissioned_groups.csv')
+            $helpDeskGroup = @($permissionedGroups | Where-Object { $_.Group -eq 'CONTOSO\HelpDeskOps' })[0]
+            Assert-True ($helpDeskGroup.DiscountedPrincipal -eq 'True') 'Permissioned group review should mark discounted broad-access groups.'
+            Assert-Equal $helpDeskGroup.DiscountReason 'Broad helpdesk access' 'Permissioned group review should expose the discount reason.'
+            Assert-Equal ([int]$helpDeskGroup.ShareAssignments) 2 'Permissioned group review should still count raw assignments for discounted groups.'
+
+            $ownerRiskPivots = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_risk_pivots.csv')
+            Assert-Equal (@($ownerRiskPivots).Count) 2 'Unrelated owner mappings should remain separate pivots.'
+            foreach ($pivot in @($ownerRiskPivots)) {
+                Assert-Equal ([int]$pivot.DirectIdentityCount) 0 'Discounted principals should not inflate migration direct identity counts.'
+                Assert-Equal ([int]$pivot.DirectGroupCount) 0 'Discounted groups should not inflate migration direct group counts.'
+                Assert-Equal ([int]$pivot.ExpandedMemberCount) 0 'Discounted groups should not inflate migration expanded member counts.'
+                Assert-True ($pivot.DiscountedPrincipal -eq 'True') 'Owner pivots should show that visible access was discounted from relatedness.'
+                Assert-True ($pivot.DiscountReason -like '*Broad helpdesk access*') 'Owner pivots should carry the discount reason for the main hub.'
+            }
+
+            $relatedDataAreas = Import-Csv -LiteralPath (Join-Path $outputPath 'related_data_areas.csv')
+            Assert-Equal (@($relatedDataAreas).Count) 2 'Discounted broad access should not collapse unrelated shares into one related data area.'
+            foreach ($area in @($relatedDataAreas)) {
+                Assert-Equal ([int]$area.DirectGroupCount) 0 'Related data areas should exclude discounted groups from group relatedness counts.'
+                Assert-True ($area.RelatedBecause -notlike '*shared permission group*') 'Related data areas should not cite discounted groups as shared permission-group relatedness.'
+                Assert-True ($area.RelatedBecause -notlike '*shared review risk*') 'Relatedness explanations should not cite readiness risks.'
+                Assert-True ([int]$area.RelationshipSignalCount -ge 1) 'Related data areas should count non-discounted relationship signals.'
+                Assert-True ($area.DiscountedPrincipal -eq 'True') 'Related data areas should visibly mark discounted broad-access principals.'
+                Assert-True ($area.DiscountReason -like '*visible but not used for migration relatedness*') 'Related data areas should explain visible-but-not-relatedness semantics.'
+            }
+
+            $ownerReviewPackets = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_review_packets.csv')
+            foreach ($packet in @($ownerReviewPackets)) {
+                Assert-Equal ([int]$packet.DirectGroupCount) 0 'Owner review packets should use non-discounted direct group counts for migration review sizing.'
+                Assert-True ($packet.DiscountedPrincipal -eq 'True') 'Owner review packets should keep discounted access visible in the main review hub.'
+                Assert-True ($packet.DiscountReason -like '*Broad helpdesk access*') 'Owner review packets should carry the discount reason.'
+                Assert-True ($packet.WhyReview -notlike '*permission-bearing security groups*') 'Discounted-only groups should not make owner packets look related by permissioned groups.'
+            }
         }
     },
     @{
@@ -1519,7 +1711,14 @@ $tests = @(
             Assert-True ($report -like '*Migration Discovery*') 'Report should include a migration discovery lane for related data areas.'
             Assert-True ($report -like '*RelatedDataArea*') 'Migration discovery rows should identify related data areas.'
             Assert-True ($report -like '*related_data_areas*') 'Report should prefer the related data areas CSV when present.'
-            Assert-True ($report -like '*Migration Candidate Packet*') 'Report should include a candidate packet for selected related data areas.'
+            Assert-True ($report -like '*Selected Related Data Area Detail*') 'Report should include a selected-cluster detail panel for related data areas.'
+            Assert-True ($report -like '*C Hybrid ranked list*') 'Report should describe the selected C Hybrid migration discovery presentation.'
+            Assert-True ($report -like '*Adaptive Rows*') 'Report should describe adaptive row behavior for migration discovery.'
+            Assert-True ($report -like '*Progressive Chips*') 'Report should expose progressive chip semantics for migration discovery rows.'
+            Assert-True ($report -like '*Core Five*') 'Report should mention Core Five chips in the selected detail behavior.'
+            Assert-True ($report -like '*Narrative Plus Evidence Blocks*') 'Report should use the accepted selected-cluster detail model.'
+            Assert-True ($report -like '*relationship-signal-filter*') 'Report should include a first-class relationship signal filter.'
+            Assert-True ($report -like '*readiness-signal-filter*') 'Report should include a first-class readiness signal filter.'
             Assert-True ($report -like '*buildMigrationDiscoveryRows*') 'Report should dynamically derive related data areas from existing CSV exports.'
             Assert-True ($report -like '*RelatedBecause*') 'Migration discovery should explain why rows were grouped.'
             Assert-True ($report -like '*focusMigrationArea*') 'Migration discovery rows should focus owner and business-unit review filters.'
@@ -1892,7 +2091,7 @@ $tests = @(
             Assert-True ($redactedOwnerRiskPivots -like '*ID-*') 'Owner risk pivots should preserve review relationships with stable tokens.'
             Assert-True ($redactedRelatedDataAreas -notlike '*Finance*') 'Related data areas must anonymize source owner and business-unit labels.'
             Assert-True ($redactedRelatedDataAreas -like '*MigrationReadiness*') 'Related data areas should preserve migration readiness headers.'
-            Assert-True ($redactedRelatedDataAreas -like '*same owner mapping*') 'Related data areas should preserve safe relatedness reasons.'
+            Assert-True ($redactedRelatedDataAreas -like '*Strong confidence*') 'Related data areas should preserve safe relatedness confidence reasons.'
             Assert-True ($redactedOwnerReviewPackets -notlike '*Finance*') 'Owner review packets must anonymize owner and business-unit labels.'
             Assert-True ($redactedOwnerReviewPackets -like '*WhyReview*') 'Owner review packets should preserve guidance headers.'
             Assert-True ($redactedOwnerReviewPackets -like '*SuggestedNextAction*') 'Owner review packets should preserve next-action guidance.'

@@ -31,7 +31,8 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `acl_entries.csv` | One row per NTFS ACL ACE | Captures item-level filesystem permissions. |
 | `identities.csv` | One row per enriched identity | Normalizes user, group, and service identity metadata, including extra directory fields that help correlate owners and business units. |
 | `group_edges.csv` | One row per group membership edge | Represents nested group expansion. |
-| `permissioned_groups.csv` | One row per permission-bearing group | Lists groups that directly grant share or NTFS access, with assignment counts, expansion health, rights, and example path context. |
+| `discounted_principals.csv` | One row per configured discounted principal | Preserves the operator-supplied broad-access identities that stay visible but do not drive migration relatedness. |
+| `permissioned_groups.csv` | One row per permission-bearing group | Lists groups that directly grant share or NTFS access, with assignment counts, expansion health, rights, example path context, and discounted-principal labels. |
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
@@ -87,9 +88,15 @@ Expected columns: `ParentGroup`, `ChildIdentity`, `ChildObjectClass`, `Depth`, `
 
 Use `IsCycle=True` for detected group loops. Use `IsTruncated=True` when expansion stops before the full graph is known.
 
+### `discounted_principals.csv`
+
+Expected columns: `Identity`, `Reason`, `Scope`, `MatchType`.
+
+Create this file with `Identity` and optional `Reason` and `Scope`, then pass it to `Invoke-ShareSurferScan -DiscountedPrincipalPath`. V1 uses exact, case-insensitive identity matching. Discounted means visible access evidence that is not used for migration relatedness; it does not mean ignored, safe, approved, or remediated. Raw `share_permissions.csv`, `acl_entries.csv`, identity/group exports, and group review rows still show the access.
+
 ### `permissioned_groups.csv`
 
-Expected columns: `Group`, `DisplayName`, `ObjectClass`, `ObsPath`, `ManagerLevel1`, `ShareAssignments`, `NtfsAssignments`, `ExpandedMembers`, `MaxDepth`, `HasCycle`, `IsTruncated`, `Rights`, `ShareId`, `ShareIds`, `Sources`, `FullPath`, `ExamplePath`.
+Expected columns: `Group`, `DisplayName`, `ObjectClass`, `ObsPath`, `ManagerLevel1`, `ShareAssignments`, `NtfsAssignments`, `ExpandedMembers`, `MaxDepth`, `HasCycle`, `IsTruncated`, `Rights`, `ShareId`, `ShareIds`, `Sources`, `FullPath`, `ExamplePath`, `DiscountedPrincipal`, `DiscountReason`, `DiscountScope`.
 
 Use this file to start group access review from groups that actually grant access. It summarizes where a group was assigned, whether the assignment was at the share gate or folder/file layer, which rights were observed, how many members were expanded, and whether expansion hit a cycle or truncation limit.
 
@@ -109,21 +116,21 @@ When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV 
 
 ### `owner_risk_pivots.csv`
 
-Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RiskLevel`.
+Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RiskLevel`, `ReadinessSignals`, `DiscountedPrincipal`, `DiscountedPrincipalCount`, `DiscountedGroupCount`, `DiscountedPrincipals`, `DiscountReason`.
 
 Use this file when business reviewers need a CSV-first view of which owner or business unit should review a share area. The direct identity, direct group, and expanded member counts size the likely access-review queue before a reviewer opens the detailed identity and group exports. `RiskLevel` is `High` when mapped findings or conflicts include high-severity rows, `Review` when mapped findings, conflicts, or partial shares exist, and `Monitor` when the mapping has no current risk rows.
 
 ### `related_data_areas.csv`
 
-Expected columns: `RelatedAreaId`, `RelatedDataArea`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `MigrationReadiness`, `MatchingShares`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `ReviewItemCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RelatedBecause`, `SuggestedNextAction`.
+Expected columns: `RelatedAreaId`, `RelatedDataArea`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RelatednessStrength`, `RelationshipSignalCount`, `SupportingSignalCount`, `ReadinessSignalCount`, `RelationshipSignals`, `SupportingEvidence`, `ReadinessSignals`, `CoreFiveChips`, `EvidenceCompleteness`, `RiskLevel`, `MigrationReadiness`, `MatchingShares`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `ReviewItemCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RelatedBecauseShort`, `RelatedBecause`, `SuggestedNextAction`, `DiscountedPrincipal`, `DiscountedPrincipalCount`, `DiscountedGroupCount`, `DiscountedPrincipals`, `DiscountReason`.
 
-Use this file before migration planning to find shares, folders, and files that appear to belong together. `RelatedBecause` is intentionally plain language, such as same owner mapping, same business unit, matching path pattern, shared permission group, shared review risk, or partial collection gap. `MigrationReadiness` is not approval; it indicates whether the current scan suggests the area is a candidate, needs review, or is blocked by scan gaps.
+Use this file before migration planning to find shares, folders, and files that appear to belong together. Balanced relatedness keeps relationship signals separate from readiness signals: `Strong` clusters have 2+ relationship signals, `Possible` clusters have 1 relationship signal plus supporting evidence, and `Needs Evidence` rows need more relationship proof. Readiness signals such as long path, conflicts, broken inheritance, deep explicit ACE, and partial data affect review priority and `MigrationReadiness`, but do not create relatedness by themselves. `CoreFiveChips` supports Adaptive Rows by summarizing confidence, relationship signal summary, migration readiness, discounted access count, and evidence completeness. Discounted principals are visible in the row and detail semantics but excluded from relatedness counts.
 
 ### `owner_review_packets.csv`
 
-Expected columns: `ReviewPacketId`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `ReviewStatus`, `WhyReview`, `WhatToReviewFirst`, `SuggestedNextAction`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `MigrationReadiness`, `RelatedDataAreaCount`.
+Expected columns: `ReviewPacketId`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `ReviewStatus`, `WhyReview`, `WhatToReviewFirst`, `SuggestedNextAction`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `MigrationReadiness`, `RelatedDataAreaCount`, `RelatednessStrength`, `RelationshipSignalCount`, `ReadinessSignals`, `DiscountedPrincipal`, `DiscountedPrincipalCount`, `DiscountedGroupCount`, `DiscountedPrincipals`, `DiscountReason`.
 
-Use this file when business owners need a CSV-first review packet instead of raw ACL evidence. `WhyReview`, `WhatToReviewFirst`, and `SuggestedNextAction` are plain-language fields generated from owner pivots, findings, conflicts, partial-share counts, group counts, and related-data-area readiness. The packet is not approval; it is a starting point for owner confirmation and access cleanup.
+Use this file when business owners need a CSV-first review packet instead of raw ACL evidence. `WhyReview`, `WhatToReviewFirst`, and `SuggestedNextAction` are plain-language fields generated from owner pivots, findings, conflicts, partial-share counts, non-discounted group counts, and related-data-area readiness. The packet is view-only current-state evidence, not approval or planning state. Per-cluster review packet export and interactive planning states are later roadmap features.
 
 ### `conflicts.csv`
 

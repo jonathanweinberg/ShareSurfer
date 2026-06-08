@@ -72,6 +72,12 @@ function Get-ShareSurferExportSchema {
             'IsCycle',
             'IsTruncated'
         )
+        'discounted_principals.csv' = @(
+            'Identity',
+            'Reason',
+            'Scope',
+            'MatchType'
+        )
         'permissioned_groups.csv' = @(
             'Group',
             'DisplayName',
@@ -89,7 +95,10 @@ function Get-ShareSurferExportSchema {
             'ShareIds',
             'Sources',
             'FullPath',
-            'ExamplePath'
+            'ExamplePath',
+            'DiscountedPrincipal',
+            'DiscountReason',
+            'DiscountScope'
         )
         'org_chains.csv' = @(
             'Identity',
@@ -126,7 +135,13 @@ function Get-ShareSurferExportSchema {
             'DirectIdentityCount',
             'DirectGroupCount',
             'ExpandedMemberCount',
-            'RiskLevel'
+            'RiskLevel',
+            'ReadinessSignals',
+            'DiscountedPrincipal',
+            'DiscountedPrincipalCount',
+            'DiscountedGroupCount',
+            'DiscountedPrincipals',
+            'DiscountReason'
         )
         'related_data_areas.csv' = @(
             'RelatedAreaId',
@@ -135,6 +150,15 @@ function Get-ShareSurferExportSchema {
             'Owner',
             'Pattern',
             'Source',
+            'RelatednessStrength',
+            'RelationshipSignalCount',
+            'SupportingSignalCount',
+            'ReadinessSignalCount',
+            'RelationshipSignals',
+            'SupportingEvidence',
+            'ReadinessSignals',
+            'CoreFiveChips',
+            'EvidenceCompleteness',
             'RiskLevel',
             'MigrationReadiness',
             'MatchingShares',
@@ -148,8 +172,14 @@ function Get-ShareSurferExportSchema {
             'DirectIdentityCount',
             'DirectGroupCount',
             'ExpandedMemberCount',
+            'RelatedBecauseShort',
             'RelatedBecause',
-            'SuggestedNextAction'
+            'SuggestedNextAction',
+            'DiscountedPrincipal',
+            'DiscountedPrincipalCount',
+            'DiscountedGroupCount',
+            'DiscountedPrincipals',
+            'DiscountReason'
         )
         'owner_review_packets.csv' = @(
             'ReviewPacketId',
@@ -172,7 +202,15 @@ function Get-ShareSurferExportSchema {
             'DirectGroupCount',
             'ExpandedMemberCount',
             'MigrationReadiness',
-            'RelatedDataAreaCount'
+            'RelatedDataAreaCount',
+            'RelatednessStrength',
+            'RelationshipSignalCount',
+            'ReadinessSignals',
+            'DiscountedPrincipal',
+            'DiscountedPrincipalCount',
+            'DiscountedGroupCount',
+            'DiscountedPrincipals',
+            'DiscountReason'
         )
         'conflicts.csv' = @(
             'ConflictId',
