@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc">
   <title id="title">ShareSurfer dataset transfer to dashboard host workflow</title>
   <desc id="desc">A labeled workflow showing a validated ShareSurfer dataset moving from a restricted collector host through an approved transfer process to a dashboard review host.</desc>
   <defs>
     <style>
       .bg { fill: #f8fafc; }
       .restricted { fill: #eff6ff; stroke: #2563eb; stroke-width: 3; stroke-dasharray: 10 8; }
-      .review { fill: #f0fdfa; stroke: #0f766e; stroke-width: 3; }
       .gate { fill: #fffbeb; stroke: #d97706; stroke-width: 3; }
+      .review { fill: #f0fdfa; stroke: #0f766e; stroke-width: 3; }
       .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
       .blue { fill: #dbeafe; stroke: #60a5fa; stroke-width: 2; }
       .green { fill: #dcfce7; stroke: #34d399; stroke-width: 2; }
@@ -14,20 +14,21 @@
       .red { fill: #fee2e2; stroke: #f87171; stroke-width: 2; }
       .title { font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 700; fill: #0f172a; }
       .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 18px; fill: #334155; }
+      .zone-title { font-family: Arial, Helvetica, sans-serif; font-size: 21px; font-weight: 700; fill: #0f172a; }
       .h { font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 700; fill: #0f172a; }
-      .t { font-family: Arial, Helvetica, sans-serif; font-size: 16px; fill: #334155; }
-      .small { font-family: Arial, Helvetica, sans-serif; font-size: 14px; fill: #475569; }
-      .tiny { font-family: Arial, Helvetica, sans-serif; font-size: 12px; fill: #64748b; }
+      .t { font-family: Arial, Helvetica, sans-serif; font-size: 15px; fill: #334155; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 13px; fill: #475569; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; fill: #1e40af; }
       .step { font-family: Arial, Helvetica, sans-serif; font-size: 16px; font-weight: 700; fill: #ffffff; }
       .badge { fill: #1d4ed8; }
       .badge-green { fill: #0f766e; }
       .badge-amber { fill: #b45309; }
-      .arrow { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .arrow { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrowBlue); }
       .arrow-green { stroke: #0f766e; stroke-width: 3; fill: none; marker-end: url(#arrowGreen); }
       .arrow-amber { stroke: #b45309; stroke-width: 3; fill: none; marker-end: url(#arrowAmber); }
-      .thin { stroke: #94a3b8; stroke-width: 1.5; fill: none; }
+      .thin { stroke: #94a3b8; stroke-width: 1.4; fill: none; }
     </style>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
     </marker>
     <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
@@ -38,85 +39,95 @@
     </marker>
   </defs>
 
-  <rect class="bg" width="1440" height="900"/>
-  <text x="56" y="58" class="title">Dataset Handoff: Restricted Collector to Dashboard Review Host</text>
-  <text x="56" y="88" class="subtitle">Move the validated export package, not the collector privileges. Review can happen somewhere more permissive without changing the scan evidence.</text>
+  <rect class="bg" width="1600" height="960"/>
+  <text x="56" y="58" class="title">Dataset Handoff Workflow</text>
+  <text x="56" y="90" class="subtitle">Move the validated evidence package, not the collection privileges.</text>
 
-  <rect x="50" y="132" width="430" height="655" rx="24" class="restricted"/>
-  <text x="82" y="170" class="h">Restricted collector side</text>
-  <text x="82" y="194" class="small">Access to file servers, shares, ACLs, and AD.</text>
+  <rect x="48" y="136" width="450" height="666" rx="24" class="restricted"/>
+  <text x="84" y="176" class="zone-title">Restricted collector side</text>
+  <text x="84" y="203" class="small">Access to file servers, shares, ACLs, and AD remains here.</text>
 
-  <rect x="88" y="238" width="330" height="150" rx="16" class="blue"/>
-  <circle cx="122" cy="272" r="18" class="badge"/>
-  <text x="117" y="278" class="step">1</text>
-  <text x="148" y="278" class="h">Validated export folder</text>
-  <text x="112" y="316" class="t">CSV evidence set</text>
-  <text x="112" y="342" class="t">report.html</text>
-  <text x="112" y="368" class="t">scan_manifest.csv and events</text>
+  <rect x="86" y="246" width="374" height="150" rx="16" class="blue"/>
+  <circle cx="120" cy="280" r="18" class="badge"/>
+  <text x="115" y="286" class="step">1</text>
+  <text x="150" y="286" class="h">Validated export folder</text>
+  <text class="t">
+    <tspan x="116" y="326">CSV evidence set and report.html</tspan>
+    <tspan x="116" y="354">scan_manifest.csv and scan_events.jsonl</tspan>
+  </text>
 
-  <rect x="88" y="430" width="330" height="160" rx="16" class="card"/>
-  <circle cx="122" cy="464" r="18" class="badge"/>
-  <text x="117" y="470" class="step">2</text>
-  <text x="148" y="470" class="h">Quality gates before handoff</text>
-  <text x="112" y="508" class="t">Test-ShareSurferExport</text>
-  <text x="112" y="534" class="t">Review partial shares</text>
-  <text x="112" y="560" class="t">Confirm OBS attribute and thresholds</text>
+  <rect x="86" y="438" width="374" height="168" rx="16" class="card"/>
+  <circle cx="120" cy="472" r="18" class="badge"/>
+  <text x="115" y="478" class="step">2</text>
+  <text x="150" y="478" class="h">Quality gates before handoff</text>
+  <text class="t">
+    <tspan x="116" y="518">Run Test-ShareSurferExport</tspan>
+    <tspan x="116" y="546">Review partial shares and errors</tspan>
+    <tspan x="116" y="574">Confirm OBS attribute and thresholds</tspan>
+  </text>
 
-  <rect x="88" y="632" width="330" height="105" rx="16" class="amber"/>
-  <circle cx="122" cy="666" r="18" class="badge-amber"/>
-  <text x="117" y="672" class="step">3</text>
-  <text x="148" y="672" class="h">Package for approved transfer</text>
-  <text x="112" y="710" class="t">Zip export folder + SHA256 hash</text>
+  <rect x="86" y="648" width="374" height="108" rx="16" class="amber"/>
+  <circle cx="120" cy="682" r="18" class="badge-amber"/>
+  <text x="115" y="688" class="step">3</text>
+  <text x="150" y="688" class="h">Package for transfer</text>
+  <text x="116" y="728" class="t">Zip the export folder and record SHA256.</text>
 
-  <rect x="535" y="238" width="355" height="500" rx="24" class="gate"/>
-  <text x="568" y="280" class="h">Transfer control point</text>
-  <text x="568" y="306" class="small">Use your organization's approved process.</text>
-  <line x1="568" y1="330" x2="852" y2="330" class="thin"/>
-  <text x="568" y="368" class="t">Verify package hash</text>
-  <text x="568" y="398" class="t">Confirm destination and reviewer role</text>
-  <text x="568" y="428" class="t">Keep raw export in trusted handling</text>
-  <text x="568" y="458" class="t">Record transfer ticket or evidence</text>
+  <rect x="574" y="216" width="450" height="526" rx="24" class="gate"/>
+  <text x="612" y="258" class="zone-title">Transfer control point</text>
+  <text x="612" y="285" class="small">Use the organization's approved transfer process.</text>
 
-  <rect x="570" y="510" width="285" height="160" rx="16" class="red"/>
-  <text x="594" y="548" class="h">Do not use raw export for</text>
-  <text x="594" y="578" class="t">External support tickets</text>
-  <text x="594" y="604" class="t">Unapproved email attachment</text>
-  <text x="594" y="630" class="t">Public bug reports</text>
-  <text x="594" y="656" class="small">Use redacted support bundle instead.</text>
+  <rect x="612" y="330" width="374" height="168" rx="16" class="card"/>
+  <text x="642" y="370" class="h">Before release</text>
+  <text class="t">
+    <tspan x="642" y="410">Verify package hash</tspan>
+    <tspan x="642" y="438">Confirm destination and reviewer role</tspan>
+    <tspan x="642" y="466">Record ticket or transfer evidence</tspan>
+  </text>
 
-  <rect x="952" y="132" width="438" height="655" rx="24" class="review"/>
-  <text x="984" y="170" class="h">Dashboard review side</text>
-  <text x="984" y="194" class="small">More permissive host for browser tooling and review.</text>
+  <rect x="612" y="540" width="374" height="146" rx="16" class="red"/>
+  <text x="642" y="580" class="h">Do not send raw export to</text>
+  <text class="t">
+    <tspan x="642" y="620">External support tickets</tspan>
+    <tspan x="642" y="648">Unapproved email or public reports</tspan>
+  </text>
+  <text x="642" y="674" class="small">Use a redacted support bundle instead.</text>
 
-  <rect x="990" y="238" width="345" height="150" rx="16" class="green"/>
-  <circle cx="1024" cy="272" r="18" class="badge-green"/>
-  <text x="1019" y="278" class="step">4</text>
-  <text x="1050" y="278" class="h">Unpack dataset</text>
-  <text x="1014" y="316" class="t">Expand-Archive into review folder</text>
-  <text x="1014" y="342" class="t">Keep CSVs and report together</text>
-  <text x="1014" y="368" class="t">No rescan needed on review host</text>
+  <rect x="1100" y="136" width="452" height="666" rx="24" class="review"/>
+  <text x="1136" y="176" class="zone-title">Dashboard review side</text>
+  <text x="1136" y="203" class="small">Browser tooling and review can live outside the collector host.</text>
 
-  <rect x="990" y="430" width="345" height="160" rx="16" class="card"/>
-  <circle cx="1024" cy="464" r="18" class="badge-green"/>
-  <text x="1019" y="470" class="step">5</text>
-  <text x="1050" y="470" class="h">Open a review surface</text>
-  <text x="1014" y="508" class="t">Option A: open report.html</text>
-  <text x="1014" y="534" class="t">Option B: package standalone dashboard</text>
-  <text x="1014" y="560" class="t">No internet or server after packaging</text>
+  <rect x="1138" y="246" width="376" height="150" rx="16" class="green"/>
+  <circle cx="1172" cy="280" r="18" class="badge-green"/>
+  <text x="1167" y="286" class="step">4</text>
+  <text x="1202" y="286" class="h">Unpack dataset</text>
+  <text class="t">
+    <tspan x="1168" y="326">Expand-Archive into a review folder</tspan>
+    <tspan x="1168" y="354">Keep CSVs and report together</tspan>
+  </text>
 
-  <rect x="990" y="632" width="345" height="105" rx="16" class="card"/>
-  <circle cx="1024" cy="666" r="18" class="badge-green"/>
-  <text x="1019" y="672" class="step">6</text>
-  <text x="1050" y="672" class="h">Start review where it matters</text>
-  <text x="1014" y="710" class="t">Owner packets, migration clusters, groups, findings</text>
+  <rect x="1138" y="438" width="376" height="168" rx="16" class="card"/>
+  <circle cx="1172" cy="472" r="18" class="badge-green"/>
+  <text x="1167" y="478" class="step">5</text>
+  <text x="1202" y="478" class="h">Open a review surface</text>
+  <text class="t">
+    <tspan x="1168" y="518">Option A: open report.html</tspan>
+    <tspan x="1168" y="546">Option B: package standalone dashboard</tspan>
+    <tspan x="1168" y="574">No internet or server after packaging</tspan>
+  </text>
 
-  <path d="M418 315 C470 315 482 318 535 338" class="arrow"/>
-  <path d="M418 510 C482 510 490 520 535 530" class="arrow"/>
-  <path d="M418 685 C485 685 500 654 535 626" class="arrow-amber"/>
-  <path d="M890 365 C922 355 930 330 990 314" class="arrow-green"/>
-  <path d="M890 520 C920 510 940 510 990 510" class="arrow-green"/>
-  <path d="M890 650 C925 670 944 682 990 684" class="arrow-green"/>
+  <rect x="1138" y="648" width="376" height="108" rx="16" class="card"/>
+  <circle cx="1172" cy="682" r="18" class="badge-green"/>
+  <text x="1167" y="688" class="step">6</text>
+  <text x="1202" y="688" class="h">Start where review matters</text>
+  <text x="1168" y="728" class="t">Owners, migration clusters, groups, findings.</text>
 
-  <rect x="70" y="820" width="1298" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
-  <text x="94" y="850" class="t">Review host gets the evidence package, not elevated collection rights. If the package leaves trusted handling, generate and inspect a redacted support bundle.</text>
+  <path d="M460 320 C510 320 530 348 574 384" class="arrow"/>
+  <path d="M460 522 C510 522 530 522 574 522" class="arrow"/>
+  <path d="M460 702 C516 702 532 660 574 620" class="arrow-amber"/>
+  <path d="M1024 384 C1062 358 1072 332 1138 322" class="arrow-green"/>
+  <path d="M1024 522 C1060 522 1082 522 1138 522" class="arrow-green"/>
+  <path d="M1024 642 C1064 670 1080 690 1138 696" class="arrow-green"/>
+
+  <rect x="80" y="842" width="1440" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="108" y="872" class="t">Review host gets evidence only, not elevated collection rights. If the package leaves trusted handling, generate and inspect a redacted support bundle first.</text>
 </svg>

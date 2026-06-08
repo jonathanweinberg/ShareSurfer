@@ -2890,6 +2890,10 @@ $tests = @(
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
             Assert-True ($readmeText -like '*Basic Use Cases*') 'README should present basic use cases.'
             Assert-True ($readmeText -like '*Nonpermissive collector workflow*') 'README should present the nonpermissive collector use case.'
+            Assert-True ($readmeText -like '*Nonpermissive / Two-Host Operation*') 'README should include the nonpermissive operating model on the main page.'
+            Assert-True ($readmeText -like '*docs/visuals/nonpermissive-collector-workflow.svg*') 'README should show the nonpermissive collector workflow visual.'
+            Assert-True ($readmeText -like '*Collector host:*') 'README should explain the collector host role.'
+            Assert-True ($readmeText -like '*Dashboard host:*') 'README should explain the dashboard host role.'
             Assert-True ($readmeText -like '*docs/nonpermissive-collection-dashboard-workflow.md*') 'README should link the nonpermissive collection workflow.'
             Assert-True ($readmeText -like '*docs/visuals/dataset-transfer-dashboard-workflow.svg*') 'README should show the dataset transfer dashboard visual.'
 

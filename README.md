@@ -30,6 +30,20 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 | Broad admin or HelpDesk access cleanup | Provide a discounted principals CSV | Visible access evidence that does not inflate Migration Discovery relatedness |
 | Support or bug report | Create a redacted support bundle after export validation | Stable-token CSVs, manifests, and optional redacted report |
 
+## Nonpermissive / Two-Host Operation
+
+Many ShareSurfer runs will happen in environments where the collector host is intentionally limited: no internet access, no npm, no browser tooling, and no elevated dashboard workstation behavior. That is fine. The collector only needs Windows PowerShell 5.1, the ShareSurfer module, read access to the target shares, and directory read access for identity enrichment.
+
+![Nonpermissive collector workflow](docs/visuals/nonpermissive-collector-workflow.svg)
+
+Keep these roles separate:
+
+- **Collector host:** runs `Invoke-ShareSurferScan`, reads SMB/share/ACL/owner/inheritance data, enriches identities from AD or LDAP, and writes the normalized export folder.
+- **Validation step:** runs `Test-ShareSurferExport`, reviews partial-data warnings, and confirms the selected OBS attribute, depth thresholds, and path policy.
+- **Transfer package:** compresses the validated export folder and records a SHA256 hash before the data leaves the restricted environment.
+- **Dashboard host:** opens `report.html` or a packaged standalone dashboard from the exported dataset. It does not need rights to rescan the file shares.
+- **Support path:** if anything leaves trusted handling for support, use a redacted support bundle instead of raw CSVs.
+
 The most common production pattern is two-host review:
 
 ![Dataset transfer to dashboard host](docs/visuals/dataset-transfer-dashboard-workflow.svg)
