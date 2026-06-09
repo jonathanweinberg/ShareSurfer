@@ -100,6 +100,24 @@ interface EvidenceDrill {
   emptyMessage: string;
 }
 
+type ReviewDecisionValue = "Expected" | "Needs Follow-up";
+
+interface ReviewDecision {
+  issueId: string;
+  decision: ReviewDecisionValue;
+  updatedAt: string;
+  title: string;
+  category: string;
+  severity: string;
+  owner: string;
+  businessUnit: string;
+  path: string;
+  identity: string;
+  source: string;
+}
+
+type ReviewDecisionMap = Record<string, ReviewDecision>;
+
 const views: Array<{ key: ViewKey; label: string; icon: JSX.Element; helper: string }> = [
   { key: "overview", label: "Overview", icon: <Gauge size={18} />, helper: "Start here" },
   { key: "findings", label: "Findings", icon: <ShieldAlert size={18} />, helper: "Issues & conflicts" },
@@ -120,6 +138,7 @@ const defaultFilters: FilterState = {
 };
 
 const dashboardSessionKey = "sharesurfer.dashboard.state.v1";
+const reviewDecisionsStorageKey = "sharesurfer.reviewDecisions.v1";
 
 const searchScopeFields: Record<SearchScope, string[]> = {
   owner: ["Owner", "DataOwner", "BusinessUnit", "Department"],
@@ -238,6 +257,100 @@ function saveDashboardState(state: PersistedDashboardState): void {
   } catch {
     // Session persistence is a convenience; the dashboard must still work when browser storage is unavailable.
   }
+}
+
+function isReviewDecisionValue(value: unknown): value is ReviewDecisionValue {
+  return value === "Expected" || value === "Needs Follow-up";
+}
+
+function isReviewDecision(value: unknown): value is ReviewDecision {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<ReviewDecision>;
+  return (
+    typeof candidate.issueId === "string" &&
+    isReviewDecisionValue(candidate.decision) &&
+    typeof candidate.updatedAt === "string" &&
+    ["title", "category", "severity", "owner", "businessUnit", "path", "identity", "source"].every(
+      (key) => typeof candidate[key as keyof ReviewDecision] === "string"
+    )
+  );
+}
+
+function loadReviewDecisions(): ReviewDecisionMap {
+  try {
+    const raw = window.localStorage.getItem(reviewDecisionsStorageKey);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => isReviewDecision(value))) as ReviewDecisionMap;
+  } catch {
+    return {};
+  }
+}
+
+function saveReviewDecisions(decisions: ReviewDecisionMap): void {
+  try {
+    if (Object.keys(decisions).length === 0) {
+      window.localStorage.removeItem(reviewDecisionsStorageKey);
+      return;
+    }
+    window.localStorage.setItem(reviewDecisionsStorageKey, JSON.stringify(decisions));
+  } catch {
+    // Local review decisions are a convenience layer; the evidence report remains read-only without storage.
+  }
+}
+
+function buildReviewDecision(issue: IssueSummary, decision: ReviewDecisionValue): ReviewDecision {
+  return {
+    issueId: issue.id,
+    decision,
+    updatedAt: new Date().toISOString(),
+    title: issue.title,
+    category: issue.category,
+    severity: issue.severity,
+    owner: issue.owner,
+    businessUnit: issue.businessUnit,
+    path: issue.path,
+    identity: issue.identity,
+    source: issue.source
+  };
+}
+
+function csvCell(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function buildReviewDecisionsCsv(decisions: ReviewDecision[]): string {
+  const headers = ["IssueId", "Decision", "UpdatedAt", "Title", "Category", "Severity", "Owner", "BusinessUnit", "Path", "Identity", "Source"];
+  const rows = decisions
+    .slice()
+    .sort((a, b) => a.issueId.localeCompare(b.issueId))
+    .map((decision) =>
+      [
+        decision.issueId,
+        decision.decision,
+        decision.updatedAt,
+        decision.title,
+        decision.category,
+        decision.severity,
+        decision.owner,
+        decision.businessUnit,
+        decision.path,
+        decision.identity,
+        decision.source
+      ].map(csvCell).join(",")
+    );
+  return [headers.join(","), ...rows].join("\r\n");
+}
+
+function buildReviewDecisionsDataUri(decisions: ReviewDecision[]): string {
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(buildReviewDecisionsCsv(decisions))}`;
 }
 
 function parseSearchQuery(query: string): ParsedSearchQuery {
@@ -1053,12 +1166,18 @@ function FindingsView({
   issues,
   criticalBlocks,
   onIssueSelect,
-  selectedIssue
+  selectedIssue,
+  reviewDecisions,
+  onReviewDecision,
+  onClearReviewDecision
 }: {
   issues: IssueSummary[];
   criticalBlocks: CriticalScanBlock[];
   selectedIssue?: IssueSummary;
   onIssueSelect: (issue: IssueSummary) => void;
+  reviewDecisions: ReviewDecisionMap;
+  onReviewDecision: (issue: IssueSummary, decision: ReviewDecisionValue) => void;
+  onClearReviewDecision: (issueId: string) => void;
 }) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const issueRollups = useMemo(() => {
@@ -1072,6 +1191,9 @@ function FindingsView({
   }, [issues]);
   const visibleIssues = categoryFilter ? issues.filter((issue) => issue.category === categoryFilter) : issues;
   const selected = selectedIssue && visibleIssues.some((issue) => issue.id === selectedIssue.id) ? selectedIssue : visibleIssues[0];
+  const issueIds = new Set(issues.map((issue) => issue.id));
+  const scopedReviewDecisions = Object.values(reviewDecisions).filter((decision) => issueIds.has(decision.issueId));
+  const selectedReviewDecision = selected ? reviewDecisions[selected.id] : undefined;
   const rows = visibleIssues.map((issue) => ({
     IssueId: issue.id,
     Category: issue.category,
@@ -1141,6 +1263,35 @@ function FindingsView({
               </div>
               <StatusBadge value={selected.severity} />
             </div>
+            <section className="review-decision-panel" aria-label="Local finding review decision">
+              <div>
+                <h3>Local review decision</h3>
+                <p className="panel-copy">Stored only in this browser. Export the CSV when you are ready to share reviewer notes outside the dashboard.</p>
+                <strong className="decision-summary">
+                  {selectedReviewDecision ? `Decision: ${selectedReviewDecision.decision}` : "No decision recorded"}
+                </strong>
+              </div>
+              <div className="review-decision-actions">
+                <button type="button" className="link-button" onClick={() => onReviewDecision(selected, "Expected")}>
+                  Mark Expected
+                </button>
+                <button type="button" className="link-button" onClick={() => onReviewDecision(selected, "Needs Follow-up")}>
+                  Mark Needs Follow-up
+                </button>
+                <button type="button" className="clear-button" onClick={() => onClearReviewDecision(selected.id)} disabled={!selectedReviewDecision}>
+                  Clear decision
+                </button>
+                {scopedReviewDecisions.length > 0 ? (
+                  <a className="link-button" href={buildReviewDecisionsDataUri(scopedReviewDecisions)} download="review-decisions.csv">
+                    Export review decisions
+                  </a>
+                ) : (
+                  <button type="button" className="clear-button" disabled>
+                    Export review decisions
+                  </button>
+                )}
+              </div>
+            </section>
             <div className="detail-grid">
               <article>
                 <h3>What happened?</h3>
@@ -1606,6 +1757,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   const [rawDatasetKey, setRawDatasetKey] = useState<DatasetKey>(initialState.rawDatasetKey ?? "owner_review_packets");
   const [returnTrail, setReturnTrail] = useState<ReturnTrail | null>(initialState.returnTrail ?? null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [reviewDecisions, setReviewDecisions] = useState<ReviewDecisionMap>(() => loadReviewDecisions());
 
   const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery), [dashboard.reviewQueue, filters, deferredQuery]);
   const filteredIssues = useMemo(() => filterIssues(dashboard.issueSummaries, filters, deferredQuery), [dashboard.issueSummaries, filters, deferredQuery]);
@@ -1632,9 +1784,31 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
     });
   }, [activeView, filters, selectedIssueId, selectedClusterId, selectedGroupName, rawDatasetKey, returnTrail]);
 
+  useEffect(() => {
+    saveReviewDecisions(reviewDecisions);
+  }, [reviewDecisions]);
+
   const openView = (view: ViewKey) => {
     setReturnTrail(null);
     setActiveView(view);
+  };
+
+  const setIssueReviewDecision = (issue: IssueSummary, decision: ReviewDecisionValue) => {
+    setReviewDecisions((current) => ({
+      ...current,
+      [issue.id]: buildReviewDecision(issue, decision)
+    }));
+  };
+
+  const clearIssueReviewDecision = (issueId: string) => {
+    setReviewDecisions((current) => {
+      if (!current[issueId]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[issueId];
+      return next;
+    });
   };
 
   const setOwnerContext = (row: ReviewQueueRow) => {
@@ -1766,7 +1940,15 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
           />
         ) : null}
         {activeView === "findings" ? (
-          <FindingsView issues={filteredIssues} criticalBlocks={filteredCriticalBlocks} selectedIssue={selectedIssue} onIssueSelect={(issue) => setSelectedIssueId(issue.id)} />
+          <FindingsView
+            issues={filteredIssues}
+            criticalBlocks={filteredCriticalBlocks}
+            selectedIssue={selectedIssue}
+            reviewDecisions={reviewDecisions}
+            onIssueSelect={(issue) => setSelectedIssueId(issue.id)}
+            onReviewDecision={setIssueReviewDecision}
+            onClearReviewDecision={clearIssueReviewDecision}
+          />
         ) : null}
         {activeView === "migration" ? (
           <MigrationView dashboard={dashboard} clusters={filteredClusters} selectedCluster={selectedCluster} onClusterSelect={(cluster) => setSelectedClusterId(cluster.id)} />
