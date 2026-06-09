@@ -869,8 +869,10 @@ function OverviewView({
   onKpiSelect: (destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "broken-sids" | "items") => void;
   onOwnerSelect: (row: ReviewQueueRow) => void;
 }) {
-  const queue = filterQueue(dashboard.reviewQueue, filters, query).slice(0, 8);
-  const queueTableRows = filterQueue(dashboard.reviewQueue, filters, query).map((row) => ({
+  const filteredReviewQueue = filterQueue(dashboard.reviewQueue, filters, query);
+  const queue = filteredReviewQueue.slice(0, 8);
+  const queueTableRows = filteredReviewQueue.map((row) => ({
+    ReviewQueueId: row.id,
     Owner: row.owner,
     "Business Unit": row.businessUnit,
     Risk: row.riskLevel,
@@ -968,20 +970,19 @@ function OverviewView({
         <p className="panel-copy">
           Owner means the mapped business reviewer or data owner for this path. It is separate from the Windows/NTFS file owner field.
         </p>
-        <div className="queue-list">
-          {queue.map((row) => (
-            <button key={row.id} type="button" className="queue-row" onClick={() => onOwnerSelect(row)}>
-              <span>
-                <strong>{row.owner}</strong>
-                <small>{row.businessUnit}</small>
-              </span>
-              <StatusBadge value={row.riskLevel} />
-              <span>{formatNumber(row.matchingItems)} items</span>
-              <span>{formatNumber(row.findingCount + row.conflictCount)} signals</span>
-              <span aria-hidden="true">Open</span>
-            </button>
-          ))}
-        </div>
+        <VirtualTable
+          rows={queueTableRows}
+          columns={["Owner", "Business Unit", "Risk", "Items", "Findings", "Conflicts", "Permissioned Groups", "Review Why"]}
+          pageSize={8}
+          title="What needs review first"
+          onRowSelect={(row) => {
+            const selected = filteredReviewQueue.find((queueRow) => queueRow.id === row.ReviewQueueId);
+            if (selected) {
+              onOwnerSelect(selected);
+            }
+          }}
+          rowKey={(row) => row.ReviewQueueId ?? `${row.Owner}-${row["Business Unit"]}`}
+        />
       </section>
 
       <aside className="panel insights-panel">
@@ -1208,22 +1209,37 @@ function MigrationView({
     return <EvidenceWorkbench drill={drill} onBack={() => setDrill(null)} />;
   }
 
+  const clusterRows = clusters.map((cluster) => ({
+    ClusterId: cluster.id,
+    Area: cluster.name,
+    Owner: cluster.owner,
+    "Business Unit": cluster.businessUnit,
+    Readiness: cluster.readiness,
+    "Review Items": String(cluster.reviewItems),
+    Shares: String(cluster.shares),
+    Folders: String(cluster.folders),
+    Files: String(cluster.files),
+    "Permissioned Groups": String(cluster.permissionedGroups)
+  }));
+
   return (
     <div className="split-view">
       <section className="panel list-panel">
         <SectionTitle tooltip={tooltipRegistry.relatedDataArea}>Related Data Area Clusters</SectionTitle>
-        <div className="cluster-list">
-          {clusters.map((cluster) => (
-            <button key={cluster.id} type="button" className="cluster-row" onClick={() => onClusterSelect(cluster)}>
-              <span>
-                <strong>{cluster.name}</strong>
-                <small>{cluster.owner}</small>
-              </span>
-              <StatusBadge value={cluster.readiness} />
-              <small>{formatNumber(cluster.reviewItems)} review items</small>
-            </button>
-          ))}
-        </div>
+        <VirtualTable
+          rows={clusterRows}
+          columns={["Area", "Owner", "Business Unit", "Readiness", "Review Items", "Shares", "Folders", "Files", "Permissioned Groups"]}
+          pageSize={12}
+          title="Related data area clusters"
+          onRowSelect={(row) => {
+            const selected = clusters.find((cluster) => cluster.id === row.ClusterId);
+            if (selected) {
+              onClusterSelect(selected);
+            }
+          }}
+          selectedKey={selected?.id}
+          rowKey={(row) => row.ClusterId ?? `${row.Area}-${row.Owner}`}
+        />
       </section>
       <section className="panel detail-panel">
         {selected ? (
