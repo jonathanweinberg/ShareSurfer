@@ -176,6 +176,8 @@ pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
 
 Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The package uses relative assets and `sharesurfer-data.js`, so it can be copied, zipped, or opened directly from disk.
 
+A future signed Windows dashboard viewer can wrap this same static dashboard package without changing the collector or export format. See the [WebView2 dashboard viewer concept](docs/webview2-dashboard-viewer.md) for the proposed executable wrapper, trust model, and release path.
+
 ## Pre-1.0 Release Packaging
 
 The first ShareSurfer release packages are unsigned but fully built. The current quickstart release is [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2). It includes the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
@@ -222,6 +224,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [Offline management overview slide](docs/management-overview.html)
 - [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)
 - [Standalone dashboard interface spec](docs/standalone-dashboard-interface-spec.md)
+- [WebView2 dashboard viewer concept](docs/webview2-dashboard-viewer.md)
 - [V1 phase-1 acceptance audit](docs/v1-phase1-acceptance-audit.md)
 - [Export schema](docs/export-schema.md)
 - [Azure Files path policy](docs/azure-files-path-policy.md)
