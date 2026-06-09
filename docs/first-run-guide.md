@@ -156,6 +156,10 @@ Use `-IncludeFiles` when you need file-level evidence, not only folder-level evi
 
 Use `-AdLookupMode Auto` for normal collection. It tries the best available directory lookup path. Use `DirectoryOnly` only for imported test data.
 
+The collector prints timestamped status lines while it runs. That is expected and helps first-time operators tell the scan is still active during recursive folder enumeration, ACL reads, identity enrichment, and CSV export. Add `-Quiet` when a scheduled or scripted run should suppress console progress.
+
+If the target cannot accept WinRM/CIM, ShareSurfer continues best-effort when it can still inspect the path. The scan will mark share-level permission proof as partial or unavailable in the exports instead of treating that alone as a hard stop.
+
 ## Step 5: Validate the Export
 
 Run validation after every scan:

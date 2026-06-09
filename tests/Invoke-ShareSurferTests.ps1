@@ -2056,6 +2056,40 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan keeps non-terminating WinRM failures out of the console error stream'
+        Body = {
+            Import-Module $moduleManifest -Force
+            function global:New-CimSession {
+                Write-Error 'mock non-terminating WinRM failure'
+            }
+            function global:Get-SmbShare {
+                throw 'Get-SmbShare should not be called without a remote CIM session.'
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called without a remote CIM session.'
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferQuietWinRmExport-' + [guid]::NewGuid().ToString('N'))
+                $captured = @(& {
+                    Invoke-ShareSurferScan -ComputerName 'remote-files03' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment -Quiet | Out-Null
+                } 2>&1)
+                $errorRecords = @($captured | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal @($errorRecords).Count 0 'Remote CIM non-terminating errors should be handled without leaking console error records.'
+                Assert-True ($collectionErrors.ErrorType -contains 'RemoteCimSessionError') 'Remote CIM failures should still be exported as collection-error evidence.'
+                Assert-True ($events.EventType -contains 'RemoteCimSessionError') 'Remote CIM failures should still be logged as scan events.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'New-ShareSurferSupportBundle redacts sensitive values with stable tokens'
         Body = {
             Import-Module $moduleManifest -Force

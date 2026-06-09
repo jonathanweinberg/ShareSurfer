@@ -63,6 +63,8 @@ Current pre-release quickstart package: [v0.1.0-pre.2](https://github.com/jonath
 
 On Windows, release users do not need Node, npm, Vite, a preview server, or internet access to package and open the standalone dashboard. Use Windows PowerShell 5.1 (`powershell.exe`) for the collector and dashboard packager unless your workstation already has PowerShell 7 (`pwsh`).
 
+`Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. Add `-Quiet` only for automation where console progress is not wanted.
+
 ```powershell
 Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
 
@@ -104,6 +106,8 @@ Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
 If you do not have owner mappings or discounted principals yet, remove those two parameters for the first scan. Move the zip file and SHA256 hash through your approved transfer process, then open `report.html` or package the standalone dashboard on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
+
+If WinRM/CIM is blocked or the target is a non-Windows SMB service, ShareSurfer continues best-effort and records the missing share-level permission proof as partial-data evidence in `collection_errors.csv`, `findings.csv`, and `scan_events.csv`.
 
 To keep broad operational access visible without letting it drive Migration Discovery, pass a discounted principal CSV:
 

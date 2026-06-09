@@ -6,7 +6,9 @@ function Get-ShareSurferSmbShareInventory {
         [Parameter(Mandatory = $true)]
         [string[]] $ShareName,
 
-        [switch] $IncludeFiles
+        [switch] $IncludeFiles,
+
+        [switch] $Quiet
     )
 
     $shares = New-Object System.Collections.ArrayList
@@ -24,7 +26,10 @@ function Get-ShareSurferSmbShareInventory {
         $remoteCimSessionAttempted = $true
         $newCimSession = Get-Command New-CimSession -ErrorAction SilentlyContinue
         if ($null -ne $newCimSession) {
+            $previousErrorActionPreference = $ErrorActionPreference
             try {
+                $ErrorActionPreference = 'Stop'
+                Write-ShareSurferStatus -Phase 'Collect' -Message ('Attempting remote CIM session to {0} for SMB share metadata.' -f $ComputerName) -Quiet:$Quiet
                 $cimSession = New-CimSession -ComputerName $ComputerName
                 $remoteCimSessionAvailable = ($null -ne $cimSession)
                 [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'RemoteCimSessionCreated' -Source 'New-CimSession' -Message ('Created remote CIM session for {0}' -f $ComputerName) -Detail $ComputerName))
@@ -37,6 +42,10 @@ function Get-ShareSurferSmbShareInventory {
                     Message = [string]$_.Exception.Message
                 })
                 [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'RemoteCimSessionError' -Source 'New-CimSession' -Level 'Warning' -Message ('Unable to create remote CIM session for {0}' -f $ComputerName) -Detail ([string]$_.Exception.Message)))
+                Write-ShareSurferStatus -Phase 'Collect' -Message ('Remote CIM session to {0} was unavailable; continuing with best-effort share/path evidence.' -f $ComputerName) -Quiet:$Quiet
+            }
+            finally {
+                $ErrorActionPreference = $previousErrorActionPreference
             }
         }
         else {
@@ -54,13 +63,16 @@ function Get-ShareSurferSmbShareInventory {
         foreach ($name in $ShareName) {
             $shareId = 'share-{0}-{1}' -f ($ComputerName -replace '[^A-Za-z0-9]', '-'), ($name -replace '[^A-Za-z0-9]', '-')
             $uncPath = '\\{0}\{1}' -f $ComputerName, $name
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Resolving SMB share {0}.' -f $uncPath) -Quiet:$Quiet
             $localPath = ''
             $description = ''
             $scanPath = $uncPath
             $source = 'BestEffort'
 
             if ($null -ne $getSmbShare) {
+                $previousErrorActionPreference = $ErrorActionPreference
                 try {
+                    $ErrorActionPreference = 'Stop'
                     if ($null -ne $cimSession) {
                         $share = Get-SmbShare -Name $name -CimSession $cimSession
                     }
@@ -87,12 +99,16 @@ function Get-ShareSurferSmbShareInventory {
                         Message = [string]$_.Exception.Message
                     })
                 }
+                finally {
+                    $ErrorActionPreference = $previousErrorActionPreference
+                }
             }
 
             [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source 'Get-SmbShare' -ShareId $shareId -Message ('Resolved share target {0}' -f $uncPath) -Detail $scanPath))
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating {0}.' -f $scanPath) -Quiet:$Quiet
 
             try {
-                $inventory = Get-ShareSurferLocalInventory -TargetPath @($scanPath) -IncludeFiles:$IncludeFiles
+                $inventory = Get-ShareSurferLocalInventory -TargetPath @($scanPath) -IncludeFiles:$IncludeFiles -Quiet:$Quiet
                 foreach ($row in @(ConvertTo-ShareSurferArray $inventory.Shares)) {
                     $row.ShareId = $shareId
                     $row.Source = $source
@@ -171,7 +187,9 @@ function Get-ShareSurferSmbShareInventory {
                     $shareRow[0].PartialData = $true
                     $shareRow[0].PartialReason = 'Share-level permissions were not collected through Get-SmbShareAccess.'
                 }
+                Write-ShareSurferStatus -Phase 'Collect' -Message ('Share-level permissions were unavailable for {0}; continuing with partial share-permission evidence.' -f $uncPath) -Quiet:$Quiet
             }
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Finished SMB share {0}.' -f $uncPath) -Quiet:$Quiet
         }
     }
     finally {
