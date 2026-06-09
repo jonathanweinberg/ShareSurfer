@@ -21,4 +21,46 @@ describe("VirtualTable", () => {
     expect(screen.getByText("Showing 21-40 of 75")).toBeInTheDocument();
     expect(screen.getByText("Row 30")).toBeInTheDocument();
   });
+
+  test("sorts rows when a column header is toggled", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Name: "Charlie", Severity: "Low" },
+      { Name: "Alpha", Severity: "High" },
+      { Name: "Bravo", Severity: "Medium" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Name", "Severity"]} pageSize={20} title="Raw evidence" />);
+
+    await user.click(screen.getByRole("button", { name: /Sort by Name/i }));
+    expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual([
+      "AlphaHigh",
+      "BravoMedium",
+      "CharlieLow"
+    ]);
+
+    await user.click(screen.getByRole("button", { name: /Sort by Name/i }));
+    expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual([
+      "CharlieLow",
+      "BravoMedium",
+      "AlphaHigh"
+    ]);
+  });
+
+  test("filters rows locally without relying on the global dashboard search", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Name: "Finance Readers", Path: "\\\\files01\\Finance" },
+      { Name: "HR Readers", Path: "\\\\files01\\HR" },
+      { Name: "Operations Readers", Path: "\\\\files01\\Operations" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Name", "Path"]} pageSize={20} title="Permissioned groups" />);
+
+    await user.type(screen.getByRole("searchbox", { name: /Filter Permissioned groups rows/i }), "finance");
+
+    expect(screen.getByText("Showing 1-1 of 1")).toBeInTheDocument();
+    expect(screen.getByText("Finance Readers")).toBeInTheDocument();
+    expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
+  });
 });

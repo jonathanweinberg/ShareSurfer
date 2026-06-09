@@ -110,6 +110,18 @@ function New-TestInventory {
                 InheritanceFlags = 'ContainerInherit,ObjectInherit'
                 PropagationFlags = 'None'
                 Depth = 1
+            },
+            [pscustomobject]@{
+                ItemId = 'item-root'
+                ShareId = 'share-finance'
+                FullPath = '\\files01\Finance'
+                Identity = 'S-1-5-21-1000-2000-3000-4040'
+                Rights = 'Read'
+                AccessControlType = 'Allow'
+                IsInherited = $false
+                InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                PropagationFlags = 'None'
+                Depth = 1
             }
         )
         Identities = @(
@@ -249,6 +261,78 @@ function New-TestInventory {
                 ManagerLevel2 = 'CONTOSO\Riley.Director'
                 ManagerLevel3 = 'CONTOSO\Jordan.VP'
                 ObsPath = 'CORP.FIN.AP'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\Morgan.Manager'
+                SamAccountName = 'Morgan.Manager'
+                DistinguishedName = 'CN=Morgan Manager,OU=Users,DC=example,DC=test'
+                DisplayName = 'Morgan Manager'
+                ObjectClass = 'user'
+                EmployeeId = 'E2001'
+                EmployeeNumber = '2001'
+                UserPrincipalName = 'morgan.manager@example.test'
+                Mail = 'morgan.manager@example.test'
+                Department = 'Finance'
+                Title = 'Finance Manager'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = 'CONTOSO\Riley.Director'
+                ManagerLevel1 = 'CONTOSO\Riley.Director'
+                ManagerLevel2 = 'CONTOSO\Jordan.VP'
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\Riley.Director'
+                SamAccountName = 'Riley.Director'
+                DistinguishedName = 'CN=Riley Director,OU=Users,DC=example,DC=test'
+                DisplayName = 'Riley Director'
+                ObjectClass = 'user'
+                EmployeeId = 'E3001'
+                EmployeeNumber = '3001'
+                UserPrincipalName = 'riley.director@example.test'
+                Mail = 'riley.director@example.test'
+                Department = 'Finance'
+                Title = 'Finance Director'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = 'CONTOSO\Jordan.VP'
+                ManagerLevel1 = 'CONTOSO\Jordan.VP'
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\Jordan.VP'
+                SamAccountName = 'Jordan.VP'
+                DistinguishedName = 'CN=Jordan VP,OU=Users,DC=example,DC=test'
+                DisplayName = 'Jordan VP'
+                ObjectClass = 'user'
+                EmployeeId = 'E4001'
+                EmployeeNumber = '4001'
+                UserPrincipalName = 'jordan.vp@example.test'
+                Mail = 'jordan.vp@example.test'
+                Department = 'Finance'
+                Title = 'Finance VP'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = ''
+                ManagerLevel1 = ''
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
                 ObsAttribute = 'extensionAttribute10'
                 PotentialServiceAccount = $false
                 Members = @()
@@ -1025,13 +1109,14 @@ $tests = @(
             Assert-True ($findings.FindingType -contains 'LongPathOperationalPolicy') 'Findings should include the operational 256-character warning.'
             Assert-True ($findings.FindingType -contains 'DeepExplicitAce') 'Findings should include explicit ACEs deeper than level 2.'
             Assert-True ($findings.FindingType -contains 'BrokenInheritance') 'Findings should include broken inheritance.'
+            Assert-True ($findings.FindingType -contains 'BrokenOrMissingSid') 'Findings should flag unresolved SID ACL identities separately from normal access findings.'
 
             $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
             $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
-            foreach ($columnName in @('Title', 'Office', 'ManagerLevel3', 'PotentialServiceAccount')) {
+            foreach ($columnName in @('Title', 'Office', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'PotentialServiceAccount')) {
                 Assert-True ($identities[0].PSObject.Properties.Name -contains $columnName) ("Identity export should include {0} for owner and service-account review." -f $columnName)
             }
-            foreach ($columnName in @('Office', 'ManagerLevel3', 'PotentialServiceAccount')) {
+            foreach ($columnName in @('Office', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'PotentialServiceAccount')) {
                 Assert-True ($orgChains[0].PSObject.Properties.Name -contains $columnName) ("Org chain export should include {0} for owner and service-account review." -f $columnName)
             }
 
@@ -1313,6 +1398,7 @@ $tests = @(
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
             $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
             $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
+            $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
 
             Assert-True ($identities.Identity -contains 'CONTOSO\Ava.Accounting') 'Identity enrichment should include user members discovered through group expansion.'
             $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
@@ -1323,7 +1409,12 @@ $tests = @(
             Assert-Equal $avaIdentity.Company 'Contoso Finance' 'Identity enrichment should export company for owner correlation.'
             Assert-Equal $avaIdentity.Office 'HQ-4' 'Identity enrichment should export office for owner correlation.'
             Assert-Equal $avaIdentity.AccountEnabled 'True' 'Identity enrichment should export account enabled status when known.'
-            Assert-Equal $avaIdentity.ManagerLevel3 'CONTOSO\Jordan.VP' 'Identity enrichment should export third-level manager context for owner escalation.'
+            Assert-Equal $avaIdentity.ManagerLevel1 'mailto:morgan.manager@example.test' 'Identity enrichment should default first-level manager context to a mailto link for business review.'
+            Assert-Equal $avaIdentity.ManagerLevel2 'mailto:riley.director@example.test' 'Identity enrichment should default second-level manager context to a mailto link for business review.'
+            Assert-Equal $avaIdentity.ManagerLevel3 'mailto:jordan.vp@example.test' 'Identity enrichment should default third-level manager context to a mailto link for business review.'
+            Assert-Equal $avaIdentity.ManagerLevel1Raw 'CONTOSO\Morgan.Manager' 'Identity enrichment should preserve raw first-level manager context for directory correlation.'
+            Assert-Equal $avaIdentity.ManagerLevel2Raw 'CONTOSO\Riley.Director' 'Identity enrichment should preserve raw second-level manager context for directory correlation.'
+            Assert-Equal $avaIdentity.ManagerLevel3Raw 'CONTOSO\Jordan.VP' 'Identity enrichment should preserve raw third-level manager context for directory correlation.'
             Assert-Equal $avaIdentity.PotentialServiceAccount 'False' 'Identity enrichment should not flag users with employee and OBS data as potential service accounts.'
             Assert-True ($avaIdentity.DistinguishedName -like 'CN=Ava Human Name*') 'Identity enrichment should export distinguished names for directory correlation.'
             $serviceIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\svc.ShareBot' })[0]
@@ -1333,9 +1424,11 @@ $tests = @(
             Assert-True ($orgChains.Identity -contains 'CONTOSO\Ava.Accounting') 'Org chains should include enriched user manager and OBS data.'
             $avaOrgChain = @($orgChains | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
             Assert-Equal $avaOrgChain.Department 'Accounts Payable' 'Org chains should carry department for manager and OBS rollups.'
-            Assert-Equal $avaOrgChain.ManagerLevel3 'CONTOSO\Jordan.VP' 'Org chains should pursue manager context three levels deep.'
+            Assert-Equal $avaOrgChain.ManagerLevel3 'mailto:jordan.vp@example.test' 'Org chains should pursue manager context three levels deep and default to mailto display.'
+            Assert-Equal $avaOrgChain.ManagerLevel3Raw 'CONTOSO\Jordan.VP' 'Org chains should preserve raw third-level manager context.'
             Assert-True ($orgChains.Identity -contains 'CONTOSO\svc.ShareBot') 'Org chains should include potential service account candidates so report pivots can surface them.'
             Assert-True ($findings.FindingType -contains 'PotentialServiceAccount') 'Findings should flag potential service accounts for report review.'
+            Assert-Equal $manifest[0].ManagerIdentityFormat 'MailTo' 'Scan manifest should record the default manager identity display format.'
         }
     },
     @{
@@ -1344,14 +1437,18 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
 
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles -ObsAttribute 'info' | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles -ObsAttribute 'info' -ManagerIdentityFormat DistinguishedName | Out-Null
 
             $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
+            $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
 
             Assert-Equal $manifest[0].AdLookupMode 'DirectoryOnly' 'Scan manifest should record the requested AD lookup mode.'
             Assert-Equal $manifest[0].ObsAttribute 'info' 'Scan manifest should record the operator-selected OBS attribute.'
             Assert-Equal $manifest[0].IncludeFiles 'True' 'Scan manifest should record whether file objects were requested.'
+            Assert-Equal $manifest[0].ManagerIdentityFormat 'DistinguishedName' 'Scan manifest should record the requested manager identity display format.'
+            $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
+            Assert-Equal $avaIdentity.ManagerLevel1 'CN=Morgan Manager,OU=Users,DC=example,DC=test' 'Manager identity format should support distinguished-name output for directory correlation.'
             Assert-True (@($groupEdges | Where-Object { $_.ParentGroup -eq 'CONTOSO\FinanceEditors' -and $_.IsTruncated -eq 'True' }).Count -gt 0) 'Group expansion should mark edges truncated at the configured max depth.'
         }
     },
@@ -1628,7 +1725,9 @@ $tests = @(
             Assert-True ($index -like '*src="./sharesurfer-data.js"*') 'Standalone dashboard index should load snapshot through a relative script tag.'
             Assert-True ($index -like '*src="./assets/index-demo.js"*') 'Standalone dashboard index should keep relative asset paths.'
             Assert-True ($dataScript -like 'window.__SHARESURFER_SNAPSHOT__ = *') 'Snapshot script should assign the dashboard data on window.'
+            Assert-True ($dataScript -like '*"snapshotKind":"export"*') 'Snapshot script should identify generated export data.'
             Assert-True ($dataScript -notlike '*fetch(*') 'Snapshot script should not require fetch or a local server.'
+            Assert-Equal $manifest.dashboardDataKind 'export' 'Dashboard manifest should identify generated export data.'
             Assert-True ([int]$manifest.rowCounts.shares -gt 0) 'Dashboard manifest should include export row counts.'
             Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
         }
@@ -1638,17 +1737,34 @@ $tests = @(
         Body = {
             $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
             $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRelease-' + [guid]::NewGuid().ToString('N'))
+            $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDependencyAge-' + [guid]::NewGuid().ToString('N') + '.json')
             $assetPath = Join-Path $buildPath 'assets'
             New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
             Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
             Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferReleaseLoaded = true;' -Encoding UTF8
+            Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
+                isValid = $true
+                skipped = $false
+                minimumAgeDays = 7
+                dependencyCount = 1
+                violationCount = 0
+                unknownCount = 0
+                dependencies = @(@{
+                    name = 'react'
+                    version = '18.3.1'
+                    status = 'Allowed'
+                    ageDays = 30
+                })
+            } | ConvertTo-Json -Depth 8) -Encoding UTF8
 
-            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0-test' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -Force -PassThru
+            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0-test' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -DependencyAgeReportPath $dependencyAgeReportPath -Force -PassThru
 
             Assert-True $result.IsValid 'Release package should report a valid package.'
             Assert-Equal $result.SigningStatus 'UnsignedPre1.0' 'Release package should record unsigned pre-1.0 status.'
             Assert-True $result.IncludesPrebuiltStandaloneDashboard 'Release package should include built dashboard assets.'
+            Assert-Equal $result.MinimumDependencyAgeDays 7 'Release result should record the npm dependency age policy.'
+            Assert-True (Test-Path -LiteralPath $result.DependencyAgeReportPath -PathType Leaf) 'Release package should include the dependency age report.'
             Assert-True (Test-Path -LiteralPath $result.PackageRoot -PathType Container) 'Release package root should exist.'
             Assert-True (Test-Path -LiteralPath $result.ZipPath -PathType Leaf) 'Release zip should exist.'
             Assert-True (Test-Path -LiteralPath $result.ZipHashPath -PathType Leaf) 'Release zip SHA256 file should exist.'
@@ -1661,13 +1777,23 @@ $tests = @(
             $releaseNotes = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'RELEASE.md') -Raw
             $hashes = Get-Content -LiteralPath $result.HashPath -Raw
             $zipHash = Get-Content -LiteralPath $result.ZipHashPath -Raw
+            $releaseDashboardData = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'interface/standalone-dashboard/dist/sharesurfer-data.js') -Raw
 
             Assert-True (-not [bool]$manifest.signed) 'Release manifest should state that the package is unsigned.'
             Assert-Equal $manifest.signingStatus 'UnsignedPre1.0' 'Release manifest should keep the unsigned pre-1.0 marker.'
             Assert-True ([bool]$manifest.includesPrebuiltStandaloneDashboard) 'Release manifest should state that prebuilt dashboard assets are included.'
+            Assert-Equal $manifest.dashboardAssetKind 'Template' 'Release manifest should state that bundled dashboard assets are templates, not scan data.'
+            Assert-True ([bool]$manifest.dashboardRequiresExportPackaging) 'Release manifest should say release dashboard assets need export packaging before real review.'
+            Assert-Equal $manifest.minimumDependencyAgeDays 7 'Release manifest should record the minimum npm dependency age.'
+            Assert-Equal $manifest.dependencyAgeReport 'dependency-age-report.json' 'Release manifest should point to the dependency age report.'
+            Assert-True (-not [bool]$manifest.dependencyAgeCheckSkipped) 'Release manifest should show that the dependency age check was not skipped.'
             Assert-Equal $manifest.dashboardEntryPoint 'interface/standalone-dashboard/dist/index.html' 'Release manifest should name the dashboard entry point.'
+            Assert-True ($releaseDashboardData -like '*"snapshotKind":"template"*') 'Release dashboard data placeholder should identify template assets.'
+            Assert-True ($releaseNotes -like '*at least 7 days old*') 'Release notes should describe the npm dependency age policy.'
+            Assert-True ($releaseNotes -like '*template dashboard assets*') 'Release notes should call bundled dashboard assets templates.'
             Assert-True ($releaseNotes -like '*No npm, Vite, development server, or internet access*') 'Release notes should explain offline dashboard use after unpacking.'
             Assert-True ($hashes -like '*interface/standalone-dashboard/dist/index.html*') 'Release package hash file should include the prebuilt dashboard entry point.'
+            Assert-True ($hashes -like '*dependency-age-report.json*') 'Release package hash file should include the dependency age report.'
             Assert-True ($zipHash -like '*ShareSurfer-0.1.0-test.zip*') 'Release zip hash should name the release archive.'
         }
     },
@@ -2018,6 +2144,40 @@ $tests = @(
                 Assert-Equal @($permissions).Count 0 'Remote partial scans should not fabricate share-level permissions.'
                 Assert-True ($findings.FindingType -contains 'CollectionError') 'Remote CIM session setup failures should be exported as collection-error findings.'
                 Assert-True ($events.EventType -contains 'RemoteCimSessionError') 'Remote CIM session setup failures should be logged as scan events.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan keeps non-terminating WinRM failures out of the console error stream'
+        Body = {
+            Import-Module $moduleManifest -Force
+            function global:New-CimSession {
+                Write-Error 'mock non-terminating WinRM failure'
+            }
+            function global:Get-SmbShare {
+                throw 'Get-SmbShare should not be called without a remote CIM session.'
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called without a remote CIM session.'
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferQuietWinRmExport-' + [guid]::NewGuid().ToString('N'))
+                $captured = @(& {
+                    Invoke-ShareSurferScan -ComputerName 'remote-files03' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment -Quiet | Out-Null
+                } 2>&1)
+                $errorRecords = @($captured | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] })
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal @($errorRecords).Count 0 'Remote CIM non-terminating errors should be handled without leaking console error records.'
+                Assert-True ($collectionErrors.ErrorType -contains 'RemoteCimSessionError') 'Remote CIM failures should still be exported as collection-error evidence.'
+                Assert-True ($events.EventType -contains 'RemoteCimSessionError') 'Remote CIM failures should still be logged as scan events.'
             }
             finally {
                 Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
@@ -2939,6 +3099,10 @@ $tests = @(
             Assert-True ($readmeText -like '*docs/nonpermissive-collection-dashboard-workflow.md*') 'README should link the nonpermissive collection workflow.'
             Assert-True ($readmeText -like '*docs/visuals/dataset-transfer-dashboard-workflow.svg*') 'README should show the dataset transfer dashboard visual.'
             Assert-True ($readmeText -like '*Quick Start in a Nonpermissive Environment*') 'README should include nonpermissive quickstart setup instructions.'
+            Assert-True ($readmeText -like '*v0.1.0-pre.2*') 'README should reference the current pre-release quickstart package.'
+            Assert-True ($readmeText -like '*ShareSurfer-0.1.0-pre.2.zip*') 'README should name the current pre-release zip asset.'
+            Assert-True ($readmeText -like '*without npm, Vite, a development server, or internet access*') 'README should explain release dashboard use without npm or a server.'
+            Assert-True ($readmeText -like '*template/onboarding screen*') 'README should explain release dashboard template behavior before export packaging.'
             Assert-True ($readmeText -like '*$shareSurferRoot*') 'README nonpermissive quickstart should show where the copied ShareSurfer folder is staged.'
             Assert-True ($readmeText -like '*Compress-Archive*') 'README nonpermissive quickstart should show how to package the validated export folder.'
             Assert-True ($readmeText -like '*Get-FileHash -Algorithm SHA256*') 'README nonpermissive quickstart should show how to hash the handoff package.'
@@ -3002,6 +3166,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*choose an attribute that exists on both users and groups*') 'First-run guide should explain OBS attribute schema fallback.'
             Assert-True ($firstRunText -like '*Move the Dataset to a Dashboard Host*') 'First-run guide should explain the two-host dashboard workflow.'
             Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.svg*') 'First-run guide should show the nonpermissive collector workflow visual.'
+            Assert-True ($firstRunText -like '*v0.1.0-pre.2 release package*') 'First-run guide should reference the current pre-release dashboard package.'
+            Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
 
             Assert-True (Test-Path -LiteralPath $nonpermissiveWorkflow) 'Documentation should include a nonpermissive collector to dashboard host workflow.'
             $nonpermissiveText = Get-Content -LiteralPath $nonpermissiveWorkflow -Raw
@@ -3011,6 +3177,8 @@ $tests = @(
             Assert-True ($nonpermissiveText -like '*Get-FileHash*') 'Nonpermissive workflow should explain hash generation.'
             Assert-True ($nonpermissiveText -like '*approved transfer process*') 'Nonpermissive workflow should require approved transfer handling.'
             Assert-True ($nonpermissiveText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Nonpermissive workflow should show dashboard packaging on the review host.'
+            Assert-True ($nonpermissiveText -like '*ShareSurfer-0.1.0-pre.2.zip*') 'Nonpermissive workflow should name the current pre-release zip asset.'
+            Assert-True ($nonpermissiveText -like '*no npm or Vite is required*') 'Nonpermissive workflow should make release dashboard packaging no-npm.'
             Assert-True ($nonpermissiveText -like '*visuals/nonpermissive-collector-workflow.svg*') 'Nonpermissive workflow should reference the collector visual.'
             Assert-True ($nonpermissiveText -like '*visuals/dataset-transfer-dashboard-workflow.svg*') 'Nonpermissive workflow should reference the dashboard-transfer visual.'
 

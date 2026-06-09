@@ -1,6 +1,7 @@
 import type { DataRow, DatasetKey } from "./schema";
 
 export interface RawSnapshot {
+  snapshotKind?: "template" | "demo" | "export";
   generatedAt?: string;
   datasets?: Partial<Record<DatasetKey | string, DataRow[]>>;
   schemaWarnings?: string[];
@@ -8,6 +9,7 @@ export interface RawSnapshot {
 }
 
 export const demoSnapshot: RawSnapshot = {
+  snapshotKind: "demo",
   generatedAt: "2026-06-05T17:41:14Z",
   datasets: {
     shares: [
@@ -150,9 +152,12 @@ export const demoSnapshot: RawSnapshot = {
         Office: "HQ-4",
         AccountEnabled: "True",
         Manager: "CONTOSO\\Morgan.Manager",
-        ManagerLevel1: "CONTOSO\\Morgan.Manager",
-        ManagerLevel2: "CONTOSO\\Riley.Director",
-        ManagerLevel3: "CONTOSO\\Jordan.VP",
+        ManagerLevel1: "mailto:morgan.manager@example.test",
+        ManagerLevel2: "mailto:riley.director@example.test",
+        ManagerLevel3: "mailto:jordan.vp@example.test",
+        ManagerLevel1Raw: "CONTOSO\\Morgan.Manager",
+        ManagerLevel2Raw: "CONTOSO\\Riley.Director",
+        ManagerLevel3Raw: "CONTOSO\\Jordan.VP",
         ObsPath: "CORP.FIN.AP",
         ObsAttribute: "extensionAttribute10",
         PotentialServiceAccount: "False",
@@ -176,6 +181,9 @@ export const demoSnapshot: RawSnapshot = {
         ManagerLevel1: "",
         ManagerLevel2: "",
         ManagerLevel3: "",
+        ManagerLevel1Raw: "",
+        ManagerLevel2Raw: "",
+        ManagerLevel3Raw: "",
         ObsPath: "",
         ObsAttribute: "extensionAttribute10",
         PotentialServiceAccount: "True",
@@ -199,6 +207,9 @@ export const demoSnapshot: RawSnapshot = {
         ManagerLevel1: "",
         ManagerLevel2: "",
         ManagerLevel3: "",
+        ManagerLevel1Raw: "",
+        ManagerLevel2Raw: "",
+        ManagerLevel3Raw: "",
         ObsPath: "CORP.FIN",
         ObsAttribute: "extensionAttribute10",
         PotentialServiceAccount: "False",
@@ -253,9 +264,12 @@ export const demoSnapshot: RawSnapshot = {
         Title: "Accounting Analyst",
         Company: "Contoso Finance",
         Office: "HQ-4",
-        ManagerLevel1: "CONTOSO\\Morgan.Manager",
-        ManagerLevel2: "CONTOSO\\Riley.Director",
-        ManagerLevel3: "CONTOSO\\Jordan.VP",
+        ManagerLevel1: "mailto:morgan.manager@example.test",
+        ManagerLevel2: "mailto:riley.director@example.test",
+        ManagerLevel3: "mailto:jordan.vp@example.test",
+        ManagerLevel1Raw: "CONTOSO\\Morgan.Manager",
+        ManagerLevel2Raw: "CONTOSO\\Riley.Director",
+        ManagerLevel3Raw: "CONTOSO\\Jordan.VP",
         ObsPath: "CORP.FIN.AP",
         ObsAttribute: "extensionAttribute10",
         PotentialServiceAccount: "False"
@@ -397,15 +411,21 @@ export const demoSnapshot: RawSnapshot = {
         ItemId: "",
         FullPath: "\\\\files01\\HR",
         ErrorType: "SharePermissionCollectionUnavailable",
+        Severity: "High",
+        Source: "Get-SmbShareAccess",
         Message: "Share-level permissions could not be collected.",
         Detail: "Demo collection gap"
       }
     ],
     scan_events: [
       {
+        EventId: "event-demo",
         Timestamp: "2026-06-05T17:41:14Z",
         Level: "Info",
         EventType: "Export",
+        Source: "Fixture",
+        ShareId: "",
+        ItemId: "",
         Message: "Demo export loaded",
         Detail: ""
       }
@@ -423,6 +443,7 @@ export const demoSnapshot: RawSnapshot = {
         ExplicitAceDepthThreshold: "2",
         GroupExpansionMaxDepth: "20",
         AdLookupMode: "DirectoryOnly",
+        ManagerIdentityFormat: "MailTo",
         IncludeFiles: "True"
       }
     ]

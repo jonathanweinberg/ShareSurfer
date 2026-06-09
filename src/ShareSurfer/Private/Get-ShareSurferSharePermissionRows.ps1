@@ -19,7 +19,9 @@ function Get-ShareSurferSharePermissionRows {
     }
 
     $createdCimSession = $null
+    $previousErrorActionPreference = $ErrorActionPreference
     try {
+        $ErrorActionPreference = 'Stop'
         if (Test-ShareSurferRemoteComputerName -ComputerName $ComputerName) {
             if ($null -eq $CimSession -and -not $SkipRemoteCimSessionCreation) {
                 $newCimSession = Get-Command New-CimSession -ErrorAction SilentlyContinue
@@ -52,6 +54,7 @@ function Get-ShareSurferSharePermissionRows {
         @()
     }
     finally {
+        $ErrorActionPreference = $previousErrorActionPreference
         if ($null -ne $createdCimSession) {
             Remove-CimSession -CimSession $createdCimSession -ErrorAction SilentlyContinue
         }

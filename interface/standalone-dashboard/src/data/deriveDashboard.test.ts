@@ -46,6 +46,46 @@ describe("ShareSurfer dashboard data model", () => {
     expect(dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "acl_entries")?.totalRows).toBe(3);
   });
 
+  test("promotes broken SID and access-denied collection blockers for focused review", () => {
+    const snapshot = JSON.parse(JSON.stringify(demoSnapshot));
+    snapshot.datasets.findings = [
+      ...snapshot.datasets.findings,
+      {
+        FindingId: "finding-sid",
+        FindingType: "BrokenOrMissingSid",
+        Severity: "High",
+        ShareId: "share-finance",
+        ItemId: "item-finance",
+        FullPath: "\\\\files01\\Finance",
+        Identity: "S-1-5-21-1000-2000-3000-4040",
+        ObservedValue: "S-1-5-21-1000-2000-3000-4040",
+        PolicyValue: "Resolvable identity",
+        Message: "ACL identity is an unresolved SID."
+      }
+    ];
+    snapshot.datasets.collection_errors = [
+      ...snapshot.datasets.collection_errors,
+      {
+        ErrorId: "error-denied",
+        ShareId: "share-finance",
+        ItemId: "item-payroll",
+        FullPath: "\\\\files01\\Finance\\Payroll",
+        ErrorType: "AclReadError",
+        Severity: "High",
+        Source: "Get-Acl",
+        Message: "Access to the path was denied while reading ACLs.",
+        Detail: "UnauthorizedAccessException"
+      }
+    ];
+
+    const dashboard = deriveDashboard(normalizeSnapshot(snapshot));
+
+    expect(dashboard.issueSummaries.map((issue) => issue.category)).toContain("Broken/Missing SID");
+    expect(dashboard.criticalScanBlocks).toHaveLength(2);
+    expect(dashboard.criticalScanBlocks.map((block) => block.ErrorType)).toContain("AclReadError");
+    expect(dashboard.criticalScanBlocks.map((block) => block.ErrorType)).toContain("SharePermissionCollectionUnavailable");
+  });
+
   test("aggregates repeated owner-level review and migration rows into one workbench cluster", () => {
     const snapshot = JSON.parse(JSON.stringify(demoSnapshot));
     const related = snapshot.datasets.related_data_areas[0];

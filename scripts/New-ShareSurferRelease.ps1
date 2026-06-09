@@ -10,6 +10,12 @@ param(
 
     [switch] $SkipNpmInstall,
 
+    [int] $MinimumDependencyAgeDays = 7,
+
+    [string] $DependencyAgeReportPath = '',
+
+    [switch] $SkipDependencyAgeCheck,
+
     [switch] $Force,
 
     [switch] $PassThru
@@ -146,6 +152,22 @@ function Copy-ShareSurferDashboardBuild {
     }
 }
 
+function Set-ShareSurferDashboardTemplateSnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $PackageRoot
+    )
+
+    $dataScriptPath = Join-Path (Join-Path (Join-Path (Join-Path $PackageRoot 'interface') 'standalone-dashboard') 'dist') 'sharesurfer-data.js'
+    $templateSnapshot = [ordered]@{
+        snapshotKind = 'template'
+        generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
+        datasets = [ordered]@{}
+    }
+    $snapshotScript = 'window.__SHARESURFER_SNAPSHOT__ = {0};' -f ($templateSnapshot | ConvertTo-Json -Depth 8 -Compress)
+    Set-Content -LiteralPath $dataScriptPath -Value $snapshotScript -Encoding UTF8
+}
+
 function New-ShareSurferReleaseHashFile {
     param(
         [Parameter(Mandatory = $true)]
@@ -167,6 +189,172 @@ function New-ShareSurferReleaseHashFile {
     }
 
     Set-Content -LiteralPath $OutputPath -Value $hashRows -Encoding UTF8
+}
+
+function Get-ShareSurferPackageLockDependencies {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $PackageLockPath
+    )
+
+    if (-not (Test-Path -LiteralPath $PackageLockPath -PathType Leaf)) {
+        throw ('Package lock not found: {0}' -f $PackageLockPath)
+    }
+
+    $lock = Get-Content -LiteralPath $PackageLockPath -Raw | ConvertFrom-Json -AsHashtable
+    if (-not $lock.ContainsKey('packages')) {
+        throw ('Package lock does not include a packages map: {0}' -f $PackageLockPath)
+    }
+
+    $seen = @{}
+    $packages = $lock['packages']
+    foreach ($packagePath in @($packages.Keys)) {
+        if ([string]::IsNullOrWhiteSpace($packagePath) -or $packagePath -notlike '*node_modules/*') {
+            continue
+        }
+
+        $package = $packages[$packagePath]
+        if (-not $package.ContainsKey('version') -or [string]::IsNullOrWhiteSpace([string]$package['version'])) {
+            continue
+        }
+
+        $name = ($packagePath -split 'node_modules/')[-1].Trim('/')
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            continue
+        }
+
+        $key = '{0}@{1}' -f $name, [string]$package['version']
+        if ($seen.ContainsKey($key)) {
+            continue
+        }
+
+        $seen[$key] = $true
+        [pscustomobject]@{
+            name = $name
+            version = [string]$package['version']
+        }
+    }
+}
+
+function New-ShareSurferDependencyAgeReport {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $PackageLockPath,
+
+        [int] $MinimumAgeDays = 7
+    )
+
+    $checkedAt = [DateTimeOffset]::UtcNow
+    $cutoff = $checkedAt.AddDays(-1 * $MinimumAgeDays)
+    $dependencies = @(Get-ShareSurferPackageLockDependencies -PackageLockPath $PackageLockPath | Sort-Object name, version)
+    $rows = New-Object System.Collections.Generic.List[object]
+    $violations = New-Object System.Collections.Generic.List[object]
+    $unknown = New-Object System.Collections.Generic.List[object]
+
+    foreach ($dependency in $dependencies) {
+        $encodedName = [uri]::EscapeDataString([string]$dependency.name)
+        $metadataUri = 'https://registry.npmjs.org/{0}' -f $encodedName
+        $publishedAt = ''
+        $ageDays = $null
+        $status = 'Unknown'
+
+        try {
+            $metadata = Invoke-RestMethod -Uri $metadataUri -Method Get -ErrorAction Stop
+            $timeProperty = $metadata.time.PSObject.Properties[[string]$dependency.version]
+            if ($null -ne $timeProperty -and -not [string]::IsNullOrWhiteSpace([string]$timeProperty.Value)) {
+                $published = [DateTimeOffset]::Parse([string]$timeProperty.Value).ToUniversalTime()
+                $publishedAt = $published.ToString('o')
+                $ageDays = [math]::Floor(($checkedAt - $published).TotalDays)
+                $status = if ($published -gt $cutoff) { 'TooNew' } else { 'Allowed' }
+            }
+        }
+        catch {
+            $status = 'Unknown'
+        }
+
+        $row = [pscustomobject]@{
+            name = [string]$dependency.name
+            version = [string]$dependency.version
+            publishedAt = $publishedAt
+            ageDays = $ageDays
+            status = $status
+        }
+        [void]$rows.Add($row)
+
+        if ($status -eq 'TooNew') {
+            [void]$violations.Add($row)
+        }
+        elseif ($status -eq 'Unknown') {
+            [void]$unknown.Add($row)
+        }
+    }
+
+    [pscustomobject]@{
+        isValid = ($violations.Count -eq 0 -and $unknown.Count -eq 0)
+        skipped = $false
+        checkedAt = $checkedAt.ToString('o')
+        packageLockPath = (Resolve-Path -LiteralPath $PackageLockPath).Path
+        minimumAgeDays = $MinimumAgeDays
+        cutoffUtc = $cutoff.ToString('o')
+        dependencyCount = $dependencies.Count
+        violationCount = $violations.Count
+        unknownCount = $unknown.Count
+        violations = @($violations.ToArray())
+        unknown = @($unknown.ToArray())
+        dependencies = @($rows.ToArray())
+    }
+}
+
+function New-ShareSurferSkippedDependencyAgeReport {
+    param([int] $MinimumAgeDays = 7)
+
+    [pscustomobject]@{
+        isValid = $true
+        skipped = $true
+        checkedAt = [DateTimeOffset]::UtcNow.ToString('o')
+        packageLockPath = ''
+        minimumAgeDays = $MinimumAgeDays
+        cutoffUtc = ''
+        dependencyCount = 0
+        violationCount = 0
+        unknownCount = 0
+        violations = @()
+        unknown = @()
+        dependencies = @()
+    }
+}
+
+function Get-ShareSurferDependencyAgeReport {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $DashboardRoot,
+
+        [int] $MinimumAgeDays = 7,
+
+        [string] $ReportPath = '',
+
+        [switch] $Skip
+    )
+
+    if ($Skip) {
+        return New-ShareSurferSkippedDependencyAgeReport -MinimumAgeDays $MinimumAgeDays
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($ReportPath)) {
+        if (-not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
+            throw ('Dependency age report not found: {0}' -f $ReportPath)
+        }
+
+        $report = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
+        if ($null -eq $report.PSObject.Properties['isValid'] -or -not [bool]$report.isValid) {
+            throw ('Dependency age report is not valid: {0}' -f $ReportPath)
+        }
+
+        return $report
+    }
+
+    $packageLockPath = Join-Path $DashboardRoot 'package-lock.json'
+    New-ShareSurferDependencyAgeReport -PackageLockPath $packageLockPath -MinimumAgeDays $MinimumAgeDays
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -202,6 +390,21 @@ if (-not (Test-Path -LiteralPath $dashboardIndexPath -PathType Leaf)) {
 }
 
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
+$dependencyAgeReport = Get-ShareSurferDependencyAgeReport -DashboardRoot $dashboardRoot -MinimumAgeDays $MinimumDependencyAgeDays -ReportPath $DependencyAgeReportPath -Skip:$SkipDependencyAgeCheck
+if ($null -eq $dependencyAgeReport.PSObject.Properties['isValid'] -or -not [bool]$dependencyAgeReport.isValid) {
+    $failedReportPath = Join-Path $OutputRoot 'dependency-age-report.failed.json'
+    Set-Content -LiteralPath $failedReportPath -Value ($dependencyAgeReport | ConvertTo-Json -Depth 20) -Encoding UTF8
+    $violationNames = @()
+    if ($null -ne $dependencyAgeReport.PSObject.Properties['violations']) {
+        $violationNames = @($dependencyAgeReport.violations | Select-Object -First 5 | ForEach-Object { '{0}@{1}' -f $_.name, $_.version })
+    }
+    $unknownNames = @()
+    if ($null -ne $dependencyAgeReport.PSObject.Properties['unknown']) {
+        $unknownNames = @($dependencyAgeReport.unknown | Select-Object -First 5 | ForEach-Object { '{0}@{1}' -f $_.name, $_.version })
+    }
+    throw ('NPM dependency age policy failed. Wrote {0}. Too new: {1}. Unknown: {2}.' -f $failedReportPath, (($violationNames -join ', ') -replace '^$', 'none'), (($unknownNames -join ', ') -replace '^$', 'none'))
+}
+
 $packageName = 'ShareSurfer-{0}' -f $Version
 $packageRoot = Join-Path $OutputRoot $packageName
 $zipPath = Join-Path $OutputRoot ('{0}.zip' -f $packageName)
@@ -226,6 +429,10 @@ foreach ($relativePath in $sourceFiles) {
 }
 
 Copy-ShareSurferDashboardBuild -DashboardBuildPath $DashboardBuildPath -PackageRoot $packageRoot
+Set-ShareSurferDashboardTemplateSnapshot -PackageRoot $packageRoot
+
+$dependencyAgeReportOutputPath = Join-Path $packageRoot 'dependency-age-report.json'
+Set-Content -LiteralPath $dependencyAgeReportOutputPath -Value ($dependencyAgeReport | ConvertTo-Json -Depth 20) -Encoding UTF8
 
 $gitCommit = ''
 $gitCommitOutput = & git -C $repoRoot rev-parse HEAD 2>$null
@@ -242,10 +449,18 @@ $manifest = [ordered]@{
     signingStatus = 'UnsignedPre1.0'
     signed = $false
     includesPrebuiltStandaloneDashboard = $true
+    dashboardAssetKind = 'Template'
+    dashboardRequiresExportPackaging = $true
     dashboardPackagePath = $dashboardPackagePath
     dashboardEntryPoint = 'interface/standalone-dashboard/dist/index.html'
+    dependencyAgePolicy = ('NPM dependency versions must be at least {0} days old unless the check is explicitly skipped for a local/offline dry run.' -f $MinimumDependencyAgeDays)
+    minimumDependencyAgeDays = $MinimumDependencyAgeDays
+    dependencyAgeReport = 'dependency-age-report.json'
+    dependencyAgeCheckSkipped = [bool]$dependencyAgeReport.skipped
+    dependencyAgeViolationCount = if ($null -ne $dependencyAgeReport.PSObject.Properties['violationCount']) { [int]$dependencyAgeReport.violationCount } else { 0 }
+    dependencyAgeUnknownCount = if ($null -ne $dependencyAgeReport.PSObject.Properties['unknownCount']) { [int]$dependencyAgeReport.unknownCount } else { 0 }
     moduleManifest = 'src/ShareSurfer/ShareSurfer.psd1'
-    packageNotes = 'Unsigned pre-1.0 package. Dashboard assets are prebuilt so release users do not need npm, Vite, a server, or internet access to package a standalone dashboard from an export.'
+    packageNotes = 'Unsigned pre-1.0 package. Dashboard assets are prebuilt template assets so release users do not need npm, Vite, a server, or internet access to package a standalone dashboard from an export. Use New-ShareSurferStandaloneDashboard.ps1 to create a real export dataset.'
 }
 
 $manifestPath = Join-Path $packageRoot 'release-manifest.json'
@@ -259,7 +474,9 @@ $releaseNotes = @(
     'This is an unsigned pre-1.0 package.',
     '',
     'The standalone dashboard assets are already built under `interface/standalone-dashboard/dist`.',
+    'These are template dashboard assets, not scan evidence. Package a validated export before using the dashboard for review.',
     'No npm, Vite, development server, or internet access is required after this release package is unpacked.',
+    ('NPM dependency versions were checked against a minimum age policy: package versions must be at least {0} days old. See `dependency-age-report.json`.' -f $MinimumDependencyAgeDays),
     '',
     'To package a validated export as a standalone dashboard:',
     '',
@@ -297,6 +514,9 @@ $result = [pscustomobject]@{
     ZipHashPath = $zipHashPath
     ManifestPath = $manifestPath
     HashPath = $hashPath
+    DependencyAgeReportPath = $dependencyAgeReportOutputPath
+    MinimumDependencyAgeDays = $MinimumDependencyAgeDays
+    DependencyAgeCheckSkipped = [bool]$dependencyAgeReport.skipped
     DashboardBuildPath = $DashboardBuildPath
     FileCount = @(Get-ChildItem -LiteralPath $packageRoot -File -Recurse).Count
 }

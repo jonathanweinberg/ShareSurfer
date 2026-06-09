@@ -104,6 +104,9 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'ident
     'ManagerLevel1',
     'ManagerLevel2',
     'ManagerLevel3',
+    'ManagerLevel1Raw',
+    'ManagerLevel2Raw',
+    'ManagerLevel3Raw',
     'ObsPath',
     'ObsAttribute',
     'PotentialServiceAccount',
@@ -120,9 +123,27 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'org_c
     'ManagerLevel1',
     'ManagerLevel2',
     'ManagerLevel3',
+    'ManagerLevel1Raw',
+    'ManagerLevel2Raw',
+    'ManagerLevel3Raw',
     'ObsPath',
     'ObsAttribute',
     'PotentialServiceAccount'
+)
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'scan_manifest.csv') -Columns @(
+    'ScanId',
+    'GeneratedAt',
+    'ExportVersion',
+    'ObsAttribute',
+    'SourceMode',
+    'OperationalPathLengthThreshold',
+    'AzurePathComponentLimit',
+    'AzureFullPathLimit',
+    'ExplicitAceDepthThreshold',
+    'GroupExpansionMaxDepth',
+    'AdLookupMode',
+    'ManagerIdentityFormat',
+    'IncludeFiles'
 )
 if (-not (Test-Path -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv'))) {
     Set-Content -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv') -Value '"Identity","Reason","Scope","MatchType"' -Encoding UTF8

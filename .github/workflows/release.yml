@@ -66,6 +66,7 @@ jobs:
           -Version '${{ steps.version.outputs.version }}'
           -OutputRoot artifacts
           -SkipNpmInstall
+          -MinimumDependencyAgeDays 7
           -Force
           -PassThru
           | ConvertTo-Json -Depth 6
@@ -88,4 +89,18 @@ jobs:
           $version = '${{ steps.version.outputs.version }}'
           $zip = "artifacts/ShareSurfer-$version.zip"
           $hash = "artifacts/ShareSurfer-$version.zip.sha256"
-          gh release create $env:GITHUB_REF_NAME $zip $hash --title "ShareSurfer $env:GITHUB_REF_NAME" --notes "Unsigned pre-1.0 release package. The standalone dashboard assets are prebuilt under interface/standalone-dashboard/dist; no npm, Vite, development server, or internet access is required after unpacking the release."
+          $args = @(
+            'release',
+            'create',
+            $env:GITHUB_REF_NAME,
+            $zip,
+            $hash,
+            '--title',
+            "ShareSurfer $env:GITHUB_REF_NAME",
+            '--notes',
+            'Unsigned pre-1.0 release package. The standalone dashboard assets are prebuilt template assets under interface/standalone-dashboard/dist; package a validated export for real review. NPM dependency versions are checked against a 7-day minimum age policy before release packaging.'
+          )
+          if ($version -match '-') {
+            $args += '--prerelease'
+          }
+          gh @args

@@ -38,6 +38,17 @@ For lab validation, use the designated Windows/AD lab host directly.
 
 Open Windows PowerShell 5.1 as the account that will run the scan.
 
+For the best first run, right-click Windows PowerShell and choose **Run as administrator**. ShareSurfer can still collect what your current token can read without elevation, but a non-elevated token may miss or partially record:
+
+- Share-level permission proof from `Get-SmbShareAccess` or remote CIM/WinRM calls.
+- ACLs on protected folders or files.
+- Owner values on protected objects.
+- Child folders/files where traversal or enumeration is denied.
+- Security descriptor details that require backup, restore, security, or take-ownership style privileges.
+- Clear evidence that a scan gap is caused by permissions instead of a missing path or unavailable service.
+
+When this happens, ShareSurfer keeps running where it can and records partial-data, collection-error, and critical scan blocker evidence. Treat those rows as "review before approval", not as clean scan results.
+
 Check the version:
 
 ```powershell
@@ -106,6 +117,25 @@ New-Item -ItemType Directory -Path 'C:\ShareSurfer\inputs' -Force
 
 Keep raw exports internal. They can contain real paths, server names, user names, group names, employee IDs, manager names, and OBS values.
 
+### Optional Owner Mapping
+
+In ShareSurfer, **Owner** means the business or data-review owner assigned by mapping rules. It is not the same thing as the Windows/NTFS owner recorded in `items.csv`.
+
+Create an owner mapping CSV when you know who should review a path:
+
+```powershell
+@(
+  [pscustomobject]@{
+    Pattern = '\\files01\Finance*'
+    Owner = 'Finance Operations'
+    BusinessUnit = 'Finance'
+    Source = 'first-run'
+  }
+) | Export-Csv -LiteralPath 'C:\ShareSurfer\inputs\owner-mapping.csv' -NoTypeInformation -Encoding UTF8
+```
+
+If you do not have owner mappings yet, skip `-OwnerMappingPath` for the first scan. ShareSurfer will still export evidence, but `owner_review_packets.csv` will be less useful because review rows cannot be routed as cleanly to business owners and business units.
+
 If broad operational groups have access almost everywhere, create a discounted principals CSV before the scan:
 
 ```powershell
@@ -131,6 +161,8 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -ManagerIdentityFormat MailTo `
+  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
   -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
@@ -147,6 +179,8 @@ Invoke-ShareSurferScan `
   -OperationalPathLengthThreshold 256 `
   -ExplicitAceDepthThreshold 2 `
   -GroupExpansionMaxDepth 5 `
+  -ManagerIdentityFormat MailTo `
+  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
   -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
   -AdLookupMode Auto `
   -ObsAttribute 'extensionAttribute10'
@@ -155,6 +189,12 @@ Invoke-ShareSurferScan `
 Use `-IncludeFiles` when you need file-level evidence, not only folder-level evidence. File-level scans can take longer on large shares.
 
 Use `-AdLookupMode Auto` for normal collection. It tries the best available directory lookup path. Use `DirectoryOnly` only for imported test data.
+
+Use `-ManagerIdentityFormat MailTo` unless you have a reason to export another format. It is the default and makes `ManagerLevel1`, `ManagerLevel2`, and `ManagerLevel3` easier for reviewers to use. Other supported values are `Mail`, `UserPrincipalName`, `SamAccountName`, and `DistinguishedName`. Raw manager references are preserved in `ManagerLevel1Raw`, `ManagerLevel2Raw`, and `ManagerLevel3Raw` when available.
+
+The collector prints timestamped status lines while it runs. That is expected and helps first-time operators tell the scan is still active during recursive folder enumeration, ACL reads, identity enrichment, and CSV export. Add `-Quiet` when a scheduled or scripted run should suppress console progress.
+
+If the target cannot accept WinRM/CIM, ShareSurfer continues best-effort when it can still inspect the path. The scan will mark share-level permission proof as partial or unavailable in the exports instead of treating that alone as a hard stop.
 
 ## Step 5: Validate the Export
 
@@ -186,7 +226,7 @@ The most important CSVs for a first review are:
 | `items.csv` | Folders and files found under each share. |
 | `share_permissions.csv` | The share-level access gate. |
 | `acl_entries.csv` | Folder and file permissions. |
-| `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, and potential service account review flags. |
+| `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, Broken/Missing SID rows, collection errors, and potential service account review flags. |
 | `conflicts.csv` | Share-vs-NTFS access mismatches. |
 | `identities.csv` | User and group details such as employee and OBS values. |
 | `group_edges.csv` | Expanded group membership paths. |
@@ -199,6 +239,18 @@ The most important CSVs for a first review are:
 | `permissioned_groups.csv` | Groups that directly grant share or folder/file access, including assignment counts, rights, expanded members, and expansion health. |
 
 Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
+
+`owner_review_packets.csv` is generated automatically during `Invoke-ShareSurferScan`. You do not create that file by hand. To make it useful, provide `owner-mapping.csv` before the scan, run the scan, then confirm the export contains:
+
+```powershell
+Import-Csv "$exportPath\owner_review_packets.csv" | Select-Object -First 10
+```
+
+If the file exists but owner or business-unit values are blank or too generic, update `owner-mapping.csv` and rerun the scan.
+
+If `Owner` is blank in `items.csv`, ShareSurfer did not receive a usable NTFS owner value for that item. That can mean the owner read was denied, the object has an unresolved owner SID, the path was partially collected, or the source did not return owner metadata. It does not automatically mean the file has no real Windows owner.
+
+If `BrokenOrMissingSid` appears in `findings.csv`, a permission referenced a SID or account name ShareSurfer could not resolve. Review it with the directory or file-share team; common causes include deleted accounts, broken trust references, or directory lookup gaps.
 
 If `PotentialServiceAccount=True` appears in `identities.csv` or a `PotentialServiceAccount` row appears in `findings.csv`, ask the owner or directory team to confirm the account purpose. It may be a real service account, or it may simply be a human account with missing OBS and employee identifier data.
 
@@ -232,6 +284,8 @@ Use the dashboard to review:
 
 - Executive summary cards.
 - What Needs Review First owner review queue for business-unit and data-owner review packets.
+- Broken/Missing SID filters when unresolved permission identities need focused review.
+- Critical scan information blocks for access denied, unauthorized, or path-resolution gaps.
 - Review Workbench snapshot for the selected business unit, data owner, or risk level.
 - Access Model view showing share gate permissions beside file/folder permissions.
 - Migration Discovery rows showing related data areas that should be kept together during migration planning.
@@ -286,15 +340,24 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. Maintainers can also build and package the React/Vite standalone dashboard when they want the richer novice-admin and business-owner interface.
+The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.2 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
-Build the dashboard assets from Windows PowerShell, PowerShell 7, Terminal, or any shell with Node and npm:
+If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -File scripts\New-ShareSurferStandaloneDashboard.ps1 `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+```
+
+Only maintainers building from source need to build the dashboard assets with Node and npm:
 
 ```powershell
 npm --prefix interface/standalone-dashboard run build
 ```
 
-Package the current export into a standalone static folder:
+Package the current export into a standalone static folder with PowerShell 7:
 
 ```powershell
 pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `

@@ -59,6 +59,9 @@ function Get-ShareSurferExportSchema {
             'ManagerLevel1',
             'ManagerLevel2',
             'ManagerLevel3',
+            'ManagerLevel1Raw',
+            'ManagerLevel2Raw',
+            'ManagerLevel3Raw',
             'ObsPath',
             'ObsAttribute',
             'PotentialServiceAccount',
@@ -111,6 +114,9 @@ function Get-ShareSurferExportSchema {
             'ManagerLevel1',
             'ManagerLevel2',
             'ManagerLevel3',
+            'ManagerLevel1Raw',
+            'ManagerLevel2Raw',
+            'ManagerLevel3Raw',
             'ObsPath',
             'ObsAttribute',
             'PotentialServiceAccount'
@@ -269,6 +275,7 @@ function Get-ShareSurferExportSchema {
             'ExplicitAceDepthThreshold',
             'GroupExpansionMaxDepth',
             'AdLookupMode',
+            'ManagerIdentityFormat',
             'IncludeFiles'
         )
     }

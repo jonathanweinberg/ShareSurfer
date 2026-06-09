@@ -22,20 +22,20 @@ function New-ShareSurferStandaloneSchema {
         'items.csv' = @('ItemId', 'ShareId', 'ItemType', 'FullPath', 'RelativePath', 'Depth', 'Owner', 'InheritanceEnabled', 'InheritanceBrokenAt')
         'share_permissions.csv' = @('ShareId', 'Identity', 'Rights', 'AccessControlType', 'Source')
         'acl_entries.csv' = @('ItemId', 'ShareId', 'FullPath', 'Identity', 'Rights', 'AccessControlType', 'IsInherited', 'InheritanceFlags', 'PropagationFlags', 'Depth')
-        'identities.csv' = @('Identity', 'SamAccountName', 'DisplayName', 'ObjectClass', 'EmployeeId', 'EmployeeNumber', 'UserPrincipalName', 'Mail', 'Department', 'Title', 'Company', 'Office', 'AccountEnabled', 'Manager', 'ManagerLevel1', 'ManagerLevel2', 'ManagerLevel3', 'ObsPath', 'ObsAttribute', 'PotentialServiceAccount', 'DistinguishedName')
+        'identities.csv' = @('Identity', 'SamAccountName', 'DisplayName', 'ObjectClass', 'EmployeeId', 'EmployeeNumber', 'UserPrincipalName', 'Mail', 'Department', 'Title', 'Company', 'Office', 'AccountEnabled', 'Manager', 'ManagerLevel1', 'ManagerLevel2', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'ObsPath', 'ObsAttribute', 'PotentialServiceAccount', 'DistinguishedName')
         'group_edges.csv' = @('ParentGroup', 'ChildIdentity', 'ChildObjectClass', 'Depth', 'IsCycle', 'IsTruncated')
         'discounted_principals.csv' = @('Identity', 'Reason', 'Scope', 'MatchType')
         'permissioned_groups.csv' = @('Group', 'DisplayName', 'ObjectClass', 'ObsPath', 'ManagerLevel1', 'ShareAssignments', 'NtfsAssignments', 'ExpandedMembers', 'MaxDepth', 'HasCycle', 'IsTruncated', 'Rights', 'ShareId', 'ShareIds', 'Sources', 'FullPath', 'ExamplePath', 'DiscountedPrincipal', 'DiscountReason', 'DiscountScope')
-        'org_chains.csv' = @('Identity', 'EmployeeId', 'EmployeeNumber', 'Department', 'Title', 'Company', 'Office', 'ManagerLevel1', 'ManagerLevel2', 'ManagerLevel3', 'ObsPath', 'ObsAttribute', 'PotentialServiceAccount')
+        'org_chains.csv' = @('Identity', 'EmployeeId', 'EmployeeNumber', 'Department', 'Title', 'Company', 'Office', 'ManagerLevel1', 'ManagerLevel2', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'ObsPath', 'ObsAttribute', 'PotentialServiceAccount')
         'owner_mappings.csv' = @('Pattern', 'Owner', 'BusinessUnit', 'Source')
         'owner_risk_pivots.csv' = @('BusinessUnit', 'Owner', 'Pattern', 'Source', 'MatchingItems', 'Directories', 'Files', 'FindingCount', 'ConflictCount', 'PartialShareCount', 'DirectIdentityCount', 'DirectGroupCount', 'ExpandedMemberCount', 'RiskLevel', 'ReadinessSignals', 'DiscountedPrincipal', 'DiscountedPrincipalCount', 'DiscountedGroupCount', 'DiscountedPrincipals', 'DiscountReason')
         'related_data_areas.csv' = @('RelatedAreaId', 'RelatedDataArea', 'BusinessUnit', 'Owner', 'Pattern', 'Source', 'RelatednessStrength', 'RelationshipSignalCount', 'SupportingSignalCount', 'ReadinessSignalCount', 'RelationshipSignals', 'SupportingEvidence', 'ReadinessSignals', 'CoreFiveChips', 'EvidenceCompleteness', 'RiskLevel', 'MigrationReadiness', 'MatchingShares', 'MatchingItems', 'Directories', 'Files', 'FindingCount', 'ConflictCount', 'ReviewItemCount', 'PartialShareCount', 'DirectIdentityCount', 'DirectGroupCount', 'ExpandedMemberCount', 'RelatedBecauseShort', 'RelatedBecause', 'SuggestedNextAction', 'DiscountedPrincipal', 'DiscountedPrincipalCount', 'DiscountedGroupCount', 'DiscountedPrincipals', 'DiscountReason')
         'owner_review_packets.csv' = @('ReviewPacketId', 'BusinessUnit', 'Owner', 'Pattern', 'Source', 'RiskLevel', 'ReviewStatus', 'WhyReview', 'WhatToReviewFirst', 'SuggestedNextAction', 'MatchingItems', 'Directories', 'Files', 'FindingCount', 'ConflictCount', 'PartialShareCount', 'DirectIdentityCount', 'DirectGroupCount', 'ExpandedMemberCount', 'MigrationReadiness', 'RelatedDataAreaCount', 'RelatednessStrength', 'RelationshipSignalCount', 'ReadinessSignals', 'DiscountedPrincipal', 'DiscountedPrincipalCount', 'DiscountedGroupCount', 'DiscountedPrincipals', 'DiscountReason')
         'conflicts.csv' = @('ConflictId', 'ConflictType', 'ShareId', 'ItemId', 'Identity', 'ShareRights', 'NtfsRights', 'Severity', 'Message')
         'findings.csv' = @('FindingId', 'FindingType', 'Severity', 'ShareId', 'ItemId', 'FullPath', 'Identity', 'ObservedValue', 'PolicyValue', 'Message')
-        'collection_errors.csv' = @('ErrorId', 'ShareId', 'ItemId', 'FullPath', 'ErrorType', 'Message', 'Detail')
-        'scan_events.csv' = @('Timestamp', 'Level', 'EventType', 'Message', 'Detail')
-        'scan_manifest.csv' = @('ScanId', 'GeneratedAt', 'ExportVersion', 'ObsAttribute', 'SourceMode', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'IncludeFiles')
+        'collection_errors.csv' = @('ErrorId', 'ShareId', 'ItemId', 'FullPath', 'ErrorType', 'Severity', 'Source', 'Message', 'Detail')
+        'scan_events.csv' = @('EventId', 'Timestamp', 'Level', 'EventType', 'Source', 'ShareId', 'ItemId', 'Message', 'Detail')
+        'scan_manifest.csv' = @('ScanId', 'GeneratedAt', 'ExportVersion', 'ObsAttribute', 'SourceMode', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'ManagerIdentityFormat', 'IncludeFiles')
     }
 }
 
@@ -161,6 +161,7 @@ $generatedAt = if ($manifest.PSObject.Properties['GeneratedAt'] -and [string]$ma
 $schemaWarnings = @($warningMap.Keys | Sort-Object)
 
 $snapshot = [ordered]@{
+    snapshotKind = 'export'
     generatedAt = $generatedAt
     rowCounts = $rowCounts
     schemaWarnings = $schemaWarnings
@@ -169,6 +170,7 @@ $snapshot = [ordered]@{
 
 $manifestOutput = [ordered]@{
     generatedAt = $generatedAt
+    dashboardDataKind = 'export'
     exportPath = (Resolve-Path -LiteralPath $ExportPath).Path
     rowCounts = $rowCounts
     schemaWarningCount = $schemaWarnings.Count
@@ -177,7 +179,8 @@ $manifestOutput = [ordered]@{
 
 $snapshotJson = $snapshot | ConvertTo-Json -Depth 30 -Compress
 $snapshotScript = 'window.__SHARESURFER_SNAPSHOT__ = {0};' -f $snapshotJson
-Set-Content -LiteralPath (Join-Path $OutputPath 'sharesurfer-data.js') -Value $snapshotScript -Encoding UTF8
+$dataScriptPath = Join-Path $OutputPath 'sharesurfer-data.js'
+Set-Content -LiteralPath $dataScriptPath -Value $snapshotScript -Encoding UTF8
 Set-Content -LiteralPath (Join-Path $OutputPath 'dashboard-manifest.json') -Value ($manifestOutput | ConvertTo-Json -Depth 8) -Encoding UTF8
 
 $result = [pscustomobject]@{
@@ -187,7 +190,8 @@ $result = [pscustomobject]@{
     ManifestPath = (Join-Path $OutputPath 'dashboard-manifest.json')
     RowCounts = $rowCounts
     SchemaWarningCount = $schemaWarnings.Count
-    IsValid = (Test-Path -LiteralPath (Join-Path $OutputPath 'index.html')) -and (Test-Path -LiteralPath (Join-Path $OutputPath 'sharesurfer-data.js'))
+    DashboardDataKind = 'export'
+    IsValid = (Test-Path -LiteralPath (Join-Path $OutputPath 'index.html')) -and (Test-Path -LiteralPath $dataScriptPath) -and ((Get-Item -LiteralPath $dataScriptPath).Length -gt 0)
 }
 
 if ($PassThru) {
