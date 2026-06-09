@@ -70,6 +70,22 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("button", { name: /Show sidebar/i })).toHaveAttribute("aria-expanded", "false");
   });
 
+  test("overview review queue is filterable and still opens owner context", () => {
+    renderWithDemoSnapshot();
+
+    const table = screen.getByRole("table", { name: /What needs review first/i });
+    expect(within(table).getByText("Finance Operations")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Filter What needs review first rows/i), { target: { value: "not-a-real-owner" } });
+    expect(within(table).getByText(/No rows match the current view/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Filter What needs review first rows/i), { target: { value: "Finance" } });
+    fireEvent.click(within(table).getByRole("row", { name: /Finance Operations/i }));
+
+    expect(screen.getByRole("heading", { name: /Findings & Conflicts/i })).toBeInTheDocument();
+    expect(screen.getByText("Overview / Finance Operations")).toBeInTheDocument();
+  });
+
   test("findings rollups are clickable filters for the issue table", () => {
     renderWithDemoSnapshot();
 
@@ -93,6 +109,19 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("heading", { name: /Shares Evidence/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Back to migration cluster/i })).toBeInTheDocument();
     expect(screen.getByText(/Finance \/ Accounts Payable/i)).toBeInTheDocument();
+  });
+
+  test("migration cluster selector has local row filtering", () => {
+    renderWithDemoSnapshot();
+
+    fireEvent.click(screen.getByRole("button", { name: /Migration/i }));
+    const table = screen.getByRole("table", { name: /Related data area clusters/i });
+
+    fireEvent.change(screen.getByLabelText(/Filter Related data area clusters rows/i), { target: { value: "not-a-real-cluster" } });
+    expect(within(table).getByText(/No rows match the current view/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Filter Related data area clusters rows/i), { target: { value: "Finance" } });
+    expect(within(table).getByText("Finance / Accounts Payable")).toBeInTheDocument();
   });
 
   test("file and folder evidence explains depth in reviewer language", () => {
