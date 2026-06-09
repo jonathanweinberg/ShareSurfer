@@ -70,6 +70,37 @@ ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\rep
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath 'C:\ShareSurfer\support\scan-001-redacted'
 ```
 
+### Quick Start in a Nonpermissive Environment
+
+Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Copy the ShareSurfer release or repository folder to the collector host first. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
+
+```powershell
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer'
+$exportPath = 'C:\ShareSurfer\exports\scan-001'
+$handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Path $exportPath) | Out-Null
+New-Item -ItemType Directory -Force -Path (Split-Path -Path $handoffPath) | Out-Null
+New-Item -ItemType Directory -Force -Path 'C:\ShareSurfer\inputs' | Out-Null
+
+Import-Module "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+Invoke-ShareSurferScan `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath $exportPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
+  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv'
+
+Test-ShareSurferExport -ExportPath $exportPath
+ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
+
+Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
+Get-FileHash -Algorithm SHA256 -Path $handoffPath
+```
+
+If you do not have owner mappings or discounted principals yet, remove those two parameters for the first scan. Move the zip file and SHA256 hash through your approved transfer process, then open `report.html` or build the standalone dashboard on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
+
 To keep broad operational access visible without letting it drive Migration Discovery, pass a discounted principal CSV:
 
 ```powershell
