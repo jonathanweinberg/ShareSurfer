@@ -106,6 +106,8 @@ interface ReviewDecision {
   issueId: string;
   decision: ReviewDecisionValue;
   updatedAt: string;
+  reviewer: string;
+  note: string;
   title: string;
   category: string;
   severity: string;
@@ -274,8 +276,21 @@ function isReviewDecision(value: unknown): value is ReviewDecision {
     typeof candidate.updatedAt === "string" &&
     ["title", "category", "severity", "owner", "businessUnit", "path", "identity", "source"].every(
       (key) => typeof candidate[key as keyof ReviewDecision] === "string"
-    )
+    ) &&
+    (candidate.reviewer === undefined || typeof candidate.reviewer === "string") &&
+    (candidate.note === undefined || typeof candidate.note === "string")
   );
+}
+
+function normalizeReviewDecision(value: unknown): ReviewDecision | null {
+  if (!isReviewDecision(value)) {
+    return null;
+  }
+  return {
+    ...value,
+    reviewer: value.reviewer ?? "",
+    note: value.note ?? ""
+  };
 }
 
 function loadReviewDecisions(): ReviewDecisionMap {
@@ -285,7 +300,10 @@ function loadReviewDecisions(): ReviewDecisionMap {
       return {};
     }
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => isReviewDecision(value))) as ReviewDecisionMap;
+    const decisions = Object.entries(parsed)
+      .map(([key, value]) => [key, normalizeReviewDecision(value)] as const)
+      .filter((entry): entry is readonly [string, ReviewDecision] => entry[1] !== null);
+    return Object.fromEntries(decisions) as ReviewDecisionMap;
   } catch {
     return {};
   }
@@ -303,11 +321,13 @@ function saveReviewDecisions(decisions: ReviewDecisionMap): void {
   }
 }
 
-function buildReviewDecision(issue: IssueSummary, decision: ReviewDecisionValue): ReviewDecision {
+function buildReviewDecision(issue: IssueSummary, decision: ReviewDecisionValue, reviewer = "", note = ""): ReviewDecision {
   return {
     issueId: issue.id,
     decision,
     updatedAt: new Date().toISOString(),
+    reviewer,
+    note,
     title: issue.title,
     category: issue.category,
     severity: issue.severity,
@@ -327,7 +347,7 @@ function csvCell(value: string): string {
 }
 
 function buildReviewDecisionsCsv(decisions: ReviewDecision[]): string {
-  const headers = ["IssueId", "Decision", "UpdatedAt", "Title", "Category", "Severity", "Owner", "BusinessUnit", "Path", "Identity", "Source"];
+  const headers = ["IssueId", "Decision", "UpdatedAt", "Reviewer", "Note", "Title", "Category", "Severity", "Owner", "BusinessUnit", "Path", "Identity", "Source"];
   const rows = decisions
     .slice()
     .sort((a, b) => a.issueId.localeCompare(b.issueId))
@@ -336,6 +356,8 @@ function buildReviewDecisionsCsv(decisions: ReviewDecision[]): string {
         decision.issueId,
         decision.decision,
         decision.updatedAt,
+        decision.reviewer,
+        decision.note,
         decision.title,
         decision.category,
         decision.severity,
@@ -1169,6 +1191,7 @@ function FindingsView({
   selectedIssue,
   reviewDecisions,
   onReviewDecision,
+  onReviewDecisionContextChange,
   onClearReviewDecision
 }: {
   issues: IssueSummary[];
@@ -1176,10 +1199,13 @@ function FindingsView({
   selectedIssue?: IssueSummary;
   onIssueSelect: (issue: IssueSummary) => void;
   reviewDecisions: ReviewDecisionMap;
-  onReviewDecision: (issue: IssueSummary, decision: ReviewDecisionValue) => void;
+  onReviewDecision: (issue: IssueSummary, decision: ReviewDecisionValue, reviewer: string, note: string) => void;
+  onReviewDecisionContextChange: (issueId: string, patch: Pick<ReviewDecision, "reviewer" | "note">) => void;
   onClearReviewDecision: (issueId: string) => void;
 }) {
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [reviewerDraft, setReviewerDraft] = useState("");
+  const [noteDraft, setNoteDraft] = useState("");
   const issueRollups = useMemo(() => {
     const counts = new Map<string, number>();
     for (const issue of issues) {
@@ -1194,6 +1220,7 @@ function FindingsView({
   const issueIds = new Set(issues.map((issue) => issue.id));
   const scopedReviewDecisions = Object.values(reviewDecisions).filter((decision) => issueIds.has(decision.issueId));
   const selectedReviewDecision = selected ? reviewDecisions[selected.id] : undefined;
+  const reviewedVisibleCount = visibleIssues.filter((issue) => Boolean(reviewDecisions[issue.id])).length;
   const rows = visibleIssues.map((issue) => ({
     IssueId: issue.id,
     Category: issue.category,
@@ -1203,10 +1230,36 @@ function FindingsView({
     Path: issue.path
   }));
 
+  useEffect(() => {
+    setReviewerDraft(selectedReviewDecision?.reviewer ?? "");
+    setNoteDraft(selectedReviewDecision?.note ?? "");
+  }, [selected?.id, selectedReviewDecision?.reviewer, selectedReviewDecision?.note]);
+
+  const updateReviewerDraft = (value: string) => {
+    setReviewerDraft(value);
+    if (selectedReviewDecision) {
+      onReviewDecisionContextChange(selectedReviewDecision.issueId, { reviewer: value, note: noteDraft });
+    }
+  };
+
+  const updateNoteDraft = (value: string) => {
+    setNoteDraft(value);
+    if (selectedReviewDecision) {
+      onReviewDecisionContextChange(selectedReviewDecision.issueId, { reviewer: reviewerDraft, note: value });
+    }
+  };
+
   return (
     <div className="split-view">
       <section className="panel">
         <SectionTitle tooltip={tooltipRegistry.fileFolderPermissions}>Findings & Conflicts</SectionTitle>
+        <div className="review-progress" aria-label="Finding review progress">
+          <div>
+            <strong>{formatNumber(reviewedVisibleCount)} of {formatNumber(visibleIssues.length)} reviewed</strong>
+            <span>Local decisions only. Export the CSV to share this review state.</span>
+          </div>
+          <progress value={reviewedVisibleCount} max={visibleIssues.length || 1} aria-label={`${reviewedVisibleCount} of ${visibleIssues.length} reviewed`} />
+        </div>
         {criticalBlocks.length > 0 ? (
           <div className="critical-blocks" aria-label="Critical scan information blocks">
             <h3>Critical Scan Information Blocks</h3>
@@ -1271,11 +1324,21 @@ function FindingsView({
                   {selectedReviewDecision ? `Decision: ${selectedReviewDecision.decision}` : "No decision recorded"}
                 </strong>
               </div>
+              <div className="review-decision-fields">
+                <label>
+                  Reviewer
+                  <input type="text" value={reviewerDraft} onChange={(event) => updateReviewerDraft(event.target.value)} placeholder="Name or initials" />
+                </label>
+                <label>
+                  Review note
+                  <textarea value={noteDraft} onChange={(event) => updateNoteDraft(event.target.value)} placeholder="Why this decision was made" rows={3} />
+                </label>
+              </div>
               <div className="review-decision-actions">
-                <button type="button" className="link-button" onClick={() => onReviewDecision(selected, "Expected")}>
+                <button type="button" className="link-button" onClick={() => onReviewDecision(selected, "Expected", reviewerDraft.trim(), noteDraft.trim())}>
                   Mark Expected
                 </button>
-                <button type="button" className="link-button" onClick={() => onReviewDecision(selected, "Needs Follow-up")}>
+                <button type="button" className="link-button" onClick={() => onReviewDecision(selected, "Needs Follow-up", reviewerDraft.trim(), noteDraft.trim())}>
                   Mark Needs Follow-up
                 </button>
                 <button type="button" className="clear-button" onClick={() => onClearReviewDecision(selected.id)} disabled={!selectedReviewDecision}>
@@ -1793,11 +1856,28 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
     setActiveView(view);
   };
 
-  const setIssueReviewDecision = (issue: IssueSummary, decision: ReviewDecisionValue) => {
+  const setIssueReviewDecision = (issue: IssueSummary, decision: ReviewDecisionValue, reviewer: string, note: string) => {
     setReviewDecisions((current) => ({
       ...current,
-      [issue.id]: buildReviewDecision(issue, decision)
+      [issue.id]: buildReviewDecision(issue, decision, reviewer, note)
     }));
+  };
+
+  const updateIssueReviewDecisionContext = (issueId: string, patch: Pick<ReviewDecision, "reviewer" | "note">) => {
+    setReviewDecisions((current) => {
+      const existing = current[issueId];
+      if (!existing) {
+        return current;
+      }
+      return {
+        ...current,
+        [issueId]: {
+          ...existing,
+          ...patch,
+          updatedAt: new Date().toISOString()
+        }
+      };
+    });
   };
 
   const clearIssueReviewDecision = (issueId: string) => {
@@ -1947,6 +2027,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
             reviewDecisions={reviewDecisions}
             onIssueSelect={(issue) => setSelectedIssueId(issue.id)}
             onReviewDecision={setIssueReviewDecision}
+            onReviewDecisionContextChange={updateIssueReviewDecisionContext}
             onClearReviewDecision={clearIssueReviewDecision}
           />
         ) : null}

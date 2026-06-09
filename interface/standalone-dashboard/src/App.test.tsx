@@ -123,20 +123,29 @@ describe("dashboard workbench interactions", () => {
 
     const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
     fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.change(screen.getByLabelText(/Reviewer/i), { target: { value: "J. Weinberg" } });
+    fireEvent.change(screen.getByLabelText(/Review note/i), { target: { value: "Known exception for migration freeze." } });
     fireEvent.click(screen.getByRole("button", { name: /Mark Expected/i }));
 
     expect(screen.getByText(/Decision: Expected/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 of 4 reviewed/i)).toBeInTheDocument();
     expect(window.localStorage.getItem("sharesurfer.reviewDecisions.v1")).toContain("Expected");
+    expect(window.localStorage.getItem("sharesurfer.reviewDecisions.v1")).toContain("J. Weinberg");
+    expect(window.localStorage.getItem("sharesurfer.reviewDecisions.v1")).toContain("Known exception");
 
     firstRender.unmount();
     renderWithDemoSnapshot();
 
     expect(screen.getByRole("heading", { name: /Findings & Conflicts/i })).toBeInTheDocument();
     expect(screen.getByText(/Decision: Expected/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Reviewer/i)).toHaveValue("J. Weinberg");
+    expect(screen.getByLabelText(/Review note/i)).toHaveValue("Known exception for migration freeze.");
+    expect(screen.getByText(/1 of 4 reviewed/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Clear decision/i }));
 
     expect(screen.getByText(/No decision recorded/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 of 4 reviewed/i)).toBeInTheDocument();
     expect(window.localStorage.getItem("sharesurfer.reviewDecisions.v1")).toBeNull();
   });
 
@@ -145,14 +154,18 @@ describe("dashboard workbench interactions", () => {
 
     const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
     fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.change(screen.getByLabelText(/Reviewer/i), { target: { value: "Ava Reviewer" } });
+    fireEvent.change(screen.getByLabelText(/Review note/i), { target: { value: "Known broad access, verify after migration." } });
     fireEvent.click(screen.getByRole("button", { name: /Mark Needs Follow-up/i }));
 
     const exportLink = screen.getByRole("link", { name: /Export review decisions/i });
     const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
 
     expect(exportLink).toHaveAttribute("download", "review-decisions.csv");
-    expect(href).toContain("IssueId,Decision,UpdatedAt,Title,Category,Severity,Owner,BusinessUnit,Path,Identity,Source");
+    expect(href).toContain("IssueId,Decision,UpdatedAt,Reviewer,Note,Title,Category,Severity,Owner,BusinessUnit,Path,Identity,Source");
     expect(href).toContain("Needs Follow-up");
+    expect(href).toContain("Ava Reviewer");
+    expect(href).toContain("Known broad access");
   });
 
   test("migration metrics drill into evidence rows and can return to the cluster", () => {
