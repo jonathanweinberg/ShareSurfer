@@ -161,6 +161,7 @@ $generatedAt = if ($manifest.PSObject.Properties['GeneratedAt'] -and [string]$ma
 $schemaWarnings = @($warningMap.Keys | Sort-Object)
 
 $snapshot = [ordered]@{
+    snapshotKind = 'export'
     generatedAt = $generatedAt
     rowCounts = $rowCounts
     schemaWarnings = $schemaWarnings
@@ -169,6 +170,7 @@ $snapshot = [ordered]@{
 
 $manifestOutput = [ordered]@{
     generatedAt = $generatedAt
+    dashboardDataKind = 'export'
     exportPath = (Resolve-Path -LiteralPath $ExportPath).Path
     rowCounts = $rowCounts
     schemaWarningCount = $schemaWarnings.Count
@@ -177,7 +179,8 @@ $manifestOutput = [ordered]@{
 
 $snapshotJson = $snapshot | ConvertTo-Json -Depth 30 -Compress
 $snapshotScript = 'window.__SHARESURFER_SNAPSHOT__ = {0};' -f $snapshotJson
-Set-Content -LiteralPath (Join-Path $OutputPath 'sharesurfer-data.js') -Value $snapshotScript -Encoding UTF8
+$dataScriptPath = Join-Path $OutputPath 'sharesurfer-data.js'
+Set-Content -LiteralPath $dataScriptPath -Value $snapshotScript -Encoding UTF8
 Set-Content -LiteralPath (Join-Path $OutputPath 'dashboard-manifest.json') -Value ($manifestOutput | ConvertTo-Json -Depth 8) -Encoding UTF8
 
 $result = [pscustomobject]@{
@@ -187,7 +190,8 @@ $result = [pscustomobject]@{
     ManifestPath = (Join-Path $OutputPath 'dashboard-manifest.json')
     RowCounts = $rowCounts
     SchemaWarningCount = $schemaWarnings.Count
-    IsValid = (Test-Path -LiteralPath (Join-Path $OutputPath 'index.html')) -and (Test-Path -LiteralPath (Join-Path $OutputPath 'sharesurfer-data.js'))
+    DashboardDataKind = 'export'
+    IsValid = (Test-Path -LiteralPath (Join-Path $OutputPath 'index.html')) -and (Test-Path -LiteralPath $dataScriptPath) -and ((Get-Item -LiteralPath $dataScriptPath).Length -gt 0)
 }
 
 if ($PassThru) {

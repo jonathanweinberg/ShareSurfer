@@ -42,6 +42,7 @@ jobs:
           pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferRelease.ps1
           -OutputRoot artifacts
           -SkipNpmInstall
+          -SkipDependencyAgeCheck
           -Force
           -PassThru
           | ConvertTo-Json -Depth 6

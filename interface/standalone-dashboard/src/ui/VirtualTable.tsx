@@ -12,6 +12,13 @@ interface VirtualTableProps {
   rowKey?: (row: DataRow, index: number) => string;
 }
 
+type SortDirection = "asc" | "desc";
+
+interface SortState {
+  column: string;
+  direction: SortDirection;
+}
+
 function getColumns(rows: DataRow[], columns?: string[]): string[] {
   if (columns && columns.length > 0) {
     return columns;
@@ -28,6 +35,16 @@ function humanizeColumnName(column: string): string {
     .trim();
 }
 
+function compareCellValues(left: string, right: string): number {
+  const leftNumber = Number(left.replace(/,/g, ""));
+  const rightNumber = Number(right.replace(/,/g, ""));
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && left.trim() !== "" && right.trim() !== "") {
+    return leftNumber - rightNumber;
+  }
+
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
 export function VirtualTable({
   rows,
   columns,
@@ -39,12 +56,34 @@ export function VirtualTable({
   rowKey
 }: VirtualTableProps) {
   const [page, setPage] = useState(0);
+  const [sort, setSort] = useState<SortState | null>(null);
   const visibleColumns = useMemo(() => getColumns(rows, columns), [columns, rows]);
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const sortedRows = useMemo(() => {
+    const indexedRows = rows.map((row, index) => ({ row, index }));
+    if (!sort) {
+      return indexedRows;
+    }
+
+    return indexedRows.sort((left, right) => {
+      const result = compareCellValues(left.row[sort.column] ?? "", right.row[sort.column] ?? "");
+      return sort.direction === "asc" ? result : -result;
+    });
+  }, [rows, sort]);
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
   const start = safePage * pageSize;
-  const visibleRows = rows.slice(start, start + pageSize);
+  const visibleRows = sortedRows.slice(start, start + pageSize);
   const end = rows.length === 0 ? 0 : Math.min(start + visibleRows.length, rows.length);
+  const toggleSort = (column: string) => {
+    setPage(0);
+    setSort((current) => {
+      if (!current || current.column !== column) {
+        return { column, direction: "asc" };
+      }
+
+      return { column, direction: current.direction === "asc" ? "desc" : "asc" };
+    });
+  };
 
   return (
     <div className="table-shell" aria-label={title}>
@@ -71,20 +110,29 @@ export function VirtualTable({
         <table aria-label={title}>
           <thead>
             <tr>
-              {visibleColumns.map((column) => (
-                <th key={column} title={columnLabels?.[column] ?? column}>{columnLabels?.[column] ?? humanizeColumnName(column)}</th>
-              ))}
+              {visibleColumns.map((column) => {
+                const label = columnLabels?.[column] ?? humanizeColumnName(column);
+                const activeSort = sort?.column === column ? sort.direction : null;
+                return (
+                  <th key={column} title={columnLabels?.[column] ?? column} aria-sort={activeSort === "asc" ? "ascending" : activeSort === "desc" ? "descending" : "none"}>
+                    <button type="button" className="sort-header" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
+                      <span>{label}</span>
+                      <span aria-hidden="true">{activeSort === "asc" ? "ASC" : activeSort === "desc" ? "DESC" : "SORT"}</span>
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row, index) => {
-              const key = rowKey ? rowKey(row, start + index) : `${start + index}-${visibleColumns.map((column) => row[column]).join("|")}`;
+            {visibleRows.map(({ row, index }) => {
+              const key = rowKey ? rowKey(row, index) : `${index}-${visibleColumns.map((column) => row[column]).join("|")}`;
               const selected = selectedKey !== undefined && key === selectedKey;
               return (
                 <tr
                   key={key}
                   className={`${onRowSelect ? "clickable-row" : ""} ${selected ? "selected-row" : ""}`}
-                  onClick={() => onRowSelect?.(row, start + index)}
+                  onClick={() => onRowSelect?.(row, index)}
                 >
                   {visibleColumns.map((column) => (
                     <td key={column} title={row[column] ?? ""}>
