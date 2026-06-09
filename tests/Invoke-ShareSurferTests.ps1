@@ -1432,6 +1432,51 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan logs manager identity format fallback without stopping export'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $inventory = New-TestInventory
+            $avaDirectory = @($inventory.IdentityDirectory | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
+            $avaDirectory.Manager = 'CONTOSO\NoMail.Manager'
+            $avaDirectory.ManagerLevel1 = 'CONTOSO\NoMail.Manager'
+            $avaDirectory.ManagerLevel2 = ''
+            $avaDirectory.ManagerLevel3 = ''
+            $inventory.IdentityDirectory += [pscustomobject]@{
+                Identity = 'CONTOSO\NoMail.Manager'
+                SamAccountName = 'NoMail.Manager'
+                DistinguishedName = 'CN=NoMail Manager,OU=Users,DC=example,DC=test'
+                DisplayName = 'NoMail Manager'
+                ObjectClass = 'user'
+                EmployeeId = 'E9001'
+                EmployeeNumber = '9001'
+                UserPrincipalName = ''
+                Mail = ''
+                Department = 'Finance'
+                Title = 'Manager without mail'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = ''
+                ManagerLevel1 = ''
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            }
+
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath | Out-Null
+
+            $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
+            $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+            $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
+            Assert-Equal $avaIdentity.ManagerLevel1 'CONTOSO\NoMail.Manager' 'Manager format fallback should keep the raw manager reference visible.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'ManagerIdentityFormatFallback' -and $_.Detail -like '*CONTOSO\NoMail.Manager*' }).Count -gt 0) 'Manager format fallback should be logged as a scan event for diagnostics.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan records AD lookup mode and marks truncated group expansion'
         Body = {
             Import-Module $moduleManifest -Force
@@ -1509,6 +1554,66 @@ $tests = @(
             $dnResolverScript = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Resolve-ShareSurferDistinguishedNameIdentity.ps1') -Raw
             foreach ($propertyName in @('userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'userAccountControl', 'distinguishedName')) {
                 Assert-True ($dnResolverScript -like ('*{0}*' -f $propertyName)) ('LDAP DN member resolution should load {0} for group-expanded identity correlation.' -f $propertyName)
+            }
+        }
+    },
+    @{
+        Name = 'ActiveDirectory manager-chain lookup stops when manager references cycle'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferIdentityName.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferIdentityDomain.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferDirectoryIdentity.ps1')
+
+            try {
+                function global:Get-ADUser {
+                    param(
+                        [string] $Identity,
+                        [string[]] $Properties
+                    )
+
+                    switch ($Identity) {
+                        'Ava.Accounting' {
+                            [pscustomobject]@{
+                                SamAccountName = 'Ava.Accounting'
+                                DisplayName = 'Ava Accounting'
+                                EmployeeID = 'E1001'
+                                employeeNumber = '1001'
+                                UserPrincipalName = 'ava.accounting@example.test'
+                                Mail = 'ava.accounting@example.test'
+                                Department = 'Accounts Payable'
+                                Title = 'Accounting Analyst'
+                                Company = 'Contoso Finance'
+                                physicalDeliveryOfficeName = 'HQ-4'
+                                Enabled = $true
+                                Manager = 'CN=Morgan Manager,OU=Users,DC=example,DC=test'
+                                extensionAttribute10 = 'CORP.FIN.AP'
+                                DistinguishedName = 'CN=Ava Accounting,OU=Users,DC=example,DC=test'
+                            }
+                        }
+                        'CN=Morgan Manager,OU=Users,DC=example,DC=test' {
+                            [pscustomobject]@{ SamAccountName = 'Morgan.Manager'; Manager = 'CN=Riley Director,OU=Users,DC=example,DC=test' }
+                        }
+                        'CN=Riley Director,OU=Users,DC=example,DC=test' {
+                            [pscustomobject]@{ SamAccountName = 'Riley.Director'; Manager = 'CN=Morgan Manager,OU=Users,DC=example,DC=test' }
+                        }
+                        default {
+                            throw ('Unexpected Get-ADUser identity {0}' -f $Identity)
+                        }
+                    }
+                }
+                function global:Get-ADGroup {
+                    throw 'User lookup should succeed before group fallback.'
+                }
+
+                $identity = Get-ShareSurferDirectoryIdentity -Identity 'CONTOSO\Ava.Accounting' -ObsAttribute 'extensionAttribute10' -AdLookupMode ActiveDirectory
+                Assert-Equal $identity.ManagerLevel1 'CN=Morgan Manager,OU=Users,DC=example,DC=test' 'AD manager chain should keep the direct manager.'
+                Assert-Equal $identity.ManagerLevel2 'CN=Riley Director,OU=Users,DC=example,DC=test' 'AD manager chain should include the next manager before the cycle.'
+                Assert-Equal $identity.ManagerLevel3 '' 'AD manager chain should stop before repeating a previously seen manager.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-ADUser -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ADGroup -ErrorAction SilentlyContinue
             }
         }
     },

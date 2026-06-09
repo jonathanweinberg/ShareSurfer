@@ -24,31 +24,10 @@ function Get-ShareSurferDirectoryIdentity {
         try {
             $properties = @('employeeID', 'employeeNumber', 'manager', 'displayName', 'userPrincipalName', 'mail', 'department', 'title', 'company', 'physicalDeliveryOfficeName', 'distinguishedName', $ObsAttribute)
             $user = Get-ShareSurferAdUserWithOptionalProperties -SamAccountName $sam -Properties $properties -OptionalProperties @('employeeNumber', $ObsAttribute)
-            $managerLevel1 = ''
-            $managerLevel2 = ''
-            $managerLevel3 = ''
-            if ($user.Manager) {
-                $managerLevel1 = [string]$user.Manager
-                try {
-                    $manager = Get-ADUser -Identity $user.Manager -Properties manager -ErrorAction Stop
-                    if ($manager.Manager) {
-                        $managerLevel2 = [string]$manager.Manager
-                        try {
-                            $manager2 = Get-ADUser -Identity $manager.Manager -Properties manager -ErrorAction Stop
-                            if ($manager2.Manager) {
-                                $managerLevel3 = [string]$manager2.Manager
-                            }
-                        }
-                        catch {
-                            $managerLevel3 = ''
-                        }
-                    }
-                }
-                catch {
-                    $managerLevel2 = ''
-                    $managerLevel3 = ''
-                }
-            }
+            $managerChain = @(Get-ShareSurferAdManagerChain -ManagerReference ([string]$user.Manager) -MaxDepth 3)
+            $managerLevel1 = if ($managerChain.Count -ge 1) { [string]$managerChain[0] } else { '' }
+            $managerLevel2 = if ($managerChain.Count -ge 2) { [string]$managerChain[1] } else { '' }
+            $managerLevel3 = if ($managerChain.Count -ge 3) { [string]$managerChain[2] } else { '' }
 
             return [pscustomobject]@{
                 Identity = $Identity
@@ -151,14 +130,52 @@ function Get-ShareSurferDirectoryIdentity {
             })
         }
 
-        $managerLevel1 = Get-ShareSurferLdapPropertyValue -Properties $props -Name 'manager'
-        $managerLevel2 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel1
-        $managerLevel3 = Get-ShareSurferLdapManagerLevel2 -ManagerDistinguishedName $managerLevel2
+        $managerChain = @(Get-ShareSurferLdapManagerChain -ManagerDistinguishedName (Get-ShareSurferLdapPropertyValue -Properties $props -Name 'manager') -MaxDepth 3)
+        $managerLevel2 = if ($managerChain.Count -ge 2) { [string]$managerChain[1] } else { '' }
+        $managerLevel3 = if ($managerChain.Count -ge 3) { [string]$managerChain[2] } else { '' }
         New-ShareSurferLdapIdentityRecord -Identity $Identity -Properties $props -ObsAttribute $ObsAttribute -Members $members -ManagerLevel2 $managerLevel2 -ManagerLevel3 $managerLevel3
     }
     catch {
         $null
     }
+}
+
+function Get-ShareSurferAdManagerChain {
+    param(
+        [string] $ManagerReference = '',
+
+        [int] $MaxDepth = 3
+    )
+
+    $chain = New-Object System.Collections.ArrayList
+    $seen = @{}
+    $current = $ManagerReference
+
+    while (-not [string]::IsNullOrWhiteSpace($current) -and $chain.Count -lt $MaxDepth) {
+        $key = $current.ToUpperInvariant()
+        if ($seen.ContainsKey($key)) {
+            break
+        }
+
+        $seen[$key] = $true
+        [void]$chain.Add($current)
+        if ($chain.Count -ge $MaxDepth) {
+            break
+        }
+
+        try {
+            $manager = Get-ADUser -Identity $current -Properties manager -ErrorAction Stop
+            if ($null -eq $manager -or [string]::IsNullOrWhiteSpace([string]$manager.Manager)) {
+                break
+            }
+            $current = [string]$manager.Manager
+        }
+        catch {
+            break
+        }
+    }
+
+    @($chain)
 }
 
 function Get-ShareSurferAdUserWithOptionalProperties {
