@@ -40,6 +40,9 @@ function Protect-ShareSurferValue {
         'ManagerLevel1',
         'ManagerLevel2',
         'ManagerLevel3',
+        'ManagerLevel1Raw',
+        'ManagerLevel2Raw',
+        'ManagerLevel3Raw',
         'ObsPath',
         'Pattern',
         'Owner',
@@ -132,6 +135,7 @@ function Protect-ShareSurferValue {
         'ExplicitAceDepthThreshold',
         'GroupExpansionMaxDepth',
         'AdLookupMode',
+        'ManagerIdentityFormat',
         'ObsAttribute',
         'PotentialServiceAccount',
         'GeneratedAt'

@@ -110,6 +110,18 @@ function New-TestInventory {
                 InheritanceFlags = 'ContainerInherit,ObjectInherit'
                 PropagationFlags = 'None'
                 Depth = 1
+            },
+            [pscustomobject]@{
+                ItemId = 'item-root'
+                ShareId = 'share-finance'
+                FullPath = '\\files01\Finance'
+                Identity = 'S-1-5-21-1000-2000-3000-4040'
+                Rights = 'Read'
+                AccessControlType = 'Allow'
+                IsInherited = $false
+                InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                PropagationFlags = 'None'
+                Depth = 1
             }
         )
         Identities = @(
@@ -249,6 +261,78 @@ function New-TestInventory {
                 ManagerLevel2 = 'CONTOSO\Riley.Director'
                 ManagerLevel3 = 'CONTOSO\Jordan.VP'
                 ObsPath = 'CORP.FIN.AP'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\Morgan.Manager'
+                SamAccountName = 'Morgan.Manager'
+                DistinguishedName = 'CN=Morgan Manager,OU=Users,DC=example,DC=test'
+                DisplayName = 'Morgan Manager'
+                ObjectClass = 'user'
+                EmployeeId = 'E2001'
+                EmployeeNumber = '2001'
+                UserPrincipalName = 'morgan.manager@example.test'
+                Mail = 'morgan.manager@example.test'
+                Department = 'Finance'
+                Title = 'Finance Manager'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = 'CONTOSO\Riley.Director'
+                ManagerLevel1 = 'CONTOSO\Riley.Director'
+                ManagerLevel2 = 'CONTOSO\Jordan.VP'
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\Riley.Director'
+                SamAccountName = 'Riley.Director'
+                DistinguishedName = 'CN=Riley Director,OU=Users,DC=example,DC=test'
+                DisplayName = 'Riley Director'
+                ObjectClass = 'user'
+                EmployeeId = 'E3001'
+                EmployeeNumber = '3001'
+                UserPrincipalName = 'riley.director@example.test'
+                Mail = 'riley.director@example.test'
+                Department = 'Finance'
+                Title = 'Finance Director'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = 'CONTOSO\Jordan.VP'
+                ManagerLevel1 = 'CONTOSO\Jordan.VP'
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
+                ObsAttribute = 'extensionAttribute10'
+                PotentialServiceAccount = $false
+                Members = @()
+            },
+            [pscustomobject]@{
+                Identity = 'CONTOSO\Jordan.VP'
+                SamAccountName = 'Jordan.VP'
+                DistinguishedName = 'CN=Jordan VP,OU=Users,DC=example,DC=test'
+                DisplayName = 'Jordan VP'
+                ObjectClass = 'user'
+                EmployeeId = 'E4001'
+                EmployeeNumber = '4001'
+                UserPrincipalName = 'jordan.vp@example.test'
+                Mail = 'jordan.vp@example.test'
+                Department = 'Finance'
+                Title = 'Finance VP'
+                Company = 'Contoso Finance'
+                Office = 'HQ-4'
+                AccountEnabled = 'True'
+                Manager = ''
+                ManagerLevel1 = ''
+                ManagerLevel2 = ''
+                ManagerLevel3 = ''
+                ObsPath = 'CORP.FIN'
                 ObsAttribute = 'extensionAttribute10'
                 PotentialServiceAccount = $false
                 Members = @()
@@ -1025,13 +1109,14 @@ $tests = @(
             Assert-True ($findings.FindingType -contains 'LongPathOperationalPolicy') 'Findings should include the operational 256-character warning.'
             Assert-True ($findings.FindingType -contains 'DeepExplicitAce') 'Findings should include explicit ACEs deeper than level 2.'
             Assert-True ($findings.FindingType -contains 'BrokenInheritance') 'Findings should include broken inheritance.'
+            Assert-True ($findings.FindingType -contains 'BrokenOrMissingSid') 'Findings should flag unresolved SID ACL identities separately from normal access findings.'
 
             $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
             $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
-            foreach ($columnName in @('Title', 'Office', 'ManagerLevel3', 'PotentialServiceAccount')) {
+            foreach ($columnName in @('Title', 'Office', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'PotentialServiceAccount')) {
                 Assert-True ($identities[0].PSObject.Properties.Name -contains $columnName) ("Identity export should include {0} for owner and service-account review." -f $columnName)
             }
-            foreach ($columnName in @('Office', 'ManagerLevel3', 'PotentialServiceAccount')) {
+            foreach ($columnName in @('Office', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'PotentialServiceAccount')) {
                 Assert-True ($orgChains[0].PSObject.Properties.Name -contains $columnName) ("Org chain export should include {0} for owner and service-account review." -f $columnName)
             }
 
@@ -1313,6 +1398,7 @@ $tests = @(
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
             $orgChains = Import-Csv -LiteralPath (Join-Path $outputPath 'org_chains.csv')
             $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
+            $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
 
             Assert-True ($identities.Identity -contains 'CONTOSO\Ava.Accounting') 'Identity enrichment should include user members discovered through group expansion.'
             $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
@@ -1323,7 +1409,12 @@ $tests = @(
             Assert-Equal $avaIdentity.Company 'Contoso Finance' 'Identity enrichment should export company for owner correlation.'
             Assert-Equal $avaIdentity.Office 'HQ-4' 'Identity enrichment should export office for owner correlation.'
             Assert-Equal $avaIdentity.AccountEnabled 'True' 'Identity enrichment should export account enabled status when known.'
-            Assert-Equal $avaIdentity.ManagerLevel3 'CONTOSO\Jordan.VP' 'Identity enrichment should export third-level manager context for owner escalation.'
+            Assert-Equal $avaIdentity.ManagerLevel1 'mailto:morgan.manager@example.test' 'Identity enrichment should default first-level manager context to a mailto link for business review.'
+            Assert-Equal $avaIdentity.ManagerLevel2 'mailto:riley.director@example.test' 'Identity enrichment should default second-level manager context to a mailto link for business review.'
+            Assert-Equal $avaIdentity.ManagerLevel3 'mailto:jordan.vp@example.test' 'Identity enrichment should default third-level manager context to a mailto link for business review.'
+            Assert-Equal $avaIdentity.ManagerLevel1Raw 'CONTOSO\Morgan.Manager' 'Identity enrichment should preserve raw first-level manager context for directory correlation.'
+            Assert-Equal $avaIdentity.ManagerLevel2Raw 'CONTOSO\Riley.Director' 'Identity enrichment should preserve raw second-level manager context for directory correlation.'
+            Assert-Equal $avaIdentity.ManagerLevel3Raw 'CONTOSO\Jordan.VP' 'Identity enrichment should preserve raw third-level manager context for directory correlation.'
             Assert-Equal $avaIdentity.PotentialServiceAccount 'False' 'Identity enrichment should not flag users with employee and OBS data as potential service accounts.'
             Assert-True ($avaIdentity.DistinguishedName -like 'CN=Ava Human Name*') 'Identity enrichment should export distinguished names for directory correlation.'
             $serviceIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\svc.ShareBot' })[0]
@@ -1333,9 +1424,11 @@ $tests = @(
             Assert-True ($orgChains.Identity -contains 'CONTOSO\Ava.Accounting') 'Org chains should include enriched user manager and OBS data.'
             $avaOrgChain = @($orgChains | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
             Assert-Equal $avaOrgChain.Department 'Accounts Payable' 'Org chains should carry department for manager and OBS rollups.'
-            Assert-Equal $avaOrgChain.ManagerLevel3 'CONTOSO\Jordan.VP' 'Org chains should pursue manager context three levels deep.'
+            Assert-Equal $avaOrgChain.ManagerLevel3 'mailto:jordan.vp@example.test' 'Org chains should pursue manager context three levels deep and default to mailto display.'
+            Assert-Equal $avaOrgChain.ManagerLevel3Raw 'CONTOSO\Jordan.VP' 'Org chains should preserve raw third-level manager context.'
             Assert-True ($orgChains.Identity -contains 'CONTOSO\svc.ShareBot') 'Org chains should include potential service account candidates so report pivots can surface them.'
             Assert-True ($findings.FindingType -contains 'PotentialServiceAccount') 'Findings should flag potential service accounts for report review.'
+            Assert-Equal $manifest[0].ManagerIdentityFormat 'MailTo' 'Scan manifest should record the default manager identity display format.'
         }
     },
     @{
@@ -1344,14 +1437,18 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
 
-            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles -ObsAttribute 'info' | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -GroupExpansionMaxDepth 1 -IncludeFiles -ObsAttribute 'info' -ManagerIdentityFormat DistinguishedName | Out-Null
 
             $manifest = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv')
             $groupEdges = Import-Csv -LiteralPath (Join-Path $outputPath 'group_edges.csv')
+            $identities = Import-Csv -LiteralPath (Join-Path $outputPath 'identities.csv')
 
             Assert-Equal $manifest[0].AdLookupMode 'DirectoryOnly' 'Scan manifest should record the requested AD lookup mode.'
             Assert-Equal $manifest[0].ObsAttribute 'info' 'Scan manifest should record the operator-selected OBS attribute.'
             Assert-Equal $manifest[0].IncludeFiles 'True' 'Scan manifest should record whether file objects were requested.'
+            Assert-Equal $manifest[0].ManagerIdentityFormat 'DistinguishedName' 'Scan manifest should record the requested manager identity display format.'
+            $avaIdentity = @($identities | Where-Object { $_.Identity -eq 'CONTOSO\Ava.Accounting' })[0]
+            Assert-Equal $avaIdentity.ManagerLevel1 'CN=Morgan Manager,OU=Users,DC=example,DC=test' 'Manager identity format should support distinguished-name output for directory correlation.'
             Assert-True (@($groupEdges | Where-Object { $_.ParentGroup -eq 'CONTOSO\FinanceEditors' -and $_.IsTruncated -eq 'True' }).Count -gt 0) 'Group expansion should mark edges truncated at the configured max depth.'
         }
     },

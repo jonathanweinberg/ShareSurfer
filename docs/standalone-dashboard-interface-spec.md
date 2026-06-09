@@ -33,6 +33,16 @@ The concept images are design references, not proof artifacts. The generated rep
 
 Current mainline identity review signals include three-level manager context and potential service-account candidates. The standalone dashboard should treat these as first-class review signals because the current offline report already surfaces them.
 
+First-run feedback added several required dashboard behaviors:
+
+- Every evidence table should support local sorting and quick filtering in addition to the global dashboard filters.
+- Report generated dates should be visible in the shell, overview, diagnostics, and raw evidence context.
+- Broken/Missing SID findings need a visible category and a global toggle so unresolved permission identities can be reviewed separately.
+- Findings should show critical scan information blocks, especially access denied, unauthorized, path-resolution, and share-permission collection gaps.
+- Finding rollups should be clickable filters that jump from "what kind of issue is this?" into the matching issue rows.
+- Permissioned Group Review should search `ExamplePath` and `FullPath`, and selected groups should offer an example-path context drilldown.
+- Manager fields should default to business-friendly mailto presentation while raw manager references remain available in CSV evidence.
+
 ## Current Constraints
 
 The existing offline report is valuable because it works in controlled environments with no server and no internet dependency. It should remain supported.
@@ -99,7 +109,7 @@ Needs redacted bundle health, row counts, schema validation, and enough raw tabl
 
 | View | Primary user | Purpose | Technical detail posture |
 | --- | --- | --- | --- |
-| Overview | Business owner, leader | Scan confidence, KPI cards, quick insights, review queue | Hide raw fields behind tooltips and drawers |
+| Overview | Business owner, leader | Scan confidence, KPI cards, quick insights, review queue, ad-hoc owner table | Hide raw fields behind tooltips and drawers |
 | Start Here / Review Queue | Business owner | Prioritized owner packets and next actions | Show why-review language first |
 | Owners & Workbench | Business owner, operator | One owner/business-unit focused review workspace | Show direct identity and group sizing with explainers |
 | Findings & Conflicts | Business owner, operator | Issue cards, detail panel, raw evidence for selected issue | Translate finding/conflict types to plain names |
@@ -168,7 +178,7 @@ Required input files:
 - `scan_events.csv`
 - `scan_manifest.csv`
 
-Identity fields should follow the current V1 schema. In particular, `identities.csv` and `org_chains.csv` now include `ManagerLevel3` and `PotentialServiceAccount`. The standalone dashboard should not assume manager context stops at two levels, and it should present potential service-account rows as review candidates rather than confirmed service accounts.
+Identity fields should follow the current V1 schema. In particular, `identities.csv` and `org_chains.csv` now include `ManagerLevel3`, `ManagerLevel1Raw`, `ManagerLevel2Raw`, `ManagerLevel3Raw`, and `PotentialServiceAccount`. The standalone dashboard should not assume manager context stops at two levels, and it should present potential service-account rows as review candidates rather than confirmed service accounts. By default, manager-level display fields may contain `mailto:` values; raw manager fields preserve directory correlation evidence.
 
 Derived view models:
 
@@ -177,6 +187,7 @@ Derived view models:
 | `scanSummary` | manifest, shares, findings, conflicts, errors | KPI cards and scan confidence |
 | `reviewQueue` | owner review packets, pivots, findings, conflicts | Start-here review queue |
 | `issueSummaries` | findings, conflicts, items, shares | Business-readable findings/conflicts |
+| `criticalScanBlocks` | collection errors | Access denied, unauthorized, target-resolution, and share-permission collection gaps |
 | `migrationClusters` | related data areas, pivots, items, shares | Migration discovery packets |
 | `permissionedGroupTree` | permissioned groups, group edges, identities | Group browser and expansion view |
 | `identityReviewSignals` | identities, org chains, findings | Potential service-account candidates and manager-chain context |
@@ -206,6 +217,7 @@ Initial tooltip registry:
 | OBS path | Org/business structure path | A directory attribute used to connect identities and groups to business structure. The attribute name is scan-specific. |
 | Manager level 3 | Third-level manager | The next manager above a manager's manager when directory data is available. It helps route escalation, not approval. |
 | Potential service account | Account purpose needs review | A user account with no OBS value and no employee identifier collected. It may be automation, or it may be incomplete directory data. |
+| Broken/Missing SID | Unresolved permission identity | A permission references a SID or account name ShareSurfer could not resolve. Review for deleted accounts, broken trust references, or lookup gaps. |
 | Collection error | Scan gap | A recorded problem while resolving, enumerating, or reading share, folder, file, ACL, or directory metadata. |
 | Long path warning | Path migration warning | The path exceeded ShareSurfer's operational migration threshold. This is separate from Azure Files hard limits. |
 | Deep explicit permission | Custom permission deep in tree | A non-inherited permission was found below the configured depth threshold. It may need owner review. |

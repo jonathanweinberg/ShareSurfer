@@ -61,6 +61,29 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("button", { name: /Back to overview/i })).toBeInTheDocument();
   });
 
+  test("sidebar can be hidden to give review panes more horizontal space", () => {
+    const view = renderWithDemoSnapshot();
+
+    fireEvent.click(screen.getByRole("button", { name: /Hide sidebar/i }));
+
+    expect(view.container.querySelector(".app-shell")).toHaveClass("sidebar-collapsed");
+    expect(screen.getByRole("button", { name: /Show sidebar/i })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("findings rollups are clickable filters for the issue table", () => {
+    renderWithDemoSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Filter findings by Deep Custom Permission/i }));
+
+    const table = screen.getByRole("table", { name: /Findings and conflicts/i });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toHaveTextContent("Deep Custom Permission");
+    expect(within(table).queryByText("Inheritance Stopped")).not.toBeInTheDocument();
+  });
+
   test("migration metrics drill into evidence rows and can return to the cluster", () => {
     renderWithDemoSnapshot();
 
@@ -91,6 +114,17 @@ describe("dashboard workbench interactions", () => {
 
     expect(screen.queryByRole("columnheader", { name: "Department" })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Manager Level1" })).toBeInTheDocument();
+  });
+
+  test("permissioned group review keeps groups visible when filtering by example path", () => {
+    renderWithDemoSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
+    fireEvent.change(screen.getByRole("searchbox", { name: /Search dashboard/i }), { target: { value: "path:Finance" } });
+
+    const table = screen.getByRole("table", { name: /Permissioned groups/i });
+    expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
   });
 
   test("raw evidence uses readable curated columns before showing all CSV fields", () => {

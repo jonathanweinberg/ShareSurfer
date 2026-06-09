@@ -46,4 +46,21 @@ describe("VirtualTable", () => {
       "AlphaHigh"
     ]);
   });
+
+  test("filters rows locally without relying on the global dashboard search", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Name: "Finance Readers", Path: "\\\\files01\\Finance" },
+      { Name: "HR Readers", Path: "\\\\files01\\HR" },
+      { Name: "Operations Readers", Path: "\\\\files01\\Operations" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Name", "Path"]} pageSize={20} title="Permissioned groups" />);
+
+    await user.type(screen.getByRole("searchbox", { name: /Filter Permissioned groups rows/i }), "finance");
+
+    expect(screen.getByText("Showing 1-1 of 1")).toBeInTheDocument();
+    expect(screen.getByText("Finance Readers")).toBeInTheDocument();
+    expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
+  });
 });

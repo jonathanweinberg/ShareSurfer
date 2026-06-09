@@ -13,6 +13,8 @@ import {
   KeyRound,
   Layers3,
   Network,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   ServerCog,
   ShieldAlert,
@@ -25,6 +27,7 @@ import {
   deriveDashboard,
   isTruthy,
   normalizeSnapshot,
+  type CriticalScanBlock,
   type DashboardModel,
   type GroupTreeRow,
   type IssueSummary,
@@ -48,6 +51,7 @@ interface FilterState {
   owner: string;
   risk: string;
   source: string;
+  brokenSidOnly: boolean;
 }
 
 interface RuntimeSnapshotState {
@@ -111,7 +115,8 @@ const defaultFilters: FilterState = {
   businessUnit: "",
   owner: "",
   risk: "",
-  source: ""
+  source: "",
+  brokenSidOnly: false
 };
 
 const dashboardSessionKey = "sharesurfer.dashboard.state.v1";
@@ -120,7 +125,7 @@ const searchScopeFields: Record<SearchScope, string[]> = {
   owner: ["Owner", "DataOwner", "BusinessUnit", "Department"],
   share: ["ShareName", "ShareId", "ShareIds", "UNCPath", "LocalPath", "Source"],
   identity: ["Identity", "DisplayName", "SamAccountName", "UserPrincipalName", "Mail"],
-  path: ["FullPath", "RelativePath", "UNCPath", "LocalPath", "Pattern"],
+  path: ["FullPath", "ExamplePath", "RelativePath", "UNCPath", "LocalPath", "Pattern"],
   group: ["Group", "ParentGroup", "ChildIdentity", "DisplayName", "Rights"]
 };
 
@@ -147,6 +152,22 @@ function columnsForDataset(datasetKey: DatasetKey, showAll = false): string[] {
 
 function formatNumber(value: number): string {
   return new Intl.NumberFormat().format(value);
+}
+
+function formatReportDate(value: string): string {
+  if (!value) {
+    return "Unknown";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
 }
 
 function riskTone(value: string): "danger" | "warning" | "good" | "neutral" {
@@ -176,7 +197,10 @@ function isFilterState(value: unknown): value is FilterState {
     return false;
   }
   const candidate = value as Partial<FilterState>;
-  return ["query", "businessUnit", "owner", "risk", "source"].every((key) => typeof candidate[key as keyof FilterState] === "string");
+  return (
+    ["query", "businessUnit", "owner", "risk", "source"].every((key) => typeof candidate[key as keyof FilterState] === "string") &&
+    (candidate.brokenSidOnly === undefined || typeof candidate.brokenSidOnly === "boolean")
+  );
 }
 
 function isReturnTrail(value: unknown): value is ReturnTrail {
@@ -196,7 +220,7 @@ function loadDashboardState(): PersistedDashboardState {
     const parsed = JSON.parse(raw) as PersistedDashboardState;
     return {
       activeView: isViewKey(parsed.activeView) ? parsed.activeView : undefined,
-      filters: isFilterState(parsed.filters) ? parsed.filters : undefined,
+      filters: isFilterState(parsed.filters) ? { ...defaultFilters, ...parsed.filters } : undefined,
       selectedIssueId: typeof parsed.selectedIssueId === "string" ? parsed.selectedIssueId : undefined,
       selectedClusterId: typeof parsed.selectedClusterId === "string" ? parsed.selectedClusterId : undefined,
       selectedGroupName: typeof parsed.selectedGroupName === "string" ? parsed.selectedGroupName : undefined,
@@ -275,6 +299,18 @@ function matchesText(value: string, filter: string): boolean {
   return !filter || value.toLowerCase() === filter.toLowerCase();
 }
 
+function isBrokenSidIdentity(value: string): boolean {
+  const trimmed = value.trim();
+  return /^S-\d-\d+(-\d+)+$/i.test(trimmed) || /account\s+unknown/i.test(trimmed) || /unknown\s+(account|sid)/i.test(trimmed);
+}
+
+function rowHasBrokenSid(row: Record<string, unknown>): boolean {
+  const findingType = getRowFieldValue(row, "FindingType");
+  const category = getRowFieldValue(row, "Category");
+  const identity = getRowFieldValue(row, "Identity");
+  return findingType === "BrokenOrMissingSid" || category === "Broken/Missing SID" || isBrokenSidIdentity(identity);
+}
+
 function datasetRows(dashboard: DashboardModel, key: DatasetKey): DataRow[] {
   return dashboard.rawEvidenceCatalog.find((entry) => entry.key === key)?.rows ?? [];
 }
@@ -327,11 +363,45 @@ function rowsMatchingCluster(cluster: MigrationCluster, dashboard: DashboardMode
 function rowsMatchingGroup(group: GroupTreeRow, dashboard: DashboardModel, key: DatasetKey): DataRow[] {
   const groupName = group.group.toLowerCase();
   const shareIds = new Set(splitIds(group.raw.ShareIds || group.raw.ShareId || ""));
+  const paths = [group.examplePath, group.fullPath].filter(Boolean).map((path) => path.toLowerCase());
   return datasetRows(dashboard, key).filter((row) => {
     const identityMatch = `${row.Identity} ${row.Group} ${row.ParentGroup}`.toLowerCase().includes(groupName);
     const shareMatch = row.ShareId ? shareIds.has(row.ShareId) : false;
-    return identityMatch || shareMatch;
+    const rowPath = `${row.FullPath} ${row.ExamplePath} ${row.UNCPath} ${row.LocalPath}`.toLowerCase();
+    const pathMatch = paths.some((path) => path !== "" && rowPath.includes(path));
+    return identityMatch || shareMatch || pathMatch;
   });
+}
+
+function rowsMatchingPathContext(group: GroupTreeRow, dashboard: DashboardModel): DataRow[] {
+  const shareIds = new Set(splitIds(group.raw.ShareIds || group.raw.ShareId || ""));
+  const paths = [group.examplePath, group.fullPath].filter(Boolean).map((path) => path.toLowerCase());
+  const contextRows: DataRow[] = [];
+  const keys: DatasetKey[] = ["items", "permissioned_groups", "acl_entries", "share_permissions", "findings", "conflicts", "collection_errors"];
+
+  for (const key of keys) {
+    for (const row of datasetRows(dashboard, key)) {
+      const shareMatch = row.ShareId ? shareIds.has(row.ShareId) : false;
+      const rowPath = `${row.FullPath} ${row.ExamplePath} ${row.UNCPath} ${row.LocalPath}`.toLowerCase();
+      const pathMatch = paths.some((path) => path !== "" && rowPath.includes(path));
+      const identityMatch = `${row.Identity} ${row.Group}`.toLowerCase().includes(group.group.toLowerCase());
+      if (shareMatch || pathMatch || identityMatch) {
+        contextRows.push({
+          Evidence: datasetLabels[key],
+          ShareId: row.ShareId || "",
+          ItemId: row.ItemId || "",
+          Identity: row.Identity || row.Group || "",
+          Type: row.FindingType || row.ConflictType || row.ErrorType || row.ItemType || row.AccessControlType || "",
+          Rights: row.Rights || row.ShareRights || row.NtfsRights || "",
+          Severity: row.Severity || "",
+          Path: row.FullPath || row.ExamplePath || row.UNCPath || row.LocalPath || "",
+          Message: row.Message || row.PartialReason || ""
+        });
+      }
+    }
+  }
+
+  return contextRows;
 }
 
 function groupExpansionStatus(group: GroupTreeRow): string {
@@ -357,6 +427,22 @@ function chip(label: string, value: string, onRemove: () => void) {
       <span aria-hidden="true">x</span>
     </button>
   );
+}
+
+function booleanChip(label: string, active: boolean, onRemove: () => void) {
+  if (!active) {
+    return null;
+  }
+  return (
+    <button key={label} type="button" className="filter-chip" onClick={onRemove}>
+      <span>{label}</span>
+      <span aria-hidden="true">x</span>
+    </button>
+  );
+}
+
+function filtersAreClear(filters: FilterState): boolean {
+  return !filters.query && !filters.businessUnit && !filters.owner && !filters.risk && !filters.source && !filters.brokenSidOnly;
 }
 
 function hasRuntimeDatasets(snapshot?: RawSnapshot): boolean {
@@ -529,6 +615,7 @@ function FilterBar({
   const update = (patch: Partial<FilterState>) => {
     startTransition(() => onFiltersChange({ ...filters, ...patch }));
   };
+  const updateQuery = (value: string) => update({ query: value });
   const scopedTokens = parseSearchQuery(filters.query).scoped;
 
   return (
@@ -539,7 +626,8 @@ function FilterBar({
         <input
           type="search"
           value={filters.query}
-          onChange={(event) => update({ query: event.target.value })}
+          onInput={(event) => updateQuery(event.currentTarget.value)}
+          onChange={(event) => updateQuery(event.currentTarget.value)}
           placeholder="Search owners, shares, identities, paths, groups..."
         />
       </label>
@@ -579,6 +667,14 @@ function FilterBar({
           ))}
         </select>
       </label>
+      <label className="toggle-filter">
+        <input
+          type="checkbox"
+          checked={filters.brokenSidOnly}
+          onChange={(event) => update({ brokenSidOnly: event.target.checked })}
+        />
+        <span>Broken/Missing SID</span>
+      </label>
       <div className="active-context">
         <strong>Active Context</strong>
         <div className="filter-chips">
@@ -592,8 +688,9 @@ function FilterBar({
           {chip("Owner", filters.owner, () => update({ owner: "" }))}
           {chip("Risk", filters.risk, () => update({ risk: "" }))}
           {chip("Source", filters.source, () => update({ source: "" }))}
-          {Object.values(filters).every((value) => value === "") ? <span className="muted">Enterprise-wide view</span> : null}
-          {Object.values(filters).some((value) => value !== "") ? (
+          {booleanChip("Broken/Missing SID only", filters.brokenSidOnly, () => update({ brokenSidOnly: false }))}
+          {filtersAreClear(filters) ? <span className="muted">Enterprise-wide view</span> : null}
+          {!filtersAreClear(filters) ? (
             <button type="button" className="clear-button" onClick={() => update(defaultFilters)}>
               Clear all
             </button>
@@ -630,6 +727,7 @@ function filterIssues(rows: IssueSummary[], filters: FilterState, query: string)
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
+      (!filters.brokenSidOnly || row.category === "Broken/Missing SID" || isBrokenSidIdentity(row.identity)) &&
       (!filters.risk || row.severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.category.toLowerCase().includes(filters.risk.toLowerCase())) &&
       (!filters.owner || row.owner.toLowerCase() === filters.owner.toLowerCase()) &&
       (!filters.businessUnit || row.businessUnit.toLowerCase() === filters.businessUnit.toLowerCase()) &&
@@ -681,15 +779,30 @@ function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string)
           DisplayName: row.displayName,
           ObsPath: row.obsPath,
           Rights: row.rights,
-          RiskLevel: row.riskLevel
+          RiskLevel: row.riskLevel,
+          ShareId: row.raw.ShareId,
+          ShareIds: row.shareIds,
+          Sources: row.sources,
+          FullPath: row.fullPath,
+          ExamplePath: row.examplePath,
+          ChildIdentity: row.children.map((child) => child.ChildIdentity).join(" ")
         },
         parsedQuery
       )
   );
 }
 
+function filterCriticalBlocks(rows: CriticalScanBlock[], filters: FilterState, query: string) {
+  const parsedQuery = parseSearchQuery(query);
+  return rows.filter(
+    (row) =>
+      (!filters.risk || row.Severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.ErrorType.toLowerCase().includes(filters.risk.toLowerCase())) &&
+      matchesParsedSearch(row, parsedQuery)
+  );
+}
+
 function hasActiveContext(filters: FilterState, query: string): boolean {
-  return Boolean(query || filters.businessUnit || filters.owner || filters.risk || filters.source);
+  return Boolean(query || filters.businessUnit || filters.owner || filters.risk || filters.source || filters.brokenSidOnly);
 }
 
 function buildOverviewSummary(
@@ -734,7 +847,8 @@ function buildOverviewSummary(
     permissionedGroups: queueTotals.permissionedGroups,
     expandedMembers: queueTotals.expandedMembers,
     potentialServiceAccounts: filteredIssues.filter((issue) => issue.category === "Service Account Review").length,
-    longPathRisks: filteredIssues.filter((issue) => issue.category === "Long Path Warning").length
+    longPathRisks: filteredIssues.filter((issue) => issue.category === "Long Path Warning").length,
+    brokenSidFindings: filteredIssues.filter((issue) => issue.category === "Broken/Missing SID").length
   };
 }
 
@@ -752,14 +866,25 @@ function OverviewView({
   filters: FilterState;
   query: string;
   onOpenView: (view: ViewKey) => void;
-  onKpiSelect: (destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "items") => void;
+  onKpiSelect: (destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "broken-sids" | "items") => void;
   onOwnerSelect: (row: ReviewQueueRow) => void;
 }) {
   const queue = filterQueue(dashboard.reviewQueue, filters, query).slice(0, 8);
+  const queueTableRows = filterQueue(dashboard.reviewQueue, filters, query).map((row) => ({
+    Owner: row.owner,
+    "Business Unit": row.businessUnit,
+    Risk: row.riskLevel,
+    "Review Why": row.whyReview,
+    Items: String(row.matchingItems),
+    Findings: String(row.findingCount),
+    Conflicts: String(row.conflictCount),
+    "Permissioned Groups": String(row.permissionedGroups)
+  }));
   const quickInsights = [
     `${formatNumber(summary.conflicts)} access conflict rows need access-model review.`,
     `${formatNumber(summary.partialShares)} share(s) have partial evidence. Review Diagnostics before approval.`,
     `${formatNumber(summary.permissionedGroups)} permissioned groups are granting direct access.`,
+    `${formatNumber(summary.brokenSidFindings)} unresolved SID signal(s) need directory or trust review.`,
     `${formatNumber(summary.potentialServiceAccounts)} account(s) need service-account purpose review.`
   ];
 
@@ -817,6 +942,16 @@ function OverviewView({
           actionLabel="Open Potential Service Accounts"
         />
         <KpiCard
+          label="Broken/Missing SID"
+          value={formatNumber(summary.brokenSidFindings)}
+          tone={summary.brokenSidFindings > 0 ? "danger" : "good"}
+          detail="Directory lookup gap"
+          tooltip={tooltipRegistry.brokenSid}
+          icon={<ShieldAlert />}
+          onClick={() => onKpiSelect("broken-sids")}
+          actionLabel="Open Broken/Missing SID"
+        />
+        <KpiCard
           label="Items Reviewed"
           value={formatNumber(summary.totalItems)}
           tone="neutral"
@@ -830,6 +965,9 @@ function OverviewView({
 
       <section className="panel queue-panel">
         <SectionTitle tooltip={tooltipRegistry.reviewRisk}>What Needs Review First</SectionTitle>
+        <p className="panel-copy">
+          Owner means the mapped business reviewer or data owner for this path. It is separate from the Windows/NTFS file owner field.
+        </p>
         <div className="queue-list">
           {queue.map((row) => (
             <button key={row.id} type="button" className="queue-row" onClick={() => onOwnerSelect(row)}>
@@ -848,6 +986,7 @@ function OverviewView({
 
       <aside className="panel insights-panel">
         <SectionTitle tooltip={tooltipRegistry.scanConfidence}>Scan Confidence</SectionTitle>
+        <p className="date-callout">Report generated {formatReportDate(summary.generatedAt)}</p>
         <div className={`confidence-ring ${riskTone(summary.confidenceLabel)}`}>
           <strong>{summary.scanConfidence}%</strong>
           <span>{summary.confidenceLabel}</span>
@@ -900,13 +1039,40 @@ function OverviewView({
           <p className="empty-state">No owner review packets match the current filters.</p>
         )}
       </section>
+      <section className="panel workbench-panel">
+        <SectionTitle tooltip={tooltipRegistry.ownerMapping}>Ad-Hoc Owner Review Table</SectionTitle>
+        <p className="panel-copy">Sort or filter this table when you need a quick owner, business-unit, risk, or signal count pivot.</p>
+        <VirtualTable rows={queueTableRows} columns={["Owner", "Business Unit", "Risk", "Items", "Findings", "Conflicts", "Permissioned Groups", "Review Why"]} pageSize={12} title="Ad-Hoc owner review table" />
+      </section>
     </div>
   );
 }
 
-function FindingsView({ issues, onIssueSelect, selectedIssue }: { issues: IssueSummary[]; selectedIssue?: IssueSummary; onIssueSelect: (issue: IssueSummary) => void }) {
-  const selected = selectedIssue ?? issues[0];
-  const rows = issues.map((issue) => ({
+function FindingsView({
+  issues,
+  criticalBlocks,
+  onIssueSelect,
+  selectedIssue
+}: {
+  issues: IssueSummary[];
+  criticalBlocks: CriticalScanBlock[];
+  selectedIssue?: IssueSummary;
+  onIssueSelect: (issue: IssueSummary) => void;
+}) {
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const issueRollups = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const issue of issues) {
+      counts.set(issue.category, (counts.get(issue.category) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+  }, [issues]);
+  const visibleIssues = categoryFilter ? issues.filter((issue) => issue.category === categoryFilter) : issues;
+  const selected = selectedIssue && visibleIssues.some((issue) => issue.id === selectedIssue.id) ? selectedIssue : visibleIssues[0];
+  const rows = visibleIssues.map((issue) => ({
+    IssueId: issue.id,
     Category: issue.category,
     Severity: issue.severity,
     Title: issue.title,
@@ -918,13 +1084,50 @@ function FindingsView({ issues, onIssueSelect, selectedIssue }: { issues: IssueS
     <div className="split-view">
       <section className="panel">
         <SectionTitle tooltip={tooltipRegistry.fileFolderPermissions}>Findings & Conflicts</SectionTitle>
+        {criticalBlocks.length > 0 ? (
+          <div className="critical-blocks" aria-label="Critical scan information blocks">
+            <h3>Critical Scan Information Blocks</h3>
+            <p className="panel-copy">These collection gaps can hide permissions or paths. Resolve or explain them before final owner approval.</p>
+            <VirtualTable
+              title="Critical scan information blocks"
+              rows={criticalBlocks}
+              columns={["Severity", "ErrorType", "Source", "FullPath", "Message"]}
+              pageSize={6}
+            />
+          </div>
+        ) : null}
+        <div className="rollup-bar" aria-label="Finding rollups">
+          <button
+            type="button"
+            className={`rollup-chip ${categoryFilter === "" ? "active" : ""}`}
+            onClick={() => setCategoryFilter("")}
+          >
+            All <strong>{formatNumber(issues.length)}</strong>
+          </button>
+          {issueRollups.map((rollup) => (
+            <button
+              key={rollup.category}
+              type="button"
+              className={`rollup-chip ${categoryFilter === rollup.category ? "active" : ""}`}
+              onClick={() => setCategoryFilter(rollup.category)}
+              aria-label={`Filter findings by ${rollup.category}`}
+            >
+              {rollup.category} <strong>{formatNumber(rollup.count)}</strong>
+            </button>
+          ))}
+        </div>
         <VirtualTable
           title="Findings and conflicts"
           rows={rows}
           columns={["Severity", "Category", "Title", "Identity", "Path"]}
           pageSize={16}
-          onRowSelect={(_, index) => onIssueSelect(issues[index])}
-          rowKey={(_, index) => issues[index]?.id ?? String(index)}
+          onRowSelect={(row) => {
+            const nextIssue = visibleIssues.find((issue) => issue.id === row.IssueId);
+            if (nextIssue) {
+              onIssueSelect(nextIssue);
+            }
+          }}
+          rowKey={(row) => row.IssueId}
         />
       </section>
       <aside className="panel detail-panel">
@@ -1123,6 +1326,19 @@ function GroupsView({
       emptyMessage: "No exported rows matched this group with the current identifiers."
     });
   };
+  const openPathContext = () => {
+    if (!selected) {
+      return;
+    }
+    setDrill({
+      title: "Example Path Context",
+      subtitle: selected.examplePath || selected.fullPath || selected.displayName,
+      rows: rowsMatchingPathContext(selected, dashboard),
+      columns: ["Evidence", "ShareId", "ItemId", "Identity", "Type", "Rights", "Severity", "Path", "Message"],
+      backLabel: "Back to permissioned group",
+      emptyMessage: "No exported rows matched this example path or share context."
+    });
+  };
 
   if (drill) {
     return <EvidenceWorkbench drill={drill} onBack={() => setDrill(null)} />;
@@ -1139,9 +1355,10 @@ function GroupsView({
             Members: String(group.expandedMembers),
             Risk: group.riskLevel,
             Rights: group.rights,
+            ExamplePath: group.examplePath || group.fullPath,
             OBS: group.obsPath
           }))}
-          columns={["Group", "Members", "Risk", "Rights", "OBS"]}
+          columns={["Group", "Members", "Risk", "Rights", "ExamplePath", "OBS"]}
           pageSize={14}
           onRowSelect={(_, index) => onGroupSelect(groups[index])}
           rowKey={(_, index) => groups[index]?.group ?? String(index)}
@@ -1173,6 +1390,12 @@ function GroupsView({
               <MetricButton label="Folder/File Assignments" value={selected.ntfsAssignments} onClick={() => openGroupEvidence("Folder/File Assignments", "acl_entries", columnsForDataset("acl_entries"))} />
               <MetricButton label="Max Depth" value={selected.maxDepth} onClick={() => openGroupEvidence("Recursive Depth", "group_edges", columnsForDataset("group_edges"))} />
             </div>
+            {(selected.examplePath || selected.fullPath) ? (
+              <button type="button" className="path-context-button" onClick={openPathContext}>
+                <strong>Example Path</strong>
+                <span>{selected.examplePath || selected.fullPath}</span>
+              </button>
+            ) : null}
             <h3>
               Membership Tree
               <Tooltip label="Expanded members help" text={tooltipRegistry.expandedMembers} />
@@ -1236,7 +1459,11 @@ function DiagnosticsView({ snapshot, dashboard }: { snapshot: NormalizedSnapshot
         <SectionTitle tooltip={tooltipRegistry.scanConfidence}>Scan Health</SectionTitle>
         <dl className="stat-grid">
           <div>
-            <dt>Generated</dt>
+            <dt>Report Generated</dt>
+            <dd>{formatReportDate(dashboard.scanSummary.generatedAt)}</dd>
+          </div>
+          <div>
+            <dt>Manifest Date</dt>
             <dd>{dashboard.scanSummary.generatedAt || "Unknown"}</dd>
           </div>
           <div>
@@ -1277,11 +1504,13 @@ function DiagnosticsView({ snapshot, dashboard }: { snapshot: NormalizedSnapshot
 function RawEvidenceView({
   dashboard,
   query,
+  filters,
   datasetKey,
   onDatasetChange
 }: {
   dashboard: DashboardModel;
   query: string;
+  filters: FilterState;
   datasetKey: DatasetKey;
   onDatasetChange: (datasetKey: DatasetKey) => void;
 }) {
@@ -1289,7 +1518,7 @@ function RawEvidenceView({
   const [selectedRow, setSelectedRow] = useState<DataRow | null>(null);
   const dataset = dashboard.rawEvidenceCatalog.find((entry) => entry.key === datasetKey) ?? dashboard.rawEvidenceCatalog[0];
   const parsedQuery = useMemo(() => parseSearchQuery(query), [query]);
-  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery));
+  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery) && (!filters.brokenSidOnly || rowHasBrokenSid(row)));
   const columns = columnsForDataset(dataset.key, showAllColumns);
   const detailRow = selectedRow ?? rows[0] ?? null;
 
@@ -1360,9 +1589,11 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   const [selectedGroupName, setSelectedGroupName] = useState<string>(initialState.selectedGroupName ?? "");
   const [rawDatasetKey, setRawDatasetKey] = useState<DatasetKey>(initialState.rawDatasetKey ?? "owner_review_packets");
   const [returnTrail, setReturnTrail] = useState<ReturnTrail | null>(initialState.returnTrail ?? null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery), [dashboard.reviewQueue, filters, deferredQuery]);
   const filteredIssues = useMemo(() => filterIssues(dashboard.issueSummaries, filters, deferredQuery), [dashboard.issueSummaries, filters, deferredQuery]);
+  const filteredCriticalBlocks = useMemo(() => filterCriticalBlocks(dashboard.criticalScanBlocks, filters, deferredQuery), [dashboard.criticalScanBlocks, filters, deferredQuery]);
   const filteredClusters = useMemo(() => filterClusters(dashboard.migrationClusters, filters, deferredQuery), [dashboard.migrationClusters, filters, deferredQuery]);
   const filteredGroups = useMemo(() => filterGroups(dashboard.permissionedGroupTree, filters, deferredQuery), [dashboard.permissionedGroupTree, filters, deferredQuery]);
   const overviewSummary = useMemo(
@@ -1397,7 +1628,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   };
 
   const openOverviewDestination = (
-    destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "items"
+    destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "broken-sids" | "items"
   ) => {
     const labels: Record<typeof destination, string> = {
       "high-priority": "High Priority Items",
@@ -1405,6 +1636,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
       "partial-shares": "Partial Shares",
       "permissioned-groups": "Permissioned Groups",
       "service-accounts": "Potential Service Accounts",
+      "broken-sids": "Broken/Missing SID",
       items: "Items Reviewed"
     };
     setReturnTrail({ from: "overview", label: `Overview / ${labels[destination]}`, backLabel: "Back to overview" });
@@ -1418,6 +1650,11 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
     }
     if (destination === "service-accounts") {
       setActiveView("identity");
+      return;
+    }
+    if (destination === "broken-sids") {
+      setFilters({ ...filters, brokenSidOnly: true });
+      setActiveView("findings");
       return;
     }
     if (destination === "items") {
@@ -1437,8 +1674,8 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   };
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+      <aside className="sidebar" id="sharesurfer-sidebar" aria-label="ShareSurfer navigation">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
             <Workflow size={28} />
@@ -1466,17 +1703,30 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
         </nav>
         <div className="sidebar-footer">
           <Info size={16} aria-hidden="true" />
-          <span>Read-only standalone report</span>
+          <span>Read-only report. Generated {formatReportDate(dashboard.scanSummary.generatedAt)}</span>
         </div>
       </aside>
 
       <main>
         <header className="topbar">
-          <div>
-            <h1>Permission Review Dashboard</h1>
-            <p>
-              Generated {dashboard.scanSummary.generatedAt || "from local snapshot"} | Source {dashboard.scanSummary.sourceMode} | Read-only | {datasetLabel}
-            </p>
+          <div className="topbar-title">
+            <button
+              type="button"
+              className="sidebar-toggle"
+              onClick={() => setSidebarCollapsed((current) => !current)}
+              aria-expanded={!sidebarCollapsed}
+              aria-controls="sharesurfer-sidebar"
+              aria-label={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+              title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}
+            </button>
+            <div>
+              <h1>Permission Review Dashboard</h1>
+              <p>
+                Generated {formatReportDate(dashboard.scanSummary.generatedAt)} | Source {dashboard.scanSummary.sourceMode} | Read-only | {datasetLabel}
+              </p>
+            </div>
           </div>
           <div className="topbar-status">
             <StatusBadge value={dashboard.scanSummary.confidenceLabel} />
@@ -1500,7 +1750,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
           />
         ) : null}
         {activeView === "findings" ? (
-          <FindingsView issues={filteredIssues} selectedIssue={selectedIssue} onIssueSelect={(issue) => setSelectedIssueId(issue.id)} />
+          <FindingsView issues={filteredIssues} criticalBlocks={filteredCriticalBlocks} selectedIssue={selectedIssue} onIssueSelect={(issue) => setSelectedIssueId(issue.id)} />
         ) : null}
         {activeView === "migration" ? (
           <MigrationView dashboard={dashboard} clusters={filteredClusters} selectedCluster={selectedCluster} onClusterSelect={(cluster) => setSelectedClusterId(cluster.id)} />
@@ -1510,7 +1760,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
         ) : null}
         {activeView === "identity" ? <IdentityView dashboard={dashboard} /> : null}
         {activeView === "diagnostics" ? <DiagnosticsView snapshot={snapshot} dashboard={dashboard} /> : null}
-        {activeView === "raw" ? <RawEvidenceView dashboard={dashboard} query={deferredQuery} datasetKey={rawDatasetKey} onDatasetChange={setRawDatasetKey} /> : null}
+        {activeView === "raw" ? <RawEvidenceView dashboard={dashboard} query={deferredQuery} filters={filters} datasetKey={rawDatasetKey} onDatasetChange={setRawDatasetKey} /> : null}
       </main>
     </div>
   );

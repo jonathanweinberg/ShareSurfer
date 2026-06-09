@@ -7,7 +7,10 @@ function Resolve-ShareSurferIdentityInventory {
         [int] $GroupExpansionMaxDepth = 20,
 
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
-        [string] $AdLookupMode = 'Auto'
+        [string] $AdLookupMode = 'Auto',
+
+        [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
+        [string] $ManagerIdentityFormat = 'MailTo'
     )
 
     $directoryByIdentity = @{}
@@ -49,6 +52,145 @@ function Resolve-ShareSurferIdentityInventory {
             [string]::IsNullOrWhiteSpace($ObsPath) -and
             [string]::IsNullOrWhiteSpace($EmployeeId) -and
             [string]::IsNullOrWhiteSpace($EmployeeNumber)
+    }
+
+    function Add-ShareSurferDirectoryEntry {
+        param(
+            $Entry
+        )
+
+        if ($null -eq $Entry) {
+            return
+        }
+
+        if ($null -ne $Entry.PSObject.Properties['Identity'] -and [string]$Entry.Identity -ne '') {
+            $directoryByIdentity[([string]$Entry.Identity).ToUpperInvariant()] = $Entry
+        }
+        if ($null -ne $Entry.PSObject.Properties['DistinguishedName'] -and [string]$Entry.DistinguishedName -ne '') {
+            $directoryByDistinguishedName[([string]$Entry.DistinguishedName).ToUpperInvariant()] = $Entry
+        }
+    }
+
+    function Get-ShareSurferEntryProperty {
+        param(
+            $Entry,
+
+            [string] $Name = ''
+        )
+
+        if ($null -eq $Entry -or [string]::IsNullOrWhiteSpace($Name)) {
+            return ''
+        }
+
+        $property = $Entry.PSObject.Properties[$Name]
+        if ($null -eq $property -or $null -eq $property.Value) {
+            return ''
+        }
+
+        [string]$property.Value
+    }
+
+    function Get-ShareSurferDirectoryEntryByReference {
+        param(
+            [string] $Reference = '',
+
+            [string] $FallbackDomain = ''
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Reference)) {
+            return $null
+        }
+
+        $key = $Reference.ToUpperInvariant()
+        if ($directoryByIdentity.ContainsKey($key)) {
+            return $directoryByIdentity[$key]
+        }
+        if ($directoryByDistinguishedName.ContainsKey($key)) {
+            return $directoryByDistinguishedName[$key]
+        }
+
+        foreach ($entry in @($directoryByIdentity.Values)) {
+            if ((Get-ShareSurferEntryProperty -Entry $entry -Name 'SamAccountName').ToUpperInvariant() -eq $key) {
+                return $entry
+            }
+        }
+
+        if ($AdLookupMode -eq 'DirectoryOnly') {
+            return $null
+        }
+
+        $resolved = $null
+        if ($Reference -match '^\s*(CN|OU|DC)=') {
+            $resolved = Resolve-ShareSurferDistinguishedNameIdentity -DistinguishedName $Reference -FallbackDomain $FallbackDomain -ObsAttribute $ObsAttribute
+        }
+        else {
+            $lookupIdentity = $Reference
+            if ($lookupIdentity -notmatch '\\' -and -not [string]::IsNullOrWhiteSpace($FallbackDomain)) {
+                $lookupIdentity = '{0}\{1}' -f $FallbackDomain, $lookupIdentity
+            }
+            $resolved = Get-ShareSurferDirectoryIdentity -Identity $lookupIdentity -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode
+        }
+
+        if ($null -ne $resolved) {
+            Add-ShareSurferDirectoryEntry -Entry $resolved
+            return $resolved
+        }
+
+        $null
+    }
+
+    function Format-ShareSurferManagerReference {
+        param(
+            [string] $Reference = '',
+
+            [string] $FallbackDomain = ''
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Reference)) {
+            return ''
+        }
+
+        $entry = Get-ShareSurferDirectoryEntryByReference -Reference $Reference -FallbackDomain $FallbackDomain
+        $mail = Get-ShareSurferEntryProperty -Entry $entry -Name 'Mail'
+        $upn = Get-ShareSurferEntryProperty -Entry $entry -Name 'UserPrincipalName'
+        $sam = Get-ShareSurferEntryProperty -Entry $entry -Name 'SamAccountName'
+        $dn = Get-ShareSurferEntryProperty -Entry $entry -Name 'DistinguishedName'
+        $identity = Get-ShareSurferEntryProperty -Entry $entry -Name 'Identity'
+
+        switch ($ManagerIdentityFormat) {
+            'MailTo' {
+                $address = if ($mail -ne '') { $mail } elseif ($upn -ne '') { $upn } else { '' }
+                if ($address -ne '') {
+                    return 'mailto:{0}' -f $address
+                }
+            }
+            'Mail' {
+                if ($mail -ne '') { return $mail }
+                if ($upn -ne '') { return $upn }
+            }
+            'UserPrincipalName' {
+                if ($upn -ne '') { return $upn }
+                if ($mail -ne '') { return $mail }
+            }
+            'SamAccountName' {
+                if ($sam -ne '') { return $sam }
+            }
+            'DistinguishedName' {
+                if ($dn -ne '') { return $dn }
+            }
+        }
+
+        if ($identity -ne '') {
+            return $identity
+        }
+        if ($dn -ne '') {
+            return $dn
+        }
+        if ($sam -ne '') {
+            return $sam
+        }
+
+        $Reference
     }
 
     foreach ($existing in @(ConvertTo-ShareSurferArray $Inventory.GroupEdges)) {
@@ -93,6 +235,9 @@ function Resolve-ShareSurferIdentityInventory {
         $managerLevel1 = ''
         $managerLevel2 = ''
         $managerLevel3 = ''
+        $managerLevel1Raw = ''
+        $managerLevel2Raw = ''
+        $managerLevel3Raw = ''
         $obsPath = ''
         $distinguishedName = ''
         if ($null -ne $entry) {
@@ -113,6 +258,9 @@ function Resolve-ShareSurferIdentityInventory {
                 @('ManagerLevel1', 'managerLevel1'),
                 @('ManagerLevel2', 'managerLevel2'),
                 @('ManagerLevel3', 'managerLevel3'),
+                @('ManagerLevel1Raw', 'managerLevel1Raw'),
+                @('ManagerLevel2Raw', 'managerLevel2Raw'),
+                @('ManagerLevel3Raw', 'managerLevel3Raw'),
                 @('ObsPath', 'obsPath'),
                 @('DistinguishedName', 'distinguishedName')
             )) {
@@ -122,6 +270,15 @@ function Resolve-ShareSurferIdentityInventory {
                 }
             }
         }
+
+        if ($managerLevel1Raw -eq '') { $managerLevel1Raw = $managerLevel1 }
+        if ($managerLevel2Raw -eq '') { $managerLevel2Raw = $managerLevel2 }
+        if ($managerLevel3Raw -eq '') { $managerLevel3Raw = $managerLevel3 }
+
+        $fallbackDomain = Get-ShareSurferIdentityDomain -Identity $Identity
+        $managerLevel1 = Format-ShareSurferManagerReference -Reference $managerLevel1Raw -FallbackDomain $fallbackDomain
+        $managerLevel2 = Format-ShareSurferManagerReference -Reference $managerLevel2Raw -FallbackDomain $fallbackDomain
+        $managerLevel3 = Format-ShareSurferManagerReference -Reference $managerLevel3Raw -FallbackDomain $fallbackDomain
 
         $row = [pscustomobject]@{
             Identity = $Identity
@@ -141,6 +298,9 @@ function Resolve-ShareSurferIdentityInventory {
             ManagerLevel1 = $managerLevel1
             ManagerLevel2 = $managerLevel2
             ManagerLevel3 = $managerLevel3
+            ManagerLevel1Raw = $managerLevel1Raw
+            ManagerLevel2Raw = $managerLevel2Raw
+            ManagerLevel3Raw = $managerLevel3Raw
             ObsPath = $obsPath
             ObsAttribute = $ObsAttribute
             PotentialServiceAccount = Test-ShareSurferPotentialServiceAccount -ObjectClass $objectClass -ObsPath $obsPath -EmployeeId $employeeId -EmployeeNumber $employeeNumber
@@ -160,6 +320,9 @@ function Resolve-ShareSurferIdentityInventory {
                 ManagerLevel1 = $managerLevel1
                 ManagerLevel2 = $managerLevel2
                 ManagerLevel3 = $managerLevel3
+                ManagerLevel1Raw = $managerLevel1Raw
+                ManagerLevel2Raw = $managerLevel2Raw
+                ManagerLevel3Raw = $managerLevel3Raw
                 ObsPath = $obsPath
                 ObsAttribute = $ObsAttribute
                 PotentialServiceAccount = $row.PotentialServiceAccount

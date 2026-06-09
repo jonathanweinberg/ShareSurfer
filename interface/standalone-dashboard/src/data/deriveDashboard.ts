@@ -30,6 +30,7 @@ export interface ScanSummary {
   permissionedGroups: number;
   expandedMembers: number;
   potentialServiceAccounts: number;
+  brokenSidFindings: number;
   scanConfidence: number;
   confidenceLabel: "Good" | "Review" | "Partial";
 }
@@ -96,6 +97,10 @@ export interface GroupTreeRow {
   isTruncated: boolean;
   obsPath: string;
   rights: string;
+  shareIds: string;
+  sources: string;
+  fullPath: string;
+  examplePath: string;
   children: DataRow[];
   raw: DataRow;
 }
@@ -112,6 +117,16 @@ export interface DiagnosticSummary {
   scanEvents: DataRow[];
 }
 
+export interface CriticalScanBlock extends DataRow {
+  ErrorId: string;
+  ErrorType: string;
+  Severity: string;
+  Source: string;
+  FullPath: string;
+  Message: string;
+  Detail: string;
+}
+
 export interface RawEvidenceDataset {
   key: DatasetKey;
   label: string;
@@ -124,6 +139,7 @@ export interface DashboardModel {
   scanSummary: ScanSummary;
   reviewQueue: ReviewQueueRow[];
   issueSummaries: IssueSummary[];
+  criticalScanBlocks: CriticalScanBlock[];
   migrationClusters: MigrationCluster[];
   permissionedGroupTree: GroupTreeRow[];
   identityReviewSignals: IdentityReviewSignals;
@@ -275,6 +291,8 @@ function categoryForFinding(type: string): string {
       return "Incomplete Collection";
     case "PotentialServiceAccount":
       return "Service Account Review";
+    case "BrokenOrMissingSid":
+      return "Broken/Missing SID";
     default:
       return type || "Finding";
   }
@@ -296,6 +314,9 @@ function issueTitle(row: DataRow, source: "finding" | "conflict"): string {
   if (category === "Service Account Review") {
     return "Account purpose needs review";
   }
+  if (category === "Broken/Missing SID") {
+    return "Permission references an unresolved SID";
+  }
   return category;
 }
 
@@ -313,6 +334,8 @@ function issueNextAction(category: string): string {
       return "Open Diagnostics and rerun or supplement the scan before approval.";
     case "Service Account Review":
       return "Ask the owner or directory team to confirm whether this account is automation or incomplete directory data.";
+    case "Broken/Missing SID":
+      return "Ask the directory or file-share team to confirm whether the SID is a deleted account, broken trust reference, or lookup gap.";
     default:
       return "Review the raw evidence and decide whether owner follow-up is needed.";
   }
@@ -326,9 +349,41 @@ function issueWhyItMatters(category: string): string {
       return "Accounts without owner signals can be hard to route during access review.";
     case "Incomplete Collection":
       return "Approvals based on incomplete evidence can miss access or migration blockers.";
+    case "Broken/Missing SID":
+      return "Unresolved SIDs make access hard to explain and can block clean owner review or migration planning.";
     default:
       return "This signal may affect ownership, access review, or migration readiness.";
   }
+}
+
+function isCriticalCollectionBlock(row: DataRow): boolean {
+  const text = `${row.ErrorType} ${row.Message} ${row.Detail}`.toLowerCase();
+  return (
+    text.includes("access denied") ||
+    text.includes("unauthorized") ||
+    text.includes("aclreaderror") ||
+    text.includes("enumerationerror") ||
+    text.includes("sharepermissioncollectionunavailable") ||
+    text.includes("targetpathresolveerror") ||
+    text.includes("remotecimsessionerror") ||
+    text.includes("cannot connect")
+  );
+}
+
+function buildCriticalScanBlocks(rows: DataRow[]): CriticalScanBlock[] {
+  return rows
+    .filter(isCriticalCollectionBlock)
+    .map((row, index) => ({
+      ...row,
+      ErrorId: row.ErrorId || `critical-block-${index}`,
+      ErrorType: row.ErrorType || "CollectionError",
+      Severity: row.Severity || "High",
+      Source: row.Source || "",
+      FullPath: row.FullPath || "",
+      Message: row.Message || "Collection was blocked for this area.",
+      Detail: row.Detail || ""
+    }))
+    .sort((a, b) => (riskRank[b.Severity] ?? 0) - (riskRank[a.Severity] ?? 0) || a.ErrorType.localeCompare(b.ErrorType));
 }
 
 function buildOwnerLookup(reviewPackets: ReviewQueueRow[]): Map<string, ReviewQueueRow> {
@@ -558,6 +613,10 @@ function buildGroups(snapshot: NormalizedSnapshot): GroupTreeRow[] {
     isTruncated: isTruthy(row.IsTruncated),
     obsPath: row.ObsPath,
     rights: row.Rights,
+    shareIds: row.ShareIds || row.ShareId,
+    sources: row.Sources,
+    fullPath: row.FullPath,
+    examplePath: row.ExamplePath,
     children: edgesByParent.get(row.Group.toLowerCase()) ?? [],
     raw: row
   }));
@@ -587,7 +646,9 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
   const reviewQueue = buildReviewQueue(snapshot.datasets.owner_review_packets);
   const ownerLookup = buildOwnerLookup(reviewQueue);
   const permissionedGroups = buildGroups(snapshot);
+  const criticalScanBlocks = buildCriticalScanBlocks(snapshot.datasets.collection_errors);
   const expandedMembers = permissionedGroups.reduce((sum, group) => sum + group.expandedMembers, 0);
+  const brokenSidFindings = snapshot.datasets.findings.filter((row) => categoryForFinding(row.FindingType) === "Broken/Missing SID").length;
   const baseSummary = {
     generatedAt: snapshot.manifest.GeneratedAt || snapshot.generatedAt,
     sourceMode: snapshot.manifest.SourceMode || "Snapshot",
@@ -602,6 +663,7 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
     permissionedGroups: snapshot.datasets.permissioned_groups.length,
     expandedMembers,
     potentialServiceAccounts: serviceAccounts.length,
+    brokenSidFindings,
     collectionErrors: snapshot.datasets.collection_errors.length
   };
   const confidenceResult = confidence(baseSummary);
@@ -621,6 +683,7 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
     },
     reviewQueue,
     issueSummaries: buildIssues(snapshot, ownerLookup),
+    criticalScanBlocks,
     migrationClusters: buildMigrationClusters(snapshot.datasets.related_data_areas),
     permissionedGroupTree: permissionedGroups,
     identityReviewSignals: {
