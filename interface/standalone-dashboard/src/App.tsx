@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -33,6 +33,7 @@ import {
   type ReviewQueueRow,
   type ScanSummary
 } from "./data/deriveDashboard";
+import type { RawSnapshot } from "./data/fixtures";
 import type { DataRow, DatasetKey } from "./data/schema";
 import { datasetLabels, expectedColumns, tooltipRegistry } from "./data/schema";
 import { KpiCard } from "./ui/KpiCard";
@@ -47,6 +48,36 @@ interface FilterState {
   owner: string;
   risk: string;
   source: string;
+}
+
+interface RuntimeSnapshotState {
+  status: "ready" | "missing";
+  snapshot?: RawSnapshot;
+  datasetLabel: string;
+  message: string;
+}
+
+type SearchScope = "owner" | "share" | "identity" | "path" | "group";
+
+interface ScopedSearchToken {
+  scope: SearchScope;
+  value: string;
+  normalizedValue: string;
+}
+
+interface ParsedSearchQuery {
+  scoped: ScopedSearchToken[];
+  freeText: string[];
+}
+
+interface PersistedDashboardState {
+  activeView?: ViewKey;
+  filters?: FilterState;
+  selectedIssueId?: string;
+  selectedClusterId?: string;
+  selectedGroupName?: string;
+  rawDatasetKey?: DatasetKey;
+  returnTrail?: ReturnTrail | null;
 }
 
 interface ReturnTrail {
@@ -81,6 +112,16 @@ const defaultFilters: FilterState = {
   owner: "",
   risk: "",
   source: ""
+};
+
+const dashboardSessionKey = "sharesurfer.dashboard.state.v1";
+
+const searchScopeFields: Record<SearchScope, string[]> = {
+  owner: ["Owner", "DataOwner", "BusinessUnit", "Department"],
+  share: ["ShareName", "ShareId", "ShareIds", "UNCPath", "LocalPath", "Source"],
+  identity: ["Identity", "DisplayName", "SamAccountName", "UserPrincipalName", "Mail"],
+  path: ["FullPath", "RelativePath", "UNCPath", "LocalPath", "Pattern"],
+  group: ["Group", "ParentGroup", "ChildIdentity", "DisplayName", "Rights"]
 };
 
 const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
@@ -122,12 +163,112 @@ function riskTone(value: string): "danger" | "warning" | "good" | "neutral" {
   return "neutral";
 }
 
-function rowText(row: DataRow): string {
+function isViewKey(value: unknown): value is ViewKey {
+  return typeof value === "string" && views.some((view) => view.key === value);
+}
+
+function isDatasetKey(value: unknown): value is DatasetKey {
+  return typeof value === "string" && value in datasetLabels;
+}
+
+function isFilterState(value: unknown): value is FilterState {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<FilterState>;
+  return ["query", "businessUnit", "owner", "risk", "source"].every((key) => typeof candidate[key as keyof FilterState] === "string");
+}
+
+function isReturnTrail(value: unknown): value is ReturnTrail {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<ReturnTrail>;
+  return isViewKey(candidate.from) && typeof candidate.label === "string" && typeof candidate.backLabel === "string";
+}
+
+function loadDashboardState(): PersistedDashboardState {
+  try {
+    const raw = window.sessionStorage.getItem(dashboardSessionKey);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as PersistedDashboardState;
+    return {
+      activeView: isViewKey(parsed.activeView) ? parsed.activeView : undefined,
+      filters: isFilterState(parsed.filters) ? parsed.filters : undefined,
+      selectedIssueId: typeof parsed.selectedIssueId === "string" ? parsed.selectedIssueId : undefined,
+      selectedClusterId: typeof parsed.selectedClusterId === "string" ? parsed.selectedClusterId : undefined,
+      selectedGroupName: typeof parsed.selectedGroupName === "string" ? parsed.selectedGroupName : undefined,
+      rawDatasetKey: isDatasetKey(parsed.rawDatasetKey) ? parsed.rawDatasetKey : undefined,
+      returnTrail: parsed.returnTrail === null || isReturnTrail(parsed.returnTrail) ? parsed.returnTrail : undefined
+    };
+  } catch {
+    return {};
+  }
+}
+
+function saveDashboardState(state: PersistedDashboardState): void {
+  try {
+    window.sessionStorage.setItem(dashboardSessionKey, JSON.stringify(state));
+  } catch {
+    // Session persistence is a convenience; the dashboard must still work when browser storage is unavailable.
+  }
+}
+
+function parseSearchQuery(query: string): ParsedSearchQuery {
+  const scoped: ScopedSearchToken[] = [];
+  const freeText: string[] = [];
+  const terms = query.match(/"[^"]+"|\S+/g) ?? [];
+
+  for (const term of terms) {
+    const normalizedTerm = term.replace(/^"|"$/g, "");
+    const scopedMatch = normalizedTerm.match(/^([a-z]+):(.+)$/i);
+    if (scopedMatch) {
+      const scope = scopedMatch[1].toLowerCase() as SearchScope;
+      const value = scopedMatch[2].trim();
+      if (scope in searchScopeFields && value) {
+        scoped.push({ scope, value, normalizedValue: value.toLowerCase() });
+        continue;
+      }
+    }
+
+    if (normalizedTerm.trim()) {
+      freeText.push(normalizedTerm.toLowerCase());
+    }
+  }
+
+  return { scoped, freeText };
+}
+
+function objectText(row: Record<string, unknown>): string {
   return Object.values(row).join(" ").toLowerCase();
 }
 
-function matchesSearch(row: DataRow, query: string): boolean {
-  return !query || rowText(row).includes(query.toLowerCase());
+function getRowFieldValue(row: Record<string, unknown>, fieldName: string): string {
+  const directValue = row[fieldName];
+  if (directValue !== undefined && directValue !== null) {
+    return String(directValue);
+  }
+
+  const matchingKey = Object.keys(row).find((key) => key.toLowerCase() === fieldName.toLowerCase());
+  return matchingKey ? String(row[matchingKey] ?? "") : "";
+}
+
+function scopedRowText(row: Record<string, unknown>, scope: SearchScope): string {
+  return searchScopeFields[scope].map((fieldName) => getRowFieldValue(row, fieldName)).join(" ").toLowerCase();
+}
+
+function matchesParsedSearch(row: Record<string, unknown>, parsedQuery: ParsedSearchQuery): boolean {
+  if (parsedQuery.scoped.length === 0 && parsedQuery.freeText.length === 0) {
+    return true;
+  }
+
+  const fullText = objectText(row);
+  return (
+    parsedQuery.freeText.every((term) => fullText.includes(term)) &&
+    parsedQuery.scoped.every((token) => scopedRowText(row, token.scope).includes(token.normalizedValue))
+  );
 }
 
 function matchesText(value: string, filter: string): boolean {
@@ -218,10 +359,56 @@ function chip(label: string, value: string, onRemove: () => void) {
   );
 }
 
-function getRuntimeSnapshot() {
+function hasRuntimeDatasets(snapshot?: RawSnapshot): boolean {
+  if (!snapshot?.datasets) {
+    return false;
+  }
+
+  const datasetValues = Object.values(snapshot.datasets);
+  return datasetValues.some((rows) => Array.isArray(rows) && rows.length > 0);
+}
+
+function getRuntimeSnapshotState(useDemoSnapshot: boolean): RuntimeSnapshotState {
+  if (useDemoSnapshot) {
+    return {
+      status: "ready",
+      snapshot: demoSnapshot,
+      datasetLabel: "Demo dataset",
+      message: "Demo data is loaded intentionally."
+    };
+  }
+
   const runtime = window.__SHARESURFER_SNAPSHOT__;
-  const hasDatasets = runtime?.datasets && Object.keys(runtime.datasets).length > 0;
-  return hasDatasets ? runtime : demoSnapshot;
+  if (!runtime) {
+    return {
+      status: "missing",
+      datasetLabel: "",
+      message: "No runtime snapshot was found on window.__SHARESURFER_SNAPSHOT__."
+    };
+  }
+
+  if (runtime.snapshotKind === "template") {
+    return {
+      status: "missing",
+      datasetLabel: "",
+      message: "This folder contains template dashboard assets, not a packaged ShareSurfer export."
+    };
+  }
+
+  if (runtime.snapshotKind !== "export" && !hasRuntimeDatasets(runtime)) {
+    return {
+      status: "missing",
+      datasetLabel: "",
+      message: "The runtime snapshot did not include any export rows."
+    };
+  }
+
+  return {
+    status: "ready",
+    snapshot: runtime,
+    datasetLabel: runtime.snapshotKind === "export" ? "Export dataset" : "Runtime dataset",
+    message: "ShareSurfer export data is loaded."
+  };
 }
 
 function StatusBadge({ value }: { value: string }) {
@@ -279,6 +466,37 @@ function EvidenceWorkbench({ drill, onBack }: { drill: EvidenceDrill; onBack: ()
   );
 }
 
+function DatasetMissingScreen({ message, onOpenDemo }: { message: string; onOpenDemo: () => void }) {
+  return (
+    <main className="dataset-gate" aria-labelledby="dataset-gate-title">
+      <section className="panel dataset-gate-panel">
+        <div className="dataset-gate-icon" aria-hidden="true">
+          <FileWarning size={36} />
+        </div>
+        <div>
+          <p className="eyebrow">Standalone dashboard</p>
+          <h1 id="dataset-gate-title">No ShareSurfer dataset found</h1>
+          <p className="panel-copy">{message}</p>
+        </div>
+        <div className="info-banner">
+          <strong>Expected sharesurfer-data.js</strong>
+          <span>
+            Package a validated export with <code>scripts/New-ShareSurferStandaloneDashboard.ps1</code>, then open the generated <code>index.html</code>.
+          </span>
+        </div>
+        <ol className="dataset-gate-steps">
+          <li>Run <code>Invoke-ShareSurferScan</code> on the collector host.</li>
+          <li>Run <code>New-ShareSurferStandaloneDashboard.ps1</code> against the export folder.</li>
+          <li>Open the packaged dashboard folder from the review workstation.</li>
+        </ol>
+        <button type="button" className="primary-action" onClick={onOpenDemo}>
+          Open demo dataset
+        </button>
+      </section>
+    </main>
+  );
+}
+
 function MetricButton({
   label,
   value,
@@ -311,6 +529,7 @@ function FilterBar({
   const update = (patch: Partial<FilterState>) => {
     startTransition(() => onFiltersChange({ ...filters, ...patch }));
   };
+  const scopedTokens = parseSearchQuery(filters.query).scoped;
 
   return (
     <section className="filter-bar" aria-label="Dashboard filters">
@@ -363,6 +582,11 @@ function FilterBar({
       <div className="active-context">
         <strong>Active Context</strong>
         <div className="filter-chips">
+          {scopedTokens.map((token) => (
+            <span key={`${token.scope}:${token.value}`} className="filter-chip search-signal">
+              {token.scope}: {token.value}
+            </span>
+          ))}
           {chip("Search", filters.query, () => update({ query: "" }))}
           {chip("Business Unit", filters.businessUnit, () => update({ businessUnit: "" }))}
           {chip("Owner", filters.owner, () => update({ owner: "" }))}
@@ -381,41 +605,86 @@ function FilterBar({
 }
 
 function filterQueue(rows: ReviewQueueRow[], filters: FilterState, query: string) {
+  const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
       matchesText(row.businessUnit, filters.businessUnit) &&
       matchesText(row.owner, filters.owner) &&
       (!filters.source || row.source.toLowerCase().includes(filters.source.toLowerCase())) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase())) &&
-      (!query || `${row.businessUnit} ${row.owner} ${row.whyReview} ${row.firstAction}`.toLowerCase().includes(query.toLowerCase()))
+      matchesParsedSearch(
+        {
+          BusinessUnit: row.businessUnit,
+          Owner: row.owner,
+          Source: row.source,
+          RiskLevel: row.riskLevel,
+          WhyReview: row.whyReview,
+          SuggestedNextAction: row.firstAction
+        },
+        parsedQuery
+      )
   );
 }
 
 function filterIssues(rows: IssueSummary[], filters: FilterState, query: string) {
+  const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
       (!filters.risk || row.severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.category.toLowerCase().includes(filters.risk.toLowerCase())) &&
       (!filters.owner || row.owner.toLowerCase() === filters.owner.toLowerCase()) &&
       (!filters.businessUnit || row.businessUnit.toLowerCase() === filters.businessUnit.toLowerCase()) &&
-      (!query || `${row.title} ${row.category} ${row.path} ${row.identity} ${row.whatHappened}`.toLowerCase().includes(query.toLowerCase()))
+      matchesParsedSearch(
+        {
+          Owner: row.owner,
+          BusinessUnit: row.businessUnit,
+          Title: row.title,
+          Category: row.category,
+          FullPath: row.path,
+          Identity: row.identity,
+          WhatHappened: row.whatHappened
+        },
+        parsedQuery
+      )
   );
 }
 
 function filterClusters(rows: MigrationCluster[], filters: FilterState, query: string) {
+  const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
       matchesText(row.businessUnit, filters.businessUnit) &&
       matchesText(row.owner, filters.owner) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase()) || row.readiness.toLowerCase().includes(filters.risk.toLowerCase())) &&
-      (!query || `${row.name} ${row.relatedSignals.join(" ")} ${row.nextAction}`.toLowerCase().includes(query.toLowerCase()))
+      matchesParsedSearch(
+        {
+          RelatedDataArea: row.name,
+          Owner: row.owner,
+          BusinessUnit: row.businessUnit,
+          RiskLevel: row.riskLevel,
+          MigrationReadiness: row.readiness,
+          RelatedBecause: row.relatedSignals.join(" "),
+          SuggestedNextAction: row.nextAction
+        },
+        parsedQuery
+      )
   );
 }
 
 function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string) {
+  const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase())) &&
-      (!query || `${row.group} ${row.displayName} ${row.obsPath} ${row.rights}`.toLowerCase().includes(query.toLowerCase()))
+      matchesParsedSearch(
+        {
+          Group: row.group,
+          DisplayName: row.displayName,
+          ObsPath: row.obsPath,
+          Rights: row.rights,
+          RiskLevel: row.riskLevel
+        },
+        parsedQuery
+      )
   );
 }
 
@@ -1019,7 +1288,8 @@ function RawEvidenceView({
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [selectedRow, setSelectedRow] = useState<DataRow | null>(null);
   const dataset = dashboard.rawEvidenceCatalog.find((entry) => entry.key === datasetKey) ?? dashboard.rawEvidenceCatalog[0];
-  const rows = dataset.rows.filter((row) => matchesSearch(row, query));
+  const parsedQuery = useMemo(() => parseSearchQuery(query), [query]);
+  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery));
   const columns = columnsForDataset(dataset.key, showAllColumns);
   const detailRow = selectedRow ?? rows[0] ?? null;
 
@@ -1078,17 +1348,18 @@ function RawEvidenceView({
   );
 }
 
-export function App() {
-  const [activeView, setActiveView] = useState<ViewKey>("overview");
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnapshot; datasetLabel: string }) {
+  const initialState = useMemo(() => loadDashboardState(), []);
+  const [activeView, setActiveView] = useState<ViewKey>(initialState.activeView ?? "overview");
+  const [filters, setFilters] = useState<FilterState>(initialState.filters ?? defaultFilters);
   const deferredQuery = useDeferredValue(filters.query);
-  const snapshot = useMemo(() => normalizeSnapshot(getRuntimeSnapshot()), []);
+  const snapshot = useMemo(() => normalizeSnapshot(snapshotInput), [snapshotInput]);
   const dashboard = useMemo(() => deriveDashboard(snapshot), [snapshot]);
-  const [selectedIssueId, setSelectedIssueId] = useState<string>("");
-  const [selectedClusterId, setSelectedClusterId] = useState<string>("");
-  const [selectedGroupName, setSelectedGroupName] = useState<string>("");
-  const [rawDatasetKey, setRawDatasetKey] = useState<DatasetKey>("owner_review_packets");
-  const [returnTrail, setReturnTrail] = useState<ReturnTrail | null>(null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string>(initialState.selectedIssueId ?? "");
+  const [selectedClusterId, setSelectedClusterId] = useState<string>(initialState.selectedClusterId ?? "");
+  const [selectedGroupName, setSelectedGroupName] = useState<string>(initialState.selectedGroupName ?? "");
+  const [rawDatasetKey, setRawDatasetKey] = useState<DatasetKey>(initialState.rawDatasetKey ?? "owner_review_packets");
+  const [returnTrail, setReturnTrail] = useState<ReturnTrail | null>(initialState.returnTrail ?? null);
 
   const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery), [dashboard.reviewQueue, filters, deferredQuery]);
   const filteredIssues = useMemo(() => filterIssues(dashboard.issueSummaries, filters, deferredQuery), [dashboard.issueSummaries, filters, deferredQuery]);
@@ -1101,6 +1372,18 @@ export function App() {
   const selectedIssue = filteredIssues.find((issue) => issue.id === selectedIssueId) ?? filteredIssues[0];
   const selectedCluster = filteredClusters.find((cluster) => cluster.id === selectedClusterId) ?? filteredClusters[0];
   const selectedGroup = filteredGroups.find((group) => group.group === selectedGroupName) ?? filteredGroups[0];
+
+  useEffect(() => {
+    saveDashboardState({
+      activeView,
+      filters,
+      selectedIssueId,
+      selectedClusterId,
+      selectedGroupName,
+      rawDatasetKey,
+      returnTrail
+    });
+  }, [activeView, filters, selectedIssueId, selectedClusterId, selectedGroupName, rawDatasetKey, returnTrail]);
 
   const openView = (view: ViewKey) => {
     setReturnTrail(null);
@@ -1192,7 +1475,7 @@ export function App() {
           <div>
             <h1>Permission Review Dashboard</h1>
             <p>
-              Generated {dashboard.scanSummary.generatedAt || "from local snapshot"} | Source {dashboard.scanSummary.sourceMode} | Read-only
+              Generated {dashboard.scanSummary.generatedAt || "from local snapshot"} | Source {dashboard.scanSummary.sourceMode} | Read-only | {datasetLabel}
             </p>
           </div>
           <div className="topbar-status">
@@ -1231,4 +1514,15 @@ export function App() {
       </main>
     </div>
   );
+}
+
+export function App() {
+  const [useDemoSnapshot, setUseDemoSnapshot] = useState(false);
+  const runtimeState = useMemo(() => getRuntimeSnapshotState(useDemoSnapshot), [useDemoSnapshot]);
+
+  if (runtimeState.status !== "ready" || !runtimeState.snapshot) {
+    return <DatasetMissingScreen message={runtimeState.message} onOpenDemo={() => setUseDemoSnapshot(true)} />;
+  }
+
+  return <DashboardApp snapshotInput={runtimeState.snapshot} datasetLabel={runtimeState.datasetLabel} />;
 }

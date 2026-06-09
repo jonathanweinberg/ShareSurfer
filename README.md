@@ -138,7 +138,9 @@ Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index
 
 ## Pre-1.0 Release Packaging
 
-The first ShareSurfer release packages are unsigned but fully built. They include the PowerShell module, scripts, documentation, SHA256 hash files, a release manifest, and prebuilt standalone dashboard assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
+The first ShareSurfer release packages are unsigned but fully built. They include the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
+
+Release packaging enforces a dependency-age policy for npm packages by default: package versions must be at least 7 days old before they are included in a release package. This helps avoid pulling a just-published dependency into a pre-release. Local dry runs can use `-SkipDependencyAgeCheck`, but tagged release packaging should keep the check enabled.
 
 Build a local unsigned pre-1.0 package:
 
@@ -148,7 +150,7 @@ pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferRelease.ps1 `
   -Force
 ```
 
-Release output is written to `artifacts\ShareSurfer-<version>\`, `artifacts\ShareSurfer-<version>.zip`, and `artifacts\ShareSurfer-<version>.zip.sha256`. After unpacking the zip, the prebuilt dashboard assets are available at `interface/standalone-dashboard/dist`, and `scripts\New-ShareSurferStandaloneDashboard.ps1` can use them without npm.
+Release output is written to `artifacts\ShareSurfer-<version>\`, `artifacts\ShareSurfer-<version>.zip`, and `artifacts\ShareSurfer-<version>.zip.sha256`. After unpacking the zip, the prebuilt dashboard template assets are available at `interface/standalone-dashboard/dist`, and `scripts\New-ShareSurferStandaloneDashboard.ps1` can use them without npm, Vite, a server, or internet access to package a real export dashboard.
 
 ## Lab Fixture
 

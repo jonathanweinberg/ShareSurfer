@@ -21,4 +21,29 @@ describe("VirtualTable", () => {
     expect(screen.getByText("Showing 21-40 of 75")).toBeInTheDocument();
     expect(screen.getByText("Row 30")).toBeInTheDocument();
   });
+
+  test("sorts rows when a column header is toggled", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Name: "Charlie", Severity: "Low" },
+      { Name: "Alpha", Severity: "High" },
+      { Name: "Bravo", Severity: "Medium" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Name", "Severity"]} pageSize={20} title="Raw evidence" />);
+
+    await user.click(screen.getByRole("button", { name: /Sort by Name/i }));
+    expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual([
+      "AlphaHigh",
+      "BravoMedium",
+      "CharlieLow"
+    ]);
+
+    await user.click(screen.getByRole("button", { name: /Sort by Name/i }));
+    expect(screen.getAllByRole("row").slice(1).map((row) => row.textContent)).toEqual([
+      "CharlieLow",
+      "BravoMedium",
+      "AlphaHigh"
+    ]);
+  });
 });

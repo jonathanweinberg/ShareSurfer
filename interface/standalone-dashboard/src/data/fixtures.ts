@@ -1,6 +1,7 @@
 import type { DataRow, DatasetKey } from "./schema";
 
 export interface RawSnapshot {
+  snapshotKind?: "template" | "demo" | "export";
   generatedAt?: string;
   datasets?: Partial<Record<DatasetKey | string, DataRow[]>>;
   schemaWarnings?: string[];
@@ -8,6 +9,7 @@ export interface RawSnapshot {
 }
 
 export const demoSnapshot: RawSnapshot = {
+  snapshotKind: "demo",
   generatedAt: "2026-06-05T17:41:14Z",
   datasets: {
     shares: [

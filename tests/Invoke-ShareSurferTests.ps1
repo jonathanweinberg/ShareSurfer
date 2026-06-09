@@ -1628,7 +1628,9 @@ $tests = @(
             Assert-True ($index -like '*src="./sharesurfer-data.js"*') 'Standalone dashboard index should load snapshot through a relative script tag.'
             Assert-True ($index -like '*src="./assets/index-demo.js"*') 'Standalone dashboard index should keep relative asset paths.'
             Assert-True ($dataScript -like 'window.__SHARESURFER_SNAPSHOT__ = *') 'Snapshot script should assign the dashboard data on window.'
+            Assert-True ($dataScript -like '*"snapshotKind":"export"*') 'Snapshot script should identify generated export data.'
             Assert-True ($dataScript -notlike '*fetch(*') 'Snapshot script should not require fetch or a local server.'
+            Assert-Equal $manifest.dashboardDataKind 'export' 'Dashboard manifest should identify generated export data.'
             Assert-True ([int]$manifest.rowCounts.shares -gt 0) 'Dashboard manifest should include export row counts.'
             Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
         }
@@ -1638,17 +1640,34 @@ $tests = @(
         Body = {
             $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
             $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRelease-' + [guid]::NewGuid().ToString('N'))
+            $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDependencyAge-' + [guid]::NewGuid().ToString('N') + '.json')
             $assetPath = Join-Path $buildPath 'assets'
             New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
             Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
             Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferReleaseLoaded = true;' -Encoding UTF8
+            Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
+                isValid = $true
+                skipped = $false
+                minimumAgeDays = 7
+                dependencyCount = 1
+                violationCount = 0
+                unknownCount = 0
+                dependencies = @(@{
+                    name = 'react'
+                    version = '18.3.1'
+                    status = 'Allowed'
+                    ageDays = 30
+                })
+            } | ConvertTo-Json -Depth 8) -Encoding UTF8
 
-            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0-test' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -Force -PassThru
+            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0-test' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -DependencyAgeReportPath $dependencyAgeReportPath -Force -PassThru
 
             Assert-True $result.IsValid 'Release package should report a valid package.'
             Assert-Equal $result.SigningStatus 'UnsignedPre1.0' 'Release package should record unsigned pre-1.0 status.'
             Assert-True $result.IncludesPrebuiltStandaloneDashboard 'Release package should include built dashboard assets.'
+            Assert-Equal $result.MinimumDependencyAgeDays 7 'Release result should record the npm dependency age policy.'
+            Assert-True (Test-Path -LiteralPath $result.DependencyAgeReportPath -PathType Leaf) 'Release package should include the dependency age report.'
             Assert-True (Test-Path -LiteralPath $result.PackageRoot -PathType Container) 'Release package root should exist.'
             Assert-True (Test-Path -LiteralPath $result.ZipPath -PathType Leaf) 'Release zip should exist.'
             Assert-True (Test-Path -LiteralPath $result.ZipHashPath -PathType Leaf) 'Release zip SHA256 file should exist.'
@@ -1661,13 +1680,23 @@ $tests = @(
             $releaseNotes = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'RELEASE.md') -Raw
             $hashes = Get-Content -LiteralPath $result.HashPath -Raw
             $zipHash = Get-Content -LiteralPath $result.ZipHashPath -Raw
+            $releaseDashboardData = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'interface/standalone-dashboard/dist/sharesurfer-data.js') -Raw
 
             Assert-True (-not [bool]$manifest.signed) 'Release manifest should state that the package is unsigned.'
             Assert-Equal $manifest.signingStatus 'UnsignedPre1.0' 'Release manifest should keep the unsigned pre-1.0 marker.'
             Assert-True ([bool]$manifest.includesPrebuiltStandaloneDashboard) 'Release manifest should state that prebuilt dashboard assets are included.'
+            Assert-Equal $manifest.dashboardAssetKind 'Template' 'Release manifest should state that bundled dashboard assets are templates, not scan data.'
+            Assert-True ([bool]$manifest.dashboardRequiresExportPackaging) 'Release manifest should say release dashboard assets need export packaging before real review.'
+            Assert-Equal $manifest.minimumDependencyAgeDays 7 'Release manifest should record the minimum npm dependency age.'
+            Assert-Equal $manifest.dependencyAgeReport 'dependency-age-report.json' 'Release manifest should point to the dependency age report.'
+            Assert-True (-not [bool]$manifest.dependencyAgeCheckSkipped) 'Release manifest should show that the dependency age check was not skipped.'
             Assert-Equal $manifest.dashboardEntryPoint 'interface/standalone-dashboard/dist/index.html' 'Release manifest should name the dashboard entry point.'
+            Assert-True ($releaseDashboardData -like '*"snapshotKind":"template"*') 'Release dashboard data placeholder should identify template assets.'
+            Assert-True ($releaseNotes -like '*at least 7 days old*') 'Release notes should describe the npm dependency age policy.'
+            Assert-True ($releaseNotes -like '*template dashboard assets*') 'Release notes should call bundled dashboard assets templates.'
             Assert-True ($releaseNotes -like '*No npm, Vite, development server, or internet access*') 'Release notes should explain offline dashboard use after unpacking.'
             Assert-True ($hashes -like '*interface/standalone-dashboard/dist/index.html*') 'Release package hash file should include the prebuilt dashboard entry point.'
+            Assert-True ($hashes -like '*dependency-age-report.json*') 'Release package hash file should include the dependency age report.'
             Assert-True ($zipHash -like '*ShareSurfer-0.1.0-test.zip*') 'Release zip hash should name the release archive.'
         }
     },
