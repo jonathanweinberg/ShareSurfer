@@ -8,11 +8,29 @@ function renderWithDemoSnapshot() {
   return render(<App />);
 }
 
+function ensureLocalStorage() {
+  if (window.localStorage) {
+    return;
+  }
+
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      clear: () => store.clear(),
+      getItem: (key: string) => store.get(key) ?? null,
+      removeItem: (key: string) => store.delete(key),
+      setItem: (key: string, value: string) => store.set(key, value)
+    }
+  });
+}
+
 describe("dashboard workbench interactions", () => {
   beforeEach(() => {
+    ensureLocalStorage();
     delete window.__SHARESURFER_SNAPSHOT__;
     window.sessionStorage.clear();
-    window.localStorage?.clear();
+    window.localStorage.clear();
   });
 
   test("missing runtime data shows an onboarding screen instead of silently rendering demo rows", () => {
@@ -98,6 +116,43 @@ describe("dashboard workbench interactions", () => {
     expect(rows).toHaveLength(2);
     expect(rows[1]).toHaveTextContent("Deep Custom Permission");
     expect(within(table).queryByText("Inheritance Stopped")).not.toBeInTheDocument();
+  });
+
+  test("finding review decisions persist locally and can be cleared", () => {
+    const firstRender = renderWithDemoSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Mark Expected/i }));
+
+    expect(screen.getByText(/Decision: Expected/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem("sharesurfer.reviewDecisions.v1")).toContain("Expected");
+
+    firstRender.unmount();
+    renderWithDemoSnapshot();
+
+    expect(screen.getByRole("heading", { name: /Findings & Conflicts/i })).toBeInTheDocument();
+    expect(screen.getByText(/Decision: Expected/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Clear decision/i }));
+
+    expect(screen.getByText(/No decision recorded/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem("sharesurfer.reviewDecisions.v1")).toBeNull();
+  });
+
+  test("finding review decisions can be exported as a local csv", () => {
+    renderWithDemoSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Mark Needs Follow-up/i }));
+
+    const exportLink = screen.getByRole("link", { name: /Export review decisions/i });
+    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
+
+    expect(exportLink).toHaveAttribute("download", "review-decisions.csv");
+    expect(href).toContain("IssueId,Decision,UpdatedAt,Title,Category,Severity,Owner,BusinessUnit,Path,Identity,Source");
+    expect(href).toContain("Needs Follow-up");
   });
 
   test("migration metrics drill into evidence rows and can return to the cluster", () => {

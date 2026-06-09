@@ -39,3 +39,11 @@ pwsh -NoLogo -NoProfile -File .\scripts\New-ShareSurferDashboardScreenshots.ps1 
 ```
 
 If Playwright is not available, keep the existing screenshots and rerun the capture from a workstation where the Playwright Node package and browser binaries are installed.
+
+## Preserved Dashboard Screenshot Sets
+
+Keep dated dashboard screenshot sets under `dashboard-screenshots/` when they are useful for documentation, release notes, or first-run walkthroughs. The current preserved set is:
+
+- `dashboard-screenshots/2026-06-09-current/` - standalone dashboard QA captures for overview, ad-hoc table filtering, findings filters, permissioned group review, path context, sidebar collapse, Migration Discovery selector filtering, and local review decisions.
+
+Use the dated folder in documentation when you need stable screenshots that should not be overwritten by the next automated screenshot refresh.
