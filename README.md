@@ -59,6 +59,10 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 
 For a first-time walkthrough, start with the [First-run guide](docs/first-run-guide.md). It explains prerequisites, target selection, collector commands, CSV outputs, reports, and redacted support bundles for operators who are new to ShareSurfer or new to Windows file-share auditing.
 
+Current pre-release quickstart package: [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2). Download `ShareSurfer-0.1.0-pre.2.zip` and `ShareSurfer-0.1.0-pre.2.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets.
+
+On Windows, release users do not need Node, npm, Vite, a preview server, or internet access to package and open the standalone dashboard. Use Windows PowerShell 5.1 (`powershell.exe`) for the collector and dashboard packager unless your workstation already has PowerShell 7 (`pwsh`).
+
 ```powershell
 Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
 
@@ -72,7 +76,7 @@ New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath 'C:\ShareSurfer
 
 ### Quick Start in a Nonpermissive Environment
 
-Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Copy the ShareSurfer release or repository folder to the collector host first. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
+Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the [v0.1.0-pre.2 release zip](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2) for first-time Windows use because it already includes the built dashboard assets. Copy the unpacked ShareSurfer release folder to the collector host first. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
 
 ```powershell
 $shareSurferRoot = 'C:\ShareSurfer\ShareSurfer'
@@ -99,7 +103,7 @@ Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
-If you do not have owner mappings or discounted principals yet, remove those two parameters for the first scan. Move the zip file and SHA256 hash through your approved transfer process, then open `report.html` or build the standalone dashboard on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
+If you do not have owner mappings or discounted principals yet, remove those two parameters for the first scan. Move the zip file and SHA256 hash through your approved transfer process, then open `report.html` or package the standalone dashboard on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
 
 To keep broad operational access visible without letting it drive Migration Discovery, pass a discounted principal CSV:
 
@@ -113,7 +117,18 @@ The CSV must include `Identity` and can include `Reason` and `Scope`. Discounted
 
 ShareSurfer also includes a React/Vite standalone dashboard for richer local review. Release packages include the built dashboard assets under `interface/standalone-dashboard/dist`, so a release user can package and open dashboard output from `index.html` on Windows or macOS without npm, Vite, a development server, or internet access.
 
-Development maintainers can still run the dashboard locally:
+The dashboard files included in the release are template assets. Opening `interface\standalone-dashboard\dist\index.html` directly from the release shows a template/onboarding screen, not demo data. To review real scan results, package a validated export folder with `scripts\New-ShareSurferStandaloneDashboard.ps1`; the generated `standalone-dashboard\index.html` is the one business reviewers should open.
+
+Package a validated export folder as a standalone dashboard from the release zip on Windows:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+```
+
+Development maintainers can still run the dashboard locally from source:
 
 ```powershell
 npm --prefix interface/standalone-dashboard run dev
@@ -125,7 +140,7 @@ Build the static dashboard assets from source:
 npm --prefix interface/standalone-dashboard run build
 ```
 
-Package a validated export folder as a standalone dashboard:
+Package a validated export folder as a standalone dashboard with PowerShell 7:
 
 ```powershell
 pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
@@ -138,7 +153,7 @@ Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index
 
 ## Pre-1.0 Release Packaging
 
-The first ShareSurfer release packages are unsigned but fully built. They include the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
+The first ShareSurfer release packages are unsigned but fully built. The current quickstart release is [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2). It includes the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
 
 Release packaging enforces a dependency-age policy for npm packages by default: package versions must be at least 7 days old before they are included in a release package. This helps avoid pulling a just-published dependency into a pre-release. Local dry runs can use `-SkipDependencyAgeCheck`, but tagged release packaging should keep the check enabled.
 

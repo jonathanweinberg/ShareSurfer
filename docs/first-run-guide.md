@@ -286,15 +286,24 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. Maintainers can also build and package the React/Vite standalone dashboard when they want the richer novice-admin and business-owner interface.
+The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.2 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
-Build the dashboard assets from Windows PowerShell, PowerShell 7, Terminal, or any shell with Node and npm:
+If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -File scripts\New-ShareSurferStandaloneDashboard.ps1 `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+```
+
+Only maintainers building from source need to build the dashboard assets with Node and npm:
 
 ```powershell
 npm --prefix interface/standalone-dashboard run build
 ```
 
-Package the current export into a standalone static folder:
+Package the current export into a standalone static folder with PowerShell 7:
 
 ```powershell
 pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `

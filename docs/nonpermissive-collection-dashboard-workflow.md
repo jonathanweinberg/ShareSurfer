@@ -20,9 +20,9 @@ ShareSurfer does not change permissions. It reads evidence, writes normalized CS
 | Host | What it needs | What it creates |
 | --- | --- | --- |
 | Collector host | Windows PowerShell 5.1, ShareSurfer module, read access to target shares and directory data | Raw CSV export set, `scan_manifest.csv`, `report.html`, optional transfer package |
-| Dashboard host | Browser, optional Node/npm only when building the standalone dashboard assets | Offline dashboard review folder copied from the export dataset |
+| Dashboard host | Browser and the unpacked ShareSurfer release package | Offline dashboard review folder copied from the export dataset |
 
-The collector host does not need npm, Vite, Playwright, internet access, or a local web server.
+The collector host does not need npm, Vite, Playwright, internet access, or a local web server. Starting with [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2), release users also do not need Node, npm, Vite, a development server, or internet access on the dashboard host to package and open the standalone dashboard. Download `ShareSurfer-0.1.0-pre.2.zip` and `ShareSurfer-0.1.0-pre.2.zip.sha256` on an approved connected workstation, verify or record the hash, and move the release package by your approved process.
 
 ## 1. Prepare Inputs on the Collector
 
@@ -142,10 +142,10 @@ Open the default report:
 Start-Process (Join-Path $reviewRoot 'report.html')
 ```
 
-If the standalone dashboard assets are already built on the dashboard host, package the dataset into a self-contained dashboard folder:
+If you are using the `v0.1.0-pre.2` release package, the standalone dashboard assets are already built. Package the dataset into a self-contained dashboard folder:
 
 ```powershell
-pwsh -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
+powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
   -ExportPath $reviewRoot `
   -OutputPath "$reviewRoot\standalone-dashboard" `
   -Force
@@ -157,7 +157,7 @@ Open:
 Start-Process "$reviewRoot\standalone-dashboard\index.html"
 ```
 
-The standalone dashboard folder is static. After packaging, it opens from disk and does not need npm, Vite, a server, or internet access.
+The standalone dashboard folder is static. After packaging, it opens from disk and does not need npm, Vite, a server, or internet access. The release's `interface\standalone-dashboard\dist\index.html` is only a template shell until you run `New-ShareSurferStandaloneDashboard.ps1` against a validated export.
 
 ## 5. What Reviewers Should Start With
 
@@ -199,5 +199,5 @@ Search for raw domain names, server names, share names, user names, group names,
 | --- | --- |
 | Strict collector, no extra tooling | Run `Invoke-ShareSurferScan`, `Test-ShareSurferExport`, and `ConvertTo-ShareSurferReport` on the collector. |
 | Rich review on another host | Transfer the validated export folder or zip to the dashboard host. |
-| Dashboard host has built assets | Run `New-ShareSurferStandaloneDashboard.ps1` against the transferred export. |
+| Dashboard host uses `v0.1.0-pre.2` or later release zip | Run `New-ShareSurferStandaloneDashboard.ps1` against the transferred export; no npm or Vite is required. |
 | External bug report or support case | Generate a redacted support bundle and inspect it before sharing. |

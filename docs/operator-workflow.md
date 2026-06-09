@@ -267,16 +267,16 @@ Expand-Archive -LiteralPath 'D:\Intake\scan-2026-06-04-finance.zip' -Destination
 Start-Process (Join-Path $reviewRoot 'report.html')
 ```
 
-If the standalone dashboard assets have been built on the dashboard host, package the transferred export for a richer static review experience:
+If you are using the [v0.1.0-pre.2 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2), the standalone dashboard assets are already built. Package the transferred export for a richer static review experience:
 
 ```powershell
-pwsh -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
+powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
   -ExportPath $reviewRoot `
   -OutputPath "$reviewRoot\standalone-dashboard" `
   -Force
 ```
 
-The packaged standalone dashboard opens from `standalone-dashboard\index.html` and does not need npm, Vite, a server, internet access, or browser `fetch` permissions after packaging.
+The packaged standalone dashboard opens from `standalone-dashboard\index.html` and does not need npm, Vite, a server, internet access, or browser `fetch` permissions after packaging. The release's `interface\standalone-dashboard\dist\index.html` is only a template shell until you package it with a validated export.
 
 See [Nonpermissive Collector to Dashboard Host Workflow](nonpermissive-collection-dashboard-workflow.md) for the first-time-operator version of this procedure.
 
