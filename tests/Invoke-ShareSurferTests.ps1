@@ -2842,6 +2842,10 @@ $tests = @(
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
             $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
             $nonpermissiveWorkflow = Join-Path $repoRoot 'docs/nonpermissive-collection-dashboard-workflow.md'
+            $webView2ViewerDoc = Join-Path $repoRoot 'docs/webview2-dashboard-viewer.md'
+            $webView2ViewerProject = Join-Path $repoRoot 'apps/ShareSurfer.DashboardViewer/ShareSurfer.DashboardViewer.csproj'
+            $webView2ViewerReadme = Join-Path $repoRoot 'apps/ShareSurfer.DashboardViewer/README.md'
+            $webView2ViewerWindow = Join-Path $repoRoot 'apps/ShareSurfer.DashboardViewer/MainWindow.xaml.cs'
             $readme = Join-Path $repoRoot 'README.md'
             $expectedVisuals = @(
                 'collector-to-report.svg',
@@ -2943,6 +2947,29 @@ $tests = @(
             Assert-True ($readmeText -like '*New-ShareSurferRelease.ps1*') 'README should document the release packager script.'
             Assert-True ($readmeText -like '*UnsignedPre1.0*') 'README should name the release manifest unsigned status.'
             Assert-True ($readmeText -like '*interface/standalone-dashboard/dist*') 'README should explain where prebuilt dashboard assets are packaged.'
+            Assert-True ($readmeText -like '*docs/webview2-dashboard-viewer.md*') 'README should link the WebView2 dashboard viewer concept.'
+
+            Assert-True (Test-Path -LiteralPath $webView2ViewerDoc) 'Documentation should include the WebView2 dashboard viewer concept.'
+            $webView2Text = Get-Content -LiteralPath $webView2ViewerDoc -Raw
+            Assert-True ($webView2Text -like '*small signed Windows executable*') 'WebView2 concept should explain the signed viewer purpose.'
+            Assert-True ($webView2Text -like '*static dashboard package remains the portable evidence artifact*') 'WebView2 concept should keep the static dashboard package as source of truth.'
+            Assert-True ($webView2Text -like '*Block external navigation*') 'WebView2 concept should define the external-navigation boundary.'
+            Assert-True ($webView2Text -like '*WebView2 Evergreen Runtime*') 'WebView2 concept should explain runtime distribution.'
+            Assert-True ($webView2Text -like '*future Authenticode signature*') 'WebView2 concept should distinguish future signing from the current concept.'
+            Assert-True ($webView2Text -like '*Microsoft.Web.WebView2 NuGet package*') 'WebView2 concept should link the WebView2 SDK package reference.'
+            Assert-True (Test-Path -LiteralPath $webView2ViewerProject) 'Repository should include the WebView2 viewer project scaffold.'
+            Assert-True (Test-Path -LiteralPath $webView2ViewerReadme) 'Repository should include the WebView2 viewer README.'
+            Assert-True (Test-Path -LiteralPath $webView2ViewerWindow) 'Repository should include the WebView2 viewer window code.'
+            $webView2ProjectText = Get-Content -LiteralPath $webView2ViewerProject -Raw
+            [xml]$webView2ProjectXml = $webView2ProjectText
+            Assert-True ($webView2ProjectText -like '*net8.0-windows*') 'WebView2 viewer should target Windows .NET.'
+            Assert-True ($webView2ProjectText -like '*UseWPF*') 'WebView2 viewer should use the WPF desktop stack.'
+            Assert-True ($webView2ProjectText -like '*Microsoft.Web.WebView2*') 'WebView2 viewer should reference the WebView2 SDK.'
+            Assert-True ($webView2ProjectXml.Project.ItemGroup.PackageReference.Include -eq 'Microsoft.Web.WebView2') 'WebView2 project XML should parse with the expected package reference.'
+            $webView2WindowText = Get-Content -LiteralPath $webView2ViewerWindow -Raw
+            Assert-True ($webView2WindowText -like '*BlockExternalNavigation*') 'WebView2 viewer code should include an external-navigation guard.'
+            Assert-True ($webView2WindowText -like '*Uri.UriSchemeFile*') 'WebView2 viewer code should allow only local file navigation.'
+            Assert-True ($webView2WindowText -like '*AreHostObjectsAllowed = false*') 'WebView2 viewer code should keep host objects disabled.'
 
             Assert-True (Test-Path -LiteralPath $acceptanceAudit) 'Documentation should include a V1 phase-1 acceptance audit.'
             $acceptanceAuditText = Get-Content -LiteralPath $acceptanceAudit -Raw

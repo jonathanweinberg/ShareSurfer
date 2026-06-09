@@ -1,0 +1,52 @@
+<Window x:Class="ShareSurfer.DashboardViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="ShareSurfer Dashboard Viewer"
+        MinWidth="1100"
+        MinHeight="720"
+        Width="1280"
+        Height="820"
+        Loaded="Window_Loaded">
+    <DockPanel Background="#F8FAFC">
+        <Border DockPanel.Dock="Top" Background="#0F172A" Padding="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="ShareSurfer Dashboard Viewer"
+                               Foreground="White"
+                               FontSize="20"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Read-only local review for packaged ShareSurfer dashboards"
+                               Foreground="#CBD5E1"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Open Dashboard"
+                            Padding="14,7"
+                            Margin="0,0,8,0"
+                            Click="OpenDashboard_Click" />
+                    <Button Content="Reload"
+                            Padding="14,7"
+                            Click="Reload_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" BorderBrush="#CBD5E1" BorderThickness="0,1,0,0" Padding="10" Background="#FFFFFF">
+            <TextBlock x:Name="StatusText"
+                       Foreground="#334155"
+                       TextWrapping="Wrap"
+                       Text="Open a ShareSurfer standalone dashboard folder to begin." />
+        </Border>
+
+        <Grid>
+            <wv2:WebView2 x:Name="DashboardView" />
+        </Grid>
+    </DockPanel>
+</Window>
