@@ -186,6 +186,8 @@ Invoke-ShareSurferScan `
 
 Use `-DiscountedPrincipalPath` for broad admin, HelpDesk, scanner, backup, or platform groups that should stay visible as access evidence but should not create Migration Discovery relatedness. The CSV shape is `Identity`, optional `Reason`, and optional `Scope`. Discounted does not mean ignored, safe, or approved; `share_permissions.csv`, `acl_entries.csv`, `permissioned_groups.csv`, and the report still show the access.
 
+The collector prints timestamped console progress by default so operators can see collection, ACL reading, identity enrichment, export, and completion phases. Use `-Quiet` for scheduled automation. WinRM/CIM gaps are treated as best-effort collection gaps when ShareSurfer can still inspect the path; review `collection_errors.csv`, `findings.csv`, and Diagnostics before approval.
+
 When the Windows SMB cmdlets can resolve the share directly, scan by computer and share name:
 
 ```powershell

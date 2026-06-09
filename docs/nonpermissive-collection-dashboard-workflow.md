@@ -24,6 +24,8 @@ ShareSurfer does not change permissions. It reads evidence, writes normalized CS
 
 The collector host does not need npm, Vite, Playwright, internet access, or a local web server. Starting with [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2), release users also do not need Node, npm, Vite, a development server, or internet access on the dashboard host to package and open the standalone dashboard. Download `ShareSurfer-0.1.0-pre.2.zip` and `ShareSurfer-0.1.0-pre.2.zip.sha256` on an approved connected workstation, verify or record the hash, and move the release package by your approved process.
 
+During collection, `Invoke-ShareSurferScan` prints timestamped phase updates so the operator can tell the scan is still active. Use `-Quiet` only for scheduled automation. If WinRM/CIM is unavailable, ShareSurfer records the gap as partial share-permission evidence and continues with file/folder evidence where possible.
+
 ## 1. Prepare Inputs on the Collector
 
 Create a dated export path:

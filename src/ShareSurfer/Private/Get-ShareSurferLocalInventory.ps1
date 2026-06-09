@@ -3,7 +3,9 @@ function Get-ShareSurferLocalInventory {
         [Parameter(Mandatory = $true)]
         [string[]] $TargetPath,
 
-        [switch] $IncludeFiles
+        [switch] $IncludeFiles,
+
+        [switch] $Quiet
     )
 
     $shares = New-Object System.Collections.ArrayList
@@ -18,6 +20,7 @@ function Get-ShareSurferLocalInventory {
     foreach ($target in $TargetPath) {
         $index++
         $shareId = 'target-{0}' -f $index
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Resolving target {0} of {1}: {2}' -f $index, @($TargetPath).Count, $target) -Quiet:$Quiet
         try {
             $targetItem = Get-Item -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $target) -ErrorAction Stop
         }
@@ -45,6 +48,7 @@ function Get-ShareSurferLocalInventory {
         $targetDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)
         $shareInfo = Get-ShareSurferTargetShareInfo -TargetPath $target -TargetItem $targetItem
         [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetDisplayPath))
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Collecting share-level permission evidence for {0}.' -f $targetDisplayPath) -Quiet:$Quiet
         $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
         foreach ($permissionRow in $permissionRows) {
             [void]$sharePermissions.Add($permissionRow)
@@ -61,6 +65,7 @@ function Get-ShareSurferLocalInventory {
                 Detail = 'Best-effort target path scan cannot prove the share-level access gate for this share.'
             })
             [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'Get-SmbShareAccess' -ShareId $shareId -Message $permissionMessage -Detail $targetDisplayPath))
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Share-level permissions were unavailable for {0}; continuing with file/folder ACL collection.' -f $targetDisplayPath) -Quiet:$Quiet
         }
 
         [void]$shares.Add([pscustomobject]@{
@@ -77,6 +82,7 @@ function Get-ShareSurferLocalInventory {
 
         $scanItems = @($targetItem)
         $childErrors = @()
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating folders{0} under {1}.' -f $(if ($IncludeFiles) { ' and files' } else { '' }), $targetDisplayPath) -Quiet:$Quiet
         $children = Get-ChildItem -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)) -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable childErrors
         foreach ($childError in $childErrors) {
             $errorPath = ConvertFrom-ShareSurferFilesystemPath -Path (Get-ShareSurferCollectionErrorPath -ErrorRecord $childError -FallbackPath $targetDisplayPath)
@@ -97,7 +103,13 @@ function Get-ShareSurferLocalInventory {
             }
         }
 
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Reading ACLs for {0} item(s) under {1}.' -f @($scanItems).Count, $targetDisplayPath) -Quiet:$Quiet
+        $processedItemCount = 0
         foreach ($scanItem in $scanItems) {
+            $processedItemCount++
+            if ($processedItemCount -gt 1 -and ($processedItemCount % 1000) -eq 0) {
+                Write-ShareSurferStatus -Phase 'Collect' -Message ('Processed {0} of {1} item(s) under {2}.' -f $processedItemCount, @($scanItems).Count, $targetDisplayPath) -Quiet:$Quiet
+            }
             $scanItemDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$scanItem.FullName)
             $relative = $scanItemDisplayPath.Substring($targetDisplayPath.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
             $depth = 0
@@ -155,6 +167,7 @@ function Get-ShareSurferLocalInventory {
                 InheritanceBrokenAt = $inheritanceBrokenAt
             })
         }
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Finished target {0}. Items={1}; ACL entries={2}; CollectionErrors={3}' -f $targetDisplayPath, @($scanItems).Count, $aclEntries.Count, $scanErrors.Count) -Quiet:$Quiet
     }
 
     [pscustomobject]@{

@@ -17,7 +17,8 @@ function Export-ShareSurferInventory {
         [string] $SourceMode = 'InputObject',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
-        [switch] $IncludeFiles
+        [switch] $IncludeFiles,
+        [switch] $Quiet
     )
 
     if (-not (Test-Path -LiteralPath $OutputPath)) {
@@ -76,10 +77,14 @@ function Export-ShareSurferInventory {
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ScanStarted' -Source $SourceMode -Message ('ShareSurfer scan export started for {0}' -f $SourceMode)))
 
     if (-not $SkipIdentityEnrichment) {
+        Write-ShareSurferStatus -Phase 'Identity' -Message ('Resolving identity context with OBS attribute {0} and AD lookup mode {1}.' -f $ObsAttribute, $AdLookupMode) -Quiet:$Quiet
         $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode
         $identities = @(ConvertTo-ShareSurferArray $identityInventory.Identities)
         $groupEdges = @(ConvertTo-ShareSurferArray $identityInventory.GroupEdges)
         $orgChains = @(ConvertTo-ShareSurferArray $identityInventory.OrgChains)
+    }
+    else {
+        Write-ShareSurferStatus -Phase 'Identity' -Message 'Skipping identity enrichment because -SkipIdentityEnrichment was supplied.' -Quiet:$Quiet
     }
 
     if ($scanErrors.Count -gt 0) {
@@ -118,6 +123,7 @@ function Export-ShareSurferInventory {
         }
     }
 
+    Write-ShareSurferStatus -Phase 'Export' -Message 'Classifying conflicts, findings, permissioned groups, owner pivots, and migration discovery rows.' -Quiet:$Quiet
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
     $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
     $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges -DiscountedPrincipals $discountedPrincipals)
@@ -166,6 +172,7 @@ function Export-ShareSurferInventory {
     foreach ($fileName in $schema.Keys) {
         Export-ShareSurferCsv -Path (Join-Path $OutputPath $fileName) -Columns $schema[$fileName] -Rows $data[$fileName]
     }
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Wrote {0} normalized CSV export(s) to {1}.' -f @($schema.Keys).Count, $OutputPath) -Quiet:$Quiet
 
     $eventLogRows = foreach ($event in @($scanEvents)) {
         New-ShareSurferRecord -Columns $schema['scan_events.csv'] -InputObject $event
