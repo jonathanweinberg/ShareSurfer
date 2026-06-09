@@ -39,6 +39,8 @@ function Resolve-ShareSurferIdentityInventory {
     $identityRows = [ordered]@{}
     $groupEdges = New-Object System.Collections.ArrayList
     $orgRows = [ordered]@{}
+    $identityScanEvents = New-Object System.Collections.ArrayList
+    $managerFallbackEventKeys = @{}
 
     function Test-ShareSurferPotentialServiceAccount {
         param(
@@ -150,6 +152,22 @@ function Resolve-ShareSurferIdentityInventory {
             return ''
         }
 
+        function Add-ShareSurferManagerFallbackEvent {
+            param(
+                [string] $FallbackValue = '',
+
+                [string] $Reason = ''
+            )
+
+            $eventKey = ('{0}|{1}|{2}' -f $ManagerIdentityFormat, $Reference, $FallbackValue).ToUpperInvariant()
+            if ($managerFallbackEventKeys.ContainsKey($eventKey)) {
+                return
+            }
+
+            $managerFallbackEventKeys[$eventKey] = $true
+            [void]$identityScanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'ManagerIdentityFormatFallback' -Source 'IdentityEnrichment' -Message ('Unable to format manager reference as {0}; using fallback value.' -f $ManagerIdentityFormat) -Detail ('Reference={0}; Fallback={1}; Reason={2}' -f $Reference, $FallbackValue, $Reason)))
+        }
+
         $entry = Get-ShareSurferDirectoryEntryByReference -Reference $Reference -FallbackDomain $FallbackDomain
         $mail = Get-ShareSurferEntryProperty -Entry $entry -Name 'Mail'
         $upn = Get-ShareSurferEntryProperty -Entry $entry -Name 'UserPrincipalName'
@@ -181,15 +199,23 @@ function Resolve-ShareSurferIdentityInventory {
         }
 
         if ($identity -ne '') {
+            Add-ShareSurferManagerFallbackEvent -FallbackValue $identity -Reason 'Resolved identity did not contain the requested display attribute.'
             return $identity
         }
         if ($dn -ne '') {
+            Add-ShareSurferManagerFallbackEvent -FallbackValue $dn -Reason 'Resolved distinguished name was used as the safest available manager reference.'
             return $dn
         }
         if ($sam -ne '') {
+            Add-ShareSurferManagerFallbackEvent -FallbackValue $sam -Reason 'Resolved SAM account name was used as the safest available manager reference.'
             return $sam
         }
 
+        if ($ManagerIdentityFormat -eq 'DistinguishedName' -and $Reference -match '^\s*(CN|OU|DC)=') {
+            return $Reference
+        }
+
+        Add-ShareSurferManagerFallbackEvent -FallbackValue $Reference -Reason 'Directory lookup could not resolve a formatted manager value.'
         $Reference
     }
 
@@ -415,5 +441,6 @@ function Resolve-ShareSurferIdentityInventory {
         Identities = @($identityRows.Values)
         GroupEdges = @($groupEdges)
         OrgChains = @($orgRows.Values)
+        ScanEvents = @($identityScanEvents)
     }
 }

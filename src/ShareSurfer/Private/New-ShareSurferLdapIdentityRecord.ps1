@@ -91,6 +91,35 @@ function Get-ShareSurferLdapManagerLevel2 {
     Get-ShareSurferLdapManager -DistinguishedName $ManagerDistinguishedName
 }
 
+function Get-ShareSurferLdapManagerChain {
+    param(
+        [string] $ManagerDistinguishedName = '',
+
+        [int] $MaxDepth = 3
+    )
+
+    $chain = New-Object System.Collections.ArrayList
+    $seen = @{}
+    $current = $ManagerDistinguishedName
+
+    while (-not [string]::IsNullOrWhiteSpace($current) -and $chain.Count -lt $MaxDepth) {
+        $key = $current.ToUpperInvariant()
+        if ($seen.ContainsKey($key)) {
+            break
+        }
+
+        $seen[$key] = $true
+        [void]$chain.Add($current)
+        if ($chain.Count -ge $MaxDepth) {
+            break
+        }
+
+        $current = Get-ShareSurferLdapManager -DistinguishedName $current
+    }
+
+    @($chain)
+}
+
 function Get-ShareSurferLdapAccountEnabled {
     param(
         [Parameter(Mandatory = $true)]

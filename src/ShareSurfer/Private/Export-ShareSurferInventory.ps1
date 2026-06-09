@@ -84,6 +84,11 @@ function Export-ShareSurferInventory {
         $identities = @(ConvertTo-ShareSurferArray $identityInventory.Identities)
         $groupEdges = @(ConvertTo-ShareSurferArray $identityInventory.GroupEdges)
         $orgChains = @(ConvertTo-ShareSurferArray $identityInventory.OrgChains)
+        if ($null -ne $identityInventory.PSObject.Properties['ScanEvents']) {
+            foreach ($event in @(ConvertTo-ShareSurferArray $identityInventory.ScanEvents)) {
+                [void]$scanEvents.Add($event)
+            }
+        }
     }
     else {
         Write-ShareSurferStatus -Phase 'Identity' -Message 'Skipping identity enrichment because -SkipIdentityEnrichment was supplied.' -Quiet:$Quiet
