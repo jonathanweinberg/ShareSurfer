@@ -1,0 +1,91 @@
+name: Pre-1.0 Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional release version. Defaults to module version when omitted.
+        required: false
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build unsigned release package
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: interface/standalone-dashboard/package-lock.json
+
+      - name: Install dashboard dependencies
+        run: npm --prefix interface/standalone-dashboard ci
+
+      - name: Test standalone dashboard
+        run: npm --prefix interface/standalone-dashboard run test
+
+      - name: Run ShareSurfer PowerShell tests
+        shell: pwsh
+        run: pwsh -NoLogo -NoProfile -File tests/Invoke-ShareSurferTests.ps1
+
+      - name: Resolve package version
+        id: version
+        shell: pwsh
+        run: |
+          $inputVersion = '${{ github.event.inputs.version }}'
+          if (-not [string]::IsNullOrWhiteSpace($inputVersion)) {
+            $version = $inputVersion
+          }
+          elseif ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          }
+          else {
+            $manifest = Test-ModuleManifest -Path .\src\ShareSurfer\ShareSurfer.psd1
+            $version = [string]$manifest.Version
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build unsigned release package
+        shell: pwsh
+        run: >
+          pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferRelease.ps1
+          -Version '${{ steps.version.outputs.version }}'
+          -OutputRoot artifacts
+          -SkipNpmInstall
+          -Force
+          -PassThru
+          | ConvertTo-Json -Depth 6
+
+      - name: Upload unsigned release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShareSurfer-${{ steps.version.outputs.version }}-unsigned
+          path: |
+            artifacts/ShareSurfer-${{ steps.version.outputs.version }}
+            artifacts/ShareSurfer-${{ steps.version.outputs.version }}.zip
+            artifacts/ShareSurfer-${{ steps.version.outputs.version }}.zip.sha256
+
+      - name: Publish GitHub release for tags
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $zip = "artifacts/ShareSurfer-$version.zip"
+          $hash = "artifacts/ShareSurfer-$version.zip.sha256"
+          gh release create $env:GITHUB_REF_NAME $zip $hash --title "ShareSurfer $env:GITHUB_REF_NAME" --notes "Unsigned pre-1.0 release package. The standalone dashboard assets are prebuilt under interface/standalone-dashboard/dist; no npm, Vite, development server, or internet access is required after unpacking the release."
