@@ -1634,6 +1634,44 @@ $tests = @(
         }
     },
     @{
+        Name = 'New-ShareSurferRelease creates an unsigned pre-1.0 package with prebuilt dashboard assets'
+        Body = {
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRelease-' + [guid]::NewGuid().ToString('N'))
+            $assetPath = Join-Path $buildPath 'assets'
+            New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferReleaseLoaded = true;' -Encoding UTF8
+
+            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0-test' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -Force -PassThru
+
+            Assert-True $result.IsValid 'Release package should report a valid package.'
+            Assert-Equal $result.SigningStatus 'UnsignedPre1.0' 'Release package should record unsigned pre-1.0 status.'
+            Assert-True $result.IncludesPrebuiltStandaloneDashboard 'Release package should include built dashboard assets.'
+            Assert-True (Test-Path -LiteralPath $result.PackageRoot -PathType Container) 'Release package root should exist.'
+            Assert-True (Test-Path -LiteralPath $result.ZipPath -PathType Leaf) 'Release zip should exist.'
+            Assert-True (Test-Path -LiteralPath $result.ZipHashPath -PathType Leaf) 'Release zip SHA256 file should exist.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'interface/standalone-dashboard/dist/index.html') -PathType Leaf) 'Release package should include the prebuilt dashboard entry point.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -PathType Leaf) 'Release package should include the standalone dashboard packager.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'scripts/New-ShareSurferRelease.ps1') -PathType Leaf) 'Release package should include the release packager.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'docs/lab-evidence') -PathType Container)) 'Release package should not include bulky lab evidence snapshots.'
+
+            $manifest = Get-Content -LiteralPath $result.ManifestPath -Raw | ConvertFrom-Json
+            $releaseNotes = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'RELEASE.md') -Raw
+            $hashes = Get-Content -LiteralPath $result.HashPath -Raw
+            $zipHash = Get-Content -LiteralPath $result.ZipHashPath -Raw
+
+            Assert-True (-not [bool]$manifest.signed) 'Release manifest should state that the package is unsigned.'
+            Assert-Equal $manifest.signingStatus 'UnsignedPre1.0' 'Release manifest should keep the unsigned pre-1.0 marker.'
+            Assert-True ([bool]$manifest.includesPrebuiltStandaloneDashboard) 'Release manifest should state that prebuilt dashboard assets are included.'
+            Assert-Equal $manifest.dashboardEntryPoint 'interface/standalone-dashboard/dist/index.html' 'Release manifest should name the dashboard entry point.'
+            Assert-True ($releaseNotes -like '*No npm, Vite, development server, or internet access*') 'Release notes should explain offline dashboard use after unpacking.'
+            Assert-True ($hashes -like '*interface/standalone-dashboard/dist/index.html*') 'Release package hash file should include the prebuilt dashboard entry point.'
+            Assert-True ($zipHash -like '*ShareSurfer-0.1.0-test.zip*') 'Release zip hash should name the release archive.'
+        }
+    },
+    @{
         Name = 'ConvertTo-ShareSurferReport generates an offline static report with Azure path policy language'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2901,6 +2939,10 @@ $tests = @(
             Assert-True ($readmeText -like '*Compress-Archive*') 'README nonpermissive quickstart should show how to package the validated export folder.'
             Assert-True ($readmeText -like '*Get-FileHash -Algorithm SHA256*') 'README nonpermissive quickstart should show how to hash the handoff package.'
             Assert-True ($readmeText -like '*approved transfer process*') 'README nonpermissive quickstart should explain the approved transfer process.'
+            Assert-True ($readmeText -like '*Pre-1.0 Release Packaging*') 'README should document the unsigned pre-1.0 package path.'
+            Assert-True ($readmeText -like '*New-ShareSurferRelease.ps1*') 'README should document the release packager script.'
+            Assert-True ($readmeText -like '*UnsignedPre1.0*') 'README should name the release manifest unsigned status.'
+            Assert-True ($readmeText -like '*interface/standalone-dashboard/dist*') 'README should explain where prebuilt dashboard assets are packaged.'
 
             Assert-True (Test-Path -LiteralPath $acceptanceAudit) 'Documentation should include a V1 phase-1 acceptance audit.'
             $acceptanceAuditText = Get-Content -LiteralPath $acceptanceAudit -Raw

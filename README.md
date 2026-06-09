@@ -109,17 +109,17 @@ Invoke-ShareSurferScan -TargetPath '\\files01\Finance' -OutputPath $exportPath -
 
 The CSV must include `Identity` and can include `Reason` and `Scope`. Discounted means visible access evidence that is not used for migration relatedness; it does not mean ignored, safe, approved, or remediated.
 
-## Standalone Dashboard Prototype
+## Standalone Dashboard
 
-ShareSurfer also includes a React/Vite standalone dashboard prototype for richer local review. It is build-time tooling only; packaged dashboard output is static, offline, and opens from `index.html` on Windows or macOS without npm, Vite, a server, or internet access.
+ShareSurfer also includes a React/Vite standalone dashboard for richer local review. Release packages include the built dashboard assets under `interface/standalone-dashboard/dist`, so a release user can package and open dashboard output from `index.html` on Windows or macOS without npm, Vite, a development server, or internet access.
 
-Run the dashboard during development:
+Development maintainers can still run the dashboard locally:
 
 ```powershell
 npm --prefix interface/standalone-dashboard run dev
 ```
 
-Build the static dashboard assets:
+Build the static dashboard assets from source:
 
 ```powershell
 npm --prefix interface/standalone-dashboard run build
@@ -135,6 +135,20 @@ pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
 ```
 
 Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The package uses relative assets and `sharesurfer-data.js`, so it can be copied, zipped, or opened directly from disk.
+
+## Pre-1.0 Release Packaging
+
+The first ShareSurfer release packages are unsigned but fully built. They include the PowerShell module, scripts, documentation, SHA256 hash files, a release manifest, and prebuilt standalone dashboard assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
+
+Build a local unsigned pre-1.0 package:
+
+```powershell
+pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferRelease.ps1 `
+  -OutputRoot .\artifacts `
+  -Force
+```
+
+Release output is written to `artifacts\ShareSurfer-<version>\`, `artifacts\ShareSurfer-<version>.zip`, and `artifacts\ShareSurfer-<version>.zip.sha256`. After unpacking the zip, the prebuilt dashboard assets are available at `interface/standalone-dashboard/dist`, and `scripts\New-ShareSurferStandaloneDashboard.ps1` can use them without npm.
 
 ## Lab Fixture
 
