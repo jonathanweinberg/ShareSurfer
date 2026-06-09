@@ -14,6 +14,8 @@ function Export-ShareSurferInventory {
         [int] $GroupExpansionMaxDepth = 20,
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
         [string] $AdLookupMode = 'Auto',
+        [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
+        [string] $ManagerIdentityFormat = 'MailTo',
         [string] $SourceMode = 'InputObject',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
@@ -77,8 +79,8 @@ function Export-ShareSurferInventory {
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ScanStarted' -Source $SourceMode -Message ('ShareSurfer scan export started for {0}' -f $SourceMode)))
 
     if (-not $SkipIdentityEnrichment) {
-        Write-ShareSurferStatus -Phase 'Identity' -Message ('Resolving identity context with OBS attribute {0} and AD lookup mode {1}.' -f $ObsAttribute, $AdLookupMode) -Quiet:$Quiet
-        $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode
+        Write-ShareSurferStatus -Phase 'Identity' -Message ('Resolving identity context with OBS attribute {0}, AD lookup mode {1}, and manager format {2}.' -f $ObsAttribute, $AdLookupMode, $ManagerIdentityFormat) -Quiet:$Quiet
+        $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat
         $identities = @(ConvertTo-ShareSurferArray $identityInventory.Identities)
         $groupEdges = @(ConvertTo-ShareSurferArray $identityInventory.GroupEdges)
         $orgChains = @(ConvertTo-ShareSurferArray $identityInventory.OrgChains)
@@ -125,7 +127,7 @@ function Export-ShareSurferInventory {
 
     Write-ShareSurferStatus -Phase 'Export' -Message 'Classifying conflicts, findings, permissioned groups, owner pivots, and migration discovery rows.' -Quiet:$Quiet
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
-    $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
+    $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -SharePermissions $sharePermissions -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
     $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges -DiscountedPrincipals $discountedPrincipals)
     $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts -DiscountedPrincipals $discountedPrincipals)
     $relatedDataAreas = @(Get-ShareSurferRelatedDataAreas -OwnerRiskPivots $ownerRiskPivots -Items $items -Shares $shares)
@@ -143,6 +145,7 @@ function Export-ShareSurferInventory {
             ExplicitAceDepthThreshold = $ExplicitAceDepthThreshold
             GroupExpansionMaxDepth = $GroupExpansionMaxDepth
             AdLookupMode = $AdLookupMode
+            ManagerIdentityFormat = $ManagerIdentityFormat
             IncludeFiles = [bool]$IncludeFiles
         }
     )

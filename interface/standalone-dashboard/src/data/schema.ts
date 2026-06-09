@@ -98,6 +98,9 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "ManagerLevel1",
     "ManagerLevel2",
     "ManagerLevel3",
+    "ManagerLevel1Raw",
+    "ManagerLevel2Raw",
+    "ManagerLevel3Raw",
     "ObsPath",
     "ObsAttribute",
     "PotentialServiceAccount",
@@ -138,6 +141,9 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "ManagerLevel1",
     "ManagerLevel2",
     "ManagerLevel3",
+    "ManagerLevel1Raw",
+    "ManagerLevel2Raw",
+    "ManagerLevel3Raw",
     "ObsPath",
     "ObsAttribute",
     "PotentialServiceAccount"
@@ -257,8 +263,8 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "PolicyValue",
     "Message"
   ],
-  collection_errors: ["ErrorId", "ShareId", "ItemId", "FullPath", "ErrorType", "Message", "Detail"],
-  scan_events: ["Timestamp", "Level", "EventType", "Message", "Detail"],
+  collection_errors: ["ErrorId", "ShareId", "ItemId", "FullPath", "ErrorType", "Severity", "Source", "Message", "Detail"],
+  scan_events: ["EventId", "Timestamp", "Level", "EventType", "Source", "ShareId", "ItemId", "Message", "Detail"],
   scan_manifest: [
     "ScanId",
     "GeneratedAt",
@@ -271,6 +277,7 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "ExplicitAceDepthThreshold",
     "GroupExpansionMaxDepth",
     "AdLookupMode",
+    "ManagerIdentityFormat",
     "IncludeFiles"
   ]
 };
@@ -302,6 +309,8 @@ export const tooltipRegistry = {
     "The next manager above a manager's manager when directory data is available. It helps route escalation, not approval.",
   potentialServiceAccount:
     "A user account with no OBS value and no employee identifier collected. It may be automation, or it may be incomplete directory data.",
+  brokenSid:
+    "A permission references a SID or account name ShareSurfer could not resolve. This can happen after account deletion, trust changes, or directory lookup gaps.",
   collectionError:
     "A recorded problem while resolving, enumerating, or reading share, folder, file, ACL, or directory metadata.",
   rawEvidence:

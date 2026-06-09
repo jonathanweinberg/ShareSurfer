@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DataRow } from "../data/schema";
 
 interface VirtualTableProps {
@@ -57,23 +57,40 @@ export function VirtualTable({
 }: VirtualTableProps) {
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortState | null>(null);
+  const [filterText, setFilterText] = useState("");
+  const updateFilterText = (value: string) => setFilterText(value);
   const visibleColumns = useMemo(() => getColumns(rows, columns), [columns, rows]);
-  const sortedRows = useMemo(() => {
+  const filteredRows = useMemo(() => {
+    const normalizedFilter = filterText.trim().toLowerCase();
     const indexedRows = rows.map((row, index) => ({ row, index }));
-    if (!sort) {
+    if (!normalizedFilter) {
       return indexedRows;
     }
 
-    return indexedRows.sort((left, right) => {
+    return indexedRows.filter(({ row }) =>
+      Object.values(row).join(" ").toLowerCase().includes(normalizedFilter)
+    );
+  }, [filterText, rows]);
+  const sortedRows = useMemo(() => {
+    if (!sort) {
+      return filteredRows;
+    }
+
+    return [...filteredRows].sort((left, right) => {
       const result = compareCellValues(left.row[sort.column] ?? "", right.row[sort.column] ?? "");
       return sort.direction === "asc" ? result : -result;
     });
-  }, [rows, sort]);
+  }, [filteredRows, sort]);
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const safePage = Math.min(page, pageCount - 1);
   const start = safePage * pageSize;
   const visibleRows = sortedRows.slice(start, start + pageSize);
-  const end = rows.length === 0 ? 0 : Math.min(start + visibleRows.length, rows.length);
+  const end = sortedRows.length === 0 ? 0 : Math.min(start + visibleRows.length, sortedRows.length);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterText, rows]);
+
   const toggleSort = (column: string) => {
     setPage(0);
     setSort((current) => {
@@ -88,8 +105,19 @@ export function VirtualTable({
   return (
     <div className="table-shell" aria-label={title}>
       <div className="table-meta">
-        <span>{rows.length === 0 ? "Showing 0 of 0" : `Showing ${start + 1}-${end} of ${rows.length}`}</span>
+        <span>{sortedRows.length === 0 ? `Showing 0 of ${filteredRows.length}` : `Showing ${start + 1}-${end} of ${filteredRows.length}`}</span>
         <div className="pager" aria-label={`${title} pages`}>
+          <label className="table-filter">
+            <span className="sr-only">Filter {title} rows</span>
+            <input
+              type="search"
+              value={filterText}
+              onInput={(event) => updateFilterText(event.currentTarget.value)}
+              onChange={(event) => updateFilterText(event.currentTarget.value)}
+              placeholder="Filter rows..."
+              aria-label={`Filter ${title} rows`}
+            />
+          </label>
           <button type="button" onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}>
             Previous
           </button>

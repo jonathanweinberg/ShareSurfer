@@ -74,11 +74,13 @@ Use `IsInherited=False` plus a high `Depth` to identify explicit ACEs buried dee
 
 ### `identities.csv`
 
-Expected columns: `Identity`, `SamAccountName`, `DisplayName`, `ObjectClass`, `EmployeeId`, `EmployeeNumber`, `UserPrincipalName`, `Mail`, `Department`, `Title`, `Company`, `Office`, `AccountEnabled`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ObsPath`, `ObsAttribute`, `PotentialServiceAccount`, `DistinguishedName`.
+Expected columns: `Identity`, `SamAccountName`, `DisplayName`, `ObjectClass`, `EmployeeId`, `EmployeeNumber`, `UserPrincipalName`, `Mail`, `Department`, `Title`, `Company`, `Office`, `AccountEnabled`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ManagerLevel1Raw`, `ManagerLevel2Raw`, `ManagerLevel3Raw`, `ObsPath`, `ObsAttribute`, `PotentialServiceAccount`, `DistinguishedName`.
 
 `ObsAttribute` records which directory attribute supplied the OBS value, for example `extensionAttribute10`.
 
 `PotentialServiceAccount=True` means the identity is a user account with no OBS value and no `employeeID` or `employeeNumber` collected. Treat it as a review flag, not proof; some environments have incomplete directory data.
+
+`ManagerLevel1`, `ManagerLevel2`, and `ManagerLevel3` use the configured manager display format. The default is `MailTo`, which produces `mailto:` values when mail or UPN data is available. `ManagerLevel1Raw`, `ManagerLevel2Raw`, and `ManagerLevel3Raw` preserve raw directory references when available for correlation and troubleshooting.
 
 Use the extra directory fields as correlation clues, not as approval by themselves. They help identify likely data owners, business units, manager chains, and related groups when path naming alone is not enough.
 
@@ -102,7 +104,7 @@ Use this file to start group access review from groups that actually grant acces
 
 ### `org_chains.csv`
 
-Expected columns: `Identity`, `EmployeeId`, `EmployeeNumber`, `Department`, `Title`, `Company`, `Office`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ObsPath`, `ObsAttribute`, `PotentialServiceAccount`.
+Expected columns: `Identity`, `EmployeeId`, `EmployeeNumber`, `Department`, `Title`, `Company`, `Office`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ManagerLevel1Raw`, `ManagerLevel2Raw`, `ManagerLevel3Raw`, `ObsPath`, `ObsAttribute`, `PotentialServiceAccount`.
 
 V1 follows the manager chain through three levels when the directory has the data. Blank manager, title, or office values are normal in many environments.
 
@@ -153,7 +155,10 @@ Common V1 finding types include:
 - `LongPathOperationalPolicy`
 - `DeepExplicitAce`
 - `BrokenInheritance`
+- `BrokenOrMissingSid`
 - `CollectionError`
+
+`BrokenOrMissingSid` means a share or folder/file permission references a SID or account name ShareSurfer could not resolve. Treat it as a directory/file-share cleanup signal, not as proof of malicious access.
 
 ### `collection_errors.csv`
 
@@ -169,9 +174,9 @@ Use this file to troubleshoot collection behavior without scraping console outpu
 
 ### `scan_manifest.csv`
 
-Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `SourceMode`, `OperationalPathLengthThreshold`, `AzurePathComponentLimit`, `AzureFullPathLimit`, `ExplicitAceDepthThreshold`, `GroupExpansionMaxDepth`, `AdLookupMode`, `IncludeFiles`.
+Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `SourceMode`, `OperationalPathLengthThreshold`, `AzurePathComponentLimit`, `AzureFullPathLimit`, `ExplicitAceDepthThreshold`, `GroupExpansionMaxDepth`, `AdLookupMode`, `ManagerIdentityFormat`, `IncludeFiles`.
 
-Use the manifest to reproduce scan settings and explain incomplete data. `IncludeFiles` records whether file objects were included in addition to folders, which matters for enterprise validation and migration-readiness evidence.
+Use the manifest to reproduce scan settings and explain incomplete data. `ManagerIdentityFormat` records how manager fields were presented in identity and org exports. `IncludeFiles` records whether file objects were included in addition to folders, which matters for enterprise validation and migration-readiness evidence.
 
 ## Relationship Map
 

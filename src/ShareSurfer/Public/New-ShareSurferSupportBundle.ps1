@@ -1227,6 +1227,7 @@ function Test-ShareSurferRedactionAuditValue {
         'ExplicitAceDepthThreshold',
         'GroupExpansionMaxDepth',
         'AdLookupMode',
+        'ManagerIdentityFormat',
         'ObsAttribute',
         'PotentialServiceAccount',
         'GeneratedAt'

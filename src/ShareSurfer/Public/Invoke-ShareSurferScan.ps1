@@ -24,6 +24,8 @@ function Invoke-ShareSurferScan {
         [int] $GroupExpansionMaxDepth = 20,
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
         [string] $AdLookupMode = 'Auto',
+        [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
+        [string] $ManagerIdentityFormat = 'MailTo',
         [string] $OwnerMappingPath = '',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
@@ -60,7 +62,7 @@ function Invoke-ShareSurferScan {
     $inventory = Add-ShareSurferOwnerMappings -Inventory $inventory -OwnerMappingPath $OwnerMappingPath
 
     Write-ShareSurferStatus -Phase 'Export' -Message 'Normalizing findings, conflicts, identity context, and CSV output.' -Quiet:$Quiet
-    $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -SourceMode $sourceMode -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+    $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -SourceMode $sourceMode -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Done' -Message ('Completed scan. Shares={0}; Items={1}; Findings={2}; Conflicts={3}; OutputPath={4}' -f $result.Shares, $result.Items, $result.Findings, $result.Conflicts, $OutputPath) -Quiet:$Quiet
     $result
 }

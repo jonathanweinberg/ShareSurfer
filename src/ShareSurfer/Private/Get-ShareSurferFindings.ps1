@@ -6,6 +6,8 @@ function Get-ShareSurferFindings {
         [Parameter(Mandatory = $true)]
         $AclEntries,
 
+        $SharePermissions = @(),
+
         [Parameter(Mandatory = $true)]
         $Shares,
 
@@ -23,6 +25,49 @@ function Get-ShareSurferFindings {
     )
 
     $findings = New-Object System.Collections.ArrayList
+    $brokenSidKeys = @{}
+
+    function Test-ShareSurferBrokenOrMissingSid {
+        param(
+            [string] $Identity = ''
+        )
+
+        $trimmed = $Identity.Trim()
+        if ($trimmed -eq '') {
+            return $false
+        }
+
+        $trimmed -match '^S-\d-\d+(-\d+)+$' -or
+            $trimmed -match '(?i)\baccount\s+unknown\b' -or
+            $trimmed -match '(?i)\bunknown\s+(account|sid)\b'
+    }
+
+    function Add-ShareSurferBrokenSidFinding {
+        param(
+            [string] $ShareId = '',
+            [string] $ItemId = '',
+            [string] $FullPath = '',
+            [string] $Identity = '',
+            [string] $Source = ''
+        )
+
+        if (-not (Test-ShareSurferBrokenOrMissingSid -Identity $Identity)) {
+            return
+        }
+
+        $key = @($ShareId, $ItemId, $FullPath, $Identity, $Source) -join '|'
+        if ($brokenSidKeys.ContainsKey($key)) {
+            return
+        }
+        $brokenSidKeys[$key] = $true
+
+        $message = 'Permission references a SID or account name that could not be resolved. Review whether this is a deleted account, broken trust reference, or directory lookup gap.'
+        if ($Source -ne '') {
+            $message = '{0} Source: {1}.' -f $message, $Source
+        }
+
+        [void]$findings.Add((New-ShareSurferFinding -FindingType 'BrokenOrMissingSid' -Severity 'High' -ShareId $ShareId -ItemId $ItemId -FullPath $FullPath -Identity $Identity -ObservedValue $Identity -PolicyValue 'Resolvable identity' -Message $message))
+    }
 
     foreach ($item in @(ConvertTo-ShareSurferArray $Items)) {
         $fullPath = [string]$item.FullPath
@@ -69,6 +114,12 @@ function Get-ShareSurferFindings {
         if (-not $isInherited -and $depth -gt $ExplicitAceDepthThreshold) {
             [void]$findings.Add((New-ShareSurferFinding -FindingType 'DeepExplicitAce' -Severity 'High' -ShareId $ace.ShareId -ItemId $ace.ItemId -FullPath $ace.FullPath -Identity $ace.Identity -ObservedValue $depth -PolicyValue $ExplicitAceDepthThreshold -Message 'Explicit permissions were introduced deeper than the configured Azure Files migration review threshold.'))
         }
+
+        Add-ShareSurferBrokenSidFinding -ShareId $ace.ShareId -ItemId $ace.ItemId -FullPath $ace.FullPath -Identity $ace.Identity -Source 'Folder/file ACL'
+    }
+
+    foreach ($sharePermission in @(ConvertTo-ShareSurferArray $SharePermissions)) {
+        Add-ShareSurferBrokenSidFinding -ShareId $sharePermission.ShareId -Identity $sharePermission.Identity -Source 'Share-level permission'
     }
 
     foreach ($share in @(ConvertTo-ShareSurferArray $Shares)) {
