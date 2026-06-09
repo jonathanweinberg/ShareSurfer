@@ -2896,6 +2896,11 @@ $tests = @(
             Assert-True ($readmeText -like '*Dashboard host:*') 'README should explain the dashboard host role.'
             Assert-True ($readmeText -like '*docs/nonpermissive-collection-dashboard-workflow.md*') 'README should link the nonpermissive collection workflow.'
             Assert-True ($readmeText -like '*docs/visuals/dataset-transfer-dashboard-workflow.svg*') 'README should show the dataset transfer dashboard visual.'
+            Assert-True ($readmeText -like '*Quick Start in a Nonpermissive Environment*') 'README should include nonpermissive quickstart setup instructions.'
+            Assert-True ($readmeText -like '*$shareSurferRoot*') 'README nonpermissive quickstart should show where the copied ShareSurfer folder is staged.'
+            Assert-True ($readmeText -like '*Compress-Archive*') 'README nonpermissive quickstart should show how to package the validated export folder.'
+            Assert-True ($readmeText -like '*Get-FileHash -Algorithm SHA256*') 'README nonpermissive quickstart should show how to hash the handoff package.'
+            Assert-True ($readmeText -like '*approved transfer process*') 'README nonpermissive quickstart should explain the approved transfer process.'
 
             Assert-True (Test-Path -LiteralPath $acceptanceAudit) 'Documentation should include a V1 phase-1 acceptance audit.'
             $acceptanceAuditText = Get-Content -LiteralPath $acceptanceAudit -Raw
