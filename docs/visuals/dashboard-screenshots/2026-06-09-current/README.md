@@ -14,7 +14,7 @@ The screenshots use demo/export data only and do not contain customer evidence.
 - `groups-sidebar-collapsed.png` - full-width group review pane with the sidebar hidden.
 - `example-path-context.png` - path context drilldown from a permissioned group.
 - `selector-tables-filterable.png` - filterable Migration Discovery selector table.
-- `review-decisions.png` - local finding review decision controls with CSV export available.
+- `review-decisions.png` - local finding review decision controls with reviewer, note, and CSV export available.
 
 ## Usage
 
