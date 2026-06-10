@@ -88,6 +88,34 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("button", { name: /Show sidebar/i })).toHaveAttribute("aria-expanded", "false");
   });
 
+  test("table-heavy review panes use the full main viewport width", () => {
+    const view = renderWithDemoSnapshot();
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+
+    expect(screen.getByRole("table", { name: /What needs review first/i }).closest(".wide-scroll-pane")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    expect(screen.getByRole("table", { name: /Findings and conflicts/i }).closest(".wide-scroll-pane")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: /Migration/i }));
+    expect(screen.getByRole("table", { name: /Related data area clusters/i }).closest(".wide-scroll-pane")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Shares 1/i }));
+    expect(screen.getByRole("table", { name: /Shares Evidence/i }).closest(".evidence-workbench")).toHaveClass("wide-scroll-pane");
+
+    fireEvent.click(screen.getByRole("button", { name: /Back to migration cluster/i }));
+    fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
+    expect(screen.getByRole("table", { name: /Permissioned groups/i }).closest(".wide-scroll-pane")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: /Identity/i }));
+    expect(screen.getByRole("table", { name: /Manager chains/i }).closest(".wide-scroll-pane")).toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: /Diagnostics/i }));
+    expect(screen.getByRole("table", { name: /Collection errors/i }).closest(".wide-scroll-pane")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+    expect(view.container.querySelector(".raw-panel")).toHaveClass("wide-scroll-pane");
+  });
+
   test("overview review queue is filterable and still opens owner context", () => {
     renderWithDemoSnapshot();
 
