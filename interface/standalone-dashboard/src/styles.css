@@ -516,6 +516,21 @@ select {
   grid-row: 2 / span 2;
 }
 
+.wide-scroll-pane {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.wide-scroll-pane .table-shell,
+.wide-scroll-pane .table-scroll {
+  width: 100%;
+}
+
+.overview-grid > .insights-panel {
+  grid-column: 1 / -1;
+  grid-row: auto;
+}
+
 .section-title {
   display: flex;
   align-items: flex-start;

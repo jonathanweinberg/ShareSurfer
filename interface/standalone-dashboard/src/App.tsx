@@ -672,7 +672,7 @@ function ReturnTrailBar({ trail, onBack }: { trail: ReturnTrail; onBack: () => v
 
 function EvidenceWorkbench({ drill, onBack }: { drill: EvidenceDrill; onBack: () => void }) {
   return (
-    <section className="panel evidence-workbench">
+    <section className="panel evidence-workbench wide-scroll-pane">
       <div className="return-trail compact">
         <button type="button" onClick={onBack}>
           <ArrowLeft size={16} aria-hidden="true" />
@@ -1100,7 +1100,7 @@ function OverviewView({
         />
       </div>
 
-      <section className="panel queue-panel">
+      <section className="panel queue-panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.reviewRisk}>What Needs Review First</SectionTitle>
         <p className="panel-copy">
           Owner means the mapped business reviewer or data owner for this path. It is separate from the Windows/NTFS file owner field.
@@ -1137,7 +1137,7 @@ function OverviewView({
         </button>
       </aside>
 
-      <section className="panel workbench-panel">
+      <section className="panel workbench-panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.ownerMapping}>Owner Workbench</SectionTitle>
         {queue[0] ? (
           <div className="workbench-layout">
@@ -1175,7 +1175,7 @@ function OverviewView({
           <p className="empty-state">No owner review packets match the current filters.</p>
         )}
       </section>
-      <section className="panel workbench-panel">
+      <section className="panel workbench-panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.ownerMapping}>Ad-Hoc Owner Review Table</SectionTitle>
         <p className="panel-copy">Sort or filter this table when you need a quick owner, business-unit, risk, or signal count pivot.</p>
         <VirtualTable rows={queueTableRows} columns={["Owner", "Business Unit", "Risk", "Items", "Findings", "Conflicts", "Permissioned Groups", "Review Why"]} pageSize={12} title="Ad-Hoc owner review table" />
@@ -1251,7 +1251,7 @@ function FindingsView({
 
   return (
     <div className="split-view">
-      <section className="panel">
+      <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.fileFolderPermissions}>Findings & Conflicts</SectionTitle>
         <div className="review-progress" aria-label="Finding review progress">
           <div>
@@ -1438,7 +1438,7 @@ function MigrationView({
 
   return (
     <div className="split-view">
-      <section className="panel list-panel">
+      <section className="panel list-panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.relatedDataArea}>Related Data Area Clusters</SectionTitle>
         <VirtualTable
           rows={clusterRows}
@@ -1576,7 +1576,7 @@ function GroupsView({
 
   return (
     <div className="split-view">
-      <section className="panel list-panel">
+      <section className="panel list-panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.permissionedGroup}>Permissioned Groups</SectionTitle>
         <VirtualTable
           title="Permissioned groups"
@@ -1654,7 +1654,7 @@ function IdentityView({ dashboard }: { dashboard: DashboardModel }) {
 
   return (
     <div className="view-grid">
-      <section className="panel">
+      <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.potentialServiceAccount}>Potential Service Account Candidates</SectionTitle>
         <p className="panel-copy">These rows are review flags, not proof. Ask the data owner or directory team whether the account is automation or missing directory data.</p>
         <VirtualTable
@@ -1664,7 +1664,7 @@ function IdentityView({ dashboard }: { dashboard: DashboardModel }) {
           title="Potential service accounts"
         />
       </section>
-      <section className="panel">
+      <section className="panel wide-scroll-pane">
         <div className="panel-heading-row">
           <SectionTitle tooltip={tooltipRegistry.managerLevel3}>Manager & OBS Context</SectionTitle>
           <button type="button" className="clear-button" onClick={() => setShowOrgFields((current) => !current)}>
@@ -1685,7 +1685,7 @@ function IdentityView({ dashboard }: { dashboard: DashboardModel }) {
 function DiagnosticsView({ snapshot, dashboard }: { snapshot: NormalizedSnapshot; dashboard: DashboardModel }) {
   return (
     <div className="view-grid">
-      <section className="panel">
+      <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.scanConfidence}>Scan Health</SectionTitle>
         <dl className="stat-grid">
           <div>
@@ -1710,11 +1710,11 @@ function DiagnosticsView({ snapshot, dashboard }: { snapshot: NormalizedSnapshot
           </div>
         </dl>
       </section>
-      <section className="panel">
+      <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.collectionError}>Collection Errors</SectionTitle>
         <VirtualTable rows={dashboard.diagnosticSummary.collectionErrors} columns={["ErrorType", "ShareId", "FullPath", "Message"]} pageSize={10} title="Collection errors" />
       </section>
-      <section className="panel">
+      <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.partialData}>Partial Shares</SectionTitle>
         <VirtualTable rows={dashboard.diagnosticSummary.partialShares} columns={["ShareName", "UNCPath", "PartialReason"]} pageSize={10} title="Partial shares" />
       </section>
@@ -1753,7 +1753,7 @@ function RawEvidenceView({
   const detailRow = selectedRow ?? rows[0] ?? null;
 
   return (
-    <section className="panel raw-panel">
+    <section className="panel raw-panel wide-scroll-pane">
       <div className="raw-toolbar">
         <SectionTitle tooltip={tooltipRegistry.rawEvidence}>Raw Evidence Explorer</SectionTitle>
         <div className="raw-controls">
