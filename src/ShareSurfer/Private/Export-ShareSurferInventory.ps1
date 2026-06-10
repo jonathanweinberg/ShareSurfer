@@ -186,6 +186,9 @@ function Export-ShareSurferInventory {
         New-ShareSurferRecord -Columns $schema['scan_events.csv'] -InputObject $event
     }
     Export-ShareSurferJsonLines -Path (Join-Path $OutputPath 'scan_events.jsonl') -Rows $eventLogRows
+    $partialShares = @($shares | Where-Object {
+        $null -ne $_.PSObject.Properties['PartialData'] -and [string]$_.PartialData -eq 'True'
+    })
 
     [pscustomobject]@{
         OutputPath = $OutputPath
@@ -196,6 +199,7 @@ function Export-ShareSurferInventory {
         Findings = $findings.Count
         Conflicts = $conflicts.Count
         CollectionErrors = @($collectionErrors).Count
+        PartialShares = @($partialShares).Count
         DiscountedPrincipals = $discountedPrincipals.Count
         PermissionedGroups = $permissionedGroups.Count
         RelatedDataAreas = $relatedDataAreas.Count
