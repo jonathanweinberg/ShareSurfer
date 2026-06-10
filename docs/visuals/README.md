@@ -1,8 +1,8 @@
 # ShareSurfer Visual Assets
 
-This folder contains user-facing workflow visuals and current example screenshots of the offline HTML report.
+This folder contains user-facing workflow visuals, current example screenshots of the offline HTML report, and dated standalone dashboard screenshot sets.
 
-The report screenshots use synthetic CONTOSO-style demo data. They are meant to show first-time operators and management readers what the dashboard looks like before they run ShareSurfer. They are not live customer evidence or future-design mockups.
+The report and standalone dashboard screenshots use synthetic CONTOSO-style demo data. They are meant to show first-time operators and management readers what the dashboard looks like before they run ShareSurfer. They are not live customer evidence or future-design mockups.
 
 ## Workflow Illustrations
 
@@ -19,7 +19,7 @@ Use `nonpermissive-collector-workflow.svg` when explaining read-only collection 
 
 ## Report Screenshots
 
-The current report screenshots are:
+The current offline `report.html` screenshots are:
 
 - `report-dashboard-overview.png`
 - `report-dashboard-workbench.png`
@@ -42,7 +42,7 @@ If Playwright is not available, keep the existing screenshots and rerun the capt
 
 ## Preserved Dashboard Screenshot Sets
 
-Keep dated dashboard screenshot sets under `dashboard-screenshots/` when they are useful for documentation, release notes, or first-run walkthroughs. The current preserved set is:
+Keep dated standalone dashboard screenshot sets under `dashboard-screenshots/` when they are useful for documentation, release notes, or first-run walkthroughs. The current preserved set is:
 
 - `dashboard-screenshots/2026-06-09-current/` - standalone dashboard QA captures for overview, ad-hoc table filtering, findings filters, permissioned group review, path context, sidebar collapse, Migration Discovery selector filtering, and local review decisions.
 
