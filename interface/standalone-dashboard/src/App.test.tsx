@@ -344,6 +344,35 @@ describe("dashboard workbench interactions", () => {
     expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
   });
 
+  test("scoped search chips remove individual signals without duplicating search context", () => {
+    renderWithDemoSnapshot();
+
+    const search = screen.getByRole("searchbox", { name: /Search dashboard/i });
+    fireEvent.change(search, { target: { value: "owner:Finance path:Payroll broad access" } });
+
+    const activeContext = screen.getByText("Active Context").closest(".active-context");
+    expect(activeContext).not.toBeNull();
+    const context = within(activeContext as HTMLElement);
+
+    expect(context.getByRole("button", { name: /Remove owner search Finance/i })).toBeInTheDocument();
+    expect(context.getByRole("button", { name: /Remove path search Payroll/i })).toBeInTheDocument();
+    expect(context.getByText("Search: broad access")).toBeInTheDocument();
+    expect(context.queryByText("Search: owner:Finance path:Payroll broad access")).not.toBeInTheDocument();
+
+    fireEvent.click(context.getByRole("button", { name: /Remove owner search Finance/i }));
+
+    expect(search).toHaveValue("path:Payroll broad access");
+    expect(context.queryByRole("button", { name: /Remove owner search Finance/i })).not.toBeInTheDocument();
+    expect(context.getByRole("button", { name: /Remove path search Payroll/i })).toBeInTheDocument();
+    expect(context.getByText("Search: broad access")).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "owner:Finance path:Payroll" } });
+
+    expect(context.queryByText(/Search:/)).not.toBeInTheDocument();
+    expect(context.getByRole("button", { name: /Remove owner search Finance/i })).toBeInTheDocument();
+    expect(context.getByRole("button", { name: /Remove path search Payroll/i })).toBeInTheDocument();
+  });
+
   test("Broken/Missing SID toggle scopes migration and group views to related rows", () => {
     renderWithBrokenSidSnapshot();
 

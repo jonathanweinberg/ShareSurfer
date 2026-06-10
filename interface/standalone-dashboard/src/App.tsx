@@ -68,6 +68,7 @@ interface ScopedSearchToken {
   scope: SearchScope;
   value: string;
   normalizedValue: string;
+  rawTerm: string;
 }
 
 interface ParsedSearchQuery {
@@ -378,29 +379,66 @@ function buildReviewDecisionsDataUri(decisions: ReviewDecision[]): string {
   return `data:text/csv;charset=utf-8,${encodeURIComponent(buildReviewDecisionsCsv(decisions))}`;
 }
 
+function splitSearchTerms(query: string): string[] {
+  return query.match(/"[^"]+"|\S+/g) ?? [];
+}
+
+function parseScopedSearchTerm(term: string): ScopedSearchToken | null {
+  const normalizedTerm = term.replace(/^"|"$/g, "");
+  const scopedMatch = normalizedTerm.match(/^([a-z]+):(.+)$/i);
+  if (!scopedMatch) {
+    return null;
+  }
+
+  const scope = scopedMatch[1].toLowerCase() as SearchScope;
+  const value = scopedMatch[2].trim();
+  if (!(scope in searchScopeFields) || !value) {
+    return null;
+  }
+
+  return { scope, value, normalizedValue: value.toLowerCase(), rawTerm: term };
+}
+
 function parseSearchQuery(query: string): ParsedSearchQuery {
   const scoped: ScopedSearchToken[] = [];
   const freeText: string[] = [];
-  const terms = query.match(/"[^"]+"|\S+/g) ?? [];
+  const terms = splitSearchTerms(query);
 
   for (const term of terms) {
-    const normalizedTerm = term.replace(/^"|"$/g, "");
-    const scopedMatch = normalizedTerm.match(/^([a-z]+):(.+)$/i);
-    if (scopedMatch) {
-      const scope = scopedMatch[1].toLowerCase() as SearchScope;
-      const value = scopedMatch[2].trim();
-      if (scope in searchScopeFields && value) {
-        scoped.push({ scope, value, normalizedValue: value.toLowerCase() });
-        continue;
-      }
+    const scopedToken = parseScopedSearchTerm(term);
+    if (scopedToken) {
+      scoped.push(scopedToken);
+      continue;
     }
 
+    const normalizedTerm = term.replace(/^"|"$/g, "");
     if (normalizedTerm.trim()) {
       freeText.push(normalizedTerm.toLowerCase());
     }
   }
 
   return { scoped, freeText };
+}
+
+function getSearchFreeTextDisplay(query: string): string {
+  return splitSearchTerms(query)
+    .filter((term) => !parseScopedSearchTerm(term))
+    .map((term) => term.replace(/^"|"$/g, ""))
+    .join(" ");
+}
+
+function removeScopedSearchToken(query: string, targetIndex: number): string {
+  let scopedIndex = -1;
+  return splitSearchTerms(query)
+    .filter((term) => {
+      if (!parseScopedSearchTerm(term)) {
+        return true;
+      }
+
+      scopedIndex += 1;
+      return scopedIndex !== targetIndex;
+    })
+    .join(" ");
 }
 
 function objectText(row: Record<string, unknown>): string {
@@ -808,7 +846,9 @@ function FilterBar({
     startTransition(() => onFiltersChange({ ...filters, ...patch }));
   };
   const updateQuery = (value: string) => update({ query: value });
-  const scopedTokens = parseSearchQuery(filters.query).scoped;
+  const parsedSearch = parseSearchQuery(filters.query);
+  const scopedTokens = parsedSearch.scoped;
+  const freeTextSearch = getSearchFreeTextDisplay(filters.query);
 
   return (
     <section className="filter-bar" aria-label="Dashboard filters">
@@ -870,12 +910,19 @@ function FilterBar({
       <div className="active-context">
         <strong>Active Context</strong>
         <div className="filter-chips">
-          {scopedTokens.map((token) => (
-            <span key={`${token.scope}:${token.value}`} className="filter-chip search-signal">
-              {token.scope}: {token.value}
-            </span>
+          {scopedTokens.map((token, index) => (
+            <button
+              key={`${token.scope}:${token.value}:${index}`}
+              type="button"
+              className="filter-chip search-signal"
+              onClick={() => updateQuery(removeScopedSearchToken(filters.query, index))}
+              aria-label={`Remove ${token.scope} search ${token.value}`}
+            >
+              <span>{token.scope}: {token.value}</span>
+              <span aria-hidden="true">×</span>
+            </button>
           ))}
-          {chip("Search", filters.query, () => update({ query: "" }))}
+          {chip("Search", freeTextSearch, () => update({ query: scopedTokens.map((token) => token.rawTerm).join(" ") }))}
           {chip("Business Unit", filters.businessUnit, () => update({ businessUnit: "" }))}
           {chip("Owner", filters.owner, () => update({ owner: "" }))}
           {chip("Risk", filters.risk, () => update({ risk: "" }))}
