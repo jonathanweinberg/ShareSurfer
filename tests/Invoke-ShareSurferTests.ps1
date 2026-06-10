@@ -1176,6 +1176,32 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan prints operator completion summary unless quiet'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSummaryExport-' + [guid]::NewGuid().ToString('N'))
+            $quietOutputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSummaryQuietExport-' + [guid]::NewGuid().ToString('N'))
+
+            $captured = @(& {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+            } 6>&1)
+            $capturedText = ($captured | ForEach-Object { [string]$_ }) -join "`n"
+
+            Assert-True ($capturedText -like '*ShareSurfer Summary:*') 'Scan should print an operator summary when it completes.'
+            Assert-True ($capturedText -like '*Shares=*Items=*Findings=*Conflicts=*CollectionErrors=*PartialShares=*') 'Summary should include core collection and review counts.'
+            Assert-True ($capturedText -like ('*OutputPath={0}*' -f $outputPath)) 'Summary should include the export path.'
+            Assert-True ($capturedText -like ('*Next: Test-ShareSurferExport -ExportPath ''{0}''*' -f $outputPath)) 'Summary should show the next validation command.'
+
+            $quietCaptured = @(& {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $quietOutputPath -SkipIdentityEnrichment -Quiet | Out-Null
+            } 6>&1)
+            $quietText = ($quietCaptured | ForEach-Object { [string]$_ }) -join "`n"
+
+            Assert-True ($quietText -notlike '*ShareSurfer Summary:*') 'Quiet mode should suppress the operator completion summary.'
+            Assert-True ($quietText -notlike '*Next: Test-ShareSurferExport*') 'Quiet mode should suppress the next-command hint.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan flags unavailable item owner metadata without claiming no owner'
         Body = {
             Import-Module $moduleManifest -Force
