@@ -4,7 +4,9 @@ function Get-ShareSurferSmbRpcShareInfo {
         [string] $ComputerName,
 
         [Parameter(Mandatory = $true)]
-        [string] $ShareName
+        [string] $ShareName,
+
+        [switch] $PreferSecurityDescriptor
     )
 
     $provider = Get-Variable -Name 'ShareSurferSmbRpcShareInfoProvider' -Scope Global -ErrorAction SilentlyContinue
@@ -12,41 +14,7 @@ function Get-ShareSurferSmbRpcShareInfo {
         return & $provider.Value -ComputerName $ComputerName -ShareName $ShareName
     }
 
-    if (-not (Test-ShareSurferIsWindows)) {
-        return $null
-    }
-
-    if ($null -eq ('ShareSurfer.NetApi32' -as [type])) {
-        Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-namespace ShareSurfer
-{
-    public static class NetApi32
-    {
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        public struct SHARE_INFO_2
-        {
-            public string shi2_netname;
-            public UInt32 shi2_type;
-            public string shi2_remark;
-            public UInt32 shi2_permissions;
-            public UInt32 shi2_max_uses;
-            public UInt32 shi2_current_uses;
-            public string shi2_path;
-            public string shi2_passwd;
-        }
-
-        [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
-        public static extern int NetShareGetInfo(string servername, string netname, int level, out IntPtr bufptr);
-
-        [DllImport("Netapi32.dll")]
-        public static extern int NetApiBufferFree(IntPtr Buffer);
-    }
-}
-"@
-    }
+    Initialize-ShareSurferNativeWin32
 
     $serverName = $null
     if (Test-ShareSurferRemoteComputerName -ComputerName $ComputerName) {
@@ -54,24 +22,53 @@ namespace ShareSurfer
     }
 
     $buffer = [IntPtr]::Zero
-    $result = [ShareSurfer.NetApi32]::NetShareGetInfo($serverName, $ShareName, 2, [ref]$buffer)
+    $result = [ShareSurfer.NativeWin32Methods]::NetShareGetInfo($serverName, $ShareName, 502, [ref]$buffer)
+    try {
+        if ($result -eq 0 -and $buffer -ne [IntPtr]::Zero) {
+            $info502 = [System.Runtime.InteropServices.Marshal]::PtrToStructure($buffer, [type][ShareSurfer.NativeWin32Methods+SHARE_INFO_502])
+            $securityDescriptorBytes = @()
+            if ($info502.shi502_security_descriptor -ne [IntPtr]::Zero) {
+                $securityDescriptorBytes = [byte[]](ConvertTo-ShareSurferSecurityDescriptorBytes -SecurityDescriptor $info502.shi502_security_descriptor)
+            }
+
+            return [pscustomobject]@{
+                ShareName = [string]$info502.shi502_netname
+                Path = [string]$info502.shi502_path
+                Description = [string]$info502.shi502_remark
+                Source = 'SmbRpcNetShareGetInfo'
+                ResultCode = $result
+                Level = 502
+                SecurityDescriptorBytes = $securityDescriptorBytes
+            }
+        }
+    }
+    finally {
+        if ($buffer -ne [IntPtr]::Zero) {
+            [void][ShareSurfer.NativeWin32Methods]::NetApiBufferFree($buffer)
+            $buffer = [IntPtr]::Zero
+        }
+    }
+
+    $result = [ShareSurfer.NativeWin32Methods]::NetShareGetInfo($serverName, $ShareName, 2, [ref]$buffer)
     try {
         if ($result -ne 0 -or $buffer -eq [IntPtr]::Zero) {
             return $null
         }
 
-        $info = [System.Runtime.InteropServices.Marshal]::PtrToStructure($buffer, [type][ShareSurfer.NetApi32+SHARE_INFO_2])
+        $info2 = [System.Runtime.InteropServices.Marshal]::PtrToStructure($buffer, [type][ShareSurfer.NativeWin32Methods+SHARE_INFO_2])
         [pscustomobject]@{
-            ShareName = [string]$info.shi2_netname
-            Path = [string]$info.shi2_path
-            Description = [string]$info.shi2_remark
+            ShareName = [string]$info2.shi2_netname
+            Path = [string]$info2.shi2_path
+            Description = [string]$info2.shi2_remark
             Source = 'SmbRpcNetShareGetInfo'
             ResultCode = $result
+            Level = 2
+            SecurityDescriptorBytes = @()
         }
     }
     finally {
         if ($buffer -ne [IntPtr]::Zero) {
-            [void][ShareSurfer.NetApi32]::NetApiBufferFree($buffer)
+            [void][ShareSurfer.NativeWin32Methods]::NetApiBufferFree($buffer)
         }
     }
 }

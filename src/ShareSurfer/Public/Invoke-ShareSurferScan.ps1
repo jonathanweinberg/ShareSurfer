@@ -16,6 +16,10 @@ function Invoke-ShareSurferScan {
         [Parameter(Mandatory = $true)]
         [string] $OutputPath,
 
+        [Parameter(ParameterSetName = 'SmbShare')]
+        [ValidateSet('Auto', 'PowerShellCim', 'NativeSmbRpc')]
+        [string] $SmbCollectionProvider = 'Auto',
+
         [string] $ObsAttribute = 'extensionAttribute10',
         [int] $OperationalPathLengthThreshold = 256,
         [int] $AzurePathComponentLimit = 255,
@@ -42,15 +46,20 @@ function Invoke-ShareSurferScan {
     }
     else {
         if ($PSCmdlet.ParameterSetName -eq 'SmbShare') {
-            Write-ShareSurferStatus -Phase 'Collect' -Message ('Scanning {0} SMB share target(s) on {1}.' -f @($ShareName).Count, $ComputerName) -Quiet:$Quiet
-            $inventory = Get-ShareSurferSmbShareInventory -ComputerName $ComputerName -ShareName $ShareName -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Scanning {0} SMB share target(s) on {1} with {2} provider.' -f @($ShareName).Count, $ComputerName, $SmbCollectionProvider) -Quiet:$Quiet
+            $inventory = Get-ShareSurferSmbShareInventory -ComputerName $ComputerName -ShareName $ShareName -SmbCollectionProvider $SmbCollectionProvider -IncludeFiles:$IncludeFiles -Quiet:$Quiet
             $sourceMode = 'SmbShare'
+            $collectionProvider = $SmbCollectionProvider
         }
         else {
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Scanning {0} target path(s).' -f @($TargetPath).Count) -Quiet:$Quiet
             $inventory = Get-ShareSurferLocalInventory -TargetPath $TargetPath -IncludeFiles:$IncludeFiles -Quiet:$Quiet
             $sourceMode = 'TargetPath'
+            $collectionProvider = 'TargetPath'
         }
+    }
+    if ($PSCmdlet.ParameterSetName -eq 'InputObject') {
+        $collectionProvider = 'InputObject'
     }
 
     if ([string]::IsNullOrWhiteSpace($OwnerMappingPath)) {
@@ -62,7 +71,7 @@ function Invoke-ShareSurferScan {
     $inventory = Add-ShareSurferOwnerMappings -Inventory $inventory -OwnerMappingPath $OwnerMappingPath
 
     Write-ShareSurferStatus -Phase 'Export' -Message 'Normalizing findings, conflicts, identity context, and CSV output.' -Quiet:$Quiet
-    $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -SourceMode $sourceMode -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+    $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -SourceMode $sourceMode -CollectionProvider $collectionProvider -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Summary' -Message 'Scan complete.' -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Summary' -Message ('Shares={0}; Items={1}; Findings={2}; Conflicts={3}; CollectionErrors={4}; PartialShares={5}' -f $result.Shares, $result.Items, $result.Findings, $result.Conflicts, $result.CollectionErrors, $result.PartialShares) -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Summary' -Message ('OutputPath={0}' -f $OutputPath) -Quiet:$Quiet

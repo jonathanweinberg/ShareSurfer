@@ -1,0 +1,7 @@
+﻿"ShareId","Identity","Rights","AccessControlType","Source"
+"share-WINSERVER-SSEngineering","BUILTIN\Administrators","Full","Allow","Get-SmbShareAccess"
+"share-WINSERVER-SSEngineering","LAB\SS-Eng-Readers","Read","Allow","Get-SmbShareAccess"
+"share-WINSERVER-SSEnt0001","BUILTIN\Administrators","Full","Allow","Get-SmbShareAccess"
+"share-WINSERVER-SSEnt0001","LAB\SS-ENT-0001-Readers","Read","Allow","Get-SmbShareAccess"
+"share-WINSERVER-SSEnt0002","BUILTIN\Administrators","Full","Allow","Get-SmbShareAccess"
+"share-WINSERVER-SSEnt0002","LAB\SS-ENT-0002-Readers","Read","Allow","Get-SmbShareAccess"

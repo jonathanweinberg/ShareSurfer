@@ -136,6 +136,7 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'scan_
     'ExportVersion',
     'ObsAttribute',
     'SourceMode',
+    'CollectionProvider',
     'OperationalPathLengthThreshold',
     'AzurePathComponentLimit',
     'AzureFullPathLimit',

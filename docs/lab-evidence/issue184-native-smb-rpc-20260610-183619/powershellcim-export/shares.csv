@@ -1,0 +1,4 @@
+﻿"ShareId","Source","ComputerName","ShareName","UNCPath","LocalPath","Description","PartialData","PartialReason"
+"share-WINSERVER-SSEngineering","Get-SmbShare","WINSERVER","SSEngineering","\\WINSERVER\SSEngineering","C:\ShareSurferEnterpriseLab\Engineering","Engineering lab share with normal inherited permissions","False",""
+"share-WINSERVER-SSEnt0001","Get-SmbShare","WINSERVER","SSEnt0001","\\WINSERVER\SSEnt0001","C:\ShareSurferEnterpriseLab\Enterprise\Share0001","Enterprise-scale complex share 0001","False",""
+"share-WINSERVER-SSEnt0002","Get-SmbShare","WINSERVER","SSEnt0002","\\WINSERVER\SSEnt0002","C:\ShareSurferEnterpriseLab\Enterprise\Share0002","Enterprise-scale complex share 0002","False",""

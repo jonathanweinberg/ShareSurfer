@@ -5,6 +5,11 @@ function Get-ShareSurferLocalInventory {
 
         [switch] $IncludeFiles,
 
+        [ValidateSet('PowerShellGetAcl', 'NativeWin32Security')]
+        [string] $AclProvider = 'PowerShellGetAcl',
+
+        [switch] $SkipSharePermissionCollection,
+
         [switch] $Quiet
     )
 
@@ -15,7 +20,10 @@ function Get-ShareSurferLocalInventory {
     $scanErrors = New-Object System.Collections.ArrayList
     $scanEvents = New-Object System.Collections.ArrayList
 
-    $getAcl = Get-Command Get-Acl -ErrorAction SilentlyContinue
+    $getAcl = $null
+    if ($AclProvider -eq 'PowerShellGetAcl') {
+        $getAcl = Get-Command Get-Acl -ErrorAction SilentlyContinue
+    }
     $index = 0
     foreach ($target in $TargetPath) {
         $index++
@@ -48,12 +56,15 @@ function Get-ShareSurferLocalInventory {
         $targetDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)
         $shareInfo = Get-ShareSurferTargetShareInfo -TargetPath $target -TargetItem $targetItem
         [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetDisplayPath))
-        Write-ShareSurferStatus -Phase 'Collect' -Message ('Collecting share-level permission evidence for {0}.' -f $targetDisplayPath) -Quiet:$Quiet
-        $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
-        foreach ($permissionRow in $permissionRows) {
-            [void]$sharePermissions.Add($permissionRow)
+        $permissionRows = @()
+        if (-not $SkipSharePermissionCollection) {
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Collecting share-level permission evidence for {0}.' -f $targetDisplayPath) -Quiet:$Quiet
+            $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
+            foreach ($permissionRow in $permissionRows) {
+                [void]$sharePermissions.Add($permissionRow)
+            }
         }
-        if ($permissionRows.Count -eq 0) {
+        if (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0) {
             $permissionMessage = 'Share-level permissions were not collected through Get-SmbShareAccess.'
             [void]$scanErrors.Add([pscustomobject]@{
                 ShareId = $shareId
@@ -70,14 +81,14 @@ function Get-ShareSurferLocalInventory {
 
         [void]$shares.Add([pscustomobject]@{
             ShareId = $shareId
-            Source = if ($permissionRows.Count -gt 0) { 'Get-SmbShareAccess' } else { 'BestEffort' }
+            Source = if ($SkipSharePermissionCollection) { 'TargetPath' } elseif ($permissionRows.Count -gt 0) { 'Get-SmbShareAccess' } else { 'BestEffort' }
             ComputerName = $shareInfo.ComputerName
             ShareName = $shareInfo.ShareName
             UNCPath = $shareInfo.UNCPath
             LocalPath = $targetDisplayPath
             Description = 'Best-effort target path scan'
-            PartialData = ($permissionRows.Count -eq 0)
-            PartialReason = if ($permissionRows.Count -eq 0) { 'Share-level permissions were not collected through Get-SmbShareAccess.' } else { '' }
+            PartialData = (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0)
+            PartialReason = if (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0) { 'Share-level permissions were not collected through Get-SmbShareAccess.' } else { '' }
         })
 
         $scanItems = @($targetItem)
@@ -121,7 +132,35 @@ function Get-ShareSurferLocalInventory {
             $inheritanceEnabled = $true
             $inheritanceBrokenAt = ''
 
-            if ($null -ne $getAcl) {
+            if ($AclProvider -eq 'NativeWin32Security') {
+                try {
+                    $nativeSecurity = Get-ShareSurferNativeSecurityInfo -Path ([string]$scanItem.FullName) -ShareId $shareId -ItemId $itemId -FullPath $scanItemDisplayPath -Depth $depth
+                    $owner = [string]$nativeSecurity.Owner
+                    $inheritanceEnabled = [bool]$nativeSecurity.InheritanceEnabled
+                    if (-not $inheritanceEnabled) {
+                        $inheritanceBrokenAt = [string]$nativeSecurity.InheritanceBrokenAt
+                        if ($inheritanceBrokenAt -eq '') {
+                            $inheritanceBrokenAt = $scanItemDisplayPath
+                        }
+                    }
+                    foreach ($access in @(ConvertTo-ShareSurferArray $nativeSecurity.AclEntries)) {
+                        [void]$aclEntries.Add($access)
+                    }
+                }
+                catch {
+                    [void]$scanErrors.Add([pscustomobject]@{
+                        ShareId = $shareId
+                        FullPath = $scanItemDisplayPath
+                        ErrorType = 'AclReadError'
+                        Severity = 'Warning'
+                        Source = 'NativeWin32Security'
+                        Message = [string]$_.Exception.Message
+                        Detail = 'GetNamedSecurityInfoW owner/DACL read failed.'
+                    })
+                    $inheritanceEnabled = $true
+                }
+            }
+            elseif ($null -ne $getAcl) {
                 try {
                     $acl = Get-Acl -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path ([string]$scanItem.FullName)) -ErrorAction Stop
                     $owner = $acl.Owner

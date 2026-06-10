@@ -739,7 +739,7 @@ function New-ShareSurferSupportBundleDiagnostics {
     }
 
     $scanSettings = [ordered]@{}
-    foreach ($column in @('ExportVersion', 'ObsAttribute', 'SourceMode', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode')) {
+    foreach ($column in @('ExportVersion', 'ObsAttribute', 'SourceMode', 'CollectionProvider', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode')) {
         if ($null -ne $manifest -and $null -ne $manifest.PSObject.Properties[$column]) {
             $scanSettings[$column] = [string]$manifest.$column
         }
@@ -1221,6 +1221,7 @@ function Test-ShareSurferRedactionAuditValue {
         'PolicyValue',
         'ExportVersion',
         'SourceMode',
+        'CollectionProvider',
         'OperationalPathLengthThreshold',
         'AzurePathComponentLimit',
         'AzureFullPathLimit',

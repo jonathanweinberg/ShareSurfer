@@ -35,7 +35,7 @@ function New-ShareSurferStandaloneSchema {
         'findings.csv' = @('FindingId', 'FindingType', 'Severity', 'ShareId', 'ItemId', 'FullPath', 'Identity', 'ObservedValue', 'PolicyValue', 'Message')
         'collection_errors.csv' = @('ErrorId', 'ShareId', 'ItemId', 'FullPath', 'ErrorType', 'Severity', 'Source', 'Message', 'Detail')
         'scan_events.csv' = @('EventId', 'Timestamp', 'Level', 'EventType', 'Source', 'ShareId', 'ItemId', 'Message', 'Detail')
-        'scan_manifest.csv' = @('ScanId', 'GeneratedAt', 'ExportVersion', 'ObsAttribute', 'SourceMode', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'ManagerIdentityFormat', 'IncludeFiles')
+        'scan_manifest.csv' = @('ScanId', 'GeneratedAt', 'ExportVersion', 'ObsAttribute', 'SourceMode', 'CollectionProvider', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'ManagerIdentityFormat', 'IncludeFiles')
     }
 }
 

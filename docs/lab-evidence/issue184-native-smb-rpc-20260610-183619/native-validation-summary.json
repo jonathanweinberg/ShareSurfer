@@ -1,0 +1,95 @@
+﻿{
+    "ArtifactType":  "ShareSurferIssue184NativeSmbRpcValidation",
+    "GeneratedAt":  "2026-06-10T18:36:28.5262198-07:00",
+    "RepoPath":  "C:\\ShareSurferRepoIssue184-7fdc605",
+    "Commit":  "7fdc605340a45fee98134849e40c9558c2bc6415",
+    "ComputerName":  "WINSERVER",
+    "User":  "LAB\\Administrator",
+    "Domain":  "lab.contoso.com",
+    "ShareNames":  [
+                       "SSEngineering",
+                       "SSEnt0001",
+                       "SSEnt0002"
+                   ],
+    "RunRoot":  "C:\\ShareSurfer\\native-validation\\issue184-native-20260610-183619",
+    "NativeExport":  "C:\\ShareSurfer\\native-validation\\issue184-native-20260610-183619\\native-export",
+    "PowerShellCimExport":  "C:\\ShareSurfer\\native-validation\\issue184-native-20260610-183619\\powershellcim-export",
+    "NativeReport":  "C:\\ShareSurfer\\native-validation\\issue184-native-20260610-183619\\native-report.html",
+    "NativeCounts":  {
+                         "Shares":  3,
+                         "Items":  61,
+                         "SharePermissions":  6,
+                         "AclEntries":  427,
+                         "CollectionErrors":  0,
+                         "Events":  12
+                     },
+    "PowerShellCimCounts":  {
+                                "Shares":  3,
+                                "Items":  61,
+                                "SharePermissions":  6,
+                                "AclEntries":  427
+                            },
+    "Checks":  [
+                   {
+                       "Name":  "NativeExportValid",
+                       "Passed":  true,
+                       "Detail":  "SchemaErrors=0"
+                   },
+                   {
+                       "Name":  "PowerShellCimComparisonExportValid",
+                       "Passed":  true,
+                       "Detail":  "SchemaErrors=0"
+                   },
+                   {
+                       "Name":  "NativeCollectionProviderManifest",
+                       "Passed":  true,
+                       "Detail":  "CollectionProvider=NativeSmbRpc"
+                   },
+                   {
+                       "Name":  "NativeProviderEvent",
+                       "Passed":  true,
+                       "Detail":  "ProviderEvents=1"
+                   },
+                   {
+                       "Name":  "NoRemoteCimEvent",
+                       "Passed":  true,
+                       "Detail":  "RemoteCimSessionCreatedEvents=0"
+                   },
+                   {
+                       "Name":  "NativeShareRows",
+                       "Passed":  true,
+                       "Detail":  "NativeShares=3; Sources=NativeSmbRpc"
+                   },
+                   {
+                       "Name":  "NativeSharePermissions",
+                       "Passed":  true,
+                       "Detail":  "NativeSharePermissions=6; Sources=NativeSmbRpc"
+                   },
+                   {
+                       "Name":  "NativeItems",
+                       "Passed":  true,
+                       "Detail":  "NativeItems=61"
+                   },
+                   {
+                       "Name":  "NativeOwnedItems",
+                       "Passed":  true,
+                       "Detail":  "NativeOwnedItems=61"
+                   },
+                   {
+                       "Name":  "NativeAclEntries",
+                       "Passed":  true,
+                       "Detail":  "NativeAclEntries=427; WithIdentity=427"
+                   },
+                   {
+                       "Name":  "NativeReportGenerated",
+                       "Passed":  true,
+                       "Detail":  "C:\\ShareSurfer\\native-validation\\issue184-native-20260610-183619\\native-report.html"
+                   },
+                   {
+                       "Name":  "ComparisonHasRows",
+                       "Passed":  true,
+                       "Detail":  "CimShares=3; CimItems=61; CimSharePermissions=6; CimAclEntries=427; CimProvider=PowerShellCim"
+                   }
+               ],
+    "IsValid":  true
+}
