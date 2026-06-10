@@ -63,7 +63,7 @@ Current pre-release quickstart package: [v0.1.0-pre.2](https://github.com/jonath
 
 On Windows, release users do not need Node, npm, Vite, a preview server, or internet access to package and open the standalone dashboard. Use Windows PowerShell 5.1 (`powershell.exe`) for the collector and dashboard packager unless your workstation already has PowerShell 7 (`pwsh`).
 
-`Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. Add `-Quiet` only for automation where console progress is not wanted.
+`Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. At the end, look for the `ShareSurfer Summary` lines. They show the scan counts, output path, any partial-data or collection-gap warning, and the next `Test-ShareSurferExport` command. Add `-Quiet` only for automation where console progress is not wanted.
 
 ```powershell
 Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
@@ -175,6 +175,8 @@ pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
 ```
 
 Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The package uses relative assets and `sharesurfer-data.js`, so it can be copied, zipped, or opened directly from disk.
+
+On the dashboard Overview tab, use **Key Terms** for plain-English definitions of Owner, No owner, Broken/Missing SID, Collection error, Partial data, Discounted access principal, and Critical scan information block.
 
 Current standalone dashboard examples are preserved under [docs/visuals/dashboard-screenshots/2026-06-09-current](docs/visuals/dashboard-screenshots/2026-06-09-current/README.md). Use that dated set when you want to show the richer standalone dashboard views, including ad-hoc table filtering, sidebar collapse, path context, Migration Discovery selector filtering, Permissioned Group Review, and local review decisions.
 
