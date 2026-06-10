@@ -57,17 +57,17 @@ $PSVersionTable.PSVersion
 
 The major version should be `5`.
 
-If you are using the `v0.1.0-pre.3` release ZIP, extract it to `C:\ShareSurfer\`. The extracted release root should be:
+If you are using the `v0.1.0-pre.4` release ZIP, extract it to `C:\ShareSurfer\`. The extracted release root should be:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.3\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.4\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.3`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.4`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.3.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.3'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.4.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.4'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
@@ -390,12 +390,12 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.3 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.3) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
+The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.4 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.4) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
 If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.3'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.4'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `
