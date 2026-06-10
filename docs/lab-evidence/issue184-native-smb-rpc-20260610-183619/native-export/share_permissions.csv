@@ -1,0 +1,7 @@
+﻿"ShareId","Identity","Rights","AccessControlType","Source"
+"share-WINSERVER-SSEngineering","BUILTIN\Administrators","Full","Allow","NativeSmbRpc"
+"share-WINSERVER-SSEngineering","LAB\SS-Eng-Readers","Change","Allow","NativeSmbRpc"
+"share-WINSERVER-SSEnt0001","BUILTIN\Administrators","Full","Allow","NativeSmbRpc"
+"share-WINSERVER-SSEnt0001","LAB\SS-ENT-0001-Readers","Change","Allow","NativeSmbRpc"
+"share-WINSERVER-SSEnt0002","BUILTIN\Administrators","Full","Allow","NativeSmbRpc"
+"share-WINSERVER-SSEnt0002","LAB\SS-ENT-0002-Readers","Change","Allow","NativeSmbRpc"
