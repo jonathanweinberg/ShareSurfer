@@ -61,6 +61,18 @@ describe("ShareSurfer dashboard data model", () => {
         ObservedValue: "S-1-5-21-1000-2000-3000-4040",
         PolicyValue: "Resolvable identity",
         Message: "ACL identity is an unresolved SID."
+      },
+      {
+        FindingId: "finding-owner-metadata",
+        FindingType: "OwnerMetadataUnavailable",
+        Severity: "Warning",
+        ShareId: "share-finance",
+        ItemId: "item-budget",
+        FullPath: "\\\\files01\\Finance\\OwnerUnknown\\budget.xlsx",
+        Identity: "",
+        ObservedValue: "blank",
+        PolicyValue: "Usable NTFS owner value",
+        Message: "ShareSurfer could not collect a usable NTFS owner value for this file."
       }
     ];
     snapshot.datasets.collection_errors = [
@@ -81,6 +93,10 @@ describe("ShareSurfer dashboard data model", () => {
     const dashboard = deriveDashboard(normalizeSnapshot(snapshot));
 
     expect(dashboard.issueSummaries.map((issue) => issue.category)).toContain("Broken/Missing SID");
+    expect(dashboard.issueSummaries.map((issue) => issue.category)).toContain("Owner Metadata Unavailable");
+    expect(dashboard.issueSummaries.find((issue) => issue.category === "Owner Metadata Unavailable")?.title).toBe(
+      "NTFS owner metadata was unavailable"
+    );
     expect(dashboard.criticalScanBlocks).toHaveLength(2);
     expect(dashboard.criticalScanBlocks.map((block) => block.ErrorType)).toContain("AclReadError");
     expect(dashboard.criticalScanBlocks.map((block) => block.ErrorType)).toContain("SharePermissionCollectionUnavailable");

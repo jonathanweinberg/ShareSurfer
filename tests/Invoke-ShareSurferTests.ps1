@@ -1176,6 +1176,35 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan flags unavailable item owner metadata without claiming no owner'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMetadataExport-' + [guid]::NewGuid().ToString('N'))
+            $inventory = New-TestInventory
+            $inventory.Items += [pscustomobject]@{
+                ItemId = 'item-owner-unavailable'
+                ShareId = 'share-finance'
+                ItemType = 'File'
+                FullPath = '\\files01\Finance\OwnerUnknown\budget.xlsx'
+                RelativePath = 'OwnerUnknown\budget.xlsx'
+                Depth = 2
+                Owner = ''
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            }
+
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
+            $ownerFindings = @($findings | Where-Object { $_.FindingType -eq 'OwnerMetadataUnavailable' })
+
+            Assert-Equal $ownerFindings.Count 1 'Blank item owner metadata should produce one explicit finding.'
+            Assert-Equal $ownerFindings[0].ItemId 'item-owner-unavailable' 'Owner metadata finding should point at the item whose owner metadata was unavailable.'
+            Assert-True ($ownerFindings[0].Message -like '*could not collect a usable NTFS owner value*') 'Owner metadata finding should explain that collection did not receive a usable owner value.'
+            Assert-True ($ownerFindings[0].Message -notlike '*has no owner*') 'Owner metadata finding should not claim the Windows object has no owner.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan keeps discounted broad access visible without migration relatedness inflation'
         Body = {
             Import-Module $moduleManifest -Force
@@ -3268,6 +3297,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*owner_review_packets.csv*') 'First-run guide should explain owner review packet exports.'
             Assert-True ($firstRunText -like '*What Needs Review First*') 'First-run guide should point users to the owner review queue.'
             Assert-True ($firstRunText -like '*Access Model*') 'First-run guide should point users to the access model view.'
+            Assert-True ($firstRunText -like '*OwnerMetadataUnavailable*') 'First-run guide should explain owner metadata unavailable findings.'
+            Assert-True ($firstRunText -like '*does not automatically mean the file has no real Windows owner*') 'First-run guide should avoid implying blank owner metadata means no Windows owner exists.'
             Assert-True ($firstRunText -like '*choose an attribute that exists on both users and groups*') 'First-run guide should explain OBS attribute schema fallback.'
             Assert-True ($firstRunText -like '*Move the Dataset to a Dashboard Host*') 'First-run guide should explain the two-host dashboard workflow.'
             Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.svg*') 'First-run guide should show the nonpermissive collector workflow visual.'
@@ -3321,6 +3352,7 @@ $tests = @(
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
+                Get-Content -LiteralPath (Join-Path $repoRoot 'docs/export-schema.md') -Raw
                 Get-Content -LiteralPath $visualDoc -Raw
                 Get-Content -LiteralPath $visualReadme -Raw
                 Get-Content -LiteralPath $firstRunGuide -Raw
@@ -3334,6 +3366,7 @@ $tests = @(
             Assert-True ($publicText -like '*Test-ShareSurferV1Acceptance.ps1*') 'Operator documentation should include the final V1 acceptance checker.'
             Assert-True ($publicText -like '*ScanExport:owner_review_packets.csv*') 'Operator documentation should call out owner review packet live evidence.'
             Assert-True ($publicText -like '*What Needs Review First*') 'Operator documentation should tell users to start with the owner review queue.'
+            Assert-True ($publicText -like '*OwnerMetadataUnavailable*') 'Operator documentation should document owner metadata unavailable findings.'
             Assert-True ($publicText -like '*share gate*') 'Operator documentation should explain the share gate access model.'
             Assert-True ($publicText -like '*Raw Evidence Tables*') 'Operator documentation should mention the report raw evidence view.'
             $oldLabToolPattern = 'pr' + 'lctl'

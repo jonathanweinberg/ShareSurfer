@@ -293,6 +293,8 @@ function categoryForFinding(type: string): string {
       return "Service Account Review";
     case "BrokenOrMissingSid":
       return "Broken/Missing SID";
+    case "OwnerMetadataUnavailable":
+      return "Owner Metadata Unavailable";
     default:
       return type || "Finding";
   }
@@ -317,6 +319,9 @@ function issueTitle(row: DataRow, source: "finding" | "conflict"): string {
   if (category === "Broken/Missing SID") {
     return "Permission references an unresolved SID";
   }
+  if (category === "Owner Metadata Unavailable") {
+    return "NTFS owner metadata was unavailable";
+  }
   return category;
 }
 
@@ -336,6 +341,8 @@ function issueNextAction(category: string): string {
       return "Ask the owner or directory team to confirm whether this account is automation or incomplete directory data.";
     case "Broken/Missing SID":
       return "Ask the directory or file-share team to confirm whether the SID is a deleted account, broken trust reference, or lookup gap.";
+    case "Owner Metadata Unavailable":
+      return "Check Diagnostics and raw item evidence, then rerun with sufficient privileges or confirm the owner through Windows/file-share tooling.";
     default:
       return "Review the raw evidence and decide whether owner follow-up is needed.";
   }
@@ -351,6 +358,8 @@ function issueWhyItMatters(category: string): string {
       return "Approvals based on incomplete evidence can miss access or migration blockers.";
     case "Broken/Missing SID":
       return "Unresolved SIDs make access hard to explain and can block clean owner review or migration planning.";
+    case "Owner Metadata Unavailable":
+      return "Blank owner metadata makes ownership review and migration routing harder; it usually means collection could not read or resolve the owner value.";
     default:
       return "This signal may affect ownership, access review, or migration readiness.";
   }
