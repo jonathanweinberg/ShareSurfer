@@ -1054,6 +1054,41 @@ select {
   color: var(--blue);
 }
 
+.employee-prefix-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.pivot-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.pivot-heading h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.pivot-heading label {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pivot-heading input {
+  min-height: 32px;
+  padding: 6px 8px;
+}
+
 .panel-heading-row {
   display: flex;
   justify-content: space-between;
@@ -1212,6 +1247,92 @@ select {
   width: 100%;
   min-height: 30px;
   padding: 5px 8px;
+}
+
+.compact-action {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.table-tools {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+
+.table-tool-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 9px;
+  min-width: min(360px, 100%);
+}
+
+.table-tool-panel summary {
+  cursor: pointer;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.table-tool-panel select {
+  width: 100%;
+  min-height: 132px;
+  margin-top: 8px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fbfdff;
+}
+
+.tool-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.field-filter-panel {
+  flex: 1 1 560px;
+}
+
+.field-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.field-filter-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.field-filter-grid input {
+  min-height: 30px;
+  padding: 5px 8px;
+}
+
+.active-field-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.active-field-filters span {
+  border: 1px solid #b8cdfa;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .critical-blocks .pager {

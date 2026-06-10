@@ -68,6 +68,24 @@ function renderWithBrokenSidSnapshot() {
   return render(<App />);
 }
 
+function renderWithEmployeePrefixSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(demoSnapshot)) as typeof demoSnapshot;
+  snapshot.datasets?.findings?.push({
+    FindingId: "finding-employee-prefix",
+    FindingType: "DeepExplicitAce",
+    Severity: "High",
+    ShareId: "share-finance",
+    ItemId: "item-payroll",
+    FullPath: "\\\\files01\\Finance\\Payroll",
+    Identity: "CONTOSO\\Ava.Accounting",
+    ObservedValue: "3",
+    PolicyValue: "2",
+    Message: "Explicit permissions were introduced deeper than the configured review threshold."
+  });
+  window.__SHARESURFER_SNAPSHOT__ = snapshot;
+  return render(<App />);
+}
+
 function ensureLocalStorage() {
   if (window.localStorage) {
     return;
@@ -418,6 +436,45 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("heading", { name: /Selected row details/i })).toBeInTheDocument();
     expect(screen.getByText("ReviewPacketId")).toBeInTheDocument();
     expect(screen.getByText("owner-review-finance")).toBeInTheDocument();
+  });
+
+  test("raw evidence combines field filters and exports the shown csv", () => {
+    renderWithDemoSnapshot();
+
+    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+    fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "share_permissions" } });
+    fireEvent.change(screen.getByLabelText(/Filter Share-level access by Share Id/i), { target: { value: "share-finance" } });
+    fireEvent.change(screen.getByLabelText(/Filter Share-level access by Identity/i), { target: { value: "FinanceReaders" } });
+
+    const table = screen.getByRole("table", { name: /Share-level access/i });
+    expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+    expect(within(table).queryByText("Everyone")).not.toBeInTheDocument();
+
+    const exportLink = screen.getByRole("link", { name: /Export shown CSV/i });
+    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
+    expect(exportLink).toHaveAttribute("download", "sharesurfer-share_permissions-shown.csv");
+    expect(href).toContain("CONTOSO\\FinanceReaders");
+    expect(href).not.toContain("Everyone");
+  });
+
+  test("findings can be grouped and exported by employee identifier prefix", () => {
+    renderWithEmployeePrefixSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.change(screen.getByLabelText(/Employee ID or EmployeeNumber prefix/i), { target: { value: "1001" } });
+
+    const table = screen.getByRole("table", { name: /Employee ID number prefix pivot/i });
+    expect(within(table).getAllByText("1001").length).toBeGreaterThan(0);
+    expect(within(table).getByText("CONTOSO\\Ava.Accounting")).toBeInTheDocument();
+
+    const exportLinks = screen.getAllByRole("link", { name: /Export shown CSV/i });
+    const pivotExport = exportLinks.find((link) => link.getAttribute("download") === "employee-prefix-findings-pivot.csv");
+    expect(pivotExport).toBeDefined();
+    const href = decodeURIComponent(pivotExport?.getAttribute("href") ?? "");
+    expect(href).toContain("EmployeePrefix,MatchPrefix,IdentifierField");
+    expect(href).toContain("1001");
+    expect(href).toContain("finding-employee-prefix");
   });
 
   test("scoped search chips explain which signal is filtering raw evidence", () => {

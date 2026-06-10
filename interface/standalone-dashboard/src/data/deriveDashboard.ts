@@ -62,6 +62,9 @@ export interface IssueSummary {
   businessUnit: string;
   path: string;
   identity: string;
+  employeeIdentifier: string;
+  employeeIdentifierField: string;
+  employeePrefix: string;
   whatHappened: string;
   whyItMatters: string;
   nextAction: string;
@@ -409,6 +412,37 @@ function buildOwnerLookup(reviewPackets: ReviewQueueRow[]): Map<string, ReviewQu
   return lookup;
 }
 
+function buildIdentityLookup(rows: DataRow[]): Map<string, DataRow> {
+  const lookup = new Map<string, DataRow>();
+  for (const row of rows) {
+    for (const key of [row.Identity, row.SamAccountName, row.DisplayName, row.UserPrincipalName, row.Mail]) {
+      const normalized = key.trim().toLowerCase();
+      if (normalized && !lookup.has(normalized)) {
+        lookup.set(normalized, row);
+      }
+    }
+  }
+  return lookup;
+}
+
+function getEmployeeSignal(row: DataRow, identityLookup: Map<string, DataRow>): Pick<IssueSummary, "employeeIdentifier" | "employeeIdentifierField" | "employeePrefix"> {
+  const identity = (row.Identity || row.Principal || row.Subject || "").trim();
+  const identityRow = identityLookup.get(identity.toLowerCase());
+  const candidates: Array<[string, string]> = [
+    ["EmployeeNumber", row.EmployeeNumber],
+    ["EmployeeId", row.EmployeeId],
+    ["EmployeeNumber", identityRow?.EmployeeNumber ?? ""],
+    ["EmployeeId", identityRow?.EmployeeId ?? ""]
+  ];
+  const [field, identifier] = candidates.find(([, value]) => String(value ?? "").trim() !== "") ?? ["", ""];
+  const digitRun = identifier.match(/\d+/)?.[0] ?? "";
+  return {
+    employeeIdentifier: identifier,
+    employeeIdentifierField: field,
+    employeePrefix: digitRun
+  };
+}
+
 function buildReviewQueue(rows: DataRow[]): ReviewQueueRow[] {
   const aggregates = new Map<
     string,
@@ -481,10 +515,12 @@ function buildReviewQueue(rows: DataRow[]): ReviewQueueRow[] {
 
 function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, ReviewQueueRow>): IssueSummary[] {
   const issues: IssueSummary[] = [];
+  const identityLookup = buildIdentityLookup(snapshot.datasets.identities);
 
   for (const row of snapshot.datasets.findings) {
     const category = categoryForFinding(row.FindingType);
     const owner = ownerLookup.get((row.Owner || "").toLowerCase());
+    const employeeSignal = getEmployeeSignal(row, identityLookup);
     issues.push({
       id: row.FindingId || `finding-${issues.length}`,
       source: "finding",
@@ -495,6 +531,7 @@ function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, Revi
       businessUnit: owner?.businessUnit ?? row.BusinessUnit ?? "",
       path: row.FullPath || row.ObservedValue || "",
       identity: row.Identity || "",
+      ...employeeSignal,
       whatHappened: row.Message || `${category} was observed in the export.`,
       whyItMatters: issueWhyItMatters(category),
       nextAction: issueNextAction(category),
@@ -504,6 +541,7 @@ function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, Revi
 
   for (const row of snapshot.datasets.conflicts) {
     const category = categoryForConflict(row.ConflictType);
+    const employeeSignal = getEmployeeSignal(row, identityLookup);
     issues.push({
       id: row.ConflictId || `conflict-${issues.length}`,
       source: "conflict",
@@ -514,6 +552,7 @@ function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, Revi
       businessUnit: "",
       path: row.FullPath || row.ItemId || row.ShareId || "",
       identity: row.Identity || "",
+      ...employeeSignal,
       whatHappened: row.Message || "Share-level and folder/file permissions do not line up.",
       whyItMatters: issueWhyItMatters(category),
       nextAction: issueNextAction(category),
