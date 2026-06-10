@@ -18,9 +18,11 @@ test("standalone dashboard opens from file URL and exercises core views without 
   });
 
   await page.goto(pathToFileURL(indexPath).toString());
+  await expect(page.getByRole("heading", { name: /No ShareSurfer dataset found/i })).toBeVisible();
+  await page.getByRole("button", { name: /Open demo dataset/i }).click();
+
   const nav = page.getByRole("navigation", { name: "Dashboard views" });
   await expect(page.getByRole("heading", { name: /Permission Review Dashboard/i })).toBeVisible();
-  await expect(page.getByText(/Read-only standalone report/i)).toBeVisible();
   await expect(page.getByText(/Potential Service Accounts/i)).toBeVisible();
 
   await page.getByRole("button", { name: /High Priority Items help/i }).hover();
