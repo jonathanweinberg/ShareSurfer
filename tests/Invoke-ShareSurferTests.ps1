@@ -2313,6 +2313,63 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan uses SMB RPC metadata fallback when remote CIM setup fails'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRpcFallback-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shareRoot 'rpc-file.txt') -Value 'rpc fallback share mode'
+
+            function global:New-CimSession {
+                throw 'mock CIM session failure'
+            }
+            function global:Get-SmbShare {
+                throw 'Get-SmbShare should not be called without a remote CIM session.'
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called without a remote CIM session.'
+            }
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = $shareRoot
+                    Description = 'Mocked SMB RPC metadata'
+                    Source = 'SmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                }
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRpcFallbackExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'remote-files04' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+                $items = Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv')
+                $permissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
+                $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+
+                Assert-Equal $shares[0].Source 'SmbRpcNetShareGetInfo' 'SMB RPC fallback should be recorded as the share metadata source.'
+                Assert-Equal $shares[0].LocalPath $shareRoot 'SMB RPC fallback should populate the resolved local path when available.'
+                Assert-Equal $shares[0].Description 'Mocked SMB RPC metadata' 'SMB RPC fallback should populate share description metadata.'
+                Assert-Equal $shares[0].PartialData 'True' 'Share should remain partial when share-level permissions are still unproven.'
+                Assert-True ([string]$shares[0].PartialReason -like '*Share-level permissions were not collected*') 'Fallback metadata should not hide missing share-level permissions.'
+                Assert-True ($items.FullPath -contains (Join-Path $shareRoot 'rpc-file.txt')) 'SMB RPC fallback should allow enumeration from the resolved path when it is locally reachable.'
+                Assert-Equal @($permissions).Count 0 'SMB RPC fallback should not fabricate share-level permissions.'
+                Assert-True ($events.EventType -contains 'SmbRpcShareInfoResolved') 'SMB RPC metadata fallback should be logged as scan evidence.'
+                Assert-True (($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Source -eq 'SmbRpcNetShareGetInfo' }).Count -ge 1) 'Share target resolution should record the RPC fallback source.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan keeps non-terminating WinRM failures out of the console error stream'
         Body = {
             Import-Module $moduleManifest -Force

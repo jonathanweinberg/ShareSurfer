@@ -85,4 +85,56 @@ describe("VirtualTable", () => {
 
     expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
   });
+
+  test("combines independent field filters and exports the shown rows", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Group: "Finance Readers", Path: "\\\\files01\\Finance", Rights: "Read" },
+      { Group: "Finance Admins", Path: "\\\\files01\\Finance", Rights: "Full" },
+      { Group: "HR Readers", Path: "\\\\files01\\HR", Rights: "Read" }
+    ];
+
+    render(
+      <VirtualTable
+        rows={rows}
+        columns={["Group", "Path", "Rights"]}
+        pageSize={20}
+        title="Permissioned groups"
+        enableFieldFilters
+        enableExport
+      />
+    );
+
+    await user.type(screen.getByLabelText(/Filter Permissioned groups by Path/i), "Finance");
+    await user.type(screen.getByLabelText(/Filter Permissioned groups by Group/i), "Readers");
+
+    expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
+    expect(screen.getByText("Finance Readers")).toBeInTheDocument();
+    expect(screen.queryByText("Finance Admins")).not.toBeInTheDocument();
+    expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
+
+    const exportLink = screen.getByRole("link", { name: /Export shown CSV/i });
+    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
+    expect(exportLink).toHaveAttribute("download", "permissioned-groups-filtered.csv");
+    expect(href).toContain("Group,Path,Rights");
+    expect(href).toContain("Finance Readers");
+    expect(href).not.toContain("Finance Admins");
+  });
+
+  test("lets reviewers remove columns through a selection box", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Group: "Finance Readers", Path: "\\\\files01\\Finance", Rights: "Read" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Group", "Path", "Rights"]} pageSize={20} title="Permissioned groups" />);
+
+    await user.click(screen.getByText("Columns"));
+    const columnSelect = screen.getByLabelText(/Select columns for Permissioned groups/i);
+    await user.deselectOptions(columnSelect, "Path");
+
+    expect(screen.getByRole("columnheader", { name: /Group/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Path/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /Rights/i })).toBeInTheDocument();
+  });
 });

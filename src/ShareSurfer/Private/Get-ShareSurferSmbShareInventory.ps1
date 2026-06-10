@@ -104,7 +104,38 @@ function Get-ShareSurferSmbShareInventory {
                 }
             }
 
-            [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source 'Get-SmbShare' -ShareId $shareId -Message ('Resolved share target {0}' -f $uncPath) -Detail $scanPath))
+            if ($source -eq 'BestEffort') {
+                try {
+                    Write-ShareSurferStatus -Phase 'Collect' -Message ('Attempting SMB/RPC share metadata fallback for {0}.' -f $uncPath) -Quiet:$Quiet
+                    $rpcShare = Get-ShareSurferSmbRpcShareInfo -ComputerName $ComputerName -ShareName $name
+                    if ($null -ne $rpcShare) {
+                        $localPath = [string]$rpcShare.Path
+                        $description = [string]$rpcShare.Description
+                        if ($localPath -ne '' -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
+                            $scanPath = $localPath
+                        }
+                        $source = [string]$rpcShare.Source
+                        if ($source -eq '') {
+                            $source = 'SmbRpcNetShareGetInfo'
+                        }
+                        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'SmbRpcShareInfoResolved' -Source $source -ShareId $shareId -Message ('Resolved share metadata for {0} through SMB/RPC fallback.' -f $uncPath) -Detail $localPath))
+                    }
+                    else {
+                        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'SmbRpcShareInfoUnavailable' -Source 'SmbRpcNetShareGetInfo' -Level 'Warning' -ShareId $shareId -Message ('SMB/RPC fallback did not return share metadata for {0}.' -f $uncPath) -Detail $uncPath))
+                    }
+                }
+                catch {
+                    [void]$scanErrors.Add([pscustomobject]@{
+                        ShareId = $shareId
+                        FullPath = $uncPath
+                        ErrorType = 'SmbRpcShareLookupError'
+                        Message = [string]$_.Exception.Message
+                    })
+                    [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'SmbRpcShareLookupError' -Source 'SmbRpcNetShareGetInfo' -Level 'Warning' -ShareId $shareId -Message ('SMB/RPC fallback failed for {0}.' -f $uncPath) -Detail ([string]$_.Exception.Message)))
+                }
+            }
+
+            [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source $source -ShareId $shareId -Message ('Resolved share target {0}' -f $uncPath) -Detail $scanPath))
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating {0}.' -f $scanPath) -Quiet:$Quiet
 
             try {

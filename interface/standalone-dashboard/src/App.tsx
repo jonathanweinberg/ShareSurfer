@@ -179,6 +179,10 @@ function formatNumber(value: number): string {
   return numberFormatter.format(value);
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.trim() !== ""))).sort((a, b) => a.localeCompare(b));
+}
+
 function formatReportDate(value: string): string {
   if (!value) {
     return "Unknown";
@@ -1324,6 +1328,7 @@ function FindingsView({
   generatedAt: string;
 }) {
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [employeePrefixFilter, setEmployeePrefixFilter] = useState("");
   const [reviewerDraft, setReviewerDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const issueRollups = useMemo(() => {
@@ -1336,6 +1341,91 @@ function FindingsView({
       .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
   }, [issues]);
   const visibleIssues = categoryFilter ? issues.filter((issue) => issue.category === categoryFilter) : issues;
+  const employeePrefixRows = useMemo(() => {
+    const requestedPrefix = employeePrefixFilter.trim();
+    const groups = new Map<
+      string,
+      {
+        EmployeePrefix: string;
+        MatchPrefix: string;
+        IdentifierField: string;
+        IssueCount: number;
+        HighSeverityCount: number;
+        Identities: Set<string>;
+        Categories: Set<string>;
+        Owners: Set<string>;
+        BusinessUnits: Set<string>;
+        ExamplePath: string;
+        IssueIds: string[];
+      }
+    >();
+
+    for (const issue of visibleIssues) {
+      const issuePrefix = issue.employeePrefix || "";
+      if (requestedPrefix && !issuePrefix.startsWith(requestedPrefix)) {
+        continue;
+      }
+      const groupPrefix = issuePrefix
+        ? issuePrefix.slice(0, requestedPrefix ? requestedPrefix.length : Math.min(2, issuePrefix.length))
+        : "No employee ID/number";
+      const group =
+        groups.get(groupPrefix) ??
+        {
+          EmployeePrefix: groupPrefix,
+          MatchPrefix: requestedPrefix || groupPrefix,
+          IdentifierField: issue.employeeIdentifierField || "Unavailable",
+          IssueCount: 0,
+          HighSeverityCount: 0,
+          Identities: new Set<string>(),
+          Categories: new Set<string>(),
+          Owners: new Set<string>(),
+          BusinessUnits: new Set<string>(),
+          ExamplePath: "",
+          IssueIds: []
+        };
+
+      group.IssueCount += 1;
+      if (riskTone(issue.severity) === "danger") {
+        group.HighSeverityCount += 1;
+      }
+      if (issue.employeeIdentifierField) {
+        group.IdentifierField = uniqueStrings([group.IdentifierField === "Unavailable" ? "" : group.IdentifierField, issue.employeeIdentifierField]).join("; ");
+      }
+      if (issue.identity) {
+        group.Identities.add(issue.identity);
+      }
+      if (issue.category) {
+        group.Categories.add(issue.category);
+      }
+      if (issue.owner) {
+        group.Owners.add(issue.owner);
+      }
+      if (issue.businessUnit) {
+        group.BusinessUnits.add(issue.businessUnit);
+      }
+      if (!group.ExamplePath && issue.path) {
+        group.ExamplePath = issue.path;
+      }
+      group.IssueIds.push(issue.id);
+      groups.set(groupPrefix, group);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        EmployeePrefix: group.EmployeePrefix,
+        MatchPrefix: group.MatchPrefix,
+        IdentifierField: group.IdentifierField,
+        IssueCount: String(group.IssueCount),
+        HighSeverityCount: String(group.HighSeverityCount),
+        Identities: Array.from(group.Identities).join("; "),
+        Categories: Array.from(group.Categories).join("; "),
+        Owners: Array.from(group.Owners).join("; "),
+        BusinessUnits: Array.from(group.BusinessUnits).join("; "),
+        ExamplePath: group.ExamplePath,
+        IssueIds: group.IssueIds.join("; ")
+      }))
+      .sort((a, b) => Number(b.IssueCount) - Number(a.IssueCount) || a.EmployeePrefix.localeCompare(b.EmployeePrefix));
+  }, [employeePrefixFilter, visibleIssues]);
   const selected = selectedIssue && visibleIssues.some((issue) => issue.id === selectedIssue.id) ? selectedIssue : visibleIssues[0];
   const issueIds = new Set(issues.map((issue) => issue.id));
   const scopedReviewDecisions = Object.values(reviewDecisions).filter((decision) => issueIds.has(decision.issueId));
@@ -1415,6 +1505,47 @@ function FindingsView({
               {rollup.category} <strong>{formatNumber(rollup.count)}</strong>
             </button>
           ))}
+        </div>
+        <div className="employee-prefix-panel" aria-label="Employee ID number prefix pivot">
+          <div className="pivot-heading">
+            <div>
+              <h3>EmployeeID/EmployeeNumber Prefix Pivot</h3>
+              <p className="panel-copy">
+                Type the first number(s), such as 67, to group and export findings tied to employee identifiers that start with that string.
+              </p>
+            </div>
+            <label>
+              Prefix
+              <input
+                type="search"
+                value={employeePrefixFilter}
+                onChange={(event) => setEmployeePrefixFilter(event.currentTarget.value)}
+                placeholder="Example: 67"
+                aria-label="Employee ID or EmployeeNumber prefix"
+              />
+            </label>
+          </div>
+          <VirtualTable
+            title="Employee ID number prefix pivot"
+            rows={employeePrefixRows}
+            columns={[
+              "EmployeePrefix",
+              "MatchPrefix",
+              "IdentifierField",
+              "IssueCount",
+              "HighSeverityCount",
+              "Identities",
+              "Categories",
+              "Owners",
+              "BusinessUnits",
+              "ExamplePath",
+              "IssueIds"
+            ]}
+            pageSize={8}
+            enableFieldFilters
+            enableExport
+            exportFileName="employee-prefix-findings-pivot.csv"
+          />
         </div>
         <VirtualTable
           title="Findings and conflicts"
@@ -1903,13 +2034,17 @@ function RawEvidenceView({
         </div>
       </div>
       <p className="panel-copy">
-        Showing {showAllColumns ? "every exported CSV column" : "the review-friendly column set"}. Use show all when you need exact source fields.
+        Showing {showAllColumns ? "every exported CSV column" : "the review-friendly column set"}. Use field filters to combine exact signals such as share path plus group name, then export the rows currently shown.
       </p>
       <VirtualTable
         rows={rows}
         columns={columns}
+        selectableColumns={expectedColumns[dataset.key]}
         pageSize={30}
         title={datasetLabels[dataset.key]}
+        enableFieldFilters
+        enableExport
+        exportFileName={`sharesurfer-${dataset.key}-shown.csv`}
         onRowSelect={(row) => setSelectedRow(row)}
         selectedKey={detailRow ? JSON.stringify(detailRow) : undefined}
         rowKey={(row) => JSON.stringify(row)}
