@@ -57,16 +57,35 @@ $PSVersionTable.PSVersion
 
 The major version should be `5`.
 
-Go to the repository folder:
+If you are using the `v0.1.0-pre.2` release ZIP, extract it to `C:\ShareSurfer\`. The extracted release root should be:
+
+```text
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.2\
+```
+
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.2`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
 
 ```powershell
-Set-Location C:\Path\To\ShareSurfer
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.2.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
+
+Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
+Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
+Test-Path "$releaseRoot\interface\standalone-dashboard\dist\index.html"
+```
+
+The two `Test-Path` commands should return `True`. The first proves the PowerShell module is present. The second proves the standalone dashboard template assets are already built in the release package.
+
+Go to the release or repository folder:
+
+```powershell
+Set-Location $releaseRoot
 ```
 
 Import the module:
 
 ```powershell
-Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
 ```
 
 Confirm the commands are available:
@@ -155,35 +174,59 @@ Use this for admin, HelpDesk, scanner, backup, or platform access that should st
 For a first scan by UNC path:
 
 ```powershell
-Invoke-ShareSurferScan `
-  -TargetPath $targetPath `
-  -OutputPath $exportPath `
-  -OperationalPathLengthThreshold 256 `
-  -ExplicitAceDepthThreshold 2 `
-  -GroupExpansionMaxDepth 5 `
-  -ManagerIdentityFormat MailTo `
-  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
-  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
-  -AdLookupMode Auto `
-  -ObsAttribute 'extensionAttribute10'
+$ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
+$discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
+
+$scanParams = @{
+  TargetPath = $targetPath
+  OutputPath = $exportPath
+  OperationalPathLengthThreshold = 256
+  ExplicitAceDepthThreshold = 2
+  GroupExpansionMaxDepth = 5
+  ManagerIdentityFormat = 'MailTo'
+  AdLookupMode = 'Auto'
+  ObsAttribute = 'extensionAttribute10'
+}
+
+if (Test-Path -LiteralPath $ownerMappingPath) {
+  $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $discountedPrincipalPath) {
+  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
+}
+
+Invoke-ShareSurferScan @scanParams
 ```
 
 For a first scan by SMB computer and share name:
 
 ```powershell
-Invoke-ShareSurferScan `
-  -ComputerName $computerName `
-  -ShareName $shareName `
-  -OutputPath $exportPath `
-  -IncludeFiles `
-  -OperationalPathLengthThreshold 256 `
-  -ExplicitAceDepthThreshold 2 `
-  -GroupExpansionMaxDepth 5 `
-  -ManagerIdentityFormat MailTo `
-  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
-  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
-  -AdLookupMode Auto `
-  -ObsAttribute 'extensionAttribute10'
+$ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
+$discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
+
+$scanParams = @{
+  ComputerName = $computerName
+  ShareName = $shareName
+  OutputPath = $exportPath
+  IncludeFiles = $true
+  OperationalPathLengthThreshold = 256
+  ExplicitAceDepthThreshold = 2
+  GroupExpansionMaxDepth = 5
+  ManagerIdentityFormat = 'MailTo'
+  AdLookupMode = 'Auto'
+  ObsAttribute = 'extensionAttribute10'
+}
+
+if (Test-Path -LiteralPath $ownerMappingPath) {
+  $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $discountedPrincipalPath) {
+  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
+}
+
+Invoke-ShareSurferScan @scanParams
 ```
 
 Use `-IncludeFiles` when you need file-level evidence, not only folder-level evidence. File-level scans can take longer on large shares.
@@ -193,6 +236,8 @@ Use `-AdLookupMode Auto` for normal collection. It tries the best available dire
 Use `-ManagerIdentityFormat MailTo` unless you have a reason to export another format. It is the default and makes `ManagerLevel1`, `ManagerLevel2`, and `ManagerLevel3` easier for reviewers to use. Other supported values are `Mail`, `UserPrincipalName`, `SamAccountName`, and `DistinguishedName`. Raw manager references are preserved in `ManagerLevel1Raw`, `ManagerLevel2Raw`, and `ManagerLevel3Raw` when available.
 
 The collector prints timestamped status lines while it runs. That is expected and helps first-time operators tell the scan is still active during recursive folder enumeration, ACL reads, identity enrichment, and CSV export. When the scan finishes, the `ShareSurfer Summary` lines show counts for shares, items, findings, conflicts, collection errors, and partial shares. They also show the output path and the next `Test-ShareSurferExport` command to run. If the summary mentions collection errors or partial shares, open `collection_errors.csv` and the Diagnostics view before asking an owner to approve the result. Add `-Quiet` when a scheduled or scripted run should suppress console progress.
+
+Do not pass `-OwnerMappingPath` or `-DiscountedPrincipalPath` unless the CSV file exists. The splatted examples above check first, which avoids stopping the scan because an optional input file was not created yet.
 
 If the target cannot accept WinRM/CIM, ShareSurfer continues best-effort when it can still inspect the path. The scan will mark share-level permission proof as partial or unavailable in the exports instead of treating that alone as a hard stop.
 
@@ -347,13 +392,17 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.2 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
-If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1:
+If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -File scripts\New-ShareSurferStandaloneDashboard.ps1 `
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `
   -OutputPath "$exportPath\standalone-dashboard" `
   -Force
+
+Start-Process "$exportPath\standalone-dashboard\index.html"
 ```
 
 Only maintainers building from source need to build the dashboard assets with Node and npm:

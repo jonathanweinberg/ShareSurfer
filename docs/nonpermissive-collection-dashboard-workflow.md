@@ -24,6 +24,14 @@ ShareSurfer does not change permissions. It reads evidence, writes normalized CS
 
 The collector host does not need npm, Vite, Playwright, internet access, or a local web server. Starting with [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2), release users also do not need Node, npm, Vite, a development server, or internet access on the dashboard host to package and open the standalone dashboard. Download `ShareSurfer-0.1.0-pre.2.zip` and `ShareSurfer-0.1.0-pre.2.zip.sha256` on an approved connected workstation, verify or record the hash, and move the release package by your approved process.
 
+When the release ZIP is extracted to `C:\ShareSurfer\`, the ShareSurfer folder is:
+
+```text
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.2\
+```
+
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.2`, change the destination to `C:\ShareSurfer` to avoid a doubled nested folder. The dashboard host can use the same release folder path, or another local path such as `D:\Tools\ShareSurfer-0.1.0-pre.2`.
+
 During collection, `Invoke-ShareSurferScan` prints timestamped phase updates so the operator can tell the scan is still active. Use `-Quiet` only for scheduled automation. If WinRM/CIM is unavailable, ShareSurfer records the gap as partial share-permission evidence and continues with file/folder evidence where possible.
 
 ## 1. Prepare Inputs on the Collector
@@ -32,10 +40,20 @@ Create a dated export path:
 
 ```powershell
 $scanId = 'scan-2026-06-08-finance'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
 $exportPath = "C:\ShareSurfer\exports\$scanId"
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+$discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
+
+Test-Path "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1"
+Test-Path "$shareSurferRoot\interface\standalone-dashboard\dist\index.html"
+
 New-Item -ItemType Directory -Path $exportPath -Force
-New-Item -ItemType Directory -Path 'C:\ShareSurfer\inputs' -Force
+New-Item -ItemType Directory -Path $inputRoot -Force
 ```
+
+Both `Test-Path` commands should return `True`. If either returns `False`, confirm the ZIP was extracted to the expected folder before scanning.
 
 Create an owner mapping CSV when you know the expected business owner:
 
@@ -47,7 +65,7 @@ Create an owner mapping CSV when you know the expected business owner:
     BusinessUnit = 'Finance'
     Source = 'operator'
   }
-) | Export-Csv -LiteralPath 'C:\ShareSurfer\inputs\owner-mapping.csv' -NoTypeInformation -Encoding UTF8
+) | Export-Csv -LiteralPath $ownerMappingPath -NoTypeInformation -Encoding UTF8
 ```
 
 Create a discounted principals CSV when broad HelpDesk, admin, scanner, backup, or platform groups should stay visible but should not drive Migration Discovery relatedness:
@@ -59,7 +77,7 @@ Create a discounted principals CSV when broad HelpDesk, admin, scanner, backup, 
     Reason = 'Broad HelpDesk access'
     Scope = 'Global'
   }
-) | Export-Csv -LiteralPath 'C:\ShareSurfer\inputs\discounted-principals.csv' -NoTypeInformation -Encoding UTF8
+) | Export-Csv -LiteralPath $discountedPrincipalPath -NoTypeInformation -Encoding UTF8
 ```
 
 Discounted does not mean ignored, safe, approved, or remediated. ShareSurfer still shows the access in the CSVs and report.
@@ -69,25 +87,37 @@ Discounted does not mean ignored, safe, approved, or remediated. ShareSurfer sti
 Import the module:
 
 ```powershell
-Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
+Import-Module "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
 ```
 
 Run the scan:
 
 ```powershell
-Invoke-ShareSurferScan `
-  -TargetPath '\\files01\Finance' `
-  -OutputPath $exportPath `
-  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
-  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
-  -OperationalPathLengthThreshold 256 `
-  -ExplicitAceDepthThreshold 2 `
-  -GroupExpansionMaxDepth 5 `
-  -AdLookupMode Auto `
-  -ObsAttribute 'extensionAttribute10'
+$scanParams = @{
+  TargetPath = '\\files01\Finance'
+  OutputPath = $exportPath
+  OperationalPathLengthThreshold = 256
+  ExplicitAceDepthThreshold = 2
+  GroupExpansionMaxDepth = 5
+  ManagerIdentityFormat = 'MailTo'
+  AdLookupMode = 'Auto'
+  ObsAttribute = 'extensionAttribute10'
+}
+
+if (Test-Path -LiteralPath $ownerMappingPath) {
+  $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $discountedPrincipalPath) {
+  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
+}
+
+Invoke-ShareSurferScan @scanParams
 ```
 
 Use the correct `-ObsAttribute` for your directory. `extensionAttribute10` is the default, but some environments use another attribute such as `info`.
+
+Do not pass optional input paths unless the files exist. The splatted command above checks for the owner mapping and discounted principals CSVs before adding those parameters, so a first scan can still run without optional inputs.
 
 Validate the export:
 
@@ -147,7 +177,9 @@ Start-Process (Join-Path $reviewRoot 'report.html')
 If you are using the `v0.1.0-pre.2` release package, the standalone dashboard assets are already built. Package the dataset into a self-contained dashboard folder:
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
+$shareSurferRoot = 'D:\Tools\ShareSurfer-0.1.0-pre.2'
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$shareSurferRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $reviewRoot `
   -OutputPath "$reviewRoot\standalone-dashboard" `
   -Force
