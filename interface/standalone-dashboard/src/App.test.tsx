@@ -8,6 +8,66 @@ function renderWithDemoSnapshot() {
   return render(<App />);
 }
 
+function renderWithBrokenSidSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(demoSnapshot)) as typeof demoSnapshot;
+  snapshot.datasets?.findings?.push({
+    FindingId: "finding-broken-sid",
+    FindingType: "BrokenOrMissingSid",
+    Severity: "High",
+    ShareId: "share-finance",
+    ItemId: "item-finance",
+    FullPath: "\\\\files01\\Finance",
+    Identity: "S-1-5-21-1000-2000-3000-4040",
+    ObservedValue: "S-1-5-21-1000-2000-3000-4040",
+    PolicyValue: "Resolvable identity",
+    Message: "Permission references a SID or account name that could not be resolved."
+  });
+  snapshot.datasets?.related_data_areas?.push({
+    RelatedAreaId: "related-hr",
+    RelatedDataArea: "HR / Employee Records",
+    BusinessUnit: "HR",
+    Owner: "HR Operations",
+    Pattern: "\\\\files01\\HR*",
+    Source: "demo",
+    RiskLevel: "Review",
+    MigrationReadiness: "Review",
+    MatchingShares: "1",
+    MatchingItems: "1",
+    Directories: "1",
+    Files: "0",
+    FindingCount: "0",
+    ConflictCount: "0",
+    ReviewItemCount: "0",
+    PartialShareCount: "1",
+    DirectIdentityCount: "1",
+    DirectGroupCount: "1",
+    ExpandedMemberCount: "1",
+    RelatedBecause: "same owner mapping; matching path pattern",
+    SuggestedNextAction: "Confirm HR ownership before migration."
+  });
+  snapshot.datasets?.permissioned_groups?.push({
+    Group: "CONTOSO\\HRReaders",
+    DisplayName: "HR Readers",
+    ObjectClass: "group",
+    ObsPath: "CORP.HR",
+    ManagerLevel1: "",
+    ShareAssignments: "1",
+    NtfsAssignments: "0",
+    ExpandedMembers: "1",
+    MaxDepth: "1",
+    HasCycle: "False",
+    IsTruncated: "False",
+    Rights: "Read",
+    ShareId: "share-hr",
+    ShareIds: "share-hr",
+    Sources: "Share",
+    FullPath: "\\\\files01\\HR",
+    ExamplePath: "\\\\files01\\HR"
+  });
+  window.__SHARESURFER_SNAPSHOT__ = snapshot;
+  return render(<App />);
+}
+
 function ensureLocalStorage() {
   if (window.localStorage) {
     return;
@@ -266,6 +326,29 @@ describe("dashboard workbench interactions", () => {
 
     const table = screen.getByRole("table", { name: /Permissioned groups/i });
     expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+  });
+
+  test("Broken/Missing SID toggle scopes migration and group views to related rows", () => {
+    renderWithBrokenSidSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+
+    fireEvent.click(within(nav).getByRole("button", { name: /Migration/i }));
+    const initialMigrationTable = screen.getByRole("table", { name: /Related data area clusters/i });
+    expect(within(initialMigrationTable).getByText("Finance / Accounts Payable")).toBeInTheDocument();
+    expect(within(initialMigrationTable).getByText("HR / Employee Records")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Broken\/Missing SID/i));
+
+    const migrationTable = screen.getByRole("table", { name: /Related data area clusters/i });
+    expect(within(migrationTable).getByText("Finance / Accounts Payable")).toBeInTheDocument();
+    expect(within(migrationTable).queryByText("HR / Employee Records")).not.toBeInTheDocument();
+
+    fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
+
+    const groupsTable = screen.getByRole("table", { name: /Permissioned groups/i });
+    expect(within(groupsTable).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+    expect(within(groupsTable).queryByText("CONTOSO\\HRReaders")).not.toBeInTheDocument();
   });
 
   test("raw evidence uses readable curated columns before showing all CSV fields", () => {

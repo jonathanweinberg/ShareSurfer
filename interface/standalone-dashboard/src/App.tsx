@@ -488,12 +488,39 @@ function rowsMatchingCluster(cluster: MigrationCluster, dashboard: DashboardMode
   const shareIds = shareIdsForCluster(cluster, dashboard);
   const prefixes = clusterPatterns(cluster).map(patternPrefix).filter(Boolean);
   return datasetRows(dashboard, key).filter((row) => {
-    if (row.ShareId && shareIds.has(row.ShareId)) {
-      return true;
-    }
-    const pathText = `${row.FullPath} ${row.UNCPath} ${row.LocalPath}`.toLowerCase();
-    return prefixes.some((prefix) => pathText.includes(prefix));
+    return rowMatchesShareOrPath(row, shareIds, prefixes);
   });
+}
+
+function rowMatchesShareOrPath(row: Record<string, unknown>, shareIds: Set<string>, pathTokens: string[]): boolean {
+  const shareId = getRowFieldValue(row, "ShareId");
+  if (shareId && shareIds.has(shareId)) {
+    return true;
+  }
+
+  const pathText = [
+    getRowFieldValue(row, "FullPath"),
+    getRowFieldValue(row, "ExamplePath"),
+    getRowFieldValue(row, "UNCPath"),
+    getRowFieldValue(row, "LocalPath")
+  ].join(" ").toLowerCase();
+  return pathTokens.some((token) => token !== "" && pathText.includes(token));
+}
+
+function brokenSidFindingRows(dashboard: DashboardModel): DataRow[] {
+  return datasetRows(dashboard, "findings").filter(rowHasBrokenSid);
+}
+
+function clusterHasBrokenSidEvidence(cluster: MigrationCluster, dashboard: DashboardModel): boolean {
+  const shareIds = shareIdsForCluster(cluster, dashboard);
+  const prefixes = clusterPatterns(cluster).map(patternPrefix).filter(Boolean);
+  return brokenSidFindingRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, prefixes));
+}
+
+function groupHasBrokenSidEvidence(group: GroupTreeRow, dashboard: DashboardModel): boolean {
+  const shareIds = new Set(splitIds(group.raw.ShareIds || group.raw.ShareId || group.shareIds));
+  const pathTokens = [group.examplePath, group.fullPath].filter(Boolean).map((path) => path.toLowerCase());
+  return brokenSidFindingRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, pathTokens));
 }
 
 function rowsMatchingGroup(group: GroupTreeRow, dashboard: DashboardModel, key: DatasetKey): DataRow[] {
@@ -909,10 +936,11 @@ function filterIssues(rows: IssueSummary[], filters: FilterState, query: string)
   );
 }
 
-function filterClusters(rows: MigrationCluster[], filters: FilterState, query: string) {
+function filterClusters(rows: MigrationCluster[], filters: FilterState, query: string, dashboard: DashboardModel) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
+      (!filters.brokenSidOnly || clusterHasBrokenSidEvidence(row, dashboard)) &&
       matchesText(row.businessUnit, filters.businessUnit) &&
       matchesText(row.owner, filters.owner) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase()) || row.readiness.toLowerCase().includes(filters.risk.toLowerCase())) &&
@@ -931,10 +959,11 @@ function filterClusters(rows: MigrationCluster[], filters: FilterState, query: s
   );
 }
 
-function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string) {
+function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string, dashboard: DashboardModel) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
+      (!filters.brokenSidOnly || groupHasBrokenSidEvidence(row, dashboard)) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase())) &&
       matchesParsedSearch(
         {
@@ -1859,8 +1888,8 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery), [dashboard.reviewQueue, filters, deferredQuery]);
   const filteredIssues = useMemo(() => filterIssues(dashboard.issueSummaries, filters, deferredQuery), [dashboard.issueSummaries, filters, deferredQuery]);
   const filteredCriticalBlocks = useMemo(() => filterCriticalBlocks(dashboard.criticalScanBlocks, filters, deferredQuery), [dashboard.criticalScanBlocks, filters, deferredQuery]);
-  const filteredClusters = useMemo(() => filterClusters(dashboard.migrationClusters, filters, deferredQuery), [dashboard.migrationClusters, filters, deferredQuery]);
-  const filteredGroups = useMemo(() => filterGroups(dashboard.permissionedGroupTree, filters, deferredQuery), [dashboard.permissionedGroupTree, filters, deferredQuery]);
+  const filteredClusters = useMemo(() => filterClusters(dashboard.migrationClusters, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
+  const filteredGroups = useMemo(() => filterGroups(dashboard.permissionedGroupTree, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
   const overviewSummary = useMemo(
     () => buildOverviewSummary(dashboard, filteredQueue, filteredIssues, filters, deferredQuery),
     [dashboard, filteredQueue, filteredIssues, filters, deferredQuery]
