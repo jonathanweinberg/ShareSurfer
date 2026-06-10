@@ -61,15 +61,38 @@ For a first-time walkthrough, start with the [First-run guide](docs/first-run-gu
 
 Current pre-release quickstart package: [v0.1.0-pre.2](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2). Download `ShareSurfer-0.1.0-pre.2.zip` and `ShareSurfer-0.1.0-pre.2.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets.
 
+When the ZIP is extracted to `C:\ShareSurfer\`, the release root is:
+
+```text
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.2\
+```
+
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.2`, change the destination to `C:\ShareSurfer` to avoid a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.2\ShareSurfer-0.1.0-pre.2`. From PowerShell, use:
+
+```powershell
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.2.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
+
+Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
+Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
+Test-Path "$releaseRoot\interface\standalone-dashboard\dist\index.html"
+```
+
 On Windows, release users do not need Node, npm, Vite, a preview server, or internet access to package and open the standalone dashboard. Use Windows PowerShell 5.1 (`powershell.exe`) for the collector and dashboard packager unless your workstation already has PowerShell 7 (`pwsh`).
 
 `Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. At the end, look for the `ShareSurfer Summary` lines. They show the scan counts, output path, any partial-data or collection-gap warning, and the next `Test-ShareSurferExport` command. Add `-Quiet` only for automation where console progress is not wanted.
 
 ```powershell
-Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
-
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
-New-Item -ItemType Directory -Force -Path 'C:\ShareSurfer\inputs' | Out-Null
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+$discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
+
+Set-Location $releaseRoot
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
 
 @(
   [pscustomobject]@{
@@ -78,15 +101,34 @@ New-Item -ItemType Directory -Force -Path 'C:\ShareSurfer\inputs' | Out-Null
     BusinessUnit = 'Finance'
     Source = 'quickstart'
   }
-) | Export-Csv -LiteralPath 'C:\ShareSurfer\inputs\owner-mapping.csv' -NoTypeInformation -Encoding UTF8
+) | Export-Csv -LiteralPath $ownerMappingPath -NoTypeInformation -Encoding UTF8
 
-Invoke-ShareSurferScan `
-  -TargetPath '\\files01\Finance' `
-  -OutputPath $exportPath `
-  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
-  -ManagerIdentityFormat MailTo
+$scanParams = @{
+  TargetPath = '\\files01\Finance'
+  OutputPath = $exportPath
+  ObsAttribute = 'extensionAttribute10'
+  ManagerIdentityFormat = 'MailTo'
+  AdLookupMode = 'Auto'
+}
+
+if (Test-Path -LiteralPath $ownerMappingPath) {
+  $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $discountedPrincipalPath) {
+  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
+}
+
+Invoke-ShareSurferScan @scanParams
 Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+
+Start-Process "$exportPath\standalone-dashboard\index.html"
 New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath 'C:\ShareSurfer\support\scan-001-redacted'
 ```
 
@@ -98,35 +140,53 @@ In ShareSurfer, **Owner** means the mapped business/data reviewer. It is separat
 
 ### Quick Start in a Nonpermissive Environment
 
-Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the [v0.1.0-pre.2 release zip](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2) for first-time Windows use because it already includes the built dashboard assets. Copy the unpacked ShareSurfer release folder to the collector host first. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
+Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the [v0.1.0-pre.2 release zip](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.2) for first-time Windows use because it already includes the built dashboard assets. Copy the unpacked ShareSurfer release folder to the collector host first. If the ZIP is extracted to `C:\ShareSurfer\`, use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.2` as `$shareSurferRoot`. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+$discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Path $exportPath) | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path -Path $handoffPath) | Out-Null
-New-Item -ItemType Directory -Force -Path 'C:\ShareSurfer\inputs' | Out-Null
+New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
 
 Import-Module "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
 
-Invoke-ShareSurferScan `
-  -TargetPath '\\files01\Finance' `
-  -OutputPath $exportPath `
-  -ObsAttribute 'extensionAttribute10' `
-  -ManagerIdentityFormat MailTo `
-  -OwnerMappingPath 'C:\ShareSurfer\inputs\owner-mapping.csv' `
-  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv'
+$scanParams = @{
+  TargetPath = '\\files01\Finance'
+  OutputPath = $exportPath
+  ObsAttribute = 'extensionAttribute10'
+  ManagerIdentityFormat = 'MailTo'
+  AdLookupMode = 'Auto'
+}
+
+if (Test-Path -LiteralPath $ownerMappingPath) {
+  $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $discountedPrincipalPath) {
+  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
+}
+
+Invoke-ShareSurferScan @scanParams
 
 Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$shareSurferRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
 
 Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
-If you do not have owner mappings or discounted principals yet, remove those two parameters for the first scan. Move the zip file and SHA256 hash through your approved transfer process, then open `report.html` or package the standalone dashboard on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
+If you do not have owner mappings or discounted principals yet, leave those CSV files absent. The splatted command above only passes them when the files exist. Move the handoff zip file and SHA256 hash through your approved transfer process, then open `report.html` or `standalone-dashboard\index.html` on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
 
 If WinRM/CIM is blocked or the target is a non-Windows SMB service, ShareSurfer continues best-effort and records the missing share-level permission proof as partial-data evidence in `collection_errors.csv`, `findings.csv`, and `scan_events.csv`.
 
@@ -147,10 +207,14 @@ The dashboard files included in the release are template assets. Opening `interf
 Package a validated export folder as a standalone dashboard from the release zip on Windows:
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.2'
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `
   -OutputPath "$exportPath\standalone-dashboard" `
   -Force
+
+Start-Process "$exportPath\standalone-dashboard\index.html"
 ```
 
 Development maintainers can still run the dashboard locally from source:
