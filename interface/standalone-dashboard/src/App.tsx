@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Building2,
+  CalendarDays,
   ClipboardCheck,
   Database,
   FileWarning,
@@ -738,6 +739,33 @@ function MetricButton({
   );
 }
 
+function ReportContextStrip({
+  summary,
+  datasetLabel
+}: {
+  summary: ScanSummary;
+  datasetLabel: string;
+}) {
+  const generatedAt = formatReportDate(summary.generatedAt);
+  const contextItems = [
+    { label: "Report generated", value: generatedAt },
+    { label: "Source mode", value: summary.sourceMode || "Unknown" },
+    { label: "OBS attribute", value: summary.obsAttribute || "Not recorded" },
+    { label: "Dataset", value: datasetLabel }
+  ];
+
+  return (
+    <dl className="report-context-strip" aria-label="Report context">
+      {contextItems.map((item) => (
+        <div key={item.label}>
+          <dt>{item.label}</dt>
+          <dd>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function FilterBar({
   dashboard,
   filters,
@@ -1192,7 +1220,8 @@ function FindingsView({
   reviewDecisions,
   onReviewDecision,
   onReviewDecisionContextChange,
-  onClearReviewDecision
+  onClearReviewDecision,
+  generatedAt
 }: {
   issues: IssueSummary[];
   criticalBlocks: CriticalScanBlock[];
@@ -1202,6 +1231,7 @@ function FindingsView({
   onReviewDecision: (issue: IssueSummary, decision: ReviewDecisionValue, reviewer: string, note: string) => void;
   onReviewDecisionContextChange: (issueId: string, patch: Pick<ReviewDecision, "reviewer" | "note">) => void;
   onClearReviewDecision: (issueId: string) => void;
+  generatedAt: string;
 }) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [reviewerDraft, setReviewerDraft] = useState("");
@@ -1253,6 +1283,10 @@ function FindingsView({
     <div className="split-view">
       <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.fileFolderPermissions}>Findings & Conflicts</SectionTitle>
+        <div className="report-context-note" aria-label="Findings report context">
+          <CalendarDays size={17} aria-hidden="true" />
+          <span>Findings use evidence generated {formatReportDate(generatedAt)}. Treat this as current-state evidence, not approval status.</span>
+        </div>
         <div className="review-progress" aria-label="Finding review progress">
           <div>
             <strong>{formatNumber(reviewedVisibleCount)} of {formatNumber(visibleIssues.length)} reviewed</strong>
@@ -1994,7 +2028,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
             <div>
               <h1>Permission Review Dashboard</h1>
               <p>
-                Generated {formatReportDate(dashboard.scanSummary.generatedAt)} | Source {dashboard.scanSummary.sourceMode} | Read-only | {datasetLabel}
+                Generated {formatReportDate(dashboard.scanSummary.generatedAt)} | Source {dashboard.scanSummary.sourceMode} | Read-only
               </p>
             </div>
           </div>
@@ -2004,6 +2038,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
             <span>{formatNumber(snapshot.rowCounts.conflicts)} conflict rows</span>
           </div>
         </header>
+        <ReportContextStrip summary={dashboard.scanSummary} datasetLabel={datasetLabel} />
 
         <FilterBar dashboard={dashboard} filters={filters} onFiltersChange={setFilters} />
         {returnTrail ? <ReturnTrailBar trail={returnTrail} onBack={returnToTrailOrigin} /> : null}
@@ -2029,6 +2064,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
             onReviewDecision={setIssueReviewDecision}
             onReviewDecisionContextChange={updateIssueReviewDecisionContext}
             onClearReviewDecision={clearIssueReviewDecision}
+            generatedAt={dashboard.scanSummary.generatedAt}
           />
         ) : null}
         {activeView === "migration" ? (

@@ -79,6 +79,22 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("button", { name: /Back to overview/i })).toBeInTheDocument();
   });
 
+  test("report date context is prominent in the header and findings review", () => {
+    renderWithDemoSnapshot();
+
+    const reportContext = screen.getByLabelText(/Report context/i);
+    expect(within(reportContext).getByText("Report generated")).toBeInTheDocument();
+    expect(within(reportContext).getByText(/Jun 5, 2026/i)).toBeInTheDocument();
+    expect(within(reportContext).getByText("Source mode")).toBeInTheDocument();
+    expect(within(reportContext).getByText("OBS attribute")).toBeInTheDocument();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+
+    const findingsContext = screen.getByLabelText(/Findings report context/i);
+    expect(within(findingsContext).getByText(/Findings use evidence generated Jun 5, 2026/i)).toBeInTheDocument();
+  });
+
   test("sidebar can be hidden to give review panes more horizontal space", () => {
     const view = renderWithDemoSnapshot();
 
