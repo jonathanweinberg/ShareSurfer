@@ -115,19 +115,20 @@ function ConvertTo-ShareSurferAceFlagText {
     )
 
     $values = New-Object System.Collections.ArrayList
+    $aceFlagValue = [int]$AceFlags
     if ($FlagType -eq 'Inheritance') {
-        if (($AceFlags -band [System.Security.AccessControl.AceFlags]::ContainerInherit) -ne 0) {
+        if (($aceFlagValue -band [int][System.Security.AccessControl.AceFlags]::ContainerInherit) -ne 0) {
             [void]$values.Add('ContainerInherit')
         }
-        if (($AceFlags -band [System.Security.AccessControl.AceFlags]::ObjectInherit) -ne 0) {
+        if (($aceFlagValue -band [int][System.Security.AccessControl.AceFlags]::ObjectInherit) -ne 0) {
             [void]$values.Add('ObjectInherit')
         }
     }
     else {
-        if (($AceFlags -band [System.Security.AccessControl.AceFlags]::NoPropagateInherit) -ne 0) {
+        if (($aceFlagValue -band [int][System.Security.AccessControl.AceFlags]::NoPropagateInherit) -ne 0) {
             [void]$values.Add('NoPropagateInherit')
         }
-        if (($AceFlags -band [System.Security.AccessControl.AceFlags]::InheritOnly) -ne 0) {
+        if (($aceFlagValue -band [int][System.Security.AccessControl.AceFlags]::InheritOnly) -ne 0) {
             [void]$values.Add('InheritOnly')
         }
     }
@@ -209,6 +210,7 @@ function ConvertTo-ShareSurferSecurityDescriptorAclRows {
         }
         else {
             $aceFlags = [System.Security.AccessControl.AceFlags]$ace.AceFlags
+            $aceFlagValue = [int]$aceFlags
             [void]$rows.Add([pscustomobject]@{
                 ItemId = $ItemId
                 ShareId = $ShareId
@@ -216,7 +218,7 @@ function ConvertTo-ShareSurferSecurityDescriptorAclRows {
                 Identity = $identity
                 Rights = $rights
                 AccessControlType = $accessControlType
-                IsInherited = (($aceFlags -band [System.Security.AccessControl.AceFlags]::Inherited) -ne 0)
+                IsInherited = (($aceFlagValue -band [int][System.Security.AccessControl.AceFlags]::Inherited) -ne 0)
                 InheritanceFlags = ConvertTo-ShareSurferAceFlagText -AceFlags $aceFlags -FlagType 'Inheritance'
                 PropagationFlags = ConvertTo-ShareSurferAceFlagText -AceFlags $aceFlags -FlagType 'Propagation'
                 Depth = $Depth

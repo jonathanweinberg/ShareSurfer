@@ -2403,6 +2403,28 @@ $tests = @(
         }
     },
     @{
+        Name = 'Native security descriptor filesystem rows preserve ACE flags on Windows PowerShell'
+        Body = {
+            Import-Module $moduleManifest -Force
+            if (-not ([System.Environment]::OSVersion.Platform -eq 'Win32NT')) {
+                return
+            }
+            $module = Get-Module ShareSurfer
+            $descriptorBytes = New-TestSecurityDescriptorBytes -Sddl 'O:BAG:BAD:(A;OICIID;FR;;;S-1-5-21-1000-2000-3000-4000)'
+
+            $rows = @(& $module {
+                param($Bytes)
+                $descriptor = ConvertTo-ShareSurferRawSecurityDescriptor -SecurityDescriptorBytes $Bytes
+                ConvertTo-ShareSurferSecurityDescriptorAclRows -RawSecurityDescriptor $descriptor -PermissionKind FileSystem -ShareId 'share-native' -ItemId 'item-native' -FullPath 'C:\Native\Path' -Depth 3
+            } $descriptorBytes)
+
+            Assert-Equal $rows.Count 1 'Native filesystem security descriptor conversion should emit one row per filesystem DACL ACE.'
+            Assert-Equal $rows[0].IsInherited $true 'Native filesystem ACE conversion should detect inherited ACE flags without PowerShell enum cast failures.'
+            Assert-Equal $rows[0].InheritanceFlags 'ContainerInherit,ObjectInherit' 'Native filesystem ACE conversion should preserve inheritance flags.'
+            Assert-Equal $rows[0].Depth 3 'Native filesystem ACE conversion should preserve item depth.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan NativeSmbRpc avoids CIM SMB cmdlets and Get-Acl for core evidence'
         Body = {
             Import-Module $moduleManifest -Force
