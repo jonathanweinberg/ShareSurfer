@@ -176,6 +176,8 @@ pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
 
 Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The package uses relative assets and `sharesurfer-data.js`, so it can be copied, zipped, or opened directly from disk.
 
+Current standalone dashboard examples are preserved under [docs/visuals/dashboard-screenshots/2026-06-09-current](docs/visuals/dashboard-screenshots/2026-06-09-current/README.md). Use that dated set when you want to show the richer standalone dashboard views, including ad-hoc table filtering, sidebar collapse, path context, Migration Discovery selector filtering, Permissioned Group Review, and local review decisions.
+
 A future signed Windows dashboard viewer can wrap this same static dashboard package without changing the collector or export format. See the [WebView2 dashboard viewer concept](docs/webview2-dashboard-viewer.md) for the proposed executable wrapper, trust model, and release path.
 
 ## Pre-1.0 Release Packaging

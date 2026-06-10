@@ -282,6 +282,8 @@ Example migration discovery view:
 
 ![ShareSurfer migration discovery view](visuals/report-dashboard-migration.png)
 
+These four images show the generated offline `report.html` experience. Current standalone dashboard examples are preserved in [visuals/dashboard-screenshots/2026-06-09-current](visuals/dashboard-screenshots/2026-06-09-current/README.md), including the overview, ad-hoc table filtering, findings filters, Permissioned Group Review, path context drilldown, sidebar collapse, Migration Discovery selector filtering, and local review decision controls.
+
 Use the dashboard to review:
 
 - Executive summary cards.
