@@ -366,6 +366,11 @@ function issueWhyItMatters(category: string): string {
 }
 
 function isCriticalCollectionBlock(row: DataRow): boolean {
+  const severity = row.Severity.trim();
+  if (severity) {
+    return (riskRank[severity] ?? 0) >= riskRank.High;
+  }
+
   const text = `${row.ErrorType} ${row.Message} ${row.Detail}`.toLowerCase();
   return (
     text.includes("access denied") ||
