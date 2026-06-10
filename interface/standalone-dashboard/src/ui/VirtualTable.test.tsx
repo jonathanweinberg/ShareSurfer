@@ -59,8 +59,30 @@ describe("VirtualTable", () => {
 
     await user.type(screen.getByRole("searchbox", { name: /Filter Permissioned groups rows/i }), "finance");
 
-    expect(screen.getByText("Showing 1-1 of 1")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
     expect(screen.getByText("Finance Readers")).toBeInTheDocument();
     expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
+  });
+
+  test("uses compact sort indicators and shows the unfiltered total when filtered", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Name: "Finance Readers", Path: "\\\\files01\\Finance" },
+      { Name: "HR Readers", Path: "\\\\files01\\HR" },
+      { Name: "Operations Readers", Path: "\\\\files01\\Operations" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Name", "Path"]} pageSize={20} title="Permissioned groups" />);
+
+    expect(screen.getAllByText("↕")).toHaveLength(2);
+    expect(screen.queryByText("SORT")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Sort by Name/i }));
+    expect(screen.getByText("▲")).toBeInTheDocument();
+    expect(screen.queryByText("ASC")).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("searchbox", { name: /Filter Permissioned groups rows/i }), "finance");
+
+    expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
   });
 });
