@@ -394,6 +394,8 @@ Test-ShareSurferExport -ExportPath 'C:\ShareSurfer\support\scan-2026-06-04-finan
 
 Before sharing the bundle, search it for real domain names, server names, share names, user names, group names, and business unit names. The bundle should contain stable tokens such as `ID-000001`, not raw sensitive values.
 
+Use a case-specific `-RedactionSalt` when you may need to compare multiple support bundles from the same case. If you leave it blank, ShareSurfer generates a fresh salt and token values may change between bundles. Do not reuse one broad salt across unrelated cases, because that can make cross-case correlation easier.
+
 ## Step 9: What To Do Next
 
 For a first business review:
