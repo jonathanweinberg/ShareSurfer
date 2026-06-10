@@ -190,6 +190,20 @@ If you do not have owner mappings or discounted principals yet, leave those CSV 
 
 If WinRM/CIM is blocked or the target is a non-Windows SMB service, ShareSurfer continues best-effort and records the missing share-level permission proof as partial-data evidence in `collection_errors.csv`, `findings.csv`, and `scan_events.csv`.
 
+When the collector host is Windows and WinRM/CIM is blocked, you can scan explicit SMB shares with the native provider instead of the default PowerShell/CIM route:
+
+```powershell
+Invoke-ShareSurferScan `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -SmbCollectionProvider NativeSmbRpc `
+  -OutputPath $exportPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -ManagerIdentityFormat MailTo
+```
+
+`NativeSmbRpc` uses Windows SMB/RPC and Win32 security APIs for share metadata, share permissions, owner values, and DACL evidence. It does not require WinRM/CIM, `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl` for that provider path. It is still permission-dependent: access denied, unavailable share security descriptors, or unreadable folders/files are recorded as partial data and collection errors.
+
 To keep broad operational access visible without letting it drive Migration Discovery, pass a discounted principal CSV:
 
 ```powershell

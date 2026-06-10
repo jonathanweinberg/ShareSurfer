@@ -269,6 +269,7 @@ function Get-ShareSurferExportSchema {
             'ExportVersion',
             'ObsAttribute',
             'SourceMode',
+            'CollectionProvider',
             'OperationalPathLengthThreshold',
             'AzurePathComponentLimit',
             'AzureFullPathLimit',

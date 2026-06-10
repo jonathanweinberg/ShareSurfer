@@ -17,6 +17,7 @@ function Export-ShareSurferInventory {
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
         [string] $ManagerIdentityFormat = 'MailTo',
         [string] $SourceMode = 'InputObject',
+        [string] $CollectionProvider = '',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
@@ -144,6 +145,7 @@ function Export-ShareSurferInventory {
             ExportVersion = '1'
             ObsAttribute = $ObsAttribute
             SourceMode = $SourceMode
+            CollectionProvider = $CollectionProvider
             OperationalPathLengthThreshold = $OperationalPathLengthThreshold
             AzurePathComponentLimit = $AzurePathComponentLimit
             AzureFullPathLimit = $AzureFullPathLimit

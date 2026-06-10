@@ -6,10 +6,17 @@ function Get-ShareSurferSmbShareInventory {
         [Parameter(Mandatory = $true)]
         [string[]] $ShareName,
 
+        [ValidateSet('Auto', 'PowerShellCim', 'NativeSmbRpc')]
+        [string] $SmbCollectionProvider = 'Auto',
+
         [switch] $IncludeFiles,
 
         [switch] $Quiet
     )
+
+    if ($SmbCollectionProvider -eq 'NativeSmbRpc') {
+        return Get-ShareSurferNativeSmbShareInventory -ComputerName $ComputerName -ShareName $ShareName -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+    }
 
     $shares = New-Object System.Collections.ArrayList
     $items = New-Object System.Collections.ArrayList
@@ -21,6 +28,8 @@ function Get-ShareSurferSmbShareInventory {
     $cimSession = $null
     $remoteCimSessionAttempted = $false
     $remoteCimSessionAvailable = $false
+
+    [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'CollectionProviderSelected' -Source $SmbCollectionProvider -Message ('Using {0} SMB collection provider for {1} explicit share target(s) on {2}.' -f $SmbCollectionProvider, @($ShareName).Count, $ComputerName) -Detail 'PowerShell SMB/CIM collector path'))
 
     if (Test-ShareSurferRemoteComputerName -ComputerName $ComputerName) {
         $remoteCimSessionAttempted = $true

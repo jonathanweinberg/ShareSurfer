@@ -35,6 +35,18 @@ function Assert-Equal {
     }
 }
 
+function New-TestSecurityDescriptorBytes {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Sddl
+    )
+
+    $descriptor = New-Object System.Security.AccessControl.RawSecurityDescriptor $Sddl
+    $bytes = New-Object byte[] $descriptor.BinaryLength
+    $descriptor.GetBinaryForm($bytes, 0)
+    ,$bytes
+}
+
 function New-TestInventory {
     $longSegment = ('A' * 260)
     $longPath = '\\files01\Finance\' + $longSegment
@@ -666,7 +678,7 @@ $tests = @(
                 [pscustomobject]@{ ReviewPacketId = 'owner-review-0001'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; ReviewStatus = 'High priority review'; WhyReview = 'high-priority access or migration risk; permission-bearing security groups'; WhatToReviewFirst = 'access conflicts; findings; permissioned groups'; SuggestedNextAction = 'Confirm ownership, review assigned groups, and document the remediation decision.'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; MigrationReadiness = 'Review'; RelatedDataAreaCount = '1'; RelatednessStrength = 'Strong'; RelationshipSignalCount = '3'; ReadinessSignals = 'broken inheritance; conflicts; deep explicit ACE; long path'; DiscountedPrincipal = 'False'; DiscountedPrincipalCount = '0'; DiscountedGroupCount = '0'; DiscountedPrincipals = ''; DiscountReason = '' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
@@ -833,7 +845,7 @@ $tests = @(
             Assert-True ([string]$existingLabDiskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Existing lab disk-budget evidence should include measured bytes.'
 
             @(
-                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'False' }
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
             $mismatchedManifestCriteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
             $mismatchedManifestFileCriterion = @($mismatchedManifestCriteria | Where-Object { $_.Name -eq 'EnterpriseRealFiles' })[0]
@@ -841,7 +853,7 @@ $tests = @(
             Assert-Equal $mismatchedManifestFileCriterion.EvidenceSource 'ScanExportMismatch:scan_manifest.csv' 'File validation should identify mismatched scan manifest evidence.'
             Assert-True ([string]$mismatchedManifestFileCriterion.EvidenceDetail -like '*ManifestIncludeFiles=False*') 'Mismatched file evidence should show the manifest IncludeFiles value.'
             @(
-                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
 
             $liveEvidence = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $criteria
@@ -2370,6 +2382,136 @@ $tests = @(
         }
     },
     @{
+        Name = 'Native SMB RPC descriptor rows preserve share permissions and unresolved SIDs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            if (-not ([System.Environment]::OSVersion.Platform -eq 'Win32NT')) {
+                return
+            }
+            $module = Get-Module ShareSurfer
+            $descriptorBytes = New-TestSecurityDescriptorBytes -Sddl 'O:BAG:BAD:(A;;FR;;;S-1-5-21-1000-2000-3000-4000)(D;;FW;;;S-1-5-21-1000-2000-3000-5000)'
+
+            $rows = @(& $module {
+                param($Bytes)
+                ConvertTo-ShareSurferSharePermissionRowsFromSecurityDescriptor -ShareId 'share-native' -SecurityDescriptorBytes $Bytes
+            } $descriptorBytes)
+
+            Assert-Equal $rows.Count 2 'Native share security descriptor conversion should emit one row per share DACL ACE.'
+            Assert-True ($rows.Identity -contains 'S-1-5-21-1000-2000-3000-4000') 'Unresolved share permission SIDs should be preserved as visible review evidence.'
+            Assert-True ($rows.AccessControlType -contains 'Deny') 'Native share security descriptor conversion should preserve deny ACEs.'
+            Assert-True ($rows.Source -contains 'NativeSmbRpc') 'Native share permission rows should record NativeSmbRpc provenance.'
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan NativeSmbRpc avoids CIM SMB cmdlets and Get-Acl for core evidence'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeRpc-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $shareRoot 'Delegated') -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shareRoot 'native-file.txt') -Value 'native rpc share mode'
+
+            function global:New-CimSession {
+                throw 'New-CimSession should not be called by NativeSmbRpc.'
+            }
+            function global:Get-SmbShare {
+                throw 'Get-SmbShare should not be called by NativeSmbRpc.'
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called by NativeSmbRpc.'
+            }
+            function global:Get-Acl {
+                throw 'Get-Acl should not be called by NativeSmbRpc.'
+            }
+
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = $shareRoot
+                    Description = 'Mocked native SMB RPC metadata'
+                    Source = 'SmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                    Level = 502
+                    SecurityDescriptorBytes = @()
+                    SharePermissions = @(
+                        [pscustomobject]@{
+                            ShareId = ''
+                            Identity = 'CONTOSO\NativeShareReaders'
+                            Rights = 'Read'
+                            AccessControlType = 'Allow'
+                            Source = 'NativeSmbRpc'
+                        }
+                    )
+                }
+            }
+
+            $global:ShareSurferNativeSecurityInfoProvider = {
+                param(
+                    [string] $Path,
+                    [string] $ShareId,
+                    [string] $ItemId,
+                    [string] $FullPath,
+                    [int] $Depth
+                )
+
+                [pscustomobject]@{
+                    Owner = 'CONTOSO\NativeOwner'
+                    InheritanceEnabled = $false
+                    InheritanceBrokenAt = $FullPath
+                    AclEntries = @(
+                        [pscustomobject]@{
+                            ItemId = $ItemId
+                            ShareId = $ShareId
+                            FullPath = $FullPath
+                            Identity = 'CONTOSO\NativeEditors'
+                            Rights = 'Modify'
+                            AccessControlType = 'Allow'
+                            IsInherited = $false
+                            InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                            PropagationFlags = 'None'
+                            Depth = $Depth
+                        }
+                    )
+                    Source = 'NativeWin32Security'
+                }
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeRpcExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'remote-files05' -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $items = @(Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv'))
+                $permissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
+                $aclRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'acl_entries.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+                $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv'))
+                $validation = Test-ShareSurferExport -ExportPath $outputPath
+
+                Assert-Equal $validation.IsValid $true 'Native SMB RPC scan export should validate against the normalized schema.'
+                Assert-Equal $shares[0].Source 'NativeSmbRpc' 'Native provider should record NativeSmbRpc as the share source.'
+                Assert-Equal $shares[0].PartialData 'False' 'Native provider should not mark the share partial when share permissions and ACLs were collected.'
+                Assert-True ($items.Owner -contains 'CONTOSO\NativeOwner') 'Native provider should populate item owner evidence through native security reads.'
+                Assert-True ($permissions.Source -contains 'NativeSmbRpc') 'Native provider should populate share permissions from native provider evidence.'
+                Assert-True ($aclRows.Identity -contains 'CONTOSO\NativeEditors') 'Native provider should populate file/folder ACL rows through native security evidence.'
+                Assert-Equal $manifest[0].CollectionProvider 'NativeSmbRpc' 'Scan manifest should record NativeSmbRpc provider selection.'
+                Assert-True ($events.EventType -contains 'CollectionProviderSelected') 'Native provider should log provider selection.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'RemoteCimSessionCreated' }).Count -eq 0) 'Native provider should not create remote CIM sessions.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-Acl -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferNativeSecurityInfoProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan keeps non-terminating WinRM failures out of the console error stream'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2567,6 +2709,8 @@ $tests = @(
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
+            Assert-True ($redactedManifest -like '*CollectionProvider*') 'Redacted manifest should preserve collection provider as a support diagnostic setting.'
+            Assert-True ($redactedManifest -like '*InputObject*') 'Redacted manifest should preserve safe collection provider values.'
             Assert-True (Test-Path -LiteralPath $redactedReportPath) 'Support bundle should include a regenerated redacted report when requested.'
             $redactedReport = Get-Content -LiteralPath $redactedReportPath -Raw
             Assert-True ($redactedReport -notlike '*CONTOSO*') 'Redacted report must not contain source domain names.'
@@ -2615,6 +2759,8 @@ $tests = @(
             Assert-True (@($bundleDiagnostics.Rollups.FindingsByType | Where-Object { $_.Name -eq 'DeepExplicitAce' }).Count -gt 0) 'Support bundle diagnostics should include finding type rollups.'
             Assert-True (@($bundleDiagnostics.Rollups.CollectionErrorsByType | Where-Object { $_.Name -eq 'AclReadError' }).Count -gt 0) 'Support bundle diagnostics should include collection error type rollups.'
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
+            Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'CollectionProvider') 'Support bundle diagnostics should preserve collection provider scan settings.'
+            Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'CollectionProvider' }).Count -eq 0) 'Collection provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
             Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.OwnerReviewPacketCount -gt 0) 'Support bundle diagnostics should summarize owner review packet counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.PermissionedGroupCount -gt 0) 'Support bundle diagnostics should summarize permissioned group counts.'

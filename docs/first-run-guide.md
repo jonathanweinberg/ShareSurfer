@@ -40,7 +40,7 @@ Open Windows PowerShell 5.1 as the account that will run the scan.
 
 For the best first run, right-click Windows PowerShell and choose **Run as administrator**. ShareSurfer can still collect what your current token can read without elevation, but a non-elevated token may miss or partially record:
 
-- Share-level permission proof from `Get-SmbShareAccess` or remote CIM/WinRM calls.
+- Share-level permission proof from `Get-SmbShareAccess`, remote CIM/WinRM calls, or native SMB/RPC security descriptors.
 - ACLs on protected folders or files.
 - Owner values on protected objects.
 - Child folders/files where traversal or enumeration is denied.
@@ -240,6 +240,20 @@ The collector prints timestamped status lines while it runs. That is expected an
 Do not pass `-OwnerMappingPath` or `-DiscountedPrincipalPath` unless the CSV file exists. The splatted examples above check first, which avoids stopping the scan because an optional input file was not created yet.
 
 If the target cannot accept WinRM/CIM, ShareSurfer continues best-effort when it can still inspect the path. The scan will mark share-level permission proof as partial or unavailable in the exports instead of treating that alone as a hard stop.
+
+If the collector host is Windows and you are scanning explicit Windows SMB shares, use the native SMB/RPC provider when WinRM/CIM is blocked:
+
+```powershell
+Invoke-ShareSurferScan `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -SmbCollectionProvider NativeSmbRpc `
+  -OutputPath $exportPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -ManagerIdentityFormat MailTo
+```
+
+`NativeSmbRpc` is a collection provider, not a different report format. It feeds the same CSVs and dashboard, but it uses Windows SMB/RPC and Win32 security APIs for share metadata, share permissions, owner values, and DACL evidence. It does not require WinRM/CIM, `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl` for the native provider path. It still needs enough share/file permissions to read the target evidence; unreadable paths and missing security descriptors are shown as partial data, collection errors, and scan events.
 
 ## Step 5: Validate the Export
 
