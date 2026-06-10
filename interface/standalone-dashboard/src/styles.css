@@ -4,7 +4,7 @@
   --surface: #ffffff;
   --surface-strong: #eef5fb;
   --ink: #0f172a;
-  --muted: #64748b;
+  --muted: #5a6677;
   --line: #d8e1ec;
   --line-strong: #bfd0e1;
   --teal: #0f8a95;
@@ -1253,8 +1253,10 @@ th {
 
 .sort-header span:last-child {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
+  min-width: 14px;
+  text-align: right;
 }
 
 .selected-row td {
@@ -1440,5 +1442,16 @@ th {
 
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0ms !important;
   }
 }

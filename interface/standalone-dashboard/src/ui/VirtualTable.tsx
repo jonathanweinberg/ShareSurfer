@@ -45,6 +45,16 @@ function compareCellValues(left: string, right: string): number {
   return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 }
 
+function sortIndicator(direction: SortDirection | null): string {
+  if (direction === "asc") {
+    return "▲";
+  }
+  if (direction === "desc") {
+    return "▼";
+  }
+  return "↕";
+}
+
 export function VirtualTable({
   rows,
   columns,
@@ -86,6 +96,10 @@ export function VirtualTable({
   const start = safePage * pageSize;
   const visibleRows = sortedRows.slice(start, start + pageSize);
   const end = sortedRows.length === 0 ? 0 : Math.min(start + visibleRows.length, sortedRows.length);
+  const pageSummary =
+    sortedRows.length === 0 ? `Showing 0 of ${filteredRows.length}` : `Showing ${start + 1}-${end} of ${filteredRows.length}`;
+  const filteredSummary =
+    filterText.trim() && filteredRows.length !== rows.length ? `${pageSummary} (filtered from ${rows.length})` : pageSummary;
 
   useEffect(() => {
     setPage(0);
@@ -105,7 +119,7 @@ export function VirtualTable({
   return (
     <div className="table-shell" aria-label={title}>
       <div className="table-meta">
-        <span>{sortedRows.length === 0 ? `Showing 0 of ${filteredRows.length}` : `Showing ${start + 1}-${end} of ${filteredRows.length}`}</span>
+        <span>{filteredSummary}</span>
         <div className="pager" aria-label={`${title} pages`}>
           <label className="table-filter">
             <span className="sr-only">Filter {title} rows</span>
@@ -145,7 +159,7 @@ export function VirtualTable({
                   <th key={column} title={columnLabels?.[column] ?? column} aria-sort={activeSort === "asc" ? "ascending" : activeSort === "desc" ? "descending" : "none"}>
                     <button type="button" className="sort-header" onClick={() => toggleSort(column)} aria-label={`Sort by ${label}`}>
                       <span>{label}</span>
-                      <span aria-hidden="true">{activeSort === "asc" ? "ASC" : activeSort === "desc" ? "DESC" : "SORT"}</span>
+                      <span aria-hidden="true">{sortIndicator(activeSort)}</span>
                     </button>
                   </th>
                 );

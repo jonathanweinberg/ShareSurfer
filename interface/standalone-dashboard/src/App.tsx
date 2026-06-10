@@ -172,8 +172,10 @@ function columnsForDataset(datasetKey: DatasetKey, showAll = false): string[] {
   return showAll ? expectedColumns[datasetKey] : curatedColumns[datasetKey] ?? expectedColumns[datasetKey].slice(0, 8);
 }
 
+const numberFormatter = new Intl.NumberFormat();
+
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat().format(value);
+  return numberFormatter.format(value);
 }
 
 function formatReportDate(value: string): string {
@@ -585,9 +587,9 @@ function chip(label: string, value: string, onRemove: () => void) {
     return null;
   }
   return (
-    <button key={label} type="button" className="filter-chip" onClick={onRemove}>
+    <button key={label} type="button" className="filter-chip" onClick={onRemove} aria-label={`Remove ${label} filter`}>
       <span>{label}: {value}</span>
-      <span aria-hidden="true">x</span>
+      <span aria-hidden="true">×</span>
     </button>
   );
 }
@@ -597,9 +599,9 @@ function booleanChip(label: string, active: boolean, onRemove: () => void) {
     return null;
   }
   return (
-    <button key={label} type="button" className="filter-chip" onClick={onRemove}>
+    <button key={label} type="button" className="filter-chip" onClick={onRemove} aria-label={`Remove ${label} filter`}>
       <span>{label}</span>
-      <span aria-hidden="true">x</span>
+      <span aria-hidden="true">×</span>
     </button>
   );
 }
@@ -1696,7 +1698,7 @@ function GroupsView({
             <div className="tree-list">
               <strong>{selected.group}</strong>
               {selected.children.map((child) => (
-                <span key={`${child.ParentGroup}-${child.ChildIdentity}`}>{"->"} {child.ChildIdentity} ({child.ChildObjectClass || "identity"})</span>
+                <span key={`${child.ParentGroup}-${child.ChildIdentity}`}>↳ {child.ChildIdentity} ({child.ChildObjectClass || "identity"})</span>
               ))}
               {selected.children.length === 0 ? <span>No expanded members were recorded for this group.</span> : null}
             </div>
