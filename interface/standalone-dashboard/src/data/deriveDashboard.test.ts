@@ -102,6 +102,52 @@ describe("ShareSurfer dashboard data model", () => {
     expect(dashboard.criticalScanBlocks.map((block) => block.ErrorType)).toContain("SharePermissionCollectionUnavailable");
   });
 
+  test("classifies critical collection blocks by severity before legacy text heuristics", () => {
+    const snapshot = JSON.parse(JSON.stringify(demoSnapshot));
+    snapshot.datasets.collection_errors = [
+      {
+        ErrorId: "error-high-new-wording",
+        ShareId: "share-finance",
+        ItemId: "item-payroll",
+        FullPath: "\\\\files01\\Finance\\Payroll",
+        ErrorType: "DirectoryMetadataGap",
+        Severity: "High",
+        Source: "Collector",
+        Message: "Collector skipped a protected branch.",
+        Detail: "New message wording that does not match the legacy critical-block heuristic."
+      },
+      {
+        ErrorId: "error-warning-access-denied",
+        ShareId: "share-hr",
+        ItemId: "item-hr",
+        FullPath: "\\\\files01\\HR",
+        ErrorType: "AclReadError",
+        Severity: "Warning",
+        Source: "Get-Acl",
+        Message: "Access denied while reading optional metadata.",
+        Detail: "Severity is populated, so dashboard should trust it over text matching."
+      },
+      {
+        ErrorId: "error-legacy-access-denied",
+        ShareId: "share-legacy",
+        ItemId: "item-legacy",
+        FullPath: "\\\\files01\\Legacy",
+        ErrorType: "AclReadError",
+        Severity: "",
+        Source: "Get-Acl",
+        Message: "Access denied while reading ACLs.",
+        Detail: "Legacy export without severity should still use text fallback."
+      }
+    ];
+
+    const dashboard = deriveDashboard(normalizeSnapshot(snapshot));
+    const criticalIds = dashboard.criticalScanBlocks.map((block) => block.ErrorId);
+
+    expect(criticalIds).toContain("error-high-new-wording");
+    expect(criticalIds).toContain("error-legacy-access-denied");
+    expect(criticalIds).not.toContain("error-warning-access-denied");
+  });
+
   test("aggregates repeated owner-level review and migration rows into one workbench cluster", () => {
     const snapshot = JSON.parse(JSON.stringify(demoSnapshot));
     const related = snapshot.datasets.related_data_areas[0];
