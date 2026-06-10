@@ -57,7 +57,9 @@ Example behavior:
 - The same source identity gets the same token in `acl_entries.csv`, `identities.csv`, `group_edges.csv`, `conflicts.csv`, and `findings.csv`.
 - Different identities, servers, shares, and paths get different tokens.
 
-Use a case-specific salt when you need stable tokens within one support case. Reusing the same salt across unrelated bundles can make cross-bundle correlation easier.
+Use a case-specific salt when you need stable tokens within one support case. If you omit `-RedactionSalt`, ShareSurfer generates a fresh salt for that bundle, so the same source account, path, or share may receive different tokens in the next bundle. Reuse the same case-specific salt for repeated bundles that must be compared with each other, and store that salt with your internal case notes, not inside the shared bundle.
+
+Do not reuse one broad salt for unrelated cases. Broad salt reuse can make cross-case correlation easier for anyone who receives multiple bundles.
 
 ## Data To Redact
 
