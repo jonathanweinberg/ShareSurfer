@@ -226,7 +226,7 @@ The most important CSVs for a first review are:
 | `items.csv` | Folders and files found under each share. |
 | `share_permissions.csv` | The share-level access gate. |
 | `acl_entries.csv` | Folder and file permissions. |
-| `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, Broken/Missing SID rows, collection errors, and potential service account review flags. |
+| `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, Broken/Missing SID rows, unavailable owner metadata, collection errors, and potential service account review flags. |
 | `conflicts.csv` | Share-vs-NTFS access mismatches. |
 | `identities.csv` | User and group details such as employee and OBS values. |
 | `group_edges.csv` | Expanded group membership paths. |
@@ -249,6 +249,8 @@ Import-Csv "$exportPath\owner_review_packets.csv" | Select-Object -First 10
 If the file exists but owner or business-unit values are blank or too generic, update `owner-mapping.csv` and rerun the scan.
 
 If `Owner` is blank in `items.csv`, ShareSurfer did not receive a usable NTFS owner value for that item. That can mean the owner read was denied, the object has an unresolved owner SID, the path was partially collected, or the source did not return owner metadata. It does not automatically mean the file has no real Windows owner.
+
+If `OwnerMetadataUnavailable` appears in `findings.csv`, use it as the review queue signal for those blank `items.csv` owner values. Confirm whether the collector was run with enough rights to read owner metadata, then rerun or validate the owner with normal Windows/file-share tools.
 
 If `BrokenOrMissingSid` appears in `findings.csv`, a permission referenced a SID or account name ShareSurfer could not resolve. Review it with the directory or file-share team; common causes include deleted accounts, broken trust references, or directory lookup gaps.
 

@@ -71,6 +71,15 @@ function Get-ShareSurferFindings {
 
     foreach ($item in @(ConvertTo-ShareSurferArray $Items)) {
         $fullPath = [string]$item.FullPath
+        $owner = ''
+        if ($null -ne $item.PSObject.Properties['Owner']) {
+            $owner = [string]$item.Owner
+        }
+
+        if ([string]::IsNullOrWhiteSpace($owner)) {
+            [void]$findings.Add((New-ShareSurferFinding -FindingType 'OwnerMetadataUnavailable' -Severity 'Warning' -ShareId $item.ShareId -ItemId $item.ItemId -FullPath $fullPath -ObservedValue 'Blank owner metadata' -PolicyValue 'Usable NTFS owner value' -Message 'ShareSurfer could not collect a usable NTFS owner value for this item. This can mean the owner read was denied, the owner SID was unresolved, the path was partially collected, or the source did not return owner metadata; it does not prove the Windows object lacks an owner.'))
+        }
+
         if ($fullPath.Length -gt $OperationalPathLengthThreshold) {
             [void]$findings.Add((New-ShareSurferFinding -FindingType 'LongPathOperationalPolicy' -Severity 'Warning' -ShareId $item.ShareId -ItemId $item.ItemId -FullPath $fullPath -ObservedValue $fullPath.Length -PolicyValue $OperationalPathLengthThreshold -Message 'Full path exceeds the configured ShareSurfer operational migration policy threshold. This is separate from Azure Files hard limits.'))
         }

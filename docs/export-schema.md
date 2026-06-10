@@ -156,9 +156,12 @@ Common V1 finding types include:
 - `DeepExplicitAce`
 - `BrokenInheritance`
 - `BrokenOrMissingSid`
+- `OwnerMetadataUnavailable`
 - `CollectionError`
 
 `BrokenOrMissingSid` means a share or folder/file permission references a SID or account name ShareSurfer could not resolve. Treat it as a directory/file-share cleanup signal, not as proof of malicious access.
+
+`OwnerMetadataUnavailable` means `items.csv` did not contain a usable NTFS owner value for the item. This can happen when owner reads are denied, the owner SID is unresolved, a path was partially collected, or the source did not return owner metadata.
 
 ### `collection_errors.csv`
 
