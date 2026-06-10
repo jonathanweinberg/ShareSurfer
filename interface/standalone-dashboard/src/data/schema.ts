@@ -324,3 +324,41 @@ export const tooltipRegistry = {
   brokenInheritance:
     "A folder or file stopped inheriting permissions from its parent. Review whether that was intentional."
 } as const;
+
+export const glossaryTerms = [
+  {
+    term: "Owner",
+    definition:
+      "The mapped business reviewer or data owner for a path, share, or related data area. This is separate from the Windows or NTFS file owner field."
+  },
+  {
+    term: "No owner",
+    definition:
+      "ShareSurfer could not collect or map a usable owner. That usually means the owner needs to be supplied by mapping, directory data, or manual business review."
+  },
+  {
+    term: "Broken/Missing SID",
+    definition:
+      "A permission references a SID or account name that could not be resolved. Common causes include deleted accounts, trust changes, or directory lookup gaps."
+  },
+  {
+    term: "Collection error",
+    definition:
+      "A recorded problem while resolving, enumerating, or reading share, folder, file, ACL, or directory metadata."
+  },
+  {
+    term: "Partial data",
+    definition:
+      "ShareSurfer found the target but could not prove every expected detail. Treat that area as incomplete until the diagnostic evidence is reviewed."
+  },
+  {
+    term: "Discounted access principal",
+    definition:
+      "An admin, helpdesk, or service principal that the operator told ShareSurfer to discount from ownership and migration signal calculations."
+  },
+  {
+    term: "Critical scan information block",
+    definition:
+      "A severe collection gap that can hide permissions or paths. Fixing the block is not the same thing as approval; it only makes review evidence more trustworthy."
+  }
+] as const;

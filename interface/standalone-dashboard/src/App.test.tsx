@@ -155,6 +155,22 @@ describe("dashboard workbench interactions", () => {
     expect(within(findingsContext).getByText(/Findings use evidence generated Jun 5, 2026/i)).toBeInTheDocument();
   });
 
+  test("overview includes first-run glossary terms for confusing review signals", () => {
+    renderWithDemoSnapshot();
+
+    const glossary = screen.getByRole("region", { name: /Key terms/i });
+
+    expect(within(glossary).getByText("Owner")).toBeInTheDocument();
+    expect(within(glossary).getByText("No owner")).toBeInTheDocument();
+    expect(within(glossary).getByText("Broken/Missing SID")).toBeInTheDocument();
+    expect(within(glossary).getByText("Collection error")).toBeInTheDocument();
+    expect(within(glossary).getByText("Partial data")).toBeInTheDocument();
+    expect(within(glossary).getByText("Discounted access principal")).toBeInTheDocument();
+    expect(within(glossary).getByText("Critical scan information block")).toBeInTheDocument();
+    expect(within(glossary).getByText(/business reviewer or data owner/i)).toBeInTheDocument();
+    expect(within(glossary).getByText(/not the same thing as approval/i)).toBeInTheDocument();
+  });
+
   test("sidebar can be hidden to give review panes more horizontal space", () => {
     const view = renderWithDemoSnapshot();
 

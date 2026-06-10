@@ -39,7 +39,7 @@ import {
 } from "./data/deriveDashboard";
 import type { RawSnapshot } from "./data/fixtures";
 import type { DataRow, DatasetKey } from "./data/schema";
-import { datasetLabels, expectedColumns, tooltipRegistry } from "./data/schema";
+import { datasetLabels, expectedColumns, glossaryTerms, tooltipRegistry } from "./data/schema";
 import { KpiCard } from "./ui/KpiCard";
 import { Tooltip } from "./ui/Tooltip";
 import { VirtualTable } from "./ui/VirtualTable";
@@ -1195,6 +1195,18 @@ function OverviewView({
           View diagnostics
         </button>
       </aside>
+
+      <section className="panel glossary-panel" aria-label="Key terms">
+        <SectionTitle tooltip="Plain-English definitions for the main labels and filters used in this dashboard.">Key Terms</SectionTitle>
+        <dl className="glossary-grid">
+          {glossaryTerms.map((item) => (
+            <div key={item.term}>
+              <dt>{item.term}</dt>
+              <dd>{item.definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
       <section className="panel workbench-panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.ownerMapping}>Owner Workbench</SectionTitle>

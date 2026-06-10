@@ -566,6 +566,39 @@ select {
   grid-row: auto;
 }
 
+.glossary-panel {
+  grid-column: 1 / -1;
+}
+
+.glossary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+}
+
+.glossary-grid > div {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.glossary-grid dt {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.glossary-grid dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .section-title {
   display: flex;
   align-items: flex-start;
