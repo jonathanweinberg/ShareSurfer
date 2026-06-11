@@ -35,14 +35,24 @@ function Get-ShareSurferNativeSecurityInfo {
         [ref]$securityDescriptor)
 
     try {
-        if ($result -ne 0 -or $securityDescriptor -eq [IntPtr]::Zero) {
-            throw ('GetNamedSecurityInfoW failed with Win32 result {0}.' -f $result)
+        if ($result -ne 0) {
+            $win32Message = Get-ShareSurferWin32ResultMessage -ResultCode $result
+            throw ('NativeSecurityDescriptorReadFailed: GetNamedSecurityInfoW failed for {0} with Win32 result {1} ({2}). SMB/RPC reachability does not guarantee readable owner/DACL security descriptor evidence.' -f $nativePath, $result, $win32Message)
+        }
+
+        if ($securityDescriptor -eq [IntPtr]::Zero) {
+            throw ('NativeSecurityDescriptorUnavailable: GetNamedSecurityInfoW returned an empty security descriptor for {0}.' -f $nativePath)
         }
 
         $bytes = [byte[]](ConvertTo-ShareSurferSecurityDescriptorBytes -SecurityDescriptor $securityDescriptor)
-        $rawDescriptor = ConvertTo-ShareSurferRawSecurityDescriptor -SecurityDescriptorBytes $bytes
+        try {
+            $rawDescriptor = ConvertTo-ShareSurferRawSecurityDescriptor -SecurityDescriptorBytes $bytes
+        }
+        catch {
+            throw ('NativeSecurityDescriptorParseFailed: GetNamedSecurityInfoW returned security descriptor bytes for {0}, but they could not be parsed. {1}' -f $nativePath, [string]$_.Exception.Message)
+        }
         if ($null -eq $rawDescriptor) {
-            throw 'GetNamedSecurityInfoW returned an empty security descriptor.'
+            throw ('NativeSecurityDescriptorUnavailable: GetNamedSecurityInfoW returned empty security descriptor bytes for {0}.' -f $nativePath)
         }
 
         $owner = ConvertTo-ShareSurferIdentityReference -SecurityIdentifier $rawDescriptor.Owner

@@ -32,7 +32,7 @@ C:\ShareSurfer\ShareSurfer-0.1.0-pre.9\
 
 If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.9`, change the destination to `C:\ShareSurfer` to avoid a doubled nested folder. The dashboard host can use the same release folder path, or another local path such as `D:\Tools\ShareSurfer-0.1.0-pre.9`.
 
-During collection, `Invoke-ShareSurferScan` prints timestamped phase updates so the operator can tell the scan is still active. Use `-Quiet` only for scheduled automation. If WinRM/CIM is unavailable, ShareSurfer records the gap as partial share-permission evidence and continues with file/folder evidence where possible.
+During collection, `Invoke-ShareSurferScan` prints timestamped phase updates so the operator can tell the scan is still active. Use `-Quiet` only for scheduled automation. If WinRM/CIM is unavailable, ShareSurfer records the gap as partial share-permission evidence and continues with file/folder evidence where possible. If SMB/RPC is reachable but native security descriptor reads fail, the scan is still partial: review `NativeShareSecurityDescriptorUnavailable`, `NativeShareSecurityDescriptorParseFailed`, `NativeSecurityDescriptorReadFailed`, and `NativeSecurityDescriptorParseFailed` rows before asking owners to approve the result.
 
 ## 1. Prepare Inputs on the Collector
 

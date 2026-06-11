@@ -151,7 +151,7 @@ Invoke-ShareSurferScan `
   -IncludeFiles
 ```
 
-`NativeSmbRpc` avoids the normal WinRM/CIM route for core SMB evidence. It is still permission-dependent, so access denied results should be reviewed in `collection_errors.csv`, `findings.csv`, and the dashboard diagnostics.
+`NativeSmbRpc` avoids the normal WinRM/CIM route for core SMB evidence. It is still permission-dependent, so access denied results should be reviewed in `collection_errors.csv`, `findings.csv`, and the dashboard diagnostics. A green SMB/RPC port check means the route is reachable; it does not prove that the collector can read or parse share security descriptors, owner values, or folder/file DACLs. If the scan reports `NativeShareSecurityDescriptorUnavailable`, `NativeShareSecurityDescriptorParseFailed`, `NativeSecurityDescriptorReadFailed`, or `NativeSecurityDescriptorParseFailed`, treat the share as reachable but incomplete and review collector rights or SMB server compatibility.
 
 ## Recipe 6: Validate, Build the Report, and Open the Dashboard
 

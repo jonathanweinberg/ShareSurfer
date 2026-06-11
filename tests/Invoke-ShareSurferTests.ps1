@@ -2757,6 +2757,62 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan NativeSmbRpc classifies reachable but unreadable security descriptors'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeDescriptorFailure-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shareRoot 'descriptor-failure.txt') -Value 'native descriptor failure mode'
+
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = $shareRoot
+                    Description = 'Mocked native SMB RPC metadata without share descriptor'
+                    Source = 'SmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                    Level = 502
+                    SecurityDescriptorBytes = @()
+                }
+            }
+
+            $global:ShareSurferNativeSecurityInfoProvider = {
+                param(
+                    [string] $Path,
+                    [string] $ShareId,
+                    [string] $ItemId,
+                    [string] $FullPath,
+                    [int] $Depth
+                )
+
+                throw 'NativeSecurityDescriptorReadFailed: GetNamedSecurityInfoW failed with Win32 result 5 (Access is denied).'
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeDescriptorFailureExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'remote-files06' -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal $shares[0].PartialData 'True' 'Share should be marked partial when native security descriptors cannot be collected.'
+                Assert-True ($collectionErrors.ErrorType -contains 'NativeShareSecurityDescriptorUnavailable') 'Missing native share security descriptors should have an explicit collection error type.'
+                Assert-True ($collectionErrors.ErrorType -contains 'NativeSecurityDescriptorReadFailed') 'Unreadable native file/folder security descriptors should have an explicit collection error type.'
+                Assert-True (($collectionErrors | Where-Object { $_.ErrorType -eq 'NativeSecurityDescriptorReadFailed' } | Select-Object -First 1).Detail -like '*SMB/RPC or UNC enumeration can be reachable*') 'Native descriptor read failures should explain reachability versus readable security evidence.'
+                Assert-True ($events.EventType -contains 'NativeShareSecurityDescriptorUnavailable') 'Missing share descriptors should be logged as scan events.'
+                Assert-True ($events.EventType -contains 'NativeSecurityDescriptorReadFailed') 'Unreadable filesystem descriptors should be logged as scan events.'
+            }
+            finally {
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferNativeSecurityInfoProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan keeps non-terminating WinRM failures out of the console error stream'
         Body = {
             Import-Module $moduleManifest -Force

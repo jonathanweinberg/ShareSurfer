@@ -285,7 +285,7 @@ function Get-ShareSurferPortProtocolCollectionImpact {
 
     if ($Status -eq 'Pass') {
         if ($Protocol -eq 'SMB') {
-            return 'Core SMB reachability is available from the collector; permissions still determine how much share, folder, file, owner, and ACL evidence can be read.'
+            return 'Core SMB reachability is available from the collector; permissions and target security-descriptor behavior still determine how much share, folder, file, owner, and ACL evidence can be read and parsed.'
         }
         return ('The {0} route is reachable from the collector and can support {1}.' -f $Protocol, $RequiredFor)
     }
@@ -338,6 +338,9 @@ function Get-ShareSurferPortProtocolOperatorGuidance {
         return 'Run again without -SkipNetworkTests when you are allowed to test network reachability.'
     }
     if ($Status -eq 'Pass') {
+        if ($Protocol -eq 'SMB') {
+            return 'No network action is indicated for SMB. Still review scan diagnostics because reachable SMB/RPC does not prove readable or parseable share, owner, or DACL security descriptors.'
+        }
         return 'No action is needed for this protocol before scanning, unless permissions or policy require separate review.'
     }
 
