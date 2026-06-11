@@ -1994,6 +1994,14 @@ $tests = @(
             Assert-True ($checks.Protocol -contains 'SMB') 'Check CSV should include SMB TCP 445 evidence.'
             Assert-True ($checks.Protocol -contains 'WinRM HTTP') 'Check CSV should include WinRM/CIM evidence.'
             Assert-True ($checks.Protocol -contains 'LDAP') 'Check CSV should include directory protocol evidence.'
+            Assert-True ($targets[0].PSObject.Properties.Name -contains 'ReadinessSummary') 'Target CSV should include reader-facing readiness summaries.'
+            Assert-True ($targets[0].PSObject.Properties.Name -contains 'CollectionImpact') 'Target CSV should include collection impact guidance.'
+            Assert-True ($checks[0].PSObject.Properties.Name -contains 'EnvironmentProfile') 'Check CSV should include environment profile guidance.'
+            Assert-True ($checks[0].PSObject.Properties.Name -contains 'OperatorGuidance') 'Check CSV should include operator guidance.'
+            Assert-True ($checks[0].PSObject.Properties.Name -contains 'RemediationHint') 'Check CSV should include remediation hints.'
+            Assert-True (@($checks | Where-Object { $_.Protocol -eq 'SMB' -and $_.EnvironmentProfile -eq 'Core SMB collection' }).Count -gt 0) 'SMB rows should explain the core collection profile.'
+            Assert-True (@($checks | Where-Object { $_.Protocol -eq 'WinRM HTTP' -and $_.EnvironmentProfile -eq 'Default Windows CIM collection' }).Count -gt 0) 'WinRM rows should explain the CIM collection profile.'
+            Assert-True (@($checks | Where-Object { $_.Protocol -eq 'WinRM HTTP' -and $_.OperatorGuidance -like '*without -SkipNetworkTests*' }).Count -gt 0) 'Skipped WinRM rows should tell operators how to get live reachability evidence.'
             Assert-True (@($checks | Where-Object { $_.Status -eq 'Skipped' }).Count -gt 0) 'SkipNetworkTests should keep deterministic skipped check rows.'
         }
     },

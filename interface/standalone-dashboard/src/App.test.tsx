@@ -531,6 +531,12 @@ describe("dashboard workbench interactions", () => {
     const targetsTable = screen.getByRole("table", { name: /Ports and protocols targets/i });
     expect(within(targetsTable).getByText("\\\\files01\\Finance")).toBeInTheDocument();
     expect(within(targetsTable).getAllByText("Blocked").length).toBeGreaterThan(0);
+    expect(within(targetsTable).getByText(/Core collection is likely blocked/i)).toBeInTheDocument();
+
+    const guidanceTable = screen.getByRole("table", { name: /Ports and protocols guidance/i });
+    expect(within(guidanceTable).getByText("Default Windows CIM collection")).toBeInTheDocument();
+    expect(within(guidanceTable).getAllByText(/NativeSmbRpc/i).length).toBeGreaterThan(0);
+    expect(within(guidanceTable).getByText(/Check firewall rules/i)).toBeInTheDocument();
 
     const checksTable = screen.getByRole("table", { name: /Ports and protocols checks/i });
     expect(within(checksTable).getAllByText("SMB").length).toBeGreaterThan(0);

@@ -409,6 +409,8 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "FailedCount",
     "SkippedCount",
     "TargetStatus",
+    "ReadinessSummary",
+    "CollectionImpact",
     "SuggestedNextAction"
   ],
   port_protocol_checks: [
@@ -428,6 +430,10 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "RequiredFor",
     "Status",
     "Severity",
+    "EnvironmentProfile",
+    "CollectionImpact",
+    "OperatorGuidance",
+    "RemediationHint",
     "LatencyMs",
     "RemoteAddress",
     "Message",

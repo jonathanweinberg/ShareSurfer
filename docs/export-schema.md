@@ -80,8 +80,8 @@ Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with t
 | File | Grain | Purpose |
 | --- | --- | --- |
 | `port_protocol_manifest.csv` | One row per ports/protocols assessment | Records the collector host, user context, PowerShell version, module availability, target count, and pass/warning/failure/skipped totals. |
-| `port_protocol_targets.csv` | One row per assessed target | Summarizes each file server/share or directory endpoint with target status and suggested next action. |
-| `port_protocol_checks.csv` | One row per protocol check | Captures SMB, WinRM/CIM, native SMB/RPC-related, RPC, and optional directory protocol reachability evidence. |
+| `port_protocol_targets.csv` | One row per assessed target | Summarizes each file server/share or directory endpoint with target status, readiness summary, collection impact, and suggested next action. |
+| `port_protocol_checks.csv` | One row per protocol check | Captures SMB, WinRM/CIM, native SMB/RPC-related, RPC, and optional directory protocol reachability evidence with operator guidance and remediation hints. |
 
 ## Column Reference
 
@@ -250,15 +250,15 @@ Use this file to understand the system that ran the reachability assessment. It 
 
 ### `port_protocol_targets.csv`
 
-Expected columns: `AssessmentId`, `TargetId`, `Target`, `TargetType`, `ComputerName`, `ShareName`, `UNCPath`, `CheckCount`, `PassedCount`, `WarningCount`, `FailedCount`, `SkippedCount`, `TargetStatus`, `SuggestedNextAction`.
+Expected columns: `AssessmentId`, `TargetId`, `Target`, `TargetType`, `ComputerName`, `ShareName`, `UNCPath`, `CheckCount`, `PassedCount`, `WarningCount`, `FailedCount`, `SkippedCount`, `TargetStatus`, `ReadinessSummary`, `CollectionImpact`, `SuggestedNextAction`.
 
-Use this file to quickly decide whether a target is ready for ShareSurfer collection. `Blocked` means a required check failed, usually SMB TCP 445. `Review` means recommended or optional checks failed, commonly WinRM/CIM. A WinRM/CIM warning does not automatically mean ShareSurfer cannot run; it means fallback collection may be used or share-level metadata may be partial.
+Use this file to quickly decide whether a target is ready for ShareSurfer collection. `Blocked` means a required check failed, usually SMB TCP 445. `Review` means recommended or optional checks failed, commonly WinRM/CIM. A WinRM/CIM warning does not automatically mean ShareSurfer cannot run; it means fallback collection may be used or share-level metadata may be partial. `ReadinessSummary` is the plain-language result for the target, and `CollectionImpact` explains what the result can mean for scan completeness.
 
 ### `port_protocol_checks.csv`
 
-Expected columns: `AssessmentId`, `CheckId`, `TargetId`, `Target`, `TargetType`, `ComputerName`, `ShareName`, `Protocol`, `Transport`, `Port`, `Requirement`, `Provider`, `Purpose`, `RequiredFor`, `Status`, `Severity`, `LatencyMs`, `RemoteAddress`, `Message`, `Detail`.
+Expected columns: `AssessmentId`, `CheckId`, `TargetId`, `Target`, `TargetType`, `ComputerName`, `ShareName`, `Protocol`, `Transport`, `Port`, `Requirement`, `Provider`, `Purpose`, `RequiredFor`, `Status`, `Severity`, `EnvironmentProfile`, `CollectionImpact`, `OperatorGuidance`, `RemediationHint`, `LatencyMs`, `RemoteAddress`, `Message`, `Detail`.
 
-Use this file as the detailed evidence behind the target summary. `Requirement=Required` is reserved for core collection routes such as SMB TCP 445. `Recommended` and `Optional` rows explain routes that improve collection completeness but may have fallbacks.
+Use this file as the detailed evidence behind the target summary. `Requirement=Required` is reserved for core collection routes such as SMB TCP 445. `Recommended` and `Optional` rows explain routes that improve collection completeness but may have fallbacks. `EnvironmentProfile` groups the row into operator-friendly contexts such as core SMB collection, default Windows CIM collection, native SMB/RPC fallback signal, or directory identity enrichment. `OperatorGuidance` and `RemediationHint` are intended for ticket notes and rerun planning.
 
 ## Relationship Map
 

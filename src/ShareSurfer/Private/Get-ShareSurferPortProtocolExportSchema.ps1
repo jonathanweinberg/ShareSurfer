@@ -38,6 +38,8 @@ function Get-ShareSurferPortProtocolExportSchema {
             'FailedCount',
             'SkippedCount',
             'TargetStatus',
+            'ReadinessSummary',
+            'CollectionImpact',
             'SuggestedNextAction'
         )
         'port_protocol_checks.csv' = @(
@@ -57,6 +59,10 @@ function Get-ShareSurferPortProtocolExportSchema {
             'RequiredFor',
             'Status',
             'Severity',
+            'EnvironmentProfile',
+            'CollectionImpact',
+            'OperatorGuidance',
+            'RemediationHint',
             'LatencyMs',
             'RemoteAddress',
             'Message',

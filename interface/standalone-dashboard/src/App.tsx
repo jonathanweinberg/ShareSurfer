@@ -179,8 +179,8 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   open_file_summary: ["ShareName", "FolderPath", "ObservationCount", "UniqueUsers", "UniqueClients", "HeatScore", "HotFolder"],
   open_file_errors: ["Timestamp", "ComputerName", "ShareName", "Provider", "Message"],
   port_protocol_manifest: ["GeneratedAt", "CollectorComputerName", "CollectorUser", "IsWindows", "IsElevated", "PowerShellVersion", "TargetCount", "CheckCount"],
-  port_protocol_targets: ["Target", "TargetType", "ComputerName", "ShareName", "TargetStatus", "FailedCount", "WarningCount", "SuggestedNextAction"],
-  port_protocol_checks: ["Target", "Protocol", "Port", "Requirement", "Provider", "Status", "Severity", "Message"]
+  port_protocol_targets: ["Target", "TargetType", "ComputerName", "ShareName", "TargetStatus", "ReadinessSummary", "CollectionImpact", "SuggestedNextAction"],
+  port_protocol_checks: ["Target", "Protocol", "Port", "Requirement", "Provider", "Status", "Severity", "EnvironmentProfile", "CollectionImpact", "OperatorGuidance", "RemediationHint"]
 };
 
 function columnsForDataset(datasetKey: DatasetKey, showAll = false): string[] {
@@ -2240,10 +2240,46 @@ function filterPortProtocolRows(rows: DataRow[], filters: FilterState, query: st
   });
 }
 
+function summarizePortProtocolGuidance(rows: DataRow[]): DataRow[] {
+  const grouped = new Map<string, { row: DataRow; targets: Set<string> }>();
+  rows
+    .filter((row) => row.Status !== "Pass")
+    .forEach((row) => {
+      const key = [row.Protocol, row.Status, row.Severity, row.OperatorGuidance, row.RemediationHint, row.CollectionImpact].join("|");
+      const existing = grouped.get(key);
+      const target = row.Target || row.ComputerName || "Unknown target";
+      if (existing) {
+        existing.targets.add(target);
+        existing.row.Targets = Array.from(existing.targets).sort().join(", ");
+        existing.row.TargetCount = String(existing.targets.size);
+        return;
+      }
+
+      const targetSet = new Set<string>([target]);
+      grouped.set(key, {
+        row: {
+          Protocol: row.Protocol || "Unknown protocol",
+          Status: row.Status || "Unknown",
+          Severity: row.Severity || "Review",
+          EnvironmentProfile: row.EnvironmentProfile || row.Provider || "Collection support signal",
+          Targets: target,
+          TargetCount: "1",
+          CollectionImpact: row.CollectionImpact || row.Message || "Review this protocol result before relying on the scan.",
+          OperatorGuidance: row.OperatorGuidance || row.Message || "Review this protocol result.",
+          RemediationHint: row.RemediationHint || row.Detail || "Review firewall, routing, name resolution, listener state, and permissions."
+        },
+        targets: targetSet
+      });
+    });
+
+  return Array.from(grouped.values()).map((entry) => entry.row);
+}
+
 function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardModel; query: string; filters: FilterState }) {
   const manifestRows = datasetRows(dashboard, "port_protocol_manifest");
   const targetRows = filterPortProtocolRows(datasetRows(dashboard, "port_protocol_targets"), filters, query);
   const checkRows = filterPortProtocolRows(datasetRows(dashboard, "port_protocol_checks"), filters, query);
+  const guidanceRows = summarizePortProtocolGuidance(checkRows);
   const manifest = manifestRows[0] ?? {};
   const blockedTargets = targetRows.filter((row) => row.TargetStatus === "Blocked").length;
   const reviewTargets = targetRows.filter((row) => row.TargetStatus === "Review").length;
@@ -2317,6 +2353,30 @@ function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardM
           enableExport
           exportFileName="sharesurfer-port-protocol-targets-shown.csv"
         />
+      </section>
+
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Operator Guidance</SectionTitle>
+        <p className="panel-copy">
+          These rows group the checks that need attention. Use them before rerunning a scan or asking a firewall, server, or directory team for help.
+        </p>
+        {guidanceRows.length > 0 ? (
+          <VirtualTable
+            rows={guidanceRows}
+            columns={["Severity", "Status", "Protocol", "EnvironmentProfile", "TargetCount", "Targets", "OperatorGuidance", "RemediationHint", "CollectionImpact"]}
+            selectableColumns={["Severity", "Status", "Protocol", "EnvironmentProfile", "TargetCount", "Targets", "OperatorGuidance", "RemediationHint", "CollectionImpact"]}
+            pageSize={10}
+            title="Ports and protocols guidance"
+            enableFieldFilters
+            enableExport
+            exportFileName="sharesurfer-port-protocol-guidance-shown.csv"
+          />
+        ) : (
+          <div className="info-banner">
+            <strong>No protocol guidance items in the current filter</strong>
+            <span>Passing checks stay in the detailed evidence table below, but they do not need action here.</span>
+          </div>
+        )}
       </section>
 
       <section className="panel wide-scroll-pane">

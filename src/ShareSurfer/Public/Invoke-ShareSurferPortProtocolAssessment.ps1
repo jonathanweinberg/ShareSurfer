@@ -252,6 +252,142 @@ function Get-ShareSurferPortProtocolSeverity {
     'Info'
 }
 
+function Get-ShareSurferPortProtocolEnvironmentProfile {
+    param(
+        [string] $Protocol,
+        [string] $TargetType
+    )
+
+    if ($TargetType -eq 'DirectoryTarget') {
+        return 'Directory identity enrichment'
+    }
+
+    switch ($Protocol) {
+        'SMB' { return 'Core SMB collection' }
+        'WinRM HTTP' { return 'Default Windows CIM collection' }
+        'WinRM HTTPS' { return 'Hardened Windows CIM collection' }
+        'RPC Endpoint Mapper' { return 'Native SMB/RPC fallback signal' }
+        default { return 'ShareSurfer collection support signal' }
+    }
+}
+
+function Get-ShareSurferPortProtocolCollectionImpact {
+    param(
+        [string] $Status,
+        [string] $Protocol,
+        [string] $Requirement,
+        [string] $RequiredFor
+    )
+
+    if ($Status -eq 'Skipped') {
+        return 'Reachability was not tested, so this row is planning evidence rather than proof from the collector network.'
+    }
+
+    if ($Status -eq 'Pass') {
+        if ($Protocol -eq 'SMB') {
+            return 'Core SMB reachability is available from the collector; permissions still determine how much share, folder, file, owner, and ACL evidence can be read.'
+        }
+        return ('The {0} route is reachable from the collector and can support {1}.' -f $Protocol, $RequiredFor)
+    }
+
+    switch ($Protocol) {
+        'SMB' {
+            return 'Required SMB reachability failed. ShareSurfer cannot reliably scan this SMB target from this collector until TCP 445 and share access work.'
+        }
+        'WinRM HTTP' {
+            return 'Default PowerShell/CIM share metadata may be unavailable. ShareSurfer can often continue with NativeSmbRpc or partial share-level evidence when SMB itself is reachable.'
+        }
+        'WinRM HTTPS' {
+            return 'The hardened CIM-over-HTTPS route is unavailable. This is usually acceptable unless your environment requires encrypted WinRM for remote SMB metadata.'
+        }
+        'RPC Endpoint Mapper' {
+            return 'Classic RPC reachability is unavailable. Native SMB/RPC metadata fallback may be limited, but file/folder evidence can still work when SMB TCP 445 is reachable.'
+        }
+        'LDAP' {
+            return 'Directory lookup fallback may be incomplete. Identity enrichment may depend on the ActiveDirectory module, cached evidence, or another reachable directory route.'
+        }
+        'LDAPS' {
+            return 'Encrypted LDAP is unavailable. This is a hardening review item when policy requires encrypted directory lookup paths.'
+        }
+        'Kerberos' {
+            return 'Kerberos reachability failed. Domain authentication and directory-backed identity context may be unreliable from this collector.'
+        }
+        'Global Catalog' {
+            return 'Forest-wide identity lookups may be incomplete in multi-domain environments.'
+        }
+        'DNS' {
+            return 'Name resolution checks failed. Target and directory names may need DNS, hosts-file, or explicit address review before relying on the scan.'
+        }
+        default {
+            if ($Requirement -eq 'Required') {
+                return ('Required reachability for {0} failed. Review before relying on {1}.' -f $Protocol, $RequiredFor)
+            }
+            return ('Optional or recommended reachability for {0} failed. ShareSurfer may continue, but {1} may be incomplete.' -f $Protocol, $RequiredFor)
+        }
+    }
+}
+
+function Get-ShareSurferPortProtocolOperatorGuidance {
+    param(
+        [string] $Status,
+        [string] $Protocol,
+        [string] $Requirement
+    )
+
+    if ($Status -eq 'Skipped') {
+        return 'Run again without -SkipNetworkTests when you are allowed to test network reachability.'
+    }
+    if ($Status -eq 'Pass') {
+        return 'No action is needed for this protocol before scanning, unless permissions or policy require separate review.'
+    }
+
+    switch ($Protocol) {
+        'SMB' { return 'Resolve this before scanning the target; ShareSurfer needs SMB reachability for share and filesystem evidence.' }
+        'WinRM HTTP' { return 'If WinRM is intentionally blocked, use -SmbCollectionProvider NativeSmbRpc for explicit Windows SMB shares and review partial evidence carefully.' }
+        'WinRM HTTPS' { return 'If your environment requires encrypted WinRM, configure or allow TCP 5986; otherwise treat this as optional context.' }
+        'RPC Endpoint Mapper' { return 'Review only when you expect classic RPC/native fallback routes to be available. SMB TCP 445 remains the core requirement.' }
+        'LDAP' { return 'Confirm a supported directory lookup route before relying on full identity enrichment.' }
+        'LDAPS' { return 'Review with directory administrators when policy requires encrypted LDAP.' }
+        'Kerberos' { return 'Confirm domain authentication path, time sync, DNS, and firewall policy from the collector.' }
+        'Global Catalog' { return 'Review if you need forest-wide identity correlation across multiple domains.' }
+        'DNS' { return 'Fix name resolution or use explicit names/addresses that resolve consistently from the collector.' }
+        default {
+            if ($Requirement -eq 'Required') {
+                return 'Resolve this required reachability failure before treating the target as scan-ready.'
+            }
+            return 'Review whether this route matters in your environment before owner approval.'
+        }
+    }
+}
+
+function Get-ShareSurferPortProtocolRemediationHint {
+    param(
+        [string] $Status,
+        [string] $Protocol,
+        [int] $Port
+    )
+
+    if ($Status -eq 'Pass') {
+        return 'No remediation indicated by this reachability check.'
+    }
+    if ($Status -eq 'Skipped') {
+        return 'No remediation was assessed because network testing was skipped.'
+    }
+
+    switch ($Protocol) {
+        'SMB' { return ('Check firewall rules, network ACLs, DNS/name resolution, and share access for TCP {0} from the collector.' -f $Port) }
+        'WinRM HTTP' { return ('If CIM collection is desired, enable/listen for WinRM on TCP {0}; otherwise plan to use NativeSmbRpc or accept partial share metadata.' -f $Port) }
+        'WinRM HTTPS' { return ('If hardened CIM collection is desired, configure WinRM HTTPS listener/certificate/firewall for TCP {0}.' -f $Port) }
+        'RPC Endpoint Mapper' { return ('If native RPC metadata paths are expected, review endpoint mapper/firewall policy for TCP {0} and related dynamic RPC rules.' -f $Port) }
+        'LDAP' { return ('Review directory server firewall/listener policy for TCP {0} or use another supported identity lookup path.' -f $Port) }
+        'LDAPS' { return ('Review LDAPS certificate, listener, and firewall policy for TCP {0}.' -f $Port) }
+        'Kerberos' { return ('Review domain controller reachability, DNS, time sync, and firewall policy for TCP {0}.' -f $Port) }
+        'Global Catalog' { return ('Review global catalog availability and firewall policy for TCP {0}.' -f $Port) }
+        'DNS' { return ('Review DNS server reachability for TCP {0}; also confirm normal name resolution from the collector.' -f $Port) }
+        default { return ('Review firewall, routing, name resolution, and listener state for TCP {0}.' -f $Port) }
+    }
+}
+
 function Get-ShareSurferPortProtocolMessage {
     param(
         [string] $Status,
@@ -272,6 +408,52 @@ function Get-ShareSurferPortProtocolMessage {
         return ('{0} on {1}:{2} is not reachable. Review before relying on {3}.' -f $Protocol, $ComputerName, $Port, $RequiredFor)
     }
     return ('{0} on {1}:{2} is not reachable. ShareSurfer may continue, but this path can affect {3}.' -f $Protocol, $ComputerName, $Port, $RequiredFor)
+}
+
+function Get-ShareSurferPortProtocolTargetReadinessSummary {
+    param(
+        [string] $TargetStatus,
+        [object[]] $Rows
+    )
+
+    if ($TargetStatus -eq 'Ready') {
+        return 'No blocked or warning protocol checks were observed for this target.'
+    }
+    if ($TargetStatus -eq 'Not Tested') {
+        return 'Reachability was not tested. Treat this as a runbook/planning package until a live check is allowed.'
+    }
+
+    $failedProtocols = @($Rows | Where-Object { $_.Status -eq 'Fail' } | Select-Object -ExpandProperty Protocol -Unique)
+    if ($failedProtocols.Count -eq 0) {
+        return 'Review this target before owner approval.'
+    }
+
+    if ($TargetStatus -eq 'Blocked') {
+        return ('Required reachability failed: {0}.' -f ($failedProtocols -join ', '))
+    }
+
+    'Review non-required reachability gaps: {0}.' -f ($failedProtocols -join ', ')
+}
+
+function Get-ShareSurferPortProtocolTargetCollectionImpact {
+    param(
+        [string] $TargetStatus,
+        [object[]] $Rows
+    )
+
+    if ($TargetStatus -eq 'Ready') {
+        return 'The target looks reachable for the assessed ShareSurfer collection paths. Permissions can still limit evidence.'
+    }
+    if ($TargetStatus -eq 'Not Tested') {
+        return 'The target readiness is unknown because the assessment was run without network tests.'
+    }
+
+    $requiredFailures = @($Rows | Where-Object { $_.Requirement -eq 'Required' -and $_.Status -eq 'Fail' })
+    if ($requiredFailures.Count -gt 0) {
+        return 'Core collection is likely blocked or severely incomplete until required reachability is restored.'
+    }
+
+    'Collection may still run, but ShareSurfer may need fallback providers or may mark some metadata partial.'
 }
 
 function Get-ShareSurferPortProtocolTargetStatus {
@@ -366,6 +548,10 @@ function Invoke-ShareSurferPortProtocolAssessment {
             $probe = Test-ShareSurferTcpPort -ComputerName ([string]$target.ComputerName) -Port ([int]$definition.Port) -TimeoutMilliseconds $TimeoutMilliseconds -SkipNetworkTests:$SkipNetworkTests
             $severity = Get-ShareSurferPortProtocolSeverity -Status ([string]$probe.Status) -Requirement ([string]$definition.Requirement)
             $message = Get-ShareSurferPortProtocolMessage -Status ([string]$probe.Status) -Protocol ([string]$definition.Protocol) -ComputerName ([string]$target.ComputerName) -Port ([int]$definition.Port) -Requirement ([string]$definition.Requirement) -RequiredFor ([string]$definition.RequiredFor)
+            $environmentProfile = Get-ShareSurferPortProtocolEnvironmentProfile -Protocol ([string]$definition.Protocol) -TargetType ([string]$target.TargetType)
+            $collectionImpact = Get-ShareSurferPortProtocolCollectionImpact -Status ([string]$probe.Status) -Protocol ([string]$definition.Protocol) -Requirement ([string]$definition.Requirement) -RequiredFor ([string]$definition.RequiredFor)
+            $operatorGuidance = Get-ShareSurferPortProtocolOperatorGuidance -Status ([string]$probe.Status) -Protocol ([string]$definition.Protocol) -Requirement ([string]$definition.Requirement)
+            $remediationHint = Get-ShareSurferPortProtocolRemediationHint -Status ([string]$probe.Status) -Protocol ([string]$definition.Protocol) -Port ([int]$definition.Port)
             [void]$checks.Add([pscustomobject]@{
                 AssessmentId = $assessmentId
                 CheckId = 'check-{0:0000}' -f $checkIndex
@@ -383,6 +569,10 @@ function Invoke-ShareSurferPortProtocolAssessment {
                 RequiredFor = [string]$definition.RequiredFor
                 Status = [string]$probe.Status
                 Severity = $severity
+                EnvironmentProfile = $environmentProfile
+                CollectionImpact = $collectionImpact
+                OperatorGuidance = $operatorGuidance
+                RemediationHint = $remediationHint
                 LatencyMs = [string]$probe.LatencyMs
                 RemoteAddress = [string]$probe.RemoteAddress
                 Message = $message
@@ -408,6 +598,8 @@ function Invoke-ShareSurferPortProtocolAssessment {
             FailedCount = @($targetChecks | Where-Object { $_.Status -eq 'Fail' -and $_.Requirement -eq 'Required' }).Count
             SkippedCount = @($targetChecks | Where-Object { $_.Status -eq 'Skipped' }).Count
             TargetStatus = $targetStatus
+            ReadinessSummary = Get-ShareSurferPortProtocolTargetReadinessSummary -TargetStatus $targetStatus -Rows $targetChecks
+            CollectionImpact = Get-ShareSurferPortProtocolTargetCollectionImpact -TargetStatus $targetStatus -Rows $targetChecks
             SuggestedNextAction = Get-ShareSurferPortProtocolNextAction -TargetStatus $targetStatus -Rows $targetChecks
         }
     }
