@@ -5,18 +5,18 @@ This page collects the most common first-run commands in one place. Use it when 
 The examples assume the current quickstart release is unpacked here:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.9\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.10\
 ```
 
 They also assume Windows PowerShell 5.1 unless a command explicitly says otherwise.
 
 ## Recipe 1: Unpack and Import the Release
 
-Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.9.zip` from the GitHub release on an approved connected workstation.
+Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.10.zip` from the GitHub release on an approved connected workstation.
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.9.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.10.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
@@ -30,7 +30,7 @@ Get-Command -Module ShareSurfer
 
 The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting the release ZIP.
 
-Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.9\ShareSurfer-0.1.0-pre.9`.
+Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.10\ShareSurfer-0.1.0-pre.10`.
 
 ## Recipe 2: Create Optional Input CSVs
 
@@ -77,7 +77,7 @@ If you do not have either file yet, leave it absent. The scan recipes below only
 Use this when you already know the share path and want a first reviewable export.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
 $discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
@@ -113,7 +113,7 @@ Use this recipe first if you are new to the tool. It can still record partial-da
 Use this when you know the Windows file server and share name and want ShareSurfer to collect share metadata.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -135,7 +135,7 @@ Use `-IncludeFiles` only when file-level rows matter for the review. Large share
 Use this when a Windows SMB target is reachable but default remote CIM or SMB cmdlets cannot prove share metadata cleanly.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\exports\finance-native-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -158,7 +158,7 @@ Invoke-ShareSurferScan `
 Run this after the collector finishes.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Test-ShareSurferExport -ExportPath $exportPath
