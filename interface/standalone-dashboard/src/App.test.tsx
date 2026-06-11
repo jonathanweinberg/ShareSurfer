@@ -517,6 +517,26 @@ describe("dashboard workbench interactions", () => {
     expect(within(table).queryByText("Everyone")).not.toBeInTheDocument();
   });
 
+  test("ports and protocols view shows collector and target readiness evidence", () => {
+    renderWithDemoSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Ports & Protocols/i }));
+
+    expect(screen.getByRole("heading", { name: /Ports & Protocols/i })).toBeInTheDocument();
+    expect(screen.getByText("COLLECTOR01")).toBeInTheDocument();
+    expect(screen.getByText(/ss-collector/)).toBeInTheDocument();
+    expect(screen.getByText("Failed WinRM/CIM checks do not automatically block collection", { exact: false })).toBeInTheDocument();
+
+    const targetsTable = screen.getByRole("table", { name: /Ports and protocols targets/i });
+    expect(within(targetsTable).getByText("\\\\files01\\Finance")).toBeInTheDocument();
+    expect(within(targetsTable).getAllByText("Blocked").length).toBeGreaterThan(0);
+
+    const checksTable = screen.getByRole("table", { name: /Ports and protocols checks/i });
+    expect(within(checksTable).getAllByText("SMB").length).toBeGreaterThan(0);
+    expect(within(checksTable).getByText("WinRM HTTP")).toBeInTheDocument();
+  });
+
   test("findings can be grouped and exported by employee identifier prefix", () => {
     renderWithEmployeePrefixSnapshot();
 

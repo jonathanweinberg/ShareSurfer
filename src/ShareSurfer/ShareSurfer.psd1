@@ -10,6 +10,7 @@
     FunctionsToExport = @(
         'ConvertTo-ShareSurferReport',
         'Invoke-ShareSurferOpenFileAssessment',
+        'Invoke-ShareSurferPortProtocolAssessment',
         'Invoke-ShareSurferScan',
         'New-ShareSurferLabFixture',
         'New-ShareSurferSupportBundle',

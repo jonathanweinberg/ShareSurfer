@@ -20,14 +20,20 @@ export const datasetKeys = [
   "open_file_manifest",
   "open_file_samples",
   "open_file_summary",
-  "open_file_errors"
+  "open_file_errors",
+  "port_protocol_manifest",
+  "port_protocol_targets",
+  "port_protocol_checks"
 ] as const;
 
 export const optionalDatasetKeys = [
   "open_file_manifest",
   "open_file_samples",
   "open_file_summary",
-  "open_file_errors"
+  "open_file_errors",
+  "port_protocol_manifest",
+  "port_protocol_targets",
+  "port_protocol_checks"
 ] as const satisfies readonly DatasetKey[];
 
 export type DatasetKey = (typeof datasetKeys)[number];
@@ -56,7 +62,10 @@ export const datasetLabels: Record<DatasetKey, string> = {
   open_file_manifest: "Open-file assessment manifest",
   open_file_samples: "Open-file samples",
   open_file_summary: "Open-file hot folders",
-  open_file_errors: "Open-file collection errors"
+  open_file_errors: "Open-file collection errors",
+  port_protocol_manifest: "Ports/protocols assessment manifest",
+  port_protocol_targets: "Ports/protocols targets",
+  port_protocol_checks: "Ports/protocols checks"
 };
 
 export const expectedColumns: Record<DatasetKey, string[]> = {
@@ -361,6 +370,68 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "ErrorType",
     "Message",
     "Detail"
+  ],
+  port_protocol_manifest: [
+    "AssessmentId",
+    "GeneratedAt",
+    "ExportVersion",
+    "CollectorComputerName",
+    "CollectorFqdn",
+    "CollectorUser",
+    "UserDomain",
+    "IsWindows",
+    "IsElevated",
+    "OSDescription",
+    "OSArchitecture",
+    "PowerShellVersion",
+    "PSEdition",
+    "ActiveDirectoryModuleAvailable",
+    "SmbShareModuleAvailable",
+    "TargetCount",
+    "CheckCount",
+    "PassedCount",
+    "WarningCount",
+    "FailedCount",
+    "SkippedCount",
+    "PackageKind"
+  ],
+  port_protocol_targets: [
+    "AssessmentId",
+    "TargetId",
+    "Target",
+    "TargetType",
+    "ComputerName",
+    "ShareName",
+    "UNCPath",
+    "CheckCount",
+    "PassedCount",
+    "WarningCount",
+    "FailedCount",
+    "SkippedCount",
+    "TargetStatus",
+    "SuggestedNextAction"
+  ],
+  port_protocol_checks: [
+    "AssessmentId",
+    "CheckId",
+    "TargetId",
+    "Target",
+    "TargetType",
+    "ComputerName",
+    "ShareName",
+    "Protocol",
+    "Transport",
+    "Port",
+    "Requirement",
+    "Provider",
+    "Purpose",
+    "RequiredFor",
+    "Status",
+    "Severity",
+    "LatencyMs",
+    "RemoteAddress",
+    "Message",
+    "Detail"
   ]
 };
 
@@ -404,7 +475,9 @@ export const tooltipRegistry = {
   deepExplicit:
     "A non-inherited permission was found below the configured depth threshold. It may need owner review.",
   brokenInheritance:
-    "A folder or file stopped inheriting permissions from its parent. Review whether that was intentional."
+    "A folder or file stopped inheriting permissions from its parent. Review whether that was intentional.",
+  portsProtocols:
+    "Read-only reachability evidence for SMB, WinRM/CIM, native SMB/RPC, and optional directory protocols ShareSurfer may use during collection."
 } as const;
 
 export const glossaryTerms = [

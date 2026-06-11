@@ -1976,6 +1976,28 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferPortProtocolAssessment writes collector and target readiness CSVs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferPortProtocol-' + [guid]::NewGuid().ToString('N'))
+
+            $result = Invoke-ShareSurferPortProtocolAssessment -ComputerName 'files01' -ShareName 'Finance' -DirectoryServer 'dc01.contoso.test' -OutputPath $outputPath -SkipNetworkTests -PassThru
+            $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'port_protocol_manifest.csv'))
+            $targets = @(Import-Csv -LiteralPath (Join-Path $outputPath 'port_protocol_targets.csv'))
+            $checks = @(Import-Csv -LiteralPath (Join-Path $outputPath 'port_protocol_checks.csv'))
+
+            Assert-True $result.IsValid 'Port/protocol assessment should report a valid CSV package.'
+            Assert-Equal $manifest[0].PackageKind 'PortProtocolAssessment' 'Port/protocol manifest should identify its package kind.'
+            Assert-Equal $manifest[0].SkippedCount $result.SkippedCount 'Manifest should summarize skipped dry-run checks.'
+            Assert-True ($targets.Target -contains '\\files01\Finance') 'Target CSV should include the SMB share target.'
+            Assert-True ($targets.TargetType -contains 'DirectoryTarget') 'Target CSV should include the directory server target when supplied.'
+            Assert-True ($checks.Protocol -contains 'SMB') 'Check CSV should include SMB TCP 445 evidence.'
+            Assert-True ($checks.Protocol -contains 'WinRM HTTP') 'Check CSV should include WinRM/CIM evidence.'
+            Assert-True ($checks.Protocol -contains 'LDAP') 'Check CSV should include directory protocol evidence.'
+            Assert-True (@($checks | Where-Object { $_.Status -eq 'Skipped' }).Count -gt 0) 'SkipNetworkTests should keep deterministic skipped check rows.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferStandaloneDashboard packages a standalone static dashboard snapshot'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2028,6 +2050,7 @@ $tests = @(
             finally {
                 Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
             }
+            Invoke-ShareSurferPortProtocolAssessment -ComputerName 'files01' -ShareName 'Finance' -DirectoryServer 'dc01.contoso.test' -OutputPath $exportPath -SkipNetworkTests -Force | Out-Null
 
             $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -ExportPath $exportPath -DashboardBuildPath $buildPath -OutputPath $standalonePath -PassThru
 
@@ -2051,7 +2074,9 @@ $tests = @(
             Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
             Assert-True ([int]$manifest.rowCounts.open_file_samples -gt 0) 'Dashboard manifest should include imported open-file sample counts when present.'
             Assert-True ([int]$manifest.rowCounts.open_file_summary -gt 0) 'Dashboard manifest should include imported open-file summary counts when present.'
+            Assert-True ([int]$manifest.rowCounts.port_protocol_checks -gt 0) 'Dashboard manifest should include imported port/protocol check counts when present.'
             Assert-True ($dataScript -like '*"open_file_samples"*') 'Dashboard snapshot should carry open-file datasets for raw evidence review.'
+            Assert-True ($dataScript -like '*"port_protocol_checks"*') 'Dashboard snapshot should carry port/protocol datasets for connectivity review.'
         }
     },
     @{
