@@ -46,6 +46,17 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 
 Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with the same structured event records as `scan_events.csv`. Keep this file with the trusted raw export; use the redacted support bundle version for bug reports.
 
+## Optional Open-File Assessment Package
+
+`Invoke-ShareSurferOpenFileAssessment` can add a separate activity package to the same export folder. These files are optional. `Test-ShareSurferExport` validates the required scan export set even when the open-file files are absent, and the report/dashboard import the activity package when it is present.
+
+| File | Grain | Purpose |
+| --- | --- | --- |
+| `open_file_manifest.csv` | One row per open-file assessment | Records the assessment provider, sample count, interval, target computer/share names, and start/end times. |
+| `open_file_samples.csv` | One row per observed open file per sample | Keeps raw open-file observations, including client, user, path, share-relative path, permissions, locks, and collection status. |
+| `open_file_summary.csv` | One row per observed folder | Summarizes activity by folder and marks hot folders based on repeated observations, unique users, unique clients, locks, and heat score. |
+| `open_file_errors.csv` | One row per assessment collection error | Records provider or permission failures without invalidating the rest of the assessment package. |
+
 ## Column Reference
 
 ### `shares.csv`
@@ -181,6 +192,30 @@ Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `Sou
 
 Use the manifest to reproduce scan settings and explain incomplete data. `CollectionProvider` records the collector route, such as `Auto`, `PowerShellCim`, `NativeSmbRpc`, `TargetPath`, or `InputObject`. `ManagerIdentityFormat` records how manager fields were presented in identity and org exports. `IncludeFiles` records whether file objects were included in addition to folders, which matters for enterprise validation and migration-readiness evidence.
 
+### `open_file_manifest.csv`
+
+Expected columns: `AssessmentId`, `GeneratedAt`, `ExportVersion`, `ComputerName`, `ShareNames`, `Provider`, `IntervalSeconds`, `SampleCount`, `DurationMinutes`, `StartedAt`, `CompletedAt`, `PackageKind`.
+
+Use this file to explain how the activity package was collected. `Provider` records the route, such as `NativeRpc` or `PowerShellCim`. `SampleCount` and `IntervalSeconds` explain whether the package was a quick ad hoc sample or a longer observation window.
+
+### `open_file_samples.csv`
+
+Expected columns: `AssessmentId`, `SampleId`, `SampleTimestamp`, `ComputerName`, `ShareName`, `Provider`, `FileId`, `SessionId`, `ClientComputerName`, `ClientUserName`, `Path`, `FolderPath`, `ShareRelativePath`, `ShareRelativeFolder`, `Permissions`, `Locks`, `Source`, `CollectionStatus`, `ErrorMessage`.
+
+Use this file as raw activity evidence. One open file can appear in multiple samples if it remains open across the observation window. `ShareRelativePath` and `ShareRelativeFolder` make it easier to compare activity to the scanned share tree without relying on local server paths.
+
+### `open_file_summary.csv`
+
+Expected columns: `AssessmentId`, `ComputerName`, `ShareName`, `FolderPath`, `ShareRelativeFolder`, `ObservationCount`, `SampleCount`, `FirstSeen`, `LastSeen`, `UniqueUsers`, `UniqueClients`, `TopUsers`, `TopClients`, `TotalLocks`, `MaxLocks`, `HeatScore`, `HotFolder`, `PathProximityKey`.
+
+Use this file to identify active or hot folders for migration planning. `HotFolder=True` means the folder had repeated observations, multiple users or clients, locks, or enough combined activity to deserve review. It is not an approval state and it does not prove exclusive ownership.
+
+### `open_file_errors.csv`
+
+Expected columns: `ErrorId`, `AssessmentId`, `SampleId`, `Timestamp`, `ComputerName`, `ShareName`, `Provider`, `ErrorType`, `Message`, `Detail`.
+
+Use this file to troubleshoot missing or partial open-file activity evidence. Common causes include insufficient rights, an unavailable provider, remote-management restrictions, or a target that does not expose equivalent open-file data.
+
 ## Relationship Map
 
 - `shares.ShareId` joins to `items.ShareId`, `share_permissions.ShareId`, `acl_entries.ShareId`, `conflicts.ShareId`, and `findings.ShareId`.
@@ -192,3 +227,4 @@ Use the manifest to reproduce scan settings and explain incomplete data. `Collec
 - `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.
 - `owner_review_packets` builds on owner risk pivots and related data areas to produce business-owner review packets with plain next steps.
+- `open_file_summary` and `open_file_samples` can be compared to `shares`, `items`, and owner mapping outputs by share name, folder path, and share-relative path when planning hot-folder migration windows.

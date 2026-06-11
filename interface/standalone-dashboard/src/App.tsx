@@ -166,7 +166,11 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   findings: ["Severity", "FindingType", "ShareId", "Identity", "FullPath", "Message"],
   collection_errors: ["ErrorType", "ShareId", "FullPath", "Message"],
   scan_events: ["Timestamp", "Level", "EventType", "Message"],
-  scan_manifest: ["GeneratedAt", "ExportVersion", "SourceMode", "GroupExpansionMaxDepth", "AdLookupMode", "IncludeFiles"]
+  scan_manifest: ["GeneratedAt", "ExportVersion", "SourceMode", "GroupExpansionMaxDepth", "AdLookupMode", "IncludeFiles"],
+  open_file_manifest: ["GeneratedAt", "ComputerName", "ShareNames", "Provider", "IntervalSeconds", "SampleCount"],
+  open_file_samples: ["SampleTimestamp", "ShareName", "ClientUserName", "ClientComputerName", "Path", "Permissions", "Locks"],
+  open_file_summary: ["ShareName", "FolderPath", "ObservationCount", "UniqueUsers", "UniqueClients", "HeatScore", "HotFolder"],
+  open_file_errors: ["Timestamp", "ComputerName", "ShareName", "Provider", "Message"]
 };
 
 function columnsForDataset(datasetKey: DatasetKey, showAll = false): string[] {
@@ -584,12 +588,12 @@ function rowsMatchingPathContext(group: GroupTreeRow, dashboard: DashboardModel)
   const shareIds = new Set(splitIds(group.raw.ShareIds || group.raw.ShareId || ""));
   const paths = [group.examplePath, group.fullPath].filter(Boolean).map((path) => path.toLowerCase());
   const contextRows: DataRow[] = [];
-  const keys: DatasetKey[] = ["items", "permissioned_groups", "acl_entries", "share_permissions", "findings", "conflicts", "collection_errors"];
+  const keys: DatasetKey[] = ["items", "permissioned_groups", "acl_entries", "share_permissions", "findings", "conflicts", "collection_errors", "open_file_summary", "open_file_samples"];
 
   for (const key of keys) {
     for (const row of datasetRows(dashboard, key)) {
       const shareMatch = row.ShareId ? shareIds.has(row.ShareId) : false;
-      const rowPath = `${row.FullPath} ${row.ExamplePath} ${row.UNCPath} ${row.LocalPath}`.toLowerCase();
+      const rowPath = `${row.FullPath} ${row.ExamplePath} ${row.UNCPath} ${row.LocalPath} ${row.Path} ${row.FolderPath} ${row.ShareRelativePath} ${row.ShareRelativeFolder}`.toLowerCase();
       const pathMatch = paths.some((path) => path !== "" && rowPath.includes(path));
       const identityMatch = `${row.Identity} ${row.Group}`.toLowerCase().includes(group.group.toLowerCase());
       if (shareMatch || pathMatch || identityMatch) {

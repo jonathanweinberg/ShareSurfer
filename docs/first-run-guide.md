@@ -57,17 +57,17 @@ $PSVersionTable.PSVersion
 
 The major version should be `5`.
 
-If you are using the `v0.1.0-pre.6` release ZIP, extract it to `C:\ShareSurfer\`. The extracted release root should be:
+If you are using the `v0.1.0-pre.7` release ZIP, extract it to `C:\ShareSurfer\`. The extracted release root should be:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.6\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.7\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.6`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.7`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.6.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.6'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.7.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
@@ -296,8 +296,9 @@ The most important CSVs for a first review are:
 | `owner_review_packets.csv` | Plain-language owner review packets showing why review is needed, where to start, and the suggested next action. |
 | `identities.csv` | Users, groups, manager fields, OBS values, potential service-account flags, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
 | `permissioned_groups.csv` | Groups that directly grant share or folder/file access, including assignment counts, rights, expanded members, and expansion health. |
+| `open_file_summary.csv` | Optional hot-folder activity summary when `Invoke-ShareSurferOpenFileAssessment` was run. |
 
-Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group.
+Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group. If you also ran an open-file assessment, use `open_file_summary.csv` to spot active folders that may need migration timing or owner review.
 
 `owner_review_packets.csv` is generated automatically during `Invoke-ShareSurferScan`. You do not create that file by hand. To make it useful, provide `owner-mapping.csv` before the scan, run the scan, then confirm the export contains:
 
@@ -314,6 +315,43 @@ If `OwnerMetadataUnavailable` appears in `findings.csv`, use it as the review qu
 If `BrokenOrMissingSid` appears in `findings.csv`, a permission referenced a SID or account name ShareSurfer could not resolve. Review it with the directory or file-share team; common causes include deleted accounts, broken trust references, or directory lookup gaps.
 
 If `PotentialServiceAccount=True` appears in `identities.csv` or a `PotentialServiceAccount` row appears in `findings.csv`, ask the owner or directory team to confirm the account purpose. It may be a real service account, or it may simply be a human account with missing OBS and employee identifier data.
+
+## Optional: Record Open-File Activity
+
+Use this optional step when you want to know which folders were actively being used during a review window. It does not change permissions, and it does not replace the normal share/NTFS scan. It adds an open-file assessment package to the same export folder so the report and standalone dashboard can show activity evidence beside ownership and access evidence.
+
+For a quick ad hoc check:
+
+```powershell
+Invoke-ShareSurferOpenFileAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -OutputPath $exportPath `
+  -SampleCount 1
+```
+
+For a longer observation window, increase the sample count and interval. This example records one sample per minute for eight hours:
+
+```powershell
+Invoke-ShareSurferOpenFileAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -OutputPath $exportPath `
+  -SampleCount 480 `
+  -IntervalSeconds 60 `
+  -Force
+```
+
+The command writes:
+
+- `open_file_manifest.csv`
+- `open_file_samples.csv`
+- `open_file_summary.csv`
+- `open_file_errors.csv`
+
+Start with `open_file_summary.csv`. Rows marked `HotFolder=True` had repeated observations, multiple users or clients, locks, or enough combined activity to deserve review. `open_file_samples.csv` keeps the raw observations. `open_file_errors.csv` records provider failures without deleting the package.
+
+For Task Scheduler, run the same PowerShell command under the collector account and use a dated `$exportPath` per assessment, or pass `-Force` when intentionally replacing a previous open-file assessment package in the same export folder.
 
 ## Step 7: Generate the Offline Report
 
@@ -404,12 +442,12 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.6 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.6) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
+The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.7 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
 If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.6'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `

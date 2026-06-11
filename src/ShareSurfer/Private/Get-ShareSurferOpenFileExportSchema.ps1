@@ -1,0 +1,71 @@
+function Get-ShareSurferOpenFileExportSchema {
+    [ordered]@{
+        'open_file_manifest.csv' = @(
+            'AssessmentId',
+            'GeneratedAt',
+            'ExportVersion',
+            'ComputerName',
+            'ShareNames',
+            'Provider',
+            'IntervalSeconds',
+            'SampleCount',
+            'DurationMinutes',
+            'StartedAt',
+            'CompletedAt',
+            'PackageKind'
+        )
+        'open_file_samples.csv' = @(
+            'AssessmentId',
+            'SampleId',
+            'SampleTimestamp',
+            'ComputerName',
+            'ShareName',
+            'Provider',
+            'FileId',
+            'SessionId',
+            'ClientComputerName',
+            'ClientUserName',
+            'Path',
+            'FolderPath',
+            'ShareRelativePath',
+            'ShareRelativeFolder',
+            'Permissions',
+            'Locks',
+            'Source',
+            'CollectionStatus',
+            'ErrorMessage'
+        )
+        'open_file_summary.csv' = @(
+            'AssessmentId',
+            'ComputerName',
+            'ShareName',
+            'FolderPath',
+            'ShareRelativeFolder',
+            'ObservationCount',
+            'SampleCount',
+            'FirstSeen',
+            'LastSeen',
+            'UniqueUsers',
+            'UniqueClients',
+            'TopUsers',
+            'TopClients',
+            'TotalLocks',
+            'MaxLocks',
+            'HeatScore',
+            'HotFolder',
+            'PathProximityKey'
+        )
+        'open_file_errors.csv' = @(
+            'ErrorId',
+            'AssessmentId',
+            'SampleId',
+            'Timestamp',
+            'ComputerName',
+            'ShareName',
+            'Provider',
+            'ErrorType',
+            'Message',
+            'Detail'
+        )
+    }
+}

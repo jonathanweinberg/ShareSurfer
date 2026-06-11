@@ -33,6 +33,18 @@ namespace ShareSurfer
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct FILE_INFO_3
+        {
+            public UInt32 fi3_id;
+            public UInt32 fi3_permissions;
+            public UInt32 fi3_num_locks;
+            [MarshalAs(UnmanagedType.LPWStr)]
+            public string fi3_pathname;
+            [MarshalAs(UnmanagedType.LPWStr)]
+            public string fi3_username;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct SHARE_INFO_502
         {
             [MarshalAs(UnmanagedType.LPWStr)]
@@ -59,9 +71,22 @@ namespace ShareSurfer
 
         public const UInt32 OWNER_SECURITY_INFORMATION = 0x00000001;
         public const UInt32 DACL_SECURITY_INFORMATION = 0x00000004;
+        public const UInt32 MAX_PREFERRED_LENGTH = 0xFFFFFFFF;
 
         [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
         public static extern Int32 NetShareGetInfo(string servername, string netname, Int32 level, out IntPtr bufptr);
+
+        [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
+        public static extern Int32 NetFileEnum(
+            string servername,
+            string basepath,
+            string username,
+            Int32 level,
+            out IntPtr bufptr,
+            UInt32 prefmaxlen,
+            out UInt32 entriesread,
+            out UInt32 totalentries,
+            ref UInt32 resume_handle);
 
         [DllImport("Netapi32.dll")]
         public static extern Int32 NetApiBufferFree(IntPtr Buffer);

@@ -1867,6 +1867,115 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferOpenFileAssessment writes samples and hot-folder summaries'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOpenFiles-' + [guid]::NewGuid().ToString('N'))
+            $global:ShareSurferOpenFileProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string[]] $ShareName,
+                    [string] $AssessmentId,
+                    [string] $SampleId,
+                    [string] $SampleTimestamp,
+                    [string] $Provider
+                )
+
+                $share = if ($ShareName.Count -gt 0) { [string]$ShareName[0] } else { 'Finance' }
+                @(
+                    [pscustomobject]@{
+                        AssessmentId = $AssessmentId
+                        SampleId = $SampleId
+                        SampleTimestamp = $SampleTimestamp
+                        ComputerName = $ComputerName
+                        ShareName = $share
+                        Provider = $Provider
+                        FileId = '1001'
+                        SessionId = '2001'
+                        ClientComputerName = 'WKSTN-001'
+                        ClientUserName = 'CONTOSO\Ava.Accounting'
+                        Path = 'C:\Shares\Finance\AP\invoice.xlsx'
+                        FolderPath = 'C:\Shares\Finance\AP'
+                        ShareRelativePath = 'AP\invoice.xlsx'
+                        ShareRelativeFolder = 'AP'
+                        Permissions = 'Read'
+                        Locks = 1
+                        Source = 'MockOpenFileProvider'
+                        CollectionStatus = 'Open'
+                        ErrorMessage = ''
+                    },
+                    [pscustomobject]@{
+                        AssessmentId = $AssessmentId
+                        SampleId = $SampleId
+                        SampleTimestamp = $SampleTimestamp
+                        ComputerName = $ComputerName
+                        ShareName = $share
+                        Provider = $Provider
+                        FileId = '1002'
+                        SessionId = '2002'
+                        ClientComputerName = 'WKSTN-002'
+                        ClientUserName = 'CONTOSO\Riley.Reviewer'
+                        Path = 'C:\Shares\Finance\AP\invoice.xlsx'
+                        FolderPath = 'C:\Shares\Finance\AP'
+                        ShareRelativePath = 'AP\invoice.xlsx'
+                        ShareRelativeFolder = 'AP'
+                        Permissions = 'Read,Write'
+                        Locks = 0
+                        Source = 'MockOpenFileProvider'
+                        CollectionStatus = 'Open'
+                        ErrorMessage = ''
+                    }
+                )
+            }
+
+            try {
+                $result = Invoke-ShareSurferOpenFileAssessment -ComputerName 'files01' -ShareName 'Finance' -OutputPath $outputPath -Provider NativeRpc -IntervalSeconds 0 -SampleCount 2 -Quiet -PassThru
+                $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'open_file_manifest.csv'))
+                $samples = @(Import-Csv -LiteralPath (Join-Path $outputPath 'open_file_samples.csv'))
+                $summary = @(Import-Csv -LiteralPath (Join-Path $outputPath 'open_file_summary.csv'))
+                $errors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'open_file_errors.csv'))
+
+                Assert-True $result.IsValid 'Open file assessment should report a valid package.'
+                Assert-Equal $manifest[0].Provider 'NativeRpc' 'Open file assessment manifest should record provider selection.'
+                Assert-Equal $manifest[0].SampleCount '2' 'Open file assessment manifest should record effective sample count.'
+                Assert-Equal $samples.Count 4 'Open file assessment should write one sample row per observed open-file row.'
+                Assert-True ($samples.ClientUserName -contains 'CONTOSO\Ava.Accounting') 'Open file samples should preserve client user evidence.'
+                Assert-True ($summary.Count -ge 1) 'Open file assessment should produce folder summary pivots.'
+                Assert-Equal $summary[0].ShareRelativeFolder 'AP' 'Open file summary should group by share-relative folder.'
+                Assert-Equal $summary[0].HotFolder 'True' 'Repeated activity should mark the folder as hot.'
+                Assert-Equal $errors.Count 0 'Successful open file assessment should still write an empty errors CSV with headers.'
+            }
+            finally {
+                Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferOpenFileAssessment records provider errors without dropping the package'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOpenFileErrors-' + [guid]::NewGuid().ToString('N'))
+            $global:ShareSurferOpenFileProvider = {
+                throw 'mock open-file provider failure'
+            }
+
+            try {
+                $result = Invoke-ShareSurferOpenFileAssessment -ComputerName 'files01' -ShareName 'Finance' -OutputPath $outputPath -Provider NativeRpc -IntervalSeconds 0 -SampleCount 1 -Quiet -PassThru
+                $samples = @(Import-Csv -LiteralPath (Join-Path $outputPath 'open_file_samples.csv'))
+                $errors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'open_file_errors.csv'))
+
+                Assert-True $result.IsValid 'Open file assessment should keep package files valid when a sample errors.'
+                Assert-Equal $result.ErrorCount 1 'Open file assessment should count provider errors.'
+                Assert-Equal $samples.Count 0 'Provider failure should not fabricate sample rows.'
+                Assert-Equal $errors.Count 1 'Provider failure should be exported as open-file error evidence.'
+                Assert-True ($errors[0].Message -like '*mock open-file provider failure*') 'Open file error rows should preserve readable failure messages.'
+            }
+            finally {
+                Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'New-ShareSurferStandaloneDashboard packages a standalone static dashboard snapshot'
         Body = {
             Import-Module $moduleManifest -Force
@@ -1881,6 +1990,44 @@ $tests = @(
             Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.css') -Value 'body { color: #0f172a; }' -Encoding UTF8
 
             Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            $global:ShareSurferOpenFileProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string[]] $ShareName,
+                    [string] $AssessmentId,
+                    [string] $SampleId,
+                    [string] $SampleTimestamp,
+                    [string] $Provider
+                )
+
+                [pscustomobject]@{
+                    AssessmentId = $AssessmentId
+                    SampleId = $SampleId
+                    SampleTimestamp = $SampleTimestamp
+                    ComputerName = $ComputerName
+                    ShareName = 'Finance'
+                    Provider = $Provider
+                    FileId = '1001'
+                    SessionId = '2001'
+                    ClientComputerName = 'WKSTN-001'
+                    ClientUserName = 'CONTOSO\Ava.Accounting'
+                    Path = 'C:\Shares\Finance\AP\invoice.xlsx'
+                    FolderPath = 'C:\Shares\Finance\AP'
+                    ShareRelativePath = 'AP\invoice.xlsx'
+                    ShareRelativeFolder = 'AP'
+                    Permissions = 'Read'
+                    Locks = 1
+                    Source = 'MockOpenFileProvider'
+                    CollectionStatus = 'Open'
+                    ErrorMessage = ''
+                }
+            }
+            try {
+                Invoke-ShareSurferOpenFileAssessment -ComputerName 'files01' -ShareName 'Finance' -OutputPath $exportPath -Provider NativeRpc -IntervalSeconds 0 -SampleCount 1 -Quiet | Out-Null
+            }
+            finally {
+                Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
+            }
 
             $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -ExportPath $exportPath -DashboardBuildPath $buildPath -OutputPath $standalonePath -PassThru
 
@@ -1902,6 +2049,9 @@ $tests = @(
             Assert-Equal $manifest.dashboardDataKind 'export' 'Dashboard manifest should identify generated export data.'
             Assert-True ([int]$manifest.rowCounts.shares -gt 0) 'Dashboard manifest should include export row counts.'
             Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
+            Assert-True ([int]$manifest.rowCounts.open_file_samples -gt 0) 'Dashboard manifest should include imported open-file sample counts when present.'
+            Assert-True ([int]$manifest.rowCounts.open_file_summary -gt 0) 'Dashboard manifest should include imported open-file summary counts when present.'
+            Assert-True ($dataScript -like '*"open_file_samples"*') 'Dashboard snapshot should carry open-file datasets for raw evidence review.'
         }
     },
     @{
@@ -1985,6 +2135,44 @@ $tests = @(
                 }
             )
             Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+            $global:ShareSurferOpenFileProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string[]] $ShareName,
+                    [string] $AssessmentId,
+                    [string] $SampleId,
+                    [string] $SampleTimestamp,
+                    [string] $Provider
+                )
+
+                [pscustomobject]@{
+                    AssessmentId = $AssessmentId
+                    SampleId = $SampleId
+                    SampleTimestamp = $SampleTimestamp
+                    ComputerName = $ComputerName
+                    ShareName = if ($ShareName.Count -gt 0) { [string]$ShareName[0] } else { 'Finance' }
+                    Provider = $Provider
+                    FileId = '1001'
+                    SessionId = '2001'
+                    ClientComputerName = 'WKSTN-001'
+                    ClientUserName = 'CONTOSO\Ava.Accounting'
+                    Path = 'C:\Shares\Finance\AP\invoice.xlsx'
+                    FolderPath = 'C:\Shares\Finance\AP'
+                    ShareRelativePath = 'AP\invoice.xlsx'
+                    ShareRelativeFolder = 'AP'
+                    Permissions = 'Read'
+                    Locks = 1
+                    Source = 'MockOpenFileProvider'
+                    CollectionStatus = 'Open'
+                    ErrorMessage = ''
+                }
+            }
+            try {
+                Invoke-ShareSurferOpenFileAssessment -ComputerName 'files01' -ShareName 'Finance' -OutputPath $outputPath -Provider NativeRpc -IntervalSeconds 0 -SampleCount 1 -Quiet | Out-Null
+            }
+            finally {
+                Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
+            }
 
             ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath $reportPath | Out-Null
             $report = Get-Content -LiteralPath $reportPath -Raw
@@ -2117,6 +2305,8 @@ $tests = @(
             Assert-True ($report -like '*renderRawEvidence*') 'Raw evidence view should dynamically render embedded CSV-shaped rows.'
             Assert-True ($report -like '*rawDatasetLabels*') 'Raw evidence view should present friendly dataset labels.'
             Assert-True ($report -like '*owner_review_packets.csv*') 'Raw evidence view should expose owner review packets.'
+            Assert-True ($report -like '*open_file_summary.csv*') 'Raw evidence view should expose optional open-file activity summaries when present.'
+            Assert-True ($report -like '*open_file_samples*') 'Report data should embed optional open-file sample rows when present.'
             Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'
             Assert-True ($report -like '*.summary, .visual-grid { grid-template-columns: 1fr; }*') 'Report summary and visual grids should collapse cleanly on mobile.'
         }
@@ -3484,8 +3674,8 @@ $tests = @(
             Assert-True ($readmeText -like '*docs/nonpermissive-collection-dashboard-workflow.md*') 'README should link the nonpermissive collection workflow.'
             Assert-True ($readmeText -like '*docs/visuals/dataset-transfer-dashboard-workflow.svg*') 'README should show the dataset transfer dashboard visual.'
             Assert-True ($readmeText -like '*Quick Start in a Nonpermissive Environment*') 'README should include nonpermissive quickstart setup instructions.'
-            Assert-True ($readmeText -like '*v0.1.0-pre.6*') 'README should reference the current pre-release quickstart package.'
-            Assert-True ($readmeText -like '*ShareSurfer-0.1.0-pre.6.zip*') 'README should name the current pre-release zip asset.'
+            Assert-True ($readmeText -like '*v0.1.0-pre.7*') 'README should reference the current pre-release quickstart package.'
+            Assert-True ($readmeText -like '*ShareSurfer-0.1.0-pre.7.zip*') 'README should name the current pre-release zip asset.'
             Assert-True ($readmeText -like '*without npm, Vite, a development server, or internet access*') 'README should explain release dashboard use without npm or a server.'
             Assert-True ($readmeText -like '*template/onboarding screen*') 'README should explain release dashboard template behavior before export packaging.'
             Assert-True ($readmeText -like '*$shareSurferRoot*') 'README nonpermissive quickstart should show where the copied ShareSurfer folder is staged.'
@@ -3553,7 +3743,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*choose an attribute that exists on both users and groups*') 'First-run guide should explain OBS attribute schema fallback.'
             Assert-True ($firstRunText -like '*Move the Dataset to a Dashboard Host*') 'First-run guide should explain the two-host dashboard workflow.'
             Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.svg*') 'First-run guide should show the nonpermissive collector workflow visual.'
-            Assert-True ($firstRunText -like '*v0.1.0-pre.6 release package*') 'First-run guide should reference the current pre-release dashboard package.'
+            Assert-True ($firstRunText -like '*v0.1.0-pre.7 release package*') 'First-run guide should reference the current pre-release dashboard package.'
             Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
 
             Assert-True (Test-Path -LiteralPath $nonpermissiveWorkflow) 'Documentation should include a nonpermissive collector to dashboard host workflow.'
@@ -3564,7 +3754,7 @@ $tests = @(
             Assert-True ($nonpermissiveText -like '*Get-FileHash*') 'Nonpermissive workflow should explain hash generation.'
             Assert-True ($nonpermissiveText -like '*approved transfer process*') 'Nonpermissive workflow should require approved transfer handling.'
             Assert-True ($nonpermissiveText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Nonpermissive workflow should show dashboard packaging on the review host.'
-            Assert-True ($nonpermissiveText -like '*ShareSurfer-0.1.0-pre.6.zip*') 'Nonpermissive workflow should name the current pre-release zip asset.'
+            Assert-True ($nonpermissiveText -like '*ShareSurfer-0.1.0-pre.7.zip*') 'Nonpermissive workflow should name the current pre-release zip asset.'
             Assert-True ($nonpermissiveText -like '*no npm or Vite is required*') 'Nonpermissive workflow should make release dashboard packaging no-npm.'
             Assert-True ($nonpermissiveText -like '*visuals/nonpermissive-collector-workflow.svg*') 'Nonpermissive workflow should reference the collector visual.'
             Assert-True ($nonpermissiveText -like '*visuals/dataset-transfer-dashboard-workflow.svg*') 'Nonpermissive workflow should reference the dashboard-transfer visual.'

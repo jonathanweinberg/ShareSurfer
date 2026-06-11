@@ -14,6 +14,7 @@ V1 is PowerShell-first and designed for airgapped or tightly controlled environm
 
 - `New-ShareSurferLabFixture`
 - `Invoke-ShareSurferScan`
+- `Invoke-ShareSurferOpenFileAssessment`
 - `ConvertTo-ShareSurferReport`
 - `New-ShareSurferSupportBundle`
 - `Test-ShareSurferExport`
@@ -26,6 +27,7 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 | --- | --- | --- |
 | First business-owner review | Scan one known share with owner mapping | `owner_review_packets.csv`, `owner_risk_pivots.csv`, and `report.html` |
 | Migration discovery | Scan related shares with file/folder evidence and owner mappings | `related_data_areas.csv`, long-path findings, inheritance breaks, and share-vs-NTFS conflicts |
+| Hot folder activity review | Add an open-file assessment after the scan | `open_file_summary.csv`, `open_file_samples.csv`, and dashboard Raw Evidence Tables |
 | Nonpermissive collector workflow | Collect on a locked-down Windows host, then transfer the validated dataset to a dashboard host | Validated CSV export folder, `report.html`, optional standalone dashboard folder |
 | Broad admin or HelpDesk access cleanup | Provide a discounted principals CSV | Visible access evidence that does not inflate Migration Discovery relatedness |
 | Support or bug report | Create a redacted support bundle after export validation | Stable-token CSVs, manifests, and optional redacted report |
@@ -59,19 +61,19 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 
 For a first-time walkthrough, start with the [First-run guide](docs/first-run-guide.md). It explains prerequisites, target selection, collector commands, CSV outputs, reports, and redacted support bundles for operators who are new to ShareSurfer or new to Windows file-share auditing.
 
-Current pre-release quickstart package: [v0.1.0-pre.6](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.6). Download `ShareSurfer-0.1.0-pre.6.zip` and `ShareSurfer-0.1.0-pre.6.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets.
+Current pre-release quickstart package: [v0.1.0-pre.7](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7). Download `ShareSurfer-0.1.0-pre.7.zip` and `ShareSurfer-0.1.0-pre.7.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets.
 
 When the ZIP is extracted to `C:\ShareSurfer\`, the release root is:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.6\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.7\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.6`, change the destination to `C:\ShareSurfer` to avoid a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.6\ShareSurfer-0.1.0-pre.6`. From PowerShell, use:
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.7`, change the destination to `C:\ShareSurfer` to avoid a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.7\ShareSurfer-0.1.0-pre.7`. From PowerShell, use:
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.6.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.6'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.7.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
@@ -83,7 +85,7 @@ On Windows, release users do not need Node, npm, Vite, a preview server, or inte
 `Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. At the end, look for the `ShareSurfer Summary` lines. They show the scan counts, output path, any partial-data or collection-gap warning, and the next `Test-ShareSurferExport` command. Add `-Quiet` only for automation where console progress is not wanted.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.6'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
@@ -120,6 +122,13 @@ if (Test-Path -LiteralPath $discountedPrincipalPath) {
 }
 
 Invoke-ShareSurferScan @scanParams
+
+Invoke-ShareSurferOpenFileAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -OutputPath $exportPath `
+  -SampleCount 1
+
 Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
 
@@ -134,16 +143,18 @@ New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath 'C:\ShareSurfer
 
 `owner_review_packets.csv` is generated by the scan. You do not create it by hand; create or update `owner-mapping.csv`, run `Invoke-ShareSurferScan`, then review `$exportPath\owner_review_packets.csv`.
 
+`Invoke-ShareSurferOpenFileAssessment` is optional. It records open-file activity into `open_file_manifest.csv`, `open_file_samples.csv`, `open_file_summary.csv`, and `open_file_errors.csv` in the same export folder. Use a one-sample quick run for ad hoc checks, or increase `-SampleCount` and `-IntervalSeconds` for a longer observation window. The assessment helps identify hot folders by repeated open-file observations; it is activity evidence, not a replacement for share and NTFS permission evidence.
+
 Run the collector from an elevated Windows PowerShell prompt when possible. Without an elevated/admin token, ShareSurfer may miss or partially record share-level permission proof, protected ACLs, owner values, denied folders/files, and security descriptor details that require higher privileges. The scan keeps going best-effort and records those gaps as partial data, collection errors, and critical scan information blocks.
 
 In ShareSurfer, **Owner** means the mapped business/data reviewer. It is separate from the NTFS owner value in `items.csv`. A blank item owner usually means the owner value could not be read or resolved; it is not proof that the file has no real Windows owner.
 
 ### Quick Start in a Nonpermissive Environment
 
-Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the [v0.1.0-pre.6 release zip](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.6) for first-time Windows use because it already includes the built dashboard assets. Copy the unpacked ShareSurfer release folder to the collector host first. If the ZIP is extracted to `C:\ShareSurfer\`, use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.6` as `$shareSurferRoot`. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
+Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the [v0.1.0-pre.7 release zip](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7) for first-time Windows use because it already includes the built dashboard assets. Copy the unpacked ShareSurfer release folder to the collector host first. If the ZIP is extracted to `C:\ShareSurfer\`, use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.7` as `$shareSurferRoot`. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.6'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -221,7 +232,7 @@ The dashboard files included in the release are template assets. Opening `interf
 Package a validated export folder as a standalone dashboard from the release zip on Windows:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.6'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `
@@ -262,7 +273,7 @@ A future signed Windows dashboard viewer can wrap this same static dashboard pac
 
 ## Pre-1.0 Release Packaging
 
-The first ShareSurfer release packages are unsigned but fully built. The current quickstart release is [v0.1.0-pre.6](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.6). It includes the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
+The first ShareSurfer release packages are unsigned but fully built. The current quickstart release is [v0.1.0-pre.7](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7). It includes the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
 
 Release packaging enforces a dependency-age policy for npm packages by default: package versions must be at least 7 days old before they are included in a release package. This helps avoid pulling a just-published dependency into a pre-release. Local dry runs can use `-SkipDependencyAgeCheck`, but tagged release packaging should keep the check enabled.
 

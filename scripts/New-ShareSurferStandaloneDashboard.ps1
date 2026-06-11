@@ -39,6 +39,15 @@ function New-ShareSurferStandaloneSchema {
     }
 }
 
+function New-ShareSurferStandaloneOptionalSchema {
+    [ordered]@{
+        'open_file_manifest.csv' = @('AssessmentId', 'GeneratedAt', 'ExportVersion', 'ComputerName', 'ShareNames', 'Provider', 'IntervalSeconds', 'SampleCount', 'DurationMinutes', 'StartedAt', 'CompletedAt', 'PackageKind')
+        'open_file_samples.csv' = @('AssessmentId', 'SampleId', 'SampleTimestamp', 'ComputerName', 'ShareName', 'Provider', 'FileId', 'SessionId', 'ClientComputerName', 'ClientUserName', 'Path', 'FolderPath', 'ShareRelativePath', 'ShareRelativeFolder', 'Permissions', 'Locks', 'Source', 'CollectionStatus', 'ErrorMessage')
+        'open_file_summary.csv' = @('AssessmentId', 'ComputerName', 'ShareName', 'FolderPath', 'ShareRelativeFolder', 'ObservationCount', 'SampleCount', 'FirstSeen', 'LastSeen', 'UniqueUsers', 'UniqueClients', 'TopUsers', 'TopClients', 'TotalLocks', 'MaxLocks', 'HeatScore', 'HotFolder', 'PathProximityKey')
+        'open_file_errors.csv' = @('ErrorId', 'AssessmentId', 'SampleId', 'Timestamp', 'ComputerName', 'ShareName', 'Provider', 'ErrorType', 'Message', 'Detail')
+    }
+}
+
 function Add-ShareSurferStandaloneWarning {
     param(
         [hashtable] $WarningMap,
@@ -75,11 +84,15 @@ function Read-ShareSurferStandaloneCsv {
         [Parameter(Mandatory = $true)]
         [string[]] $Columns,
 
-        [hashtable] $WarningMap
+        [hashtable] $WarningMap,
+
+        [switch] $Optional
     )
 
     if (-not (Test-Path -LiteralPath $Path)) {
-        Add-ShareSurferStandaloneWarning -WarningMap $WarningMap -Warning ('{0} was not present in the export. The dashboard will show an empty dataset.' -f $FileName)
+        if (-not $Optional) {
+            Add-ShareSurferStandaloneWarning -WarningMap $WarningMap -Warning ('{0} was not present in the export. The dashboard will show an empty dataset.' -f $FileName)
+        }
         return @()
     }
 
@@ -144,6 +157,7 @@ foreach ($child in @(Get-ChildItem -LiteralPath $DashboardBuildPath -Force)) {
 }
 
 $schema = New-ShareSurferStandaloneSchema
+$optionalSchema = New-ShareSurferStandaloneOptionalSchema
 $warningMap = @{}
 $datasets = [ordered]@{}
 $rowCounts = [ordered]@{}
@@ -151,6 +165,13 @@ foreach ($fileName in $schema.Keys) {
     $datasetKey = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
     $filePath = Join-Path $ExportPath $fileName
     $rows = @(Read-ShareSurferStandaloneCsv -Path $filePath -FileName $fileName -Columns $schema[$fileName] -WarningMap $warningMap)
+    $datasets[$datasetKey] = @($rows)
+    $rowCounts[$datasetKey] = @($rows).Count
+}
+foreach ($fileName in $optionalSchema.Keys) {
+    $datasetKey = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+    $filePath = Join-Path $ExportPath $fileName
+    $rows = @(Read-ShareSurferStandaloneCsv -Path $filePath -FileName $fileName -Columns $optionalSchema[$fileName] -WarningMap $warningMap -Optional)
     $datasets[$datasetKey] = @($rows)
     $rowCounts[$datasetKey] = @($rows).Count
 }

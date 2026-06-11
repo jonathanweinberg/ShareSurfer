@@ -9,6 +9,7 @@ foreach ($script in @($privateScripts + $publicScripts)) {
 
 Export-ModuleMember -Function @(
     'ConvertTo-ShareSurferReport',
+    'Invoke-ShareSurferOpenFileAssessment',
     'Invoke-ShareSurferScan',
     'New-ShareSurferLabFixture',
     'New-ShareSurferSupportBundle',
