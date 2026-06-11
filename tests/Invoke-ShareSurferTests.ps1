@@ -3575,6 +3575,7 @@ $tests = @(
             $firstRunTroubleshooting = Join-Path $repoRoot 'docs/first-run-troubleshooting.md'
             $businessReviewHandoff = Join-Path $repoRoot 'docs/business-review-handoff.md'
             $workflowGuide = Join-Path $repoRoot 'docs/workflow-guides.md'
+            $commandRecipes = Join-Path $repoRoot 'docs/command-recipes.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
@@ -3630,6 +3631,15 @@ $tests = @(
             Assert-True ($workflowGuideText -like '*Discounted principals*' -or $workflowGuideText -like '*discounted access principals*') 'Workflow guide should explain discounted access signal handling.'
             Assert-True ($workflowGuideText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Workflow guide should show dashboard packaging.'
             Assert-True ($workflowGuideText -like '*Get-FileHash -Algorithm SHA256*') 'Workflow guide should show handoff hash verification evidence.'
+            Assert-True (Test-Path -LiteralPath $commandRecipes) 'Documentation should include first-run command recipes.'
+            $commandRecipeText = Get-Content -LiteralPath $commandRecipes -Raw
+            Assert-True ($commandRecipeText -like '*ShareSurfer Command Recipes*') 'Command recipes should have a clear title.'
+            Assert-True ($commandRecipeText -like '*Quick UNC Path Scan*') 'Command recipes should include UNC path scan guidance.'
+            Assert-True ($commandRecipeText -like '*SMB Scan When WinRM or CIM Is Blocked*') 'Command recipes should include NativeSmbRpc fallback guidance.'
+            Assert-True ($commandRecipeText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Command recipes should include standalone dashboard packaging.'
+            Assert-True ($commandRecipeText -like '*Invoke-ShareSurferOpenFileAssessment*') 'Command recipes should include open-file assessment.'
+            Assert-True ($commandRecipeText -like '*New-ShareSurferSupportBundle*') 'Command recipes should include redacted support bundle creation.'
+            Assert-True ($commandRecipeText -like '*Get-FileHash -Algorithm SHA256*') 'Command recipes should include SHA256 handoff verification.'
             foreach ($visual in $expectedVisuals) {
                 $path = Join-Path $visualRoot $visual
                 Assert-True (Test-Path -LiteralPath $path) ("Missing workflow visual {0}" -f $visual)
@@ -3684,6 +3694,7 @@ $tests = @(
             Assert-True ($readmeText -like '*Basic Use Cases*') 'README should present basic use cases.'
             Assert-True ($readmeText -like '*Workflow Guides*') 'README should include workflow guide visuals.'
             Assert-True ($readmeText -like '*docs/workflow-guides.md*') 'README should link the workflow guide.'
+            Assert-True ($readmeText -like '*docs/command-recipes.md*') 'README should link the command recipes.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/first-scan-owner-review.png*') 'README should show the first scan owner review visual.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/locked-down-collector-dashboard-host.png*') 'README should show the locked-down collector dashboard visual.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/migration-discovery-cleanup-planning.png*') 'README should show the migration discovery visual.'
@@ -3752,6 +3763,7 @@ $tests = @(
             $firstRunTroubleshootingText = Get-Content -LiteralPath $firstRunTroubleshooting -Raw
             $businessReviewHandoffText = Get-Content -LiteralPath $businessReviewHandoff -Raw
             Assert-True ($firstRunText -like '*first-time*') 'First-run guide should explicitly address first-time operators.'
+            Assert-True ($firstRunText -like '*command recipes*') 'First-run guide should link command recipes.'
             Assert-True ($firstRunText -like '*Before You Run Checklist*') 'First-run guide should include a before-run checklist.'
             Assert-True ($firstRunText -like '*Which Scan Command Should I Use?*') 'First-run guide should help operators choose a scan command shape.'
             Assert-True ($firstRunText -like '*What good looks like after validation*') 'First-run guide should explain validation success criteria.'
@@ -3849,6 +3861,7 @@ $tests = @(
                 Get-Content -LiteralPath $firstRunTroubleshooting -Raw
                 Get-Content -LiteralPath $businessReviewHandoff -Raw
                 Get-Content -LiteralPath $workflowGuide -Raw
+                Get-Content -LiteralPath $commandRecipes -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw

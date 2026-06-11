@@ -33,6 +33,8 @@ Write these answers down before the first scan:
 
 If you are unsure about optional input files, leave them absent and use the splatted examples in this guide. They only pass optional paths when the files exist.
 
+If you already know which task you need to run and only want copy/paste commands, use the [command recipes](command-recipes.md). That page collects release extraction, module import, UNC scans, SMB scans, NativeSmbRpc fallback, dashboard packaging, two-host handoff, open-file assessment, and support bundle commands.
+
 ## Prerequisites
 
 Use a Windows collector machine with:
