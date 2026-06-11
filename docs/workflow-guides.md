@@ -21,7 +21,7 @@ Use this flow when you want one business owner or business unit to understand a 
 Fast starter command:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -65,7 +65,7 @@ Use this flow when the collector host is locked down, has no internet access, ca
 Collector-side handoff command:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 
@@ -86,7 +86,7 @@ Get-FileHash -Algorithm SHA256 -Path $handoffPath
 Dashboard-host command:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
 $exportPath = 'C:\ShareSurfer\received\scan-001'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
