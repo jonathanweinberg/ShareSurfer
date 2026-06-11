@@ -10,6 +10,50 @@ V1 is PowerShell-first and designed for airgapped or tightly controlled environm
 - Windows/AD lab fixture planning and live fixture creation on Windows hosts
 - Raw export validation plus redacted support bundle generation
 
+## How ShareSurfer Works
+
+Think of ShareSurfer as a read-only evidence pipeline for file-share review. It does not change permissions, approve access, or migrate data. It collects what exists, normalizes it, enriches it with identity and org context, then gives operators and business owners safer ways to review the results.
+
+In ShareSurfer, **Owner** means the mapped business or data reviewer for a share, folder, or group of related paths. That is separate from the Windows NTFS owner field collected in `items.csv`.
+
+### 1. Evidence moves from shares into review outputs
+
+![ShareSurfer evidence pipeline](docs/visuals/field-guide/evidence-pipeline.png)
+
+The collector reads share permission evidence, file and folder ACLs, owner values, inheritance state, AD identities, groups, and org attributes. The output is a normalized evidence set: CSVs, findings, conflicts, `scan_manifest.csv`, `report.html`, and optional standalone dashboard files.
+
+### 2. Share access and file/folder access are both reviewed
+
+![Share gate vs NTFS permissions](docs/visuals/field-guide/share-gate-ntfs-model.png)
+
+The share permission is the front gate. NTFS permissions decide what happens after someone gets through that gate. ShareSurfer shows both layers so reviewers can spot restrictive share gates, NTFS deny collisions, broken inheritance, deep custom permissions, missing SIDs, and long-path migration warnings.
+
+### 3. Identities become reviewable org context
+
+![Identity and org enrichment](docs/visuals/field-guide/identity-org-enrichment.png)
+
+ShareSurfer expands permission-bearing security groups, follows nested membership with cycle protection, enriches users with employee and directory attributes, follows manager chains up to three levels, and records the runtime OBS/OID attribute selected with `-ObsAttribute`.
+
+### 4. Related data areas are grouped for migration planning
+
+![Migration discovery signals](docs/visuals/field-guide/migration-discovery-signals.png)
+
+Migration Discovery helps avoid moving one part of a business data area while leaving related paths behind. It groups related shares and folders using explainable signals such as owner mapping, business unit, OBS path, manager chain, path naming, and permission-group overlap. Discounted admin or HelpDesk principals remain visible, but they do not inflate relatedness.
+
+### 5. Diagnostics explain how much to trust the scan
+
+![Diagnostics and trust review](docs/visuals/field-guide/diagnostics-trust-review.png)
+
+Warnings do not always mean the scan failed. They tell the operator what needs review before asking owners to approve anything: access denied paths, WinRM/CIM gaps, partial share evidence, broken or missing SIDs, critical scan information blocks, and paths that may need a rerun with different rights or a different provider.
+
+### 6. Support evidence can be redacted before handoff
+
+![Redacted support handoff](docs/visuals/field-guide/redacted-support-handoff.png)
+
+Raw exports can contain real identities, paths, employee attributes, manager context, and business structure. When evidence must leave trusted handling, create a redacted support bundle so troubleshooting shape, row counts, manifests, and stable tokens can be shared without exposing the raw dataset.
+
+The deeper [visual field guide](docs/visual-field-guide.md) explains each diagram with review questions and primary output files.
+
 ## Commands
 
 - `New-ShareSurferLabFixture`
