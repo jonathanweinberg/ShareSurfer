@@ -284,7 +284,7 @@ Invoke-ShareSurferScan `
   -ManagerIdentityFormat MailTo
 ```
 
-`NativeSmbRpc` is a collection provider, not a different report format. It feeds the same CSVs and dashboard, but it uses Windows SMB/RPC and Win32 security APIs for share metadata, share permissions, owner values, and DACL evidence. It does not require WinRM/CIM, `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl` for the native provider path. It still needs enough share/file permissions to read the target evidence; unreadable paths and missing security descriptors are shown as partial data, collection errors, and scan events.
+`NativeSmbRpc` is a collection provider, not a different report format. It feeds the same CSVs and dashboard, but it uses Windows SMB/RPC and Win32 security APIs for share metadata, share permissions, owner values, and DACL evidence. It does not require WinRM/CIM, `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl` for the native provider path. It still needs enough share/file permissions to read the target evidence; unreadable paths, missing security descriptors, and unparseable security descriptors are shown as partial data, collection errors, and scan events. A passed SMB/RPC port check proves reachability, not that every share, owner, or folder/file security descriptor can be read.
 
 Optional readiness check:
 
@@ -296,7 +296,7 @@ Invoke-ShareSurferPortProtocolAssessment `
   -OutputPath $exportPath
 ```
 
-This adds `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv` beside the normal scan exports. The standalone dashboard shows them in **Ports & Protocols** below Raw Evidence. Use this when you need a plain-language explanation of which collector routes are reachable, what a failure means, and what to ask the firewall, server, or directory team to check. A failed WinRM/CIM row is usually a completeness/fallback warning; a failed required SMB TCP 445 row usually means the target is not scan-ready from that collector.
+This adds `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv` beside the normal scan exports. The standalone dashboard shows them in **Ports & Protocols** below Raw Evidence. Use this when you need a plain-language explanation of which collector routes are reachable, what a failure means, and what to ask the firewall, server, or directory team to check. A failed WinRM/CIM row is usually a completeness/fallback warning; a failed required SMB TCP 445 row usually means the target is not scan-ready from that collector. A passed SMB/RPC row is still only a network signal; review `collection_errors.csv` for `NativeShareSecurityDescriptorUnavailable`, `NativeShareSecurityDescriptorParseFailed`, `NativeSecurityDescriptorReadFailed`, or `NativeSecurityDescriptorParseFailed` before treating native security evidence as complete.
 
 ## Step 5: Validate the Export
 

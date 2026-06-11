@@ -148,15 +148,18 @@ function Get-ShareSurferLocalInventory {
                     }
                 }
                 catch {
+                    $nativeError = Get-ShareSurferNativeSecurityErrorInfo -Exception $_.Exception -DefaultDetail 'GetNamedSecurityInfoW owner/DACL read failed.'
                     [void]$scanErrors.Add([pscustomobject]@{
                         ShareId = $shareId
+                        ItemId = $itemId
                         FullPath = $scanItemDisplayPath
-                        ErrorType = 'AclReadError'
+                        ErrorType = $nativeError.ErrorType
                         Severity = 'Warning'
                         Source = 'NativeWin32Security'
-                        Message = [string]$_.Exception.Message
-                        Detail = 'GetNamedSecurityInfoW owner/DACL read failed.'
+                        Message = $nativeError.Message
+                        Detail = $nativeError.Detail
                     })
+                    [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType $nativeError.ErrorType -Source 'NativeWin32Security' -ShareId $shareId -ItemId $itemId -Message ('Unable to read native owner/DACL security descriptor for {0}.' -f $scanItemDisplayPath) -Detail $nativeError.Message))
                     $inheritanceEnabled = $true
                 }
             }

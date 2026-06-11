@@ -58,13 +58,13 @@ function Get-ShareSurferNativeSmbShareInventory {
                         [void]$scanErrors.Add([pscustomobject]@{
                             ShareId = $shareId
                             FullPath = $uncPath
-                            ErrorType = 'SharePermissionParseError'
+                            ErrorType = 'NativeShareSecurityDescriptorParseFailed'
                             Severity = 'Warning'
                             Source = 'NativeSmbRpc'
-                            Message = [string]$_.Exception.Message
-                            Detail = 'SHARE_INFO_502 security descriptor could not be parsed.'
+                            Message = 'Native SMB/RPC returned a share security descriptor, but ShareSurfer could not parse it into share permission rows.'
+                            Detail = ('SMB/RPC reachability was proven for this share, but the returned SHARE_INFO_502 security descriptor was unusable. Parser message: {0}' -f [string]$_.Exception.Message)
                         })
-                        [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionParseError' -Source 'NativeSmbRpc' -ShareId $shareId -Message ('Unable to parse native share permissions for {0}.' -f $uncPath) -Detail ([string]$_.Exception.Message)))
+                        [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'NativeShareSecurityDescriptorParseFailed' -Source 'NativeSmbRpc' -ShareId $shareId -Message ('Unable to parse native share security descriptor for {0}.' -f $uncPath) -Detail ([string]$_.Exception.Message)))
                     }
                 }
                 elseif ($null -ne $rpcShare.PSObject.Properties['SharePermissions']) {
@@ -82,13 +82,13 @@ function Get-ShareSurferNativeSmbShareInventory {
                     [void]$scanErrors.Add([pscustomobject]@{
                         ShareId = $shareId
                         FullPath = $uncPath
-                        ErrorType = 'SharePermissionCollectionUnavailable'
+                        ErrorType = 'NativeShareSecurityDescriptorUnavailable'
                         Severity = 'Warning'
                         Source = 'NativeSmbRpc'
-                        Message = 'Share-level permissions were not collected through NativeSmbRpc.'
-                        Detail = 'NetShareGetInfo did not return a share security descriptor.'
+                        Message = 'Native SMB/RPC reached the share, but no share security descriptor was returned.'
+                        Detail = 'NetShareGetInfo level 502 did not return SHARE_INFO_502 security descriptor bytes, so share-level permissions remain partial even though SMB/RPC was reachable.'
                     })
-                    [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'NativeSmbRpc' -ShareId $shareId -Message ('Native SMB/RPC did not return share-level permissions for {0}.' -f $uncPath) -Detail 'Missing SHARE_INFO_502 security descriptor'))
+                    [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'NativeShareSecurityDescriptorUnavailable' -Source 'NativeSmbRpc' -ShareId $shareId -Message ('Native SMB/RPC reached {0}, but no share security descriptor was returned.' -f $uncPath) -Detail 'Missing SHARE_INFO_502 security descriptor'))
                 }
             }
             else {
