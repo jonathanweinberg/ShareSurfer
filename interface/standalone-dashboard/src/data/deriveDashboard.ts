@@ -2,6 +2,7 @@ import {
   datasetKeys,
   datasetLabels,
   expectedColumns,
+  optionalDatasetKeys,
   type DataRow,
   type DatasetKey,
   type DatasetMap
@@ -226,7 +227,10 @@ function inferPotentialServiceAccount(row: DataRow): string {
 function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warnings: Set<string>): DataRow[] {
   const sourceRows = Array.isArray(rows) ? rows : [];
   if (!Array.isArray(rows)) {
-    warnings.add(`${datasetKey}.csv was not present in the snapshot. The view will show empty evidence for that dataset.`);
+    const isOptional = (optionalDatasetKeys as readonly string[]).includes(datasetKey);
+    if (!isOptional) {
+      warnings.add(`${datasetKey}.csv was not present in the snapshot. The view will show empty evidence for that dataset.`);
+    }
   }
 
   return sourceRows.map((row, rowIndex) => {

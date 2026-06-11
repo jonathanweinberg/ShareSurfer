@@ -9,6 +9,7 @@
     PowerShellVersion = '5.1'
     FunctionsToExport = @(
         'ConvertTo-ShareSurferReport',
+        'Invoke-ShareSurferOpenFileAssessment',
         'Invoke-ShareSurferScan',
         'New-ShareSurferLabFixture',
         'New-ShareSurferSupportBundle',

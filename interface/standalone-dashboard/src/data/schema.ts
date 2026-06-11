@@ -16,8 +16,19 @@ export const datasetKeys = [
   "findings",
   "collection_errors",
   "scan_events",
-  "scan_manifest"
+  "scan_manifest",
+  "open_file_manifest",
+  "open_file_samples",
+  "open_file_summary",
+  "open_file_errors"
 ] as const;
+
+export const optionalDatasetKeys = [
+  "open_file_manifest",
+  "open_file_samples",
+  "open_file_summary",
+  "open_file_errors"
+] as const satisfies readonly DatasetKey[];
 
 export type DatasetKey = (typeof datasetKeys)[number];
 export type DataRow = Record<string, string>;
@@ -41,7 +52,11 @@ export const datasetLabels: Record<DatasetKey, string> = {
   findings: "Findings",
   collection_errors: "Collection errors",
   scan_events: "Scan events",
-  scan_manifest: "Scan manifest"
+  scan_manifest: "Scan manifest",
+  open_file_manifest: "Open-file assessment manifest",
+  open_file_samples: "Open-file samples",
+  open_file_summary: "Open-file hot folders",
+  open_file_errors: "Open-file collection errors"
 };
 
 export const expectedColumns: Record<DatasetKey, string[]> = {
@@ -279,6 +294,73 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "AdLookupMode",
     "ManagerIdentityFormat",
     "IncludeFiles"
+  ],
+  open_file_manifest: [
+    "AssessmentId",
+    "GeneratedAt",
+    "ExportVersion",
+    "ComputerName",
+    "ShareNames",
+    "Provider",
+    "IntervalSeconds",
+    "SampleCount",
+    "DurationMinutes",
+    "StartedAt",
+    "CompletedAt",
+    "PackageKind"
+  ],
+  open_file_samples: [
+    "AssessmentId",
+    "SampleId",
+    "SampleTimestamp",
+    "ComputerName",
+    "ShareName",
+    "Provider",
+    "FileId",
+    "SessionId",
+    "ClientComputerName",
+    "ClientUserName",
+    "Path",
+    "FolderPath",
+    "ShareRelativePath",
+    "ShareRelativeFolder",
+    "Permissions",
+    "Locks",
+    "Source",
+    "CollectionStatus",
+    "ErrorMessage"
+  ],
+  open_file_summary: [
+    "AssessmentId",
+    "ComputerName",
+    "ShareName",
+    "FolderPath",
+    "ShareRelativeFolder",
+    "ObservationCount",
+    "SampleCount",
+    "FirstSeen",
+    "LastSeen",
+    "UniqueUsers",
+    "UniqueClients",
+    "TopUsers",
+    "TopClients",
+    "TotalLocks",
+    "MaxLocks",
+    "HeatScore",
+    "HotFolder",
+    "PathProximityKey"
+  ],
+  open_file_errors: [
+    "ErrorId",
+    "AssessmentId",
+    "SampleId",
+    "Timestamp",
+    "ComputerName",
+    "ShareName",
+    "Provider",
+    "ErrorType",
+    "Message",
+    "Detail"
   ]
 };
 

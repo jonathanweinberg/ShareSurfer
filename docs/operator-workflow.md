@@ -206,6 +206,36 @@ If a pre-collected inventory object is being tested, pass it with `-InputObject`
 
 Use `-AdLookupMode Auto` for normal runs. Use `ActiveDirectory` to force the AD PowerShell module path, `Ldap` to force the built-in .NET directory searcher fallback, or `DirectoryOnly` for imported fixture data where no live directory lookup should occur. Both live directory paths try to populate employee fields, title, office, the selected OBS attribute, direct manager, manager's manager, and third-level manager when directory permissions allow those reads.
 
+## Optional Open-File Activity Assessment
+
+Use `Invoke-ShareSurferOpenFileAssessment` when migration planning needs a simple view of which folders are actively being used. Run it after the normal scan and point it at the same export folder. The command writes optional `open_file_*.csv` files beside the normalized scan CSVs, and the report/dashboard will import them when present.
+
+Quick ad hoc run:
+
+```powershell
+Invoke-ShareSurferOpenFileAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -OutputPath $exportPath `
+  -SampleCount 1
+```
+
+Longer observation window:
+
+```powershell
+Invoke-ShareSurferOpenFileAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -OutputPath $exportPath `
+  -SampleCount 480 `
+  -IntervalSeconds 60 `
+  -Force
+```
+
+The package includes `open_file_manifest.csv`, `open_file_samples.csv`, `open_file_summary.csv`, and `open_file_errors.csv`. Start with `open_file_summary.csv`; `HotFolder=True` means the folder had repeated observations, multiple users or clients, locks, or a high combined heat score. `open_file_errors.csv` records provider failures, such as missing permissions or an unavailable open-file provider, without removing the rest of the package.
+
+For scheduled collection, use the same command in Task Scheduler under the collector account. Prefer a dated export path per run. Use `-Force` only when you intentionally want to replace the previous open-file assessment files in an existing export folder.
+
 After every scan, validate the export set:
 
 ```powershell
@@ -269,7 +299,7 @@ Expand-Archive -LiteralPath 'D:\Intake\scan-2026-06-04-finance.zip' -Destination
 Start-Process (Join-Path $reviewRoot 'report.html')
 ```
 
-If you are using the [v0.1.0-pre.6 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.6), the standalone dashboard assets are already built. Package the transferred export for a richer static review experience:
+If you are using the [v0.1.0-pre.7 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7), the standalone dashboard assets are already built. Package the transferred export for a richer static review experience:
 
 ```powershell
 powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `

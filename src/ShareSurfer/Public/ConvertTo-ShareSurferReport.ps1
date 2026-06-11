@@ -9,10 +9,18 @@ function ConvertTo-ShareSurferReport {
     )
 
     $schema = Get-ShareSurferExportSchema
+    $optionalSchema = Get-ShareSurferOpenFileExportSchema
     $data = [ordered]@{}
     foreach ($fileName in $schema.Keys) {
         $key = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
         $data[$key] = @(Read-ShareSurferCsv -Path (Join-Path $ExportPath $fileName))
+    }
+    foreach ($fileName in $optionalSchema.Keys) {
+        $path = Join-Path $ExportPath $fileName
+        if (Test-Path -LiteralPath $path) {
+            $key = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+            $data[$key] = @(Read-ShareSurferCsv -Path $path)
+        }
     }
 
     $json = $data | ConvertTo-Json -Depth 6 -Compress
@@ -1282,7 +1290,11 @@ function ConvertTo-ShareSurferReport {
       findings: 'findings.csv',
       collection_errors: 'collection_errors.csv',
       scan_events: 'scan_events.jsonl',
-      scan_manifest: 'scan_manifest.csv'
+      scan_manifest: 'scan_manifest.csv',
+      open_file_manifest: 'open_file_manifest.csv',
+      open_file_samples: 'open_file_samples.csv',
+      open_file_summary: 'open_file_summary.csv',
+      open_file_errors: 'open_file_errors.csv'
     };
     const rawDatasetKeys = Object.keys(data).filter(key => Array.isArray(data[key]));
     function populateRawDatasetFilter() {
