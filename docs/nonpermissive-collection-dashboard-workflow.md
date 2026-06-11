@@ -22,15 +22,15 @@ ShareSurfer does not change permissions. It reads evidence, writes normalized CS
 | Collector host | Windows PowerShell 5.1, ShareSurfer module, read access to target shares and directory data | Raw CSV export set, `scan_manifest.csv`, `report.html`, optional transfer package |
 | Dashboard host | Browser and the unpacked ShareSurfer release package | Offline dashboard review folder copied from the export dataset |
 
-The collector host does not need npm, Vite, Playwright, internet access, or a local web server. Starting with [v0.1.0-pre.7](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7), release users also do not need Node, npm, Vite, a development server, or internet access on the dashboard host to package and open the standalone dashboard. Download `ShareSurfer-0.1.0-pre.7.zip` and `ShareSurfer-0.1.0-pre.7.zip.sha256` on an approved connected workstation, verify or record the hash, and move the release package by your approved process.
+The collector host does not need npm, Vite, Playwright, internet access, or a local web server. Starting with [v0.1.0-pre.8](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.8), release users also do not need Node, npm, Vite, a development server, or internet access on the dashboard host to package and open the standalone dashboard. Download `ShareSurfer-0.1.0-pre.8.zip` and `ShareSurfer-0.1.0-pre.8.zip.sha256` on an approved connected workstation, verify or record the hash, and move the release package by your approved process.
 
 When the release ZIP is extracted to `C:\ShareSurfer\`, the ShareSurfer folder is:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.7\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.8\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.7`, change the destination to `C:\ShareSurfer` to avoid a doubled nested folder. The dashboard host can use the same release folder path, or another local path such as `D:\Tools\ShareSurfer-0.1.0-pre.7`.
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.8`, change the destination to `C:\ShareSurfer` to avoid a doubled nested folder. The dashboard host can use the same release folder path, or another local path such as `D:\Tools\ShareSurfer-0.1.0-pre.8`.
 
 During collection, `Invoke-ShareSurferScan` prints timestamped phase updates so the operator can tell the scan is still active. Use `-Quiet` only for scheduled automation. If WinRM/CIM is unavailable, ShareSurfer records the gap as partial share-permission evidence and continues with file/folder evidence where possible.
 
@@ -40,7 +40,7 @@ Create a dated export path:
 
 ```powershell
 $scanId = 'scan-2026-06-08-finance'
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.7'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.8'
 $exportPath = "C:\ShareSurfer\exports\$scanId"
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
@@ -217,10 +217,10 @@ Dashboard host received-package checklist:
 - The ShareSurfer release folder is separate from the scan export folder. The release contains the dashboard template assets; the export folder contains the scan data.
 - If the standalone dashboard opens a template/onboarding screen, run `New-ShareSurferStandaloneDashboard.ps1` against the extracted export folder and open the generated dashboard output instead.
 
-If you are using the `v0.1.0-pre.7` release package, the standalone dashboard assets are already built. Package the dataset into a self-contained dashboard folder:
+If you are using the `v0.1.0-pre.8` release package, the standalone dashboard assets are already built. Package the dataset into a self-contained dashboard folder:
 
 ```powershell
-$shareSurferRoot = 'D:\Tools\ShareSurfer-0.1.0-pre.7'
+$shareSurferRoot = 'D:\Tools\ShareSurfer-0.1.0-pre.8'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$shareSurferRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $reviewRoot `
@@ -276,5 +276,5 @@ Search for raw domain names, server names, share names, user names, group names,
 | --- | --- |
 | Strict collector, no extra tooling | Run `Invoke-ShareSurferScan`, `Test-ShareSurferExport`, and `ConvertTo-ShareSurferReport` on the collector. |
 | Rich review on another host | Transfer the validated export folder or zip to the dashboard host. |
-| Dashboard host uses `v0.1.0-pre.7` or later release zip | Run `New-ShareSurferStandaloneDashboard.ps1` against the transferred export; no npm or Vite is required. |
+| Dashboard host uses `v0.1.0-pre.8` or later release zip | Run `New-ShareSurferStandaloneDashboard.ps1` against the transferred export; no npm or Vite is required. |
 | External bug report or support case | Generate a redacted support bundle and inspect it before sharing. |
