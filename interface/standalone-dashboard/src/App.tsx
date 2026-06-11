@@ -45,6 +45,7 @@ import { Tooltip } from "./ui/Tooltip";
 import { VirtualTable } from "./ui/VirtualTable";
 
 type ViewKey = "overview" | "findings" | "migration" | "groups" | "identity" | "diagnostics" | "raw";
+type BrokenSidMode = "all" | "only" | "hide";
 
 interface FilterState {
   query: string;
@@ -52,7 +53,7 @@ interface FilterState {
   owner: string;
   risk: string;
   source: string;
-  brokenSidOnly: boolean;
+  brokenSidMode: BrokenSidMode;
 }
 
 interface RuntimeSnapshotState {
@@ -69,11 +70,14 @@ interface ScopedSearchToken {
   value: string;
   normalizedValue: string;
   rawTerm: string;
+  excluded: boolean;
 }
 
 interface ParsedSearchQuery {
   scoped: ScopedSearchToken[];
+  excludedScoped: ScopedSearchToken[];
   freeText: string[];
+  excludedFreeText: string[];
 }
 
 interface PersistedDashboardState {
@@ -98,6 +102,8 @@ interface EvidenceDrill {
   rows: DataRow[];
   columns: string[];
   columnLabels?: Record<string, string>;
+  enableExport?: boolean;
+  exportFileName?: string;
   backLabel: string;
   emptyMessage: string;
 }
@@ -138,7 +144,7 @@ const defaultFilters: FilterState = {
   owner: "",
   risk: "",
   source: "",
-  brokenSidOnly: false
+  brokenSidMode: "all"
 };
 
 const dashboardSessionKey = "sharesurfer.dashboard.state.v1";
@@ -187,6 +193,27 @@ function uniqueStrings(values: string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.trim() !== ""))).sort((a, b) => a.localeCompare(b));
 }
 
+function trimMailtoPrefix(value: string): string {
+  return value.replace(/^mailto:/i, "");
+}
+
+function trimManagerDisplayRow(row: DataRow): DataRow {
+  return {
+    ...row,
+    ManagerLevel1: trimMailtoPrefix(row.ManagerLevel1 ?? ""),
+    ManagerLevel2: trimMailtoPrefix(row.ManagerLevel2 ?? ""),
+    ManagerLevel3: trimMailtoPrefix(row.ManagerLevel3 ?? "")
+  };
+}
+
+function safeFileToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "selection";
+}
+
 function formatReportDate(value: string): string {
   if (!value) {
     return "Unknown";
@@ -232,8 +259,22 @@ function isFilterState(value: unknown): value is FilterState {
   const candidate = value as Partial<FilterState>;
   return (
     ["query", "businessUnit", "owner", "risk", "source"].every((key) => typeof candidate[key as keyof FilterState] === "string") &&
-    (candidate.brokenSidOnly === undefined || typeof candidate.brokenSidOnly === "boolean")
+    (candidate.brokenSidMode === undefined || candidate.brokenSidMode === "all" || candidate.brokenSidMode === "only" || candidate.brokenSidMode === "hide") &&
+    ((candidate as { brokenSidOnly?: unknown }).brokenSidOnly === undefined || typeof (candidate as { brokenSidOnly?: unknown }).brokenSidOnly === "boolean")
   );
+}
+
+function normalizeFilterState(value: unknown): FilterState | undefined {
+  if (!isFilterState(value)) {
+    return undefined;
+  }
+
+  const legacyBrokenSidOnly = (value as { brokenSidOnly?: boolean }).brokenSidOnly === true;
+  return {
+    ...defaultFilters,
+    ...value,
+    brokenSidMode: value.brokenSidMode ?? (legacyBrokenSidOnly ? "only" : defaultFilters.brokenSidMode)
+  };
 }
 
 function isReturnTrail(value: unknown): value is ReturnTrail {
@@ -253,7 +294,7 @@ function loadDashboardState(): PersistedDashboardState {
     const parsed = JSON.parse(raw) as PersistedDashboardState;
     return {
       activeView: isViewKey(parsed.activeView) ? parsed.activeView : undefined,
-      filters: isFilterState(parsed.filters) ? { ...defaultFilters, ...parsed.filters } : undefined,
+      filters: normalizeFilterState(parsed.filters),
       selectedIssueId: typeof parsed.selectedIssueId === "string" ? parsed.selectedIssueId : undefined,
       selectedClusterId: typeof parsed.selectedClusterId === "string" ? parsed.selectedClusterId : undefined,
       selectedGroupName: typeof parsed.selectedGroupName === "string" ? parsed.selectedGroupName : undefined,
@@ -388,11 +429,21 @@ function buildReviewDecisionsDataUri(decisions: ReviewDecision[]): string {
 }
 
 function splitSearchTerms(query: string): string[] {
-  return query.match(/"[^"]+"|\S+/g) ?? [];
+  return query.match(/[!-]?"[^"]+"|\S+/g) ?? [];
+}
+
+function parseSearchTermModifier(term: string): { value: string; excluded: boolean } {
+  const excluded = term.startsWith("-") || term.startsWith("!");
+  const withoutModifier = excluded ? term.slice(1) : term;
+  return {
+    value: withoutModifier.replace(/^"|"$/g, ""),
+    excluded
+  };
 }
 
 function parseScopedSearchTerm(term: string): ScopedSearchToken | null {
-  const normalizedTerm = term.replace(/^"|"$/g, "");
+  const parsedTerm = parseSearchTermModifier(term);
+  const normalizedTerm = parsedTerm.value;
   const scopedMatch = normalizedTerm.match(/^([a-z]+):(.+)$/i);
   if (!scopedMatch) {
     return null;
@@ -404,35 +455,55 @@ function parseScopedSearchTerm(term: string): ScopedSearchToken | null {
     return null;
   }
 
-  return { scope, value, normalizedValue: value.toLowerCase(), rawTerm: term };
+  return { scope, value, normalizedValue: value.toLowerCase(), rawTerm: term, excluded: parsedTerm.excluded };
 }
 
 function parseSearchQuery(query: string): ParsedSearchQuery {
   const scoped: ScopedSearchToken[] = [];
+  const excludedScoped: ScopedSearchToken[] = [];
   const freeText: string[] = [];
+  const excludedFreeText: string[] = [];
   const terms = splitSearchTerms(query);
 
   for (const term of terms) {
     const scopedToken = parseScopedSearchTerm(term);
     if (scopedToken) {
-      scoped.push(scopedToken);
+      if (scopedToken.excluded) {
+        excludedScoped.push(scopedToken);
+      } else {
+        scoped.push(scopedToken);
+      }
       continue;
     }
 
-    const normalizedTerm = term.replace(/^"|"$/g, "");
-    if (normalizedTerm.trim()) {
-      freeText.push(normalizedTerm.toLowerCase());
+    const parsedTerm = parseSearchTermModifier(term);
+    const normalizedTerm = parsedTerm.value.trim();
+    if (normalizedTerm) {
+      if (parsedTerm.excluded) {
+        excludedFreeText.push(normalizedTerm.toLowerCase());
+      } else {
+        freeText.push(normalizedTerm.toLowerCase());
+      }
     }
   }
 
-  return { scoped, freeText };
+  return { scoped, excludedScoped, freeText, excludedFreeText };
 }
 
 function getSearchFreeTextDisplay(query: string): string {
   return splitSearchTerms(query)
     .filter((term) => !parseScopedSearchTerm(term))
-    .map((term) => term.replace(/^"|"$/g, ""))
+    .map((term) => {
+      const parsed = parseSearchTermModifier(term);
+      return `${parsed.excluded ? "-" : ""}${parsed.value}`;
+    })
     .join(" ");
+}
+
+function getScopedSearchTokens(query: string): ScopedSearchToken[] {
+  return splitSearchTerms(query)
+    .map((term) => parseScopedSearchTerm(term))
+    .filter((token): token is ScopedSearchToken => token !== null);
 }
 
 function removeScopedSearchToken(query: string, targetIndex: number): string {
@@ -468,14 +539,16 @@ function scopedRowText(row: Record<string, unknown>, scope: SearchScope): string
 }
 
 function matchesParsedSearch(row: Record<string, unknown>, parsedQuery: ParsedSearchQuery): boolean {
-  if (parsedQuery.scoped.length === 0 && parsedQuery.freeText.length === 0) {
+  if (parsedQuery.scoped.length === 0 && parsedQuery.excludedScoped.length === 0 && parsedQuery.freeText.length === 0 && parsedQuery.excludedFreeText.length === 0) {
     return true;
   }
 
   const fullText = objectText(row);
   return (
     parsedQuery.freeText.every((term) => fullText.includes(term)) &&
-    parsedQuery.scoped.every((token) => scopedRowText(row, token.scope).includes(token.normalizedValue))
+    parsedQuery.excludedFreeText.every((term) => !fullText.includes(term)) &&
+    parsedQuery.scoped.every((token) => scopedRowText(row, token.scope).includes(token.normalizedValue)) &&
+    parsedQuery.excludedScoped.every((token) => !scopedRowText(row, token.scope).includes(token.normalizedValue))
   );
 }
 
@@ -493,6 +566,16 @@ function rowHasBrokenSid(row: Record<string, unknown>): boolean {
   const category = getRowFieldValue(row, "Category");
   const identity = getRowFieldValue(row, "Identity");
   return findingType === "BrokenOrMissingSid" || category === "Broken/Missing SID" || isBrokenSidIdentity(identity);
+}
+
+function matchesBrokenSidMode(hasBrokenSid: boolean, mode: BrokenSidMode): boolean {
+  if (mode === "only") {
+    return hasBrokenSid;
+  }
+  if (mode === "hide") {
+    return !hasBrokenSid;
+  }
+  return true;
 }
 
 function datasetRows(dashboard: DashboardModel, key: DatasetKey): DataRow[] {
@@ -578,10 +661,42 @@ function rowsMatchingGroup(group: GroupTreeRow, dashboard: DashboardModel, key: 
   return datasetRows(dashboard, key).filter((row) => {
     const identityMatch = `${row.Identity} ${row.Group} ${row.ParentGroup}`.toLowerCase().includes(groupName);
     const shareMatch = row.ShareId ? shareIds.has(row.ShareId) : false;
-    const rowPath = `${row.FullPath} ${row.ExamplePath} ${row.UNCPath} ${row.LocalPath}`.toLowerCase();
-    const pathMatch = paths.some((path) => path !== "" && rowPath.includes(path));
+    const rowPath = `${row.FullPath} ${row.ExamplePath} ${row.UNCPath} ${row.LocalPath} ${row.Pattern} ${row.PatternList}`.toLowerCase();
+    const rowPathPrefix = rowPath.replace(/\*+$/g, "").trim();
+    const pathMatch = paths.some((path) => path !== "" && rowPathPrefix !== "" && (rowPath.includes(path) || path.includes(rowPathPrefix)));
     return identityMatch || shareMatch || pathMatch;
   });
+}
+
+function groupFilterEvidenceRows(group: GroupTreeRow, dashboard: DashboardModel): DataRow[] {
+  const keys: DatasetKey[] = ["permissioned_groups", "owner_review_packets", "related_data_areas", "share_permissions", "acl_entries", "findings", "conflicts", "collection_errors"];
+  return [
+    group.raw,
+    ...keys.flatMap((key) => rowsMatchingGroup(group, dashboard, key))
+  ];
+}
+
+function evidenceRowsMatchFilter(rows: DataRow[], fields: string[], filter: string, requireEvidence = false): boolean {
+  if (!filter) {
+    return true;
+  }
+
+  const normalizedFilter = filter.toLowerCase();
+  const values = rows.flatMap((row) => fields.map((field) => getRowFieldValue(row, field)).filter(Boolean));
+  if (values.length === 0) {
+    return !requireEvidence;
+  }
+
+  return values.some((value) => value.toLowerCase().includes(normalizedFilter));
+}
+
+function rawRowMatchesTopFilters(row: DataRow, filters: FilterState): boolean {
+  return (
+    evidenceRowsMatchFilter([row], ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit) &&
+    evidenceRowsMatchFilter([row], ["Owner", "DataOwner"], filters.owner) &&
+    evidenceRowsMatchFilter([row], ["RiskLevel", "Severity", "ReviewStatus", "MigrationReadiness"], filters.risk) &&
+    evidenceRowsMatchFilter([row], ["Source", "Sources", "SourceMode", "CollectionProvider"], filters.source)
+  );
 }
 
 function rowsMatchingPathContext(group: GroupTreeRow, dashboard: DashboardModel): DataRow[] {
@@ -653,7 +768,7 @@ function booleanChip(label: string, active: boolean, onRemove: () => void) {
 }
 
 function filtersAreClear(filters: FilterState): boolean {
-  return !filters.query && !filters.businessUnit && !filters.owner && !filters.risk && !filters.source && !filters.brokenSidOnly;
+  return !filters.query && !filters.businessUnit && !filters.owner && !filters.risk && !filters.source && filters.brokenSidMode === "all";
 }
 
 function hasRuntimeDatasets(snapshot?: RawSnapshot): boolean {
@@ -757,7 +872,15 @@ function EvidenceWorkbench({ drill, onBack }: { drill: EvidenceDrill; onBack: ()
         <span>{drill.subtitle}</span>
       </div>
       <SectionTitle tooltip={tooltipRegistry.rawEvidence}>{drill.title}</SectionTitle>
-      <VirtualTable rows={drill.rows} columns={drill.columns} columnLabels={drill.columnLabels} pageSize={30} title={drill.title} />
+      <VirtualTable
+        rows={drill.rows}
+        columns={drill.columns}
+        columnLabels={drill.columnLabels}
+        pageSize={30}
+        title={drill.title}
+        enableExport={drill.enableExport}
+        exportFileName={drill.exportFileName}
+      />
       {drill.rows.length === 0 ? <p className="empty-state">{drill.emptyMessage}</p> : null}
     </section>
   );
@@ -854,8 +977,7 @@ function FilterBar({
     startTransition(() => onFiltersChange({ ...filters, ...patch }));
   };
   const updateQuery = (value: string) => update({ query: value });
-  const parsedSearch = parseSearchQuery(filters.query);
-  const scopedTokens = parsedSearch.scoped;
+  const scopedTokens = getScopedSearchTokens(filters.query);
   const freeTextSearch = getSearchFreeTextDisplay(filters.query);
 
   return (
@@ -907,14 +1029,24 @@ function FilterBar({
           ))}
         </select>
       </label>
-      <label className="toggle-filter">
-        <input
-          type="checkbox"
-          checked={filters.brokenSidOnly}
-          onChange={(event) => update({ brokenSidOnly: event.target.checked })}
-        />
-        <span>Broken/Missing SID</span>
-      </label>
+      <div className="sid-filter-stack" aria-label="Broken or missing SID filter mode">
+        <label className="toggle-filter">
+          <input
+            type="checkbox"
+            checked={filters.brokenSidMode === "only"}
+            onChange={(event) => update({ brokenSidMode: event.target.checked ? "only" : "all" })}
+          />
+          <span>Show only Broken/Missing SIDs</span>
+        </label>
+        <label className="toggle-filter">
+          <input
+            type="checkbox"
+            checked={filters.brokenSidMode === "hide"}
+            onChange={(event) => update({ brokenSidMode: event.target.checked ? "hide" : "all" })}
+          />
+          <span>Hide Broken/Missing SIDs</span>
+        </label>
+      </div>
       <div className="active-context">
         <strong>Active Context</strong>
         <div className="filter-chips">
@@ -924,9 +1056,9 @@ function FilterBar({
               type="button"
               className="filter-chip search-signal"
               onClick={() => updateQuery(removeScopedSearchToken(filters.query, index))}
-              aria-label={`Remove ${token.scope} search ${token.value}`}
+              aria-label={`Remove ${token.excluded ? "excluded " : ""}${token.scope} search ${token.value}`}
             >
-              <span>{token.scope}: {token.value}</span>
+              <span>{token.excluded ? "not " : ""}{token.scope}: {token.value}</span>
               <span aria-hidden="true">×</span>
             </button>
           ))}
@@ -935,7 +1067,8 @@ function FilterBar({
           {chip("Owner", filters.owner, () => update({ owner: "" }))}
           {chip("Risk", filters.risk, () => update({ risk: "" }))}
           {chip("Source", filters.source, () => update({ source: "" }))}
-          {booleanChip("Broken/Missing SID only", filters.brokenSidOnly, () => update({ brokenSidOnly: false }))}
+          {booleanChip("Showing only Broken/Missing SIDs", filters.brokenSidMode === "only", () => update({ brokenSidMode: "all" }))}
+          {booleanChip("Broken/Missing SIDs hidden", filters.brokenSidMode === "hide", () => update({ brokenSidMode: "all" }))}
           {filtersAreClear(filters) ? <span className="muted">Enterprise-wide view</span> : null}
           {!filtersAreClear(filters) ? (
             <button type="button" className="clear-button" onClick={() => update(defaultFilters)}>
@@ -974,10 +1107,11 @@ function filterIssues(rows: IssueSummary[], filters: FilterState, query: string)
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      (!filters.brokenSidOnly || row.category === "Broken/Missing SID" || isBrokenSidIdentity(row.identity)) &&
+      matchesBrokenSidMode(row.category === "Broken/Missing SID" || isBrokenSidIdentity(row.identity), filters.brokenSidMode) &&
       (!filters.risk || row.severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.category.toLowerCase().includes(filters.risk.toLowerCase())) &&
       (!filters.owner || row.owner.toLowerCase() === filters.owner.toLowerCase()) &&
       (!filters.businessUnit || row.businessUnit.toLowerCase() === filters.businessUnit.toLowerCase()) &&
+      (!filters.source || row.source.toLowerCase().includes(filters.source.toLowerCase())) &&
       matchesParsedSearch(
         {
           Owner: row.owner,
@@ -997,9 +1131,10 @@ function filterClusters(rows: MigrationCluster[], filters: FilterState, query: s
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      (!filters.brokenSidOnly || clusterHasBrokenSidEvidence(row, dashboard)) &&
+      matchesBrokenSidMode(clusterHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode) &&
       matchesText(row.businessUnit, filters.businessUnit) &&
       matchesText(row.owner, filters.owner) &&
+      (!filters.source || row.raw.Source.toLowerCase().includes(filters.source.toLowerCase())) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase()) || row.readiness.toLowerCase().includes(filters.risk.toLowerCase())) &&
       matchesParsedSearch(
         {
@@ -1019,9 +1154,14 @@ function filterClusters(rows: MigrationCluster[], filters: FilterState, query: s
 function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string, dashboard: DashboardModel) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
-    (row) =>
-      (!filters.brokenSidOnly || groupHasBrokenSidEvidence(row, dashboard)) &&
-      (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase())) &&
+    (row) => {
+      const evidenceRows = groupFilterEvidenceRows(row, dashboard);
+      return (
+      matchesBrokenSidMode(groupHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode) &&
+      evidenceRowsMatchFilter(evidenceRows, ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit, true) &&
+      evidenceRowsMatchFilter(evidenceRows, ["Owner", "DataOwner"], filters.owner, true) &&
+      evidenceRowsMatchFilter(evidenceRows, ["Source", "Sources", "SourceMode", "CollectionProvider"], filters.source, true) &&
+      (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase()) || evidenceRowsMatchFilter(evidenceRows, ["RiskLevel", "Severity", "ReviewStatus", "MigrationReadiness"], filters.risk, true)) &&
       matchesParsedSearch(
         {
           Group: row.group,
@@ -1034,10 +1174,13 @@ function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string,
           Sources: row.sources,
           FullPath: row.fullPath,
           ExamplePath: row.examplePath,
-          ChildIdentity: row.children.map((child) => child.ChildIdentity).join(" ")
+          ChildIdentity: row.children.map((child) => child.ChildIdentity).join(" "),
+          RelatedEvidence: evidenceRows.map((evidenceRow) => objectText(evidenceRow)).join(" ")
         },
         parsedQuery
       )
+      );
+    }
   );
 }
 
@@ -1045,13 +1188,15 @@ function filterCriticalBlocks(rows: CriticalScanBlock[], filters: FilterState, q
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
+      matchesBrokenSidMode(rowHasBrokenSid(row), filters.brokenSidMode) &&
+      rawRowMatchesTopFilters(row, filters) &&
       (!filters.risk || row.Severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.ErrorType.toLowerCase().includes(filters.risk.toLowerCase())) &&
       matchesParsedSearch(row, parsedQuery)
   );
 }
 
 function hasActiveContext(filters: FilterState, query: string): boolean {
-  return Boolean(query || filters.businessUnit || filters.owner || filters.risk || filters.source || filters.brokenSidOnly);
+  return Boolean(query || filters.businessUnit || filters.owner || filters.risk || filters.source || filters.brokenSidMode !== "all");
 }
 
 function buildOverviewSummary(
@@ -1811,6 +1956,8 @@ function GroupsView({
       subtitle: selected.displayName,
       rows: rowsMatchingGroup(selected, dashboard, key),
       columns,
+      enableExport: true,
+      exportFileName: `sharesurfer-${safeFileToken(label)}-${safeFileToken(selected.group)}.csv`,
       backLabel: "Back to permissioned group",
       emptyMessage: "No exported rows matched this group with the current identifiers."
     });
@@ -1824,6 +1971,8 @@ function GroupsView({
       subtitle: selected.examplePath || selected.fullPath || selected.displayName,
       rows: rowsMatchingPathContext(selected, dashboard),
       columns: ["Evidence", "ShareId", "ItemId", "Identity", "Type", "Rights", "Severity", "Path", "Message"],
+      enableExport: true,
+      exportFileName: `sharesurfer-example-path-${safeFileToken(selected.group)}.csv`,
       backLabel: "Back to permissioned group",
       emptyMessage: "No exported rows matched this example path or share context."
     });
@@ -1907,6 +2056,10 @@ function GroupsView({
 
 function IdentityView({ dashboard }: { dashboard: DashboardModel }) {
   const [showOrgFields, setShowOrgFields] = useState(true);
+  const managerRows = useMemo(
+    () => dashboard.identityReviewSignals.managerChains.map(trimManagerDisplayRow),
+    [dashboard.identityReviewSignals.managerChains]
+  );
   const managerColumns = showOrgFields
     ? ["Identity", "Department", "Title", "Office", "ManagerLevel1", "ManagerLevel2", "ManagerLevel3", "ObsPath"]
     : ["Identity", "ManagerLevel1", "ManagerLevel2", "ManagerLevel3", "ObsPath"];
@@ -1931,7 +2084,7 @@ function IdentityView({ dashboard }: { dashboard: DashboardModel }) {
           </button>
         </div>
         <VirtualTable
-          rows={dashboard.identityReviewSignals.managerChains}
+          rows={managerRows}
           columns={managerColumns}
           pageSize={14}
           title="Manager chains"
@@ -2007,7 +2160,7 @@ function RawEvidenceView({
   const [selectedRow, setSelectedRow] = useState<DataRow | null>(null);
   const dataset = dashboard.rawEvidenceCatalog.find((entry) => entry.key === datasetKey) ?? dashboard.rawEvidenceCatalog[0];
   const parsedQuery = useMemo(() => parseSearchQuery(query), [query]);
-  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery) && (!filters.brokenSidOnly || rowHasBrokenSid(row)));
+  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery) && matchesBrokenSidMode(rowHasBrokenSid(row), filters.brokenSidMode) && rawRowMatchesTopFilters(row, filters));
   const columns = columnsForDataset(dataset.key, showAllColumns);
   const detailRow = selectedRow ?? rows[0] ?? null;
 
@@ -2186,7 +2339,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
       return;
     }
     if (destination === "broken-sids") {
-      setFilters({ ...filters, brokenSidOnly: true });
+      setFilters({ ...filters, brokenSidMode: "only" });
       setActiveView("findings");
       return;
     }

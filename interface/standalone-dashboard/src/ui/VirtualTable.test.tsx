@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 import { VirtualTable } from "./VirtualTable";
@@ -121,7 +121,38 @@ describe("VirtualTable", () => {
     expect(href).not.toContain("Finance Admins");
   });
 
-  test("lets reviewers remove columns through a selection box", async () => {
+  test("supports negative global and field filters", async () => {
+    const user = userEvent.setup();
+    const rows = [
+      { Group: "Finance Readers", Path: "\\\\files01\\Finance", Rights: "Read" },
+      { Group: "Finance Admins", Path: "\\\\files01\\Finance", Rights: "Full" },
+      { Group: "HR Readers", Path: "\\\\files01\\HR", Rights: "Read" }
+    ];
+
+    render(
+      <VirtualTable
+        rows={rows}
+        columns={["Group", "Path", "Rights"]}
+        pageSize={20}
+        title="Permissioned groups"
+        enableFieldFilters
+      />
+    );
+
+    await user.type(screen.getByRole("searchbox", { name: /Filter Permissioned groups rows/i }), "-HR");
+
+    expect(screen.getByText("Finance Readers")).toBeInTheDocument();
+    expect(screen.getByText("Finance Admins")).toBeInTheDocument();
+    expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Filter Permissioned groups by Rights/i), "-Full");
+
+    expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
+    expect(screen.getByText("Finance Readers")).toBeInTheDocument();
+    expect(screen.queryByText("Finance Admins")).not.toBeInTheDocument();
+  });
+
+  test("lets reviewers remove columns through checkboxes", async () => {
     const user = userEvent.setup();
     const rows = [
       { Group: "Finance Readers", Path: "\\\\files01\\Finance", Rights: "Read" }
@@ -130,11 +161,30 @@ describe("VirtualTable", () => {
     render(<VirtualTable rows={rows} columns={["Group", "Path", "Rights"]} pageSize={20} title="Permissioned groups" />);
 
     await user.click(screen.getByText("Columns"));
-    const columnSelect = screen.getByLabelText(/Select columns for Permissioned groups/i);
-    await user.deselectOptions(columnSelect, "Path");
+    await user.click(screen.getByRole("checkbox", { name: "Path" }));
 
     expect(screen.getByRole("columnheader", { name: /Group/i })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /Path/i })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /Rights/i })).toBeInTheDocument();
+  });
+
+  test("lets reviewers resize evidence columns", () => {
+    const rows = [
+      { Group: "Finance Readers", Path: "\\\\files01\\Finance", Rights: "Read" }
+    ];
+
+    render(<VirtualTable rows={rows} columns={["Group", "Path", "Rights"]} pageSize={20} title="Permissioned groups" />);
+
+    const groupColumn = document.querySelector("col");
+    expect(groupColumn).toHaveStyle({ width: "160px" });
+
+    const resizer = screen.getByRole("button", { name: /Resize Group column/i });
+    act(() => {
+      resizer.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 100 }));
+      window.dispatchEvent(new MouseEvent("pointermove", { clientX: 240 }));
+      window.dispatchEvent(new MouseEvent("pointerup"));
+    });
+
+    expect(groupColumn).toHaveStyle({ width: "300px" });
   });
 });

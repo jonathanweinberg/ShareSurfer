@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { DataRow } from "../data/schema";
 
 interface VirtualTableProps {
@@ -22,6 +22,18 @@ type SortDirection = "asc" | "desc";
 interface SortState {
   column: string;
   direction: SortDirection;
+}
+
+interface ColumnResizeState {
+  column: string;
+  startX: number;
+  startWidth: number;
+}
+
+interface TextFilter {
+  include: string[];
+  exclude: string[];
+  label: string;
 }
 
 function getColumns(rows: DataRow[], columns?: string[]): string[] {
@@ -108,6 +120,53 @@ function safeDownloadName(title: string): string {
   return `${normalized || "sharesurfer-evidence"}-filtered.csv`;
 }
 
+function splitFilterTerms(value: string): string[] {
+  return value.match(/[!-]?"[^"]+"|\S+/g) ?? [];
+}
+
+function normalizeFilterTerm(term: string): { value: string; exclude: boolean } | null {
+  const trimmed = term.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const exclude = trimmed.startsWith("-") || trimmed.startsWith("!");
+  const withoutModifier = exclude ? trimmed.slice(1) : trimmed;
+  const value = withoutModifier.replace(/^"|"$/g, "").trim().toLowerCase();
+  if (!value) {
+    return null;
+  }
+
+  return { value, exclude };
+}
+
+function parseTextFilter(value: string): TextFilter {
+  const include: string[] = [];
+  const exclude: string[] = [];
+  for (const term of splitFilterTerms(value)) {
+    const parsed = normalizeFilterTerm(term);
+    if (!parsed) {
+      continue;
+    }
+    if (parsed.exclude) {
+      exclude.push(parsed.value);
+    } else {
+      include.push(parsed.value);
+    }
+  }
+
+  return { include, exclude, label: value.trim() };
+}
+
+function textFilterIsActive(filter: TextFilter): boolean {
+  return filter.include.length > 0 || filter.exclude.length > 0;
+}
+
+function textMatchesFilter(value: string, filter: TextFilter): boolean {
+  const normalized = value.toLowerCase();
+  return filter.include.every((term) => normalized.includes(term)) && filter.exclude.every((term) => !normalized.includes(term));
+}
+
 export function VirtualTable({
   rows,
   columns,
@@ -127,6 +186,8 @@ export function VirtualTable({
   const [sort, setSort] = useState<SortState | null>(null);
   const [filterText, setFilterText] = useState("");
   const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const activeResize = useRef<ColumnResizeState | null>(null);
   const updateFilterText = (value: string) => setFilterText(value);
   const defaultColumns = useMemo(() => getColumns(rows, columns), [columns, rows]);
   const allColumns = useMemo(() => getSelectableColumns(rows, columns, selectableColumns), [columns, rows, selectableColumns]);
@@ -139,21 +200,21 @@ export function VirtualTable({
   const activeColumnFilters = useMemo(
     () =>
       Object.entries(columnFilters)
-        .map(([column, value]) => [column, value.trim().toLowerCase()] as const)
-        .filter(([, value]) => value !== ""),
+        .map(([column, value]) => [column, parseTextFilter(value)] as const)
+        .filter(([, value]) => textFilterIsActive(value)),
     [columnFilters]
   );
   const filteredRows = useMemo(() => {
-    const normalizedFilter = filterText.trim().toLowerCase();
+    const globalFilter = parseTextFilter(filterText);
     const indexedRows = rows.map((row, index) => ({ row, index }));
-    if (!normalizedFilter && activeColumnFilters.length === 0) {
+    if (!textFilterIsActive(globalFilter) && activeColumnFilters.length === 0) {
       return indexedRows;
     }
 
     return indexedRows.filter(({ row }) => {
-      const matchesGlobal = !normalizedFilter || Object.values(row).join(" ").toLowerCase().includes(normalizedFilter);
+      const matchesGlobal = !textFilterIsActive(globalFilter) || textMatchesFilter(Object.values(row).join(" "), globalFilter);
       const matchesColumns = activeColumnFilters.every(([column, value]) =>
-        String(row[column] ?? "").toLowerCase().includes(value)
+        textMatchesFilter(String(row[column] ?? ""), value)
       );
       return matchesGlobal && matchesColumns;
     });
@@ -178,6 +239,10 @@ export function VirtualTable({
   const filteredSummary =
     (filterText.trim() || activeColumnFilters.length > 0) && filteredRows.length !== rows.length ? `${pageSummary} (filtered from ${rows.length})` : pageSummary;
   const exportHref = useMemo(() => buildCsvDataUri(sortedRows, visibleColumns), [sortedRows, visibleColumns]);
+  const tableMinWidth = useMemo(
+    () => Math.max(920, visibleColumns.reduce((sum, column) => sum + (columnWidths[column] ?? 160), 0)),
+    [columnWidths, visibleColumns]
+  );
 
   useEffect(() => {
     setPage(0);
@@ -191,7 +256,17 @@ export function VirtualTable({
     setColumnFilters((current) =>
       Object.fromEntries(Object.entries(current).filter(([column]) => allColumns.includes(column)))
     );
+    setColumnWidths((current) =>
+      Object.fromEntries(Object.entries(current).filter(([column]) => allColumns.includes(column)))
+    );
   }, [allColumns]);
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("pointermove", handleColumnResize);
+      window.removeEventListener("pointerup", stopColumnResize);
+    };
+  }, []);
 
   const toggleSort = (column: string) => {
     setPage(0);
@@ -207,6 +282,60 @@ export function VirtualTable({
   const labelForColumn = (column: string) => columnLabels?.[column] ?? humanizeColumnName(column);
   const updateColumnFilter = (column: string, value: string) => {
     setColumnFilters((current) => ({ ...current, [column]: value }));
+  };
+  function handleColumnResize(event: PointerEvent) {
+    const resize = activeResize.current;
+    if (!resize) {
+      return;
+    }
+
+    if (!Number.isFinite(event.clientX)) {
+      return;
+    }
+
+    const nextWidth = Math.max(96, Math.round(resize.startWidth + event.clientX - resize.startX));
+    setColumnWidths((current) => ({ ...current, [resize.column]: nextWidth }));
+  }
+  function stopColumnResize() {
+    activeResize.current = null;
+    document.body.classList.remove("resizing-column");
+    window.removeEventListener("pointermove", handleColumnResize);
+    window.removeEventListener("pointerup", stopColumnResize);
+  }
+  const startColumnResize = (column: string, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const header = event.currentTarget.closest("th");
+    const measuredWidth = header?.getBoundingClientRect().width ?? 0;
+    activeResize.current = {
+      column,
+      startX: Number.isFinite(event.clientX) ? event.clientX : 0,
+      startWidth: columnWidths[column] ?? Math.max(160, Math.round(Number.isFinite(measuredWidth) ? measuredWidth : 0))
+    };
+    document.body.classList.add("resizing-column");
+    window.addEventListener("pointermove", handleColumnResize);
+    window.addEventListener("pointerup", stopColumnResize);
+  };
+  const resetColumnWidth = (column: string) => {
+    setColumnWidths((current) => {
+      const next = { ...current };
+      delete next[column];
+      return next;
+    });
+  };
+  const toggleColumn = (column: string, checked: boolean) => {
+    setSelectedColumns((current) => {
+      if (checked) {
+        const next = new Set([...current, column]);
+        return allColumns.filter((candidate) => next.has(candidate));
+      }
+
+      if (current.filter((candidate) => allColumns.includes(candidate)).length <= 1) {
+        return current;
+      }
+
+      return current.filter((candidate) => candidate !== column);
+    });
   };
 
   return (
@@ -251,24 +380,24 @@ export function VirtualTable({
           {enableColumnSelection ? (
             <details className="table-tool-panel">
               <summary>Columns</summary>
-              <label>
-                <span className="sr-only">Select columns for {title}</span>
-                <select
-                  multiple
-                  value={visibleColumns}
-                  aria-label={`Select columns for ${title}`}
-                  onChange={(event) => {
-                    const nextColumns = Array.from(event.currentTarget.selectedOptions).map((option) => option.value);
-                    setSelectedColumns(nextColumns);
-                  }}
-                >
-                  {allColumns.map((column) => (
-                    <option key={column} value={column}>
-                      {labelForColumn(column)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <fieldset className="column-checkbox-list" aria-label={`Select columns for ${title}`}>
+                <legend className="sr-only">Select columns for {title}</legend>
+                {allColumns.map((column) => {
+                  const checked = visibleColumns.includes(column);
+                  return (
+                    <label key={column} className="column-checkbox-row">
+                      <input
+                        type="checkbox"
+                        value={column}
+                        checked={checked}
+                        disabled={checked && visibleColumns.length <= 1}
+                        onChange={(event) => toggleColumn(column, event.currentTarget.checked)}
+                      />
+                      <span>{labelForColumn(column)}</span>
+                    </label>
+                  );
+                })}
+              </fieldset>
               <div className="tool-actions">
                 <button type="button" className="clear-button" onClick={() => setSelectedColumns(defaultColumns)}>
                   Reset columns
@@ -305,7 +434,7 @@ export function VirtualTable({
               {activeColumnFilters.length > 0 ? (
                 <div className="active-field-filters" aria-label={`${title} active field filters`}>
                   {activeColumnFilters.map(([column, value]) => (
-                    <span key={`${column}-${value}`}>{labelForColumn(column)}: {value}</span>
+                    <span key={`${column}-${value.label}`}>{labelForColumn(column)}: {value.label}</span>
                   ))}
                 </div>
               ) : null}
@@ -314,7 +443,12 @@ export function VirtualTable({
         </div>
       ) : null}
       <div className="table-scroll">
-        <table aria-label={title}>
+        <table aria-label={title} style={{ minWidth: tableMinWidth }}>
+          <colgroup>
+            {visibleColumns.map((column) => (
+              <col key={column} style={{ width: `${columnWidths[column] ?? 160}px` }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               {visibleColumns.map((column) => {
@@ -326,6 +460,14 @@ export function VirtualTable({
                       <span>{label}</span>
                       <span aria-hidden="true">{sortIndicator(activeSort)}</span>
                     </button>
+                    <button
+                      type="button"
+                      className="column-resizer"
+                      aria-label={`Resize ${label} column`}
+                      title={`Resize ${label} column`}
+                      onPointerDown={(event) => startColumnResize(column, event)}
+                      onDoubleClick={() => resetColumnWidth(column)}
+                    />
                   </th>
                 );
               })}
