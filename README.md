@@ -88,6 +88,7 @@ Choose the starting path that matches your situation:
 | Situation | Use this path |
 | --- | --- |
 | You are new to ShareSurfer | Follow the [First-run guide](docs/first-run-guide.md) from the beginning. |
+| You need plain-English definitions | Use the [glossary](docs/glossary.md). |
 | Your collector host is locked down | Use the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md). |
 | You want copy/paste commands for common tasks | Use the [command recipes](docs/command-recipes.md). |
 | A scan completed but looks partial, sparse, or confusing | Use the [first-run troubleshooting guide](docs/first-run-troubleshooting.md) before asking a business owner to approve the result. |
@@ -347,6 +348,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 
 - [Operator workflow](docs/operator-workflow.md)
 - [First-run guide](docs/first-run-guide.md)
+- [Glossary](docs/glossary.md)
 - [First-run troubleshooting](docs/first-run-troubleshooting.md)
 - [Business review handoff](docs/business-review-handoff.md)
 - [Management overview](docs/management-overview.md)
