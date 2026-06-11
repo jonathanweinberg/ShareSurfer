@@ -6,6 +6,18 @@ This page gives operators and business reviewers a visual map of the V1 workflow
 
 ![ShareSurfer workflow overview](visuals/share-surfer-workflow-concept.png)
 
+## README Flow Guides
+
+The README includes three descriptive workflow maps for first-time readers:
+
+![First scan to owner review workflow](visuals/readme-flow-guides/first-scan-owner-review.png)
+
+![Locked-down collector to dashboard host workflow](visuals/readme-flow-guides/locked-down-collector-dashboard-host.png)
+
+![Migration discovery and cleanup planning workflow](visuals/readme-flow-guides/migration-discovery-cleanup-planning.png)
+
+Use [workflow-guides.md](workflow-guides.md) for the step-by-step version with commands, handoff checks, and stop gates.
+
 ## Locked-Down Collection
 
 ![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.svg)

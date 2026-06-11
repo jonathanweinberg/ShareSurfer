@@ -3574,6 +3574,7 @@ $tests = @(
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
             $firstRunTroubleshooting = Join-Path $repoRoot 'docs/first-run-troubleshooting.md'
             $businessReviewHandoff = Join-Path $repoRoot 'docs/business-review-handoff.md'
+            $workflowGuide = Join-Path $repoRoot 'docs/workflow-guides.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
@@ -3592,7 +3593,10 @@ $tests = @(
             $expectedWorkflowImages = @(
                 'share-surfer-workflow-concept.png',
                 'nonpermissive-collector-workflow.svg',
-                'dataset-transfer-dashboard-workflow.svg'
+                'dataset-transfer-dashboard-workflow.svg',
+                'readme-flow-guides/first-scan-owner-review.png',
+                'readme-flow-guides/locked-down-collector-dashboard-host.png',
+                'readme-flow-guides/migration-discovery-cleanup-planning.png'
             )
             $expectedScreenshots = @(
                 'report-dashboard-overview.png',
@@ -3616,6 +3620,16 @@ $tests = @(
                     Assert-True ($workflowSvg -like '*Test-ShareSurferExport*' -or $workflowSvg -like '*Transfer control point*') ("Workflow image {0} should show validation or transfer gates." -f $workflowImage)
                 }
             }
+            Assert-True (Test-Path -LiteralPath $workflowGuide) 'Documentation should include a README workflow guide.'
+            $workflowGuideText = Get-Content -LiteralPath $workflowGuide -Raw
+            Assert-True ($workflowGuideText -like '*First Scan to Owner Review*') 'Workflow guide should explain first scan to owner review.'
+            Assert-True ($workflowGuideText -like '*Locked-Down Collector to Dashboard Host*') 'Workflow guide should explain the two-host flow.'
+            Assert-True ($workflowGuideText -like '*Migration Discovery and Cleanup Planning*') 'Workflow guide should explain migration discovery cleanup planning.'
+            Assert-True ($workflowGuideText -like '*Stop gate*') 'Workflow guide should include stop gates.'
+            Assert-True ($workflowGuideText -like '*Go gate*') 'Workflow guide should include go gates.'
+            Assert-True ($workflowGuideText -like '*Discounted principals*' -or $workflowGuideText -like '*discounted access principals*') 'Workflow guide should explain discounted access signal handling.'
+            Assert-True ($workflowGuideText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Workflow guide should show dashboard packaging.'
+            Assert-True ($workflowGuideText -like '*Get-FileHash -Algorithm SHA256*') 'Workflow guide should show handoff hash verification evidence.'
             foreach ($visual in $expectedVisuals) {
                 $path = Join-Path $visualRoot $visual
                 Assert-True (Test-Path -LiteralPath $path) ("Missing workflow visual {0}" -f $visual)
@@ -3668,6 +3682,11 @@ $tests = @(
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
             Assert-True ($readmeText -like '*Basic Use Cases*') 'README should present basic use cases.'
+            Assert-True ($readmeText -like '*Workflow Guides*') 'README should include workflow guide visuals.'
+            Assert-True ($readmeText -like '*docs/workflow-guides.md*') 'README should link the workflow guide.'
+            Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/first-scan-owner-review.png*') 'README should show the first scan owner review visual.'
+            Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/locked-down-collector-dashboard-host.png*') 'README should show the locked-down collector dashboard visual.'
+            Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/migration-discovery-cleanup-planning.png*') 'README should show the migration discovery visual.'
             Assert-True ($readmeText -like '*Nonpermissive collector workflow*') 'README should present the nonpermissive collector use case.'
             Assert-True ($readmeText -like '*Nonpermissive / Two-Host Operation*') 'README should include the nonpermissive operating model on the main page.'
             Assert-True ($readmeText -like '*docs/visuals/nonpermissive-collector-workflow.svg*') 'README should show the nonpermissive collector workflow visual.'
@@ -3829,6 +3848,7 @@ $tests = @(
                 Get-Content -LiteralPath $firstRunGuide -Raw
                 Get-Content -LiteralPath $firstRunTroubleshooting -Raw
                 Get-Content -LiteralPath $businessReviewHandoff -Raw
+                Get-Content -LiteralPath $workflowGuide -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw

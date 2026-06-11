@@ -32,6 +32,28 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 | Broad admin or HelpDesk access cleanup | Provide a discounted principals CSV | Visible access evidence that does not inflate Migration Discovery relatedness |
 | Support or bug report | Create a redacted support bundle after export validation | Stable-token CSVs, manifests, and optional redacted report |
 
+## Workflow Guides
+
+These diagrams show the normal ShareSurfer paths at a glance. Use the [workflow guide](docs/workflow-guides.md) when you need the step-by-step version with commands, handoff checks, and stop gates.
+
+### First Scan to Owner Review
+
+![First scan to owner review workflow](docs/visuals/readme-flow-guides/first-scan-owner-review.png)
+
+Use this flow when a team is scanning one share or a small set of related shares for the first business-owner review. The important outputs are the validated CSV folder, `report.html`, the standalone dashboard package, `owner_review_packets.csv`, and the list of findings that should be cleaned up before a migration wave.
+
+### Locked-Down Collector to Dashboard Host
+
+![Locked-down collector to dashboard host workflow](docs/visuals/readme-flow-guides/locked-down-collector-dashboard-host.png)
+
+Use this flow when collection must happen on a restricted Windows host but review can happen somewhere else. The collector creates evidence, `Test-ShareSurferExport` validates it, the transfer package gets a SHA256 hash, and the dashboard host opens `report.html` or `standalone-dashboard\index.html` without needing access to the file shares.
+
+### Migration Discovery and Cleanup Planning
+
+![Migration discovery and cleanup planning workflow](docs/visuals/readme-flow-guides/migration-discovery-cleanup-planning.png)
+
+Use this flow before migration planning to keep related data together. ShareSurfer groups evidence by owner, business unit, OBS path, manager chain, path patterns, security groups, long-path warnings, inheritance breaks, share-vs-NTFS conflicts, partial collection gaps, and discounted access principals.
+
 ## Nonpermissive / Two-Host Operation
 
 Many ShareSurfer runs will happen in environments where the collector host is intentionally limited: no internet access, no npm, no browser tooling, and no elevated dashboard workstation behavior. That is fine. The collector only needs Windows PowerShell 5.1, the ShareSurfer module, read access to the target shares, and directory read access for identity enrichment.
@@ -328,6 +350,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [Business review handoff](docs/business-review-handoff.md)
 - [Management overview](docs/management-overview.md)
 - [Offline management overview slide](docs/management-overview.html)
+- [Workflow guide](docs/workflow-guides.md)
 - [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)
 - [Standalone dashboard interface spec](docs/standalone-dashboard-interface-spec.md)
 - [WebView2 dashboard viewer concept](docs/webview2-dashboard-viewer.md)
