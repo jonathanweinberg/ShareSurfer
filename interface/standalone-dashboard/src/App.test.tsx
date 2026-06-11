@@ -344,6 +344,8 @@ describe("dashboard workbench interactions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Identity/i }));
     expect(screen.getByRole("columnheader", { name: "Department" })).toBeInTheDocument();
+    expect(screen.getByText("morgan.manager@example.test")).toBeInTheDocument();
+    expect(screen.queryByText("mailto:morgan.manager@example.test")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Hide org fields/i }));
 
@@ -360,6 +362,45 @@ describe("dashboard workbench interactions", () => {
 
     const table = screen.getByRole("table", { name: /Permissioned groups/i });
     expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+  });
+
+  test("group permission review honors top business filters", () => {
+    renderWithBrokenSidSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
+
+    let table = screen.getByRole("table", { name: /Permissioned groups/i });
+    expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+    expect(within(table).getByText("CONTOSO\\HRReaders")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Business Unit/i), { target: { value: "Finance" } });
+
+    table = screen.getByRole("table", { name: /Permissioned groups/i });
+    expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+    expect(within(table).queryByText("CONTOSO\\HRReaders")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getAllByLabelText(/Business Unit/i)[0], { target: { value: "HR" } });
+
+    table = screen.getByRole("table", { name: /Permissioned groups/i });
+    expect(within(table).queryByText("CONTOSO\\FinanceReaders")).not.toBeInTheDocument();
+    expect(within(table).getByText("CONTOSO\\HRReaders")).toBeInTheDocument();
+  });
+
+  test("group folder and file assignments open a filtered exportable evidence pane", () => {
+    renderWithDemoSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Folder\/File Assignments 2/i }));
+
+    expect(screen.getByRole("heading", { name: /Folder\/File Assignments Evidence/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Back to permissioned group/i })).toBeInTheDocument();
+    const exportLink = screen.getByRole("link", { name: /Export shown CSV/i });
+    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
+    expect(exportLink).toHaveAttribute("download", "sharesurfer-folder-file-assignments-contoso-financereaders.csv");
+    expect(href).toContain("CONTOSO\\FinanceReaders");
+    expect(href).toContain("\\\\files01\\Finance");
   });
 
   test("scoped search chips remove individual signals without duplicating search context", () => {
@@ -401,17 +442,24 @@ describe("dashboard workbench interactions", () => {
     expect(within(initialMigrationTable).getByText("Finance / Accounts Payable")).toBeInTheDocument();
     expect(within(initialMigrationTable).getByText("HR / Employee Records")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/Broken\/Missing SID/i));
+    fireEvent.click(screen.getByLabelText(/Show only Broken\/Missing SIDs/i));
 
     const migrationTable = screen.getByRole("table", { name: /Related data area clusters/i });
     expect(within(migrationTable).getByText("Finance / Accounts Payable")).toBeInTheDocument();
     expect(within(migrationTable).queryByText("HR / Employee Records")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Show only Broken\/Missing SIDs/i)).toBeChecked();
+    expect(screen.getByLabelText(/Hide Broken\/Missing SIDs/i)).not.toBeChecked();
+
+    fireEvent.click(screen.getByLabelText(/Hide Broken\/Missing SIDs/i));
+
+    expect(screen.getByLabelText(/Show only Broken\/Missing SIDs/i)).not.toBeChecked();
+    expect(screen.getByLabelText(/Hide Broken\/Missing SIDs/i)).toBeChecked();
 
     fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
 
     const groupsTable = screen.getByRole("table", { name: /Permissioned groups/i });
-    expect(within(groupsTable).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
-    expect(within(groupsTable).queryByText("CONTOSO\\HRReaders")).not.toBeInTheDocument();
+    expect(within(groupsTable).queryByText("CONTOSO\\FinanceReaders")).not.toBeInTheDocument();
+    expect(within(groupsTable).getByText("CONTOSO\\HRReaders")).toBeInTheDocument();
   });
 
   test("raw evidence uses readable curated columns before showing all CSV fields", () => {
@@ -455,6 +503,18 @@ describe("dashboard workbench interactions", () => {
     expect(exportLink).toHaveAttribute("download", "sharesurfer-share_permissions-shown.csv");
     expect(href).toContain("CONTOSO\\FinanceReaders");
     expect(href).not.toContain("Everyone");
+  });
+
+  test("raw evidence accepts negative field filters", () => {
+    renderWithDemoSnapshot();
+
+    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+    fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "share_permissions" } });
+    fireEvent.change(screen.getByLabelText(/Filter Share-level access by Identity/i), { target: { value: "-Everyone" } });
+
+    const table = screen.getByRole("table", { name: /Share-level access/i });
+    expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+    expect(within(table).queryByText("Everyone")).not.toBeInTheDocument();
   });
 
   test("findings can be grouped and exported by employee identifier prefix", () => {

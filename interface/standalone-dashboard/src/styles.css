@@ -327,6 +327,16 @@ h3 {
   font-size: 12px;
 }
 
+.sid-filter-stack {
+  display: grid;
+  gap: 6px;
+}
+
+.sid-filter-stack .toggle-filter {
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
 label span {
   display: block;
   color: var(--muted);
@@ -1277,14 +1287,43 @@ select {
   font-weight: 800;
 }
 
-.table-tool-panel select {
-  width: 100%;
-  min-height: 132px;
+.column-checkbox-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
   margin-top: 8px;
-  padding: 6px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #fbfdff;
+}
+
+.column-checkbox-row {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.column-checkbox-row input {
+  width: 16px;
+  min-height: 16px;
+  flex: 0 0 auto;
+}
+
+.column-checkbox-row span {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .tool-actions {
@@ -1403,6 +1442,43 @@ th {
   align-items: center;
   font-weight: inherit;
   text-align: left;
+}
+
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 8px;
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+  padding: 0;
+  touch-action: none;
+}
+
+.column-resizer::after {
+  position: absolute;
+  top: 9px;
+  right: 3px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+}
+
+th:hover .column-resizer::after,
+.column-resizer:focus-visible::after,
+.resizing-column .column-resizer::after {
+  background: #7aa2e3;
+}
+
+.resizing-column {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .sort-header span:last-child {
