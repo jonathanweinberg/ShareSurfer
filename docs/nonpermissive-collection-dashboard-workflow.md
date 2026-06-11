@@ -146,6 +146,16 @@ ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\rep
 
 At this point the export folder is the dataset. Keep it together.
 
+Collector handoff checklist:
+
+- `Test-ShareSurferExport` returned `IsValid=True`, or the validation failure is documented before transfer.
+- `scan_manifest.csv`, `shares.csv`, `items.csv`, `share_permissions.csv`, `acl_entries.csv`, `findings.csv`, `conflicts.csv`, `collection_errors.csv`, and `scan_events.csv` are present.
+- `report.html` exists in the export folder.
+- `shares.csv` partial rows and `collection_errors.csv` critical rows have been reviewed by the operator.
+- `owner_review_packets.csv` and `owner_risk_pivots.csv` are present when owner mapping was supplied.
+- Optional `open_file_*.csv` files are present when open-file activity was collected.
+- Raw exports are approved for the intended transfer path, or a redacted support bundle will be used instead.
+
 ## 3. Package the Dataset for Transfer
 
 Create a zip package and hash:
@@ -180,11 +190,32 @@ New-Item -ItemType Directory -Path $reviewRoot -Force
 Expand-Archive -LiteralPath 'D:\Intake\scan-2026-06-08-finance.zip' -DestinationPath $reviewRoot
 ```
 
+Confirm the package hash when your transfer process provides the collector-side hash CSV:
+
+```powershell
+$zipPath = 'D:\Intake\scan-2026-06-08-finance.zip'
+$hashCsvPath = 'D:\Intake\scan-2026-06-08-finance.zip.sha256.csv'
+$expectedHash = (Import-Csv -LiteralPath $hashCsvPath | Select-Object -First 1).Hash
+$actualHash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
+
+$actualHash -eq $expectedHash
+```
+
+The final line should return `True`. If it returns `False`, stop and re-check the transfer before opening or repackaging the dataset.
+
 Open the default report:
 
 ```powershell
 Start-Process (Join-Path $reviewRoot 'report.html')
 ```
+
+Dashboard host received-package checklist:
+
+- The received zip hash matches the hash recorded on the collector side.
+- The extracted folder contains `scan_manifest.csv` at the top level, not another nested zip or release package folder.
+- `report.html` opens from the extracted review folder.
+- The ShareSurfer release folder is separate from the scan export folder. The release contains the dashboard template assets; the export folder contains the scan data.
+- If the standalone dashboard opens a template/onboarding screen, run `New-ShareSurferStandaloneDashboard.ps1` against the extracted export folder and open the generated dashboard output instead.
 
 If you are using the `v0.1.0-pre.7` release package, the standalone dashboard assets are already built. Package the dataset into a self-contained dashboard folder:
 

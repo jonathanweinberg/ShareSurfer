@@ -10,6 +10,22 @@ ShareSurfer V1 writes a normalized CSV export set. Each scan should produce all 
 - Identity values should keep a consistent display form, usually `DOMAIN\Name`, before redaction.
 - Implementations may add columns, but should not remove or rename V1 columns without a schema version change.
 
+Empty fields should be handled carefully. A blank `Owner`, OBS value, manager, title, office, employee ID, or share metadata field is not proof that the value does not exist in the source system. It usually means ShareSurfer did not collect a usable value, the source did not return one, the value was not populated, or the collector account could not read it.
+
+## Reading Order By Question
+
+| Question | Start with | Then open |
+| --- | --- | --- |
+| Did the scan run with the settings I expected? | `scan_manifest.csv` | `scan_events.csv`, `collection_errors.csv` |
+| Which shares and paths were collected? | `shares.csv` | `items.csv` |
+| Was the scan complete enough to review? | `shares.csv` partial fields | `collection_errors.csv`, `findings.csv`, Diagnostics in the report |
+| Who should review this data? | `owner_review_packets.csv` | `owner_risk_pivots.csv`, `owner_mappings.csv`, `related_data_areas.csv` |
+| Which groups grant access? | `permissioned_groups.csv` | `share_permissions.csv`, `acl_entries.csv`, `group_edges.csv`, `identities.csv` |
+| Why is this path risky for migration? | `findings.csv` | `conflicts.csv`, `related_data_areas.csv`, `items.csv` |
+| Which identities look like service accounts? | `identities.csv` | `findings.csv`, `org_chains.csv` |
+| Which folders were active during the observation window? | `open_file_summary.csv` | `open_file_samples.csv`, `open_file_errors.csv` |
+| What can I send to support? | Redacted support bundle output | Raw exports only inside trusted handling |
+
 ## Export Validation
 
 `Test-ShareSurferExport` returns:
@@ -228,3 +244,15 @@ Use this file to troubleshoot missing or partial open-file activity evidence. Co
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.
 - `owner_review_packets` builds on owner risk pivots and related data areas to produce business-owner review packets with plain next steps.
 - `open_file_summary` and `open_file_samples` can be compared to `shares`, `items`, and owner mapping outputs by share name, folder path, and share-relative path when planning hot-folder migration windows.
+
+## Common Join Recipes
+
+| Need | Join path |
+| --- | --- |
+| Show all ACL entries for one share | `shares.ShareId` to `acl_entries.ShareId`, then filter by `shares.ShareName` or `shares.UNCPath`. |
+| Explain why a business owner got a review packet | Start with `owner_review_packets.Pattern`, then compare to `owner_mappings.Pattern`, `owner_risk_pivots.Pattern`, and matching `items.FullPath` or `shares.UNCPath`. |
+| Expand a permissioned group | `permissioned_groups.Group` to `group_edges.ParentGroup`, then join `group_edges.ChildIdentity` to `identities.Identity`. |
+| Investigate Broken/Missing SID rows | Filter `findings.FindingType=BrokenOrMissingSid`, then use `ShareId`, `ItemId`, `FullPath`, and `Identity` to compare with `share_permissions.csv` and `acl_entries.csv`. |
+| Investigate blank file owners | Filter `findings.FindingType=OwnerMetadataUnavailable`, then join `findings.ItemId` to `items.ItemId`. |
+| Check whether broad admin access influenced migration relatedness | Open `discounted_principals.csv`, then compare `DiscountedPrincipal*` fields in `permissioned_groups.csv`, `owner_risk_pivots.csv`, and `related_data_areas.csv`. |
+| Compare hot folders to access evidence | Use `open_file_summary.ShareRelativeFolder` or `FolderPath`, then compare with `items.RelativePath`, `items.FullPath`, owner mappings, and related data areas. |
