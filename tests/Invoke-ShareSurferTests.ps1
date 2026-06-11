@@ -3568,6 +3568,7 @@ $tests = @(
         Body = {
             $pesterWrapper = Join-Path $repoRoot 'tests/ShareSurfer.Tests.ps1'
             $visualDoc = Join-Path $repoRoot 'docs/workflow-visuals.md'
+            $visualFieldGuide = Join-Path $repoRoot 'docs/visual-field-guide.md'
             $visualRoot = Join-Path $repoRoot 'docs/visuals'
             $visualReadme = Join-Path $visualRoot 'README.md'
             $screenshotScript = Join-Path $repoRoot 'scripts/New-ShareSurferDashboardScreenshots.ps1'
@@ -3598,7 +3599,13 @@ $tests = @(
                 'dataset-transfer-dashboard-workflow.svg',
                 'readme-flow-guides/first-scan-owner-review.png',
                 'readme-flow-guides/locked-down-collector-dashboard-host.png',
-                'readme-flow-guides/migration-discovery-cleanup-planning.png'
+                'readme-flow-guides/migration-discovery-cleanup-planning.png',
+                'field-guide/evidence-pipeline.png',
+                'field-guide/share-gate-ntfs-model.png',
+                'field-guide/identity-org-enrichment.png',
+                'field-guide/migration-discovery-signals.png',
+                'field-guide/diagnostics-trust-review.png',
+                'field-guide/redacted-support-handoff.png'
             )
             $expectedScreenshots = @(
                 'report-dashboard-overview.png',
@@ -3610,11 +3617,20 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $visualDoc) 'Workflow visual documentation should exist.'
             $visualDocText = Get-Content -LiteralPath $visualDoc -Raw
             Assert-True ($visualDocText -like '*Workflow Overview*') 'Workflow visual documentation should include the overview section.'
+            Assert-True (Test-Path -LiteralPath $visualFieldGuide) 'Documentation should include a visual field guide.'
+            $visualFieldGuideText = Get-Content -LiteralPath $visualFieldGuide -Raw
+            Assert-True ($visualFieldGuideText -like '*ShareSurfer Visual Field Guide*') 'Visual field guide should have a clear title.'
+            Assert-True ($visualFieldGuideText -like '*Evidence Pipeline*') 'Visual field guide should explain the evidence pipeline.'
+            Assert-True ($visualFieldGuideText -like '*Share Gate vs File and Folder Permissions*') 'Visual field guide should explain the access model.'
+            Assert-True ($visualFieldGuideText -like '*Identity and Org Enrichment*') 'Visual field guide should explain identity enrichment.'
+            Assert-True ($visualFieldGuideText -like '*Migration Discovery Signals*') 'Visual field guide should explain migration discovery signals.'
+            Assert-True ($visualFieldGuideText -like '*Diagnostics and Trust Review*') 'Visual field guide should explain diagnostics and trust review.'
+            Assert-True ($visualFieldGuideText -like '*Redacted Support Handoff*') 'Visual field guide should explain redacted support handoff.'
             foreach ($workflowImage in $expectedWorkflowImages) {
                 $path = Join-Path $visualRoot $workflowImage
                 Assert-True (Test-Path -LiteralPath $path) ("Missing workflow image {0}" -f $workflowImage)
                 Assert-True ((Get-Item -LiteralPath $path).Length -gt 7000) ("Workflow image {0} should be a real descriptive asset." -f $workflowImage)
-                Assert-True ($visualDocText -like ("*visuals/{0}*" -f $workflowImage)) ("Workflow visual doc should reference {0}" -f $workflowImage)
+                Assert-True ($visualDocText -like ("*visuals/{0}*" -f $workflowImage) -or $visualFieldGuideText -like ("*visuals/{0}*" -f $workflowImage)) ("Workflow documentation should reference {0}" -f $workflowImage)
                 if ($workflowImage -like '*.svg') {
                     $workflowSvg = Get-Content -LiteralPath $path -Raw
                     Assert-True ($workflowSvg -like '*<svg*') ("Workflow image {0} should be an SVG asset." -f $workflowImage)
@@ -3703,6 +3719,7 @@ $tests = @(
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
             Assert-True ($readmeText -like '*Basic Use Cases*') 'README should present basic use cases.'
             Assert-True ($readmeText -like '*Workflow Guides*') 'README should include workflow guide visuals.'
+            Assert-True ($readmeText -like '*docs/visual-field-guide.md*') 'README should link the visual field guide.'
             Assert-True ($readmeText -like '*docs/workflow-guides.md*') 'README should link the workflow guide.'
             Assert-True ($readmeText -like '*docs/command-recipes.md*') 'README should link the command recipes.'
             Assert-True ($readmeText -like '*docs/glossary.md*') 'README should link the glossary.'
@@ -3868,6 +3885,7 @@ $tests = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/export-schema.md') -Raw
                 Get-Content -LiteralPath $glossary -Raw
+                Get-Content -LiteralPath $visualFieldGuide -Raw
                 Get-Content -LiteralPath $visualDoc -Raw
                 Get-Content -LiteralPath $visualReadme -Raw
                 Get-Content -LiteralPath $firstRunGuide -Raw

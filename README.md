@@ -36,6 +36,8 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 
 These diagrams show the normal ShareSurfer paths at a glance. Use the [workflow guide](docs/workflow-guides.md) when you need the step-by-step version with commands, handoff checks, and stop gates.
 
+For a richer explanation of the evidence pipeline, access model, identity enrichment, migration discovery, diagnostics, and redacted support handoff, use the [visual field guide](docs/visual-field-guide.md).
+
 ### First Scan to Owner Review
 
 ![First scan to owner review workflow](docs/visuals/readme-flow-guides/first-scan-owner-review.png)
@@ -353,6 +355,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [Business review handoff](docs/business-review-handoff.md)
 - [Management overview](docs/management-overview.md)
 - [Offline management overview slide](docs/management-overview.html)
+- [Visual field guide](docs/visual-field-guide.md)
 - [Workflow guide](docs/workflow-guides.md)
 - [Command recipes](docs/command-recipes.md)
 - [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)

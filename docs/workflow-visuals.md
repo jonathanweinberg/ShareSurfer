@@ -18,6 +18,22 @@ The README includes three descriptive workflow maps for first-time readers:
 
 Use [workflow-guides.md](workflow-guides.md) for the step-by-step version with commands, handoff checks, and stop gates.
 
+## Visual Field Guide
+
+Use [visual-field-guide.md](visual-field-guide.md) for the richer diagram set that explains the evidence pipeline, share gate vs NTFS permissions, identity enrichment, migration discovery, diagnostics, and redacted support handoff.
+
+![ShareSurfer evidence pipeline](visuals/field-guide/evidence-pipeline.png)
+
+![Share gate vs NTFS permissions](visuals/field-guide/share-gate-ntfs-model.png)
+
+![Identity and org enrichment](visuals/field-guide/identity-org-enrichment.png)
+
+![Migration discovery signals](visuals/field-guide/migration-discovery-signals.png)
+
+![Diagnostics and trust review](visuals/field-guide/diagnostics-trust-review.png)
+
+![Redacted support handoff](visuals/field-guide/redacted-support-handoff.png)
+
 ## Locked-Down Collection
 
 ![Locked-down collector workflow](visuals/nonpermissive-collector-workflow.svg)

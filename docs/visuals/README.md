@@ -17,10 +17,18 @@ The current workflow illustrations are:
 - `readme-flow-guides/first-scan-owner-review.png`
 - `readme-flow-guides/locked-down-collector-dashboard-host.png`
 - `readme-flow-guides/migration-discovery-cleanup-planning.png`
+- `field-guide/evidence-pipeline.png`
+- `field-guide/share-gate-ntfs-model.png`
+- `field-guide/identity-org-enrichment.png`
+- `field-guide/migration-discovery-signals.png`
+- `field-guide/diagnostics-trust-review.png`
+- `field-guide/redacted-support-handoff.png`
 
 Use `nonpermissive-collector-workflow.svg` when explaining read-only collection inside a restricted network. Use `dataset-transfer-dashboard-workflow.svg` when explaining how a validated dataset moves to a separate dashboard review workstation. These diagrams are intentionally text-rich so a first-time operator can understand the steps, gates, and outputs without extra context.
 
 Use the `readme-flow-guides/` PNGs when you need a more descriptive one-page visual for first-time readers: first scan to owner review, locked-down collector to dashboard host, and migration discovery cleanup planning.
+
+Use the `field-guide/` PNGs with [the visual field guide](../visual-field-guide.md) when you need a more detailed walkthrough for managers, business reviewers, or first-time operators.
 
 ## Report Screenshots
 
