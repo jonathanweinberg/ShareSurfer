@@ -14,8 +14,13 @@ The current workflow illustrations are:
 - `collector-to-report.svg`
 - `enterprise-lab-validation.svg`
 - `support-bundle-diagnostics.svg`
+- `readme-flow-guides/first-scan-owner-review.png`
+- `readme-flow-guides/locked-down-collector-dashboard-host.png`
+- `readme-flow-guides/migration-discovery-cleanup-planning.png`
 
 Use `nonpermissive-collector-workflow.svg` when explaining read-only collection inside a restricted network. Use `dataset-transfer-dashboard-workflow.svg` when explaining how a validated dataset moves to a separate dashboard review workstation. These diagrams are intentionally text-rich so a first-time operator can understand the steps, gates, and outputs without extra context.
+
+Use the `readme-flow-guides/` PNGs when you need a more descriptive one-page visual for first-time readers: first scan to owner review, locked-down collector to dashboard host, and migration discovery cleanup planning.
 
 ## Report Screenshots
 
