@@ -2,6 +2,8 @@
 
 This guide is for a first-time ShareSurfer operator. You do not need to be a senior Windows, Active Directory, or file-share engineer to get a useful first scan. Follow the steps in order and keep the raw export inside your trusted environment.
 
+If report or command terms are unfamiliar, keep the [glossary](glossary.md) open while you work.
+
 ## What ShareSurfer Does
 
 ShareSurfer reads Windows file-share information and turns it into CSV files and an offline report.

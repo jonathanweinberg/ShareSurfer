@@ -3572,6 +3572,7 @@ $tests = @(
             $visualReadme = Join-Path $visualRoot 'README.md'
             $screenshotScript = Join-Path $repoRoot 'scripts/New-ShareSurferDashboardScreenshots.ps1'
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
+            $glossary = Join-Path $repoRoot 'docs/glossary.md'
             $firstRunTroubleshooting = Join-Path $repoRoot 'docs/first-run-troubleshooting.md'
             $businessReviewHandoff = Join-Path $repoRoot 'docs/business-review-handoff.md'
             $workflowGuide = Join-Path $repoRoot 'docs/workflow-guides.md'
@@ -3640,6 +3641,15 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Invoke-ShareSurferOpenFileAssessment*') 'Command recipes should include open-file assessment.'
             Assert-True ($commandRecipeText -like '*New-ShareSurferSupportBundle*') 'Command recipes should include redacted support bundle creation.'
             Assert-True ($commandRecipeText -like '*Get-FileHash -Algorithm SHA256*') 'Command recipes should include SHA256 handoff verification.'
+            Assert-True (Test-Path -LiteralPath $glossary) 'Documentation should include a first-run glossary.'
+            $glossaryText = Get-Content -LiteralPath $glossary -Raw
+            Assert-True ($glossaryText -like '*ShareSurfer Glossary*') 'Glossary should have a clear title.'
+            Assert-True ($glossaryText -like '*Owner*' -and $glossaryText -like '*NTFS owner*') 'Glossary should distinguish owner from NTFS owner.'
+            Assert-True ($glossaryText -like '*Broken/Missing SID*') 'Glossary should define broken or missing SIDs.'
+            Assert-True ($glossaryText -like '*Partial data*') 'Glossary should define partial data.'
+            Assert-True ($glossaryText -like '*Discounted access principal*') 'Glossary should define discounted principals.'
+            Assert-True ($glossaryText -like '*Migration Discovery*') 'Glossary should define Migration Discovery.'
+            Assert-True ($glossaryText -like '*Dashboard host*') 'Glossary should define dashboard host.'
             foreach ($visual in $expectedVisuals) {
                 $path = Join-Path $visualRoot $visual
                 Assert-True (Test-Path -LiteralPath $path) ("Missing workflow visual {0}" -f $visual)
@@ -3695,6 +3705,7 @@ $tests = @(
             Assert-True ($readmeText -like '*Workflow Guides*') 'README should include workflow guide visuals.'
             Assert-True ($readmeText -like '*docs/workflow-guides.md*') 'README should link the workflow guide.'
             Assert-True ($readmeText -like '*docs/command-recipes.md*') 'README should link the command recipes.'
+            Assert-True ($readmeText -like '*docs/glossary.md*') 'README should link the glossary.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/first-scan-owner-review.png*') 'README should show the first scan owner review visual.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/locked-down-collector-dashboard-host.png*') 'README should show the locked-down collector dashboard visual.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/migration-discovery-cleanup-planning.png*') 'README should show the migration discovery visual.'
@@ -3763,6 +3774,7 @@ $tests = @(
             $firstRunTroubleshootingText = Get-Content -LiteralPath $firstRunTroubleshooting -Raw
             $businessReviewHandoffText = Get-Content -LiteralPath $businessReviewHandoff -Raw
             Assert-True ($firstRunText -like '*first-time*') 'First-run guide should explicitly address first-time operators.'
+            Assert-True ($firstRunText -like '*glossary*') 'First-run guide should link glossary definitions.'
             Assert-True ($firstRunText -like '*command recipes*') 'First-run guide should link command recipes.'
             Assert-True ($firstRunText -like '*Before You Run Checklist*') 'First-run guide should include a before-run checklist.'
             Assert-True ($firstRunText -like '*Which Scan Command Should I Use?*') 'First-run guide should help operators choose a scan command shape.'
@@ -3855,6 +3867,7 @@ $tests = @(
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/export-schema.md') -Raw
+                Get-Content -LiteralPath $glossary -Raw
                 Get-Content -LiteralPath $visualDoc -Raw
                 Get-Content -LiteralPath $visualReadme -Raw
                 Get-Content -LiteralPath $firstRunGuide -Raw
