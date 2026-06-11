@@ -19,6 +19,20 @@ It helps answer plain questions:
 
 ShareSurfer does not make access changes. It collects, normalizes, reports, and redacts evidence.
 
+## Before You Run Checklist
+
+Write these answers down before the first scan:
+
+- Target path or share: for example `\\files01\Finance`, or `ComputerName=files01` and `ShareName=Finance`.
+- Export folder: use a new folder such as `C:\ShareSurfer\exports\scan-001`.
+- OBS attribute: default is `extensionAttribute10`, but your directory may use another attribute such as `info`.
+- Owner mapping: decide whether you already have `owner-mapping.csv`, or whether the first scan will run without owner routing.
+- Discounted principals: decide whether broad HelpDesk, admin, scanner, backup, or platform groups should be listed in `discounted-principals.csv`.
+- Collector account: confirm whether the PowerShell prompt is elevated and whether the account can read shares, folders, files, ACLs, owner values, and directory data.
+- Dashboard path: decide whether the same machine will open the report, or whether you need the two-host workflow.
+
+If you are unsure about optional input files, leave them absent and use the splatted examples in this guide. They only pass optional paths when the files exist.
+
 ## Prerequisites
 
 Use a Windows collector machine with:
@@ -123,6 +137,16 @@ Use computer and share name when you want ShareSurfer to query SMB share metadat
 $computerName = 'files01'
 $shareName = 'Finance'
 ```
+
+### Which Scan Command Should I Use?
+
+| Situation | Command shape | Notes |
+| --- | --- | --- |
+| You know the UNC path and only need a quick first pass | `-TargetPath '\\files01\Finance'` | Good first scan path. It may not prove every share-level permission layer when remote share metadata is unavailable. |
+| You know the Windows file server and share name | `-ComputerName files01 -ShareName Finance` | Best when Windows SMB metadata and share permissions are important to the review. |
+| WinRM/CIM is blocked on a Windows file server | Add `-SmbCollectionProvider NativeSmbRpc` | Uses native Windows SMB/RPC and Win32 security APIs where available. Still records partial data when permissions are missing. |
+| You need file rows, not only folder rows | Add `-IncludeFiles` | Useful for migration proof and file-level owner/ACL review. Larger shares take longer. |
+| You are testing imported fixture data | `-InputObject <inventory>` | Mainly for tests, demos, and controlled validation. Production operators should normally scan real targets. |
 
 ## Step 3: Prepare Output Folders
 
@@ -274,6 +298,17 @@ If `IsValid` is `False`, look at:
 
 Validation does not prove that the scan reached every file. It proves the export structure is usable.
 
+What good looks like after validation:
+
+- `IsValid` is `True`.
+- `scan_manifest.csv` shows the expected target mode, OBS attribute, manager identity format, thresholds, and `IncludeFiles` value.
+- `shares.csv` has the shares you expected to scan.
+- Any `PartialData=True` share row has been reviewed in `collection_errors.csv`, `findings.csv`, and the report Diagnostics view.
+- `owner_review_packets.csv` and `owner_risk_pivots.csv` contain useful owner/business-unit rows if you supplied owner mappings.
+- `report.html` opens and the Overview, What Needs Review First, Findings, Conflicts, Groups, Diagnostics, and Raw Evidence views show the expected dataset.
+
+If validation passes but the dataset looks wrong, use the [first-run troubleshooting guide](first-run-troubleshooting.md) before asking a business owner to approve the result.
+
 ## Step 6: Understand Outputs
 
 The most important CSVs for a first review are:
@@ -287,14 +322,13 @@ The most important CSVs for a first review are:
 | `acl_entries.csv` | Folder and file permissions. |
 | `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, Broken/Missing SID rows, unavailable owner metadata, collection errors, and potential service account review flags. |
 | `conflicts.csv` | Share-vs-NTFS access mismatches. |
-| `identities.csv` | User and group details such as employee and OBS values. |
+| `identities.csv` | Users, groups, manager fields, OBS values, potential service-account flags, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
 | `group_edges.csv` | Expanded group membership paths. |
 | `org_chains.csv` | Manager, manager's manager, and third-level manager context when populated. |
 | `owner_mappings.csv` | Business owner and business unit rules. |
 | `owner_risk_pivots.csv` | Owner/business-unit review queue with mapped item counts, direct identities, direct groups, expanded members, findings, conflicts, partial shares, and risk level. |
 | `related_data_areas.csv` | Migration discovery rows for like-owned shares, folders, and files that should be reviewed together before migration planning. |
 | `owner_review_packets.csv` | Plain-language owner review packets showing why review is needed, where to start, and the suggested next action. |
-| `identities.csv` | Users, groups, manager fields, OBS values, potential service-account flags, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
 | `permissioned_groups.csv` | Groups that directly grant share or folder/file access, including assignment counts, rights, expanded members, and expansion health. |
 | `open_file_summary.csv` | Optional hot-folder activity summary when `Invoke-ShareSurferOpenFileAssessment` was run. |
 
@@ -405,6 +439,16 @@ Use the dashboard to review:
 - Explicit permissions deeper than level 2.
 - Group expansion browsing.
 - Raw Evidence Tables when an operator needs to browse the underlying CSV-shaped rows inside the offline report. This is secondary evidence browsing, not the first place to send a business owner.
+
+Before sending the report to a business owner, make sure you can answer:
+
+- Was the scan complete enough for this owner to review?
+- Which owner/business-unit mapping caused this owner to see these paths?
+- Are there collection gaps, Broken/Missing SID rows, no-owner rows, or potential service-account flags that need admin review first?
+- Are broad HelpDesk/admin groups visible but discounted from Migration Discovery relatedness where appropriate?
+- Is the owner receiving the report or packaged dashboard, not unreviewed raw CSVs?
+
+For a copy-ready handoff checklist and suggested owner-review message, see [Business review handoff](business-review-handoff.md).
 
 Path note: Microsoft documents Azure Files limits of 255-character path components and 2,048-character full paths. ShareSurfer's default warning for full paths over 256 characters is an operational migration policy warning, not a claim that Azure Files cannot store the path.
 
@@ -518,13 +562,19 @@ For a migration review:
 
 ## Common First-Run Problems
 
+For deeper triage with exact files to open, see the [first-run troubleshooting guide](first-run-troubleshooting.md).
+
 | Symptom | What to check |
 | --- | --- |
 | The scan shows partial data | Open `shares.csv` and read `PartialReason`. Confirm the target path exists and that your account can read share metadata, folders, files, and ACLs, then check `findings.csv` for `CollectionError` rows. |
+| WinRM/CIM errors appear | Try `-SmbCollectionProvider NativeSmbRpc` for explicit Windows SMB shares, or continue as partial evidence if the scan can still inspect the path. Review `collection_errors.csv` before approval. |
+| Optional input file was not found | Do not pass `-OwnerMappingPath` or `-DiscountedPrincipalPath` until the CSV exists. Use the splatted examples in this guide. |
 | Identity details are missing | Confirm directory read access and the selected `-AdLookupMode`. |
 | OBS values are blank | Confirm the correct `-ObsAttribute`, such as `extensionAttribute10`. If that attribute does not exist in your AD schema, use an existing user/group attribute such as `info`. |
 | Group expansion is incomplete | Increase `-GroupExpansionMaxDepth` or check for directory lookup errors. |
+| Broken/Missing SID rows appear | Review `findings.csv` for `BrokenOrMissingSid`, then ask the directory or file-share team to check deleted accounts, broken trusts, stale ACEs, or lookup gaps. |
 | The report is sparse | Confirm `Test-ShareSurferExport` passed and the scan target contained data. |
+| The standalone dashboard shows a template | Run `New-ShareSurferStandaloneDashboard.ps1` against a validated export folder, then open the generated `standalone-dashboard\index.html`. |
 | A support bundle still shows real names | Do not share it. Regenerate with redaction and inspect again. |
 
 ## Quick Command Set
@@ -533,16 +583,30 @@ For a migration review:
 Import-Module .\src\ShareSurfer\ShareSurfer.psd1 -Force
 
 $exportPath = 'C:\ShareSurfer\exports\scan-2026-06-04-finance'
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+$discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
-Invoke-ShareSurferScan `
-  -TargetPath '\\files01\Finance' `
-  -OutputPath $exportPath `
-  -OperationalPathLengthThreshold 256 `
-  -ExplicitAceDepthThreshold 2 `
-  -GroupExpansionMaxDepth 5 `
-  -DiscountedPrincipalPath 'C:\ShareSurfer\inputs\discounted-principals.csv' `
-  -AdLookupMode Auto `
-  -ObsAttribute 'extensionAttribute10'
+$scanParams = @{
+  TargetPath = '\\files01\Finance'
+  OutputPath = $exportPath
+  OperationalPathLengthThreshold = 256
+  ExplicitAceDepthThreshold = 2
+  GroupExpansionMaxDepth = 5
+  ManagerIdentityFormat = 'MailTo'
+  AdLookupMode = 'Auto'
+  ObsAttribute = 'extensionAttribute10'
+}
+
+if (Test-Path -LiteralPath $ownerMappingPath) {
+  $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $discountedPrincipalPath) {
+  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
+}
+
+Invoke-ShareSurferScan @scanParams
 
 Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"

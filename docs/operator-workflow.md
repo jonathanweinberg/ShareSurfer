@@ -18,6 +18,18 @@ If this is your first time using ShareSurfer, start with the [First-run guide](f
 - Pick a local output directory with enough free space for CSVs and any support bundle.
 - Record the OBS extension attribute in use, for example `extensionAttribute10`, before scanning. If that attribute is not present in the AD schema, use another attribute that exists on both users and groups, such as `info`.
 
+## Choose Your Operator Path
+
+| Goal | Start here | Skip for now |
+| --- | --- | --- |
+| First production scan | [Scan Workflow](#scan-workflow), then `Test-ShareSurferExport`, report generation, and [First-run troubleshooting](first-run-troubleshooting.md) if anything looks partial. | Lab creation and enterprise validation. |
+| Locked-down collector with separate review workstation | [Nonpermissive Collector to Dashboard Host](#nonpermissive-collector-to-dashboard-host). | Dashboard development tooling. |
+| Business-owner review | `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, and the report What Needs Review First queue. | Raw evidence tables until an operator needs detail. |
+| Enterprise lab proof | [Lab Setup](#lab-setup), [Windows lab readiness checklist](windows-lab-readiness-checklist.md), then acceptance validation. | Production shares. |
+| Support case | Validate the raw export first, then create and inspect a redacted support bundle. | Sending raw CSVs outside trusted handling. |
+
+Production-only operators can skip the lab setup section until they need to validate a new build, demo environment, or enterprise-scale proof run.
+
 ## Lab Setup
 
 Use the lab fixture in a disposable lab before touching production shares.
@@ -187,6 +199,8 @@ Invoke-ShareSurferScan `
 Use `-DiscountedPrincipalPath` for broad admin, HelpDesk, scanner, backup, or platform groups that should stay visible as access evidence but should not create Migration Discovery relatedness. The CSV shape is `Identity`, optional `Reason`, and optional `Scope`. Discounted does not mean ignored, safe, or approved; `share_permissions.csv`, `acl_entries.csv`, `permissioned_groups.csv`, and the report still show the access.
 
 The collector prints timestamped console progress by default so operators can see collection, ACL reading, identity enrichment, export, and completion phases. Use `-Quiet` for scheduled automation. WinRM/CIM gaps are treated as best-effort collection gaps when ShareSurfer can still inspect the path; review `collection_errors.csv`, `findings.csv`, and Diagnostics before approval.
+
+If a first run looks incomplete, use [First-run troubleshooting](first-run-troubleshooting.md) before changing scan scope. That guide lists the exact CSVs to open first and separates rerun decisions from business-review handoff decisions.
 
 When the Windows SMB cmdlets can resolve the share directly, scan by computer and share name:
 

@@ -60,6 +60,17 @@ After a useful scan, leaders should expect:
 - Redacted support evidence when the project team needs help diagnosing a bug.
 - A repeatable process for rescanning after cleanup.
 
+## What Leaders Should Ask
+
+- Are the right business owners mapped to the scanned data areas?
+- Which review packets should be handled first?
+- Are scan gaps clearly understood before asking for approval?
+- Which related data areas should be kept together during migration planning?
+- Which permission-bearing groups need owner confirmation?
+- What cleanup or rerun decision is needed before the next migration or audit step?
+
+For the operator-facing handoff checklist, see [Business review handoff](business-review-handoff.md).
+
 ## Example Report Views
 
 Dashboard overview:

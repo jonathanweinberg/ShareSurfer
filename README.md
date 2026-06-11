@@ -61,6 +61,17 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 
 For a first-time walkthrough, start with the [First-run guide](docs/first-run-guide.md). It explains prerequisites, target selection, collector commands, CSV outputs, reports, and redacted support bundles for operators who are new to ShareSurfer or new to Windows file-share auditing.
 
+Choose the starting path that matches your situation:
+
+| Situation | Use this path |
+| --- | --- |
+| You are new to ShareSurfer | Follow the [First-run guide](docs/first-run-guide.md) from the beginning. |
+| Your collector host is locked down | Use the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md). |
+| A scan completed but looks partial, sparse, or confusing | Use the [first-run troubleshooting guide](docs/first-run-troubleshooting.md) before asking a business owner to approve the result. |
+| You are ready to send results to a business owner | Use the [business review handoff guide](docs/business-review-handoff.md). |
+| You need CSV definitions or joins | Use the [export schema](docs/export-schema.md). |
+| You are validating the enterprise lab | Use the [operator workflow](docs/operator-workflow.md) and [Windows lab readiness checklist](docs/windows-lab-readiness-checklist.md). |
+
 Current pre-release quickstart package: [v0.1.0-pre.7](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.7). Download `ShareSurfer-0.1.0-pre.7.zip` and `ShareSurfer-0.1.0-pre.7.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets.
 
 When the ZIP is extracted to `C:\ShareSurfer\`, the release root is:
@@ -313,6 +324,8 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 
 - [Operator workflow](docs/operator-workflow.md)
 - [First-run guide](docs/first-run-guide.md)
+- [First-run troubleshooting](docs/first-run-troubleshooting.md)
+- [Business review handoff](docs/business-review-handoff.md)
 - [Management overview](docs/management-overview.md)
 - [Offline management overview slide](docs/management-overview.html)
 - [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)

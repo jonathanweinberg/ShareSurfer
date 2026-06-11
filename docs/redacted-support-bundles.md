@@ -99,6 +99,8 @@ A useful support bundle includes:
 
 Do not include a reversal map in the shared bundle. If an implementation produces a map for internal troubleshooting, store it separately with the raw export and treat it as sensitive.
 
+Also do not add raw screenshots, copied console text, unredacted CSV snippets, or ad hoc zip files from the original export to a support case. If a support reviewer needs more context, generate a new redacted bundle from the raw export instead of hand-curating raw evidence.
+
 ## Review Before Sharing
 
 Before sending a support bundle outside the trusted team:

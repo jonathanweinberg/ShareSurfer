@@ -3572,6 +3572,8 @@ $tests = @(
             $visualReadme = Join-Path $visualRoot 'README.md'
             $screenshotScript = Join-Path $repoRoot 'scripts/New-ShareSurferDashboardScreenshots.ps1'
             $firstRunGuide = Join-Path $repoRoot 'docs/first-run-guide.md'
+            $firstRunTroubleshooting = Join-Path $repoRoot 'docs/first-run-troubleshooting.md'
+            $businessReviewHandoff = Join-Path $repoRoot 'docs/business-review-handoff.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
@@ -3687,6 +3689,8 @@ $tests = @(
             Assert-True ($readmeText -like '*UnsignedPre1.0*') 'README should name the release manifest unsigned status.'
             Assert-True ($readmeText -like '*interface/standalone-dashboard/dist*') 'README should explain where prebuilt dashboard assets are packaged.'
             Assert-True ($readmeText -like '*docs/webview2-dashboard-viewer.md*') 'README should link the WebView2 dashboard viewer concept.'
+            Assert-True ($readmeText -like '*docs/first-run-troubleshooting.md*') 'README should link the first-run troubleshooting guide.'
+            Assert-True ($readmeText -like '*docs/business-review-handoff.md*') 'README should link the business review handoff guide.'
 
             Assert-True (Test-Path -LiteralPath $webView2ViewerDoc) 'Documentation should include the WebView2 dashboard viewer concept.'
             $webView2Text = Get-Content -LiteralPath $webView2ViewerDoc -Raw
@@ -3723,8 +3727,15 @@ $tests = @(
             Assert-True ($acceptanceAuditText -like '*issuecomment-4635064013*') 'Acceptance audit should link the issue #5 human-review closeout comment.'
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
+            Assert-True (Test-Path -LiteralPath $firstRunTroubleshooting) 'Documentation should include first-run troubleshooting guidance.'
+            Assert-True (Test-Path -LiteralPath $businessReviewHandoff) 'Documentation should include business review handoff guidance.'
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
+            $firstRunTroubleshootingText = Get-Content -LiteralPath $firstRunTroubleshooting -Raw
+            $businessReviewHandoffText = Get-Content -LiteralPath $businessReviewHandoff -Raw
             Assert-True ($firstRunText -like '*first-time*') 'First-run guide should explicitly address first-time operators.'
+            Assert-True ($firstRunText -like '*Before You Run Checklist*') 'First-run guide should include a before-run checklist.'
+            Assert-True ($firstRunText -like '*Which Scan Command Should I Use?*') 'First-run guide should help operators choose a scan command shape.'
+            Assert-True ($firstRunText -like '*What good looks like after validation*') 'First-run guide should explain validation success criteria.'
             Assert-True ($firstRunText -like '*Prerequisites*') 'First-run guide should explain prerequisites.'
             Assert-True ($firstRunText -like '*Choose Scan Targets*') 'First-run guide should explain choosing scan targets.'
             Assert-True ($firstRunText -like '*Run the Collector*') 'First-run guide should explain running the collector.'
@@ -3745,6 +3756,20 @@ $tests = @(
             Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.svg*') 'First-run guide should show the nonpermissive collector workflow visual.'
             Assert-True ($firstRunText -like '*v0.1.0-pre.7 release package*') 'First-run guide should reference the current pre-release dashboard package.'
             Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
+            Assert-True ($firstRunText -like '*first-run troubleshooting guide*') 'First-run guide should link the troubleshooting guide.'
+            Assert-True ($firstRunTroubleshootingText -like '*Start Here*') 'Troubleshooting guide should include a start-here triage section.'
+            Assert-True ($firstRunTroubleshootingText -like '*WinRM or CIM cannot connect*') 'Troubleshooting guide should cover WinRM/CIM collection gaps.'
+            Assert-True ($firstRunTroubleshootingText -like '*Owner mapping file was not found*') 'Troubleshooting guide should cover missing owner mapping inputs.'
+            Assert-True ($firstRunTroubleshootingText -like '*doubled folder*') 'Troubleshooting guide should cover common release extraction folder mistakes.'
+            Assert-True ($firstRunTroubleshootingText -like '*release contains tools and dashboard template assets*') 'Troubleshooting guide should distinguish release folders from scan export folders.'
+            Assert-True ($firstRunTroubleshootingText -like '*BrokenOrMissingSid*') 'Troubleshooting guide should cover broken or missing SID findings.'
+            Assert-True ($firstRunTroubleshootingText -like '*When To Rerun*') 'Troubleshooting guide should distinguish rerun decisions.'
+            Assert-True ($firstRunTroubleshootingText -like '*When To Hand Off To Reviewers*') 'Troubleshooting guide should distinguish business-review handoff decisions.'
+            Assert-True ($firstRunText -like '*business-review handoff*' -or $firstRunText -like '*Business review handoff*') 'First-run guide should link business review handoff guidance.'
+            Assert-True ($businessReviewHandoffText -like '*What To Send*') 'Business review handoff should explain what to send to reviewers.'
+            Assert-True ($businessReviewHandoffText -like '*Do Not Hand Off Yet If*') 'Business review handoff should define stop conditions.'
+            Assert-True ($businessReviewHandoffText -like '*Suggested Owner Review Request*') 'Business review handoff should include copy-ready owner request wording.'
+            Assert-True ($businessReviewHandoffText -like '*This report is read-only evidence*') 'Business review handoff should explain the report is not a permissions change or approval record.'
 
             Assert-True (Test-Path -LiteralPath $nonpermissiveWorkflow) 'Documentation should include a nonpermissive collector to dashboard host workflow.'
             $nonpermissiveText = Get-Content -LiteralPath $nonpermissiveWorkflow -Raw
@@ -3758,6 +3783,9 @@ $tests = @(
             Assert-True ($nonpermissiveText -like '*no npm or Vite is required*') 'Nonpermissive workflow should make release dashboard packaging no-npm.'
             Assert-True ($nonpermissiveText -like '*visuals/nonpermissive-collector-workflow.svg*') 'Nonpermissive workflow should reference the collector visual.'
             Assert-True ($nonpermissiveText -like '*visuals/dataset-transfer-dashboard-workflow.svg*') 'Nonpermissive workflow should reference the dashboard-transfer visual.'
+            Assert-True ($nonpermissiveText -like '*Collector handoff checklist*') 'Nonpermissive workflow should include a collector handoff checklist.'
+            Assert-True ($nonpermissiveText -like '*Dashboard host received-package checklist*') 'Nonpermissive workflow should include a dashboard-host intake checklist.'
+            Assert-True ($nonpermissiveText -like '*$actualHash -eq $expectedHash*') 'Nonpermissive workflow should show a dashboard-host hash verification check.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'
@@ -3790,6 +3818,8 @@ $tests = @(
             Assert-True ($operatorWorkflowText -like '*target-volume free space*') 'Operator workflow should explain creation-mode preflight blockers.'
             Assert-True ($operatorWorkflowText.Contains('selected `-ObsAttribute` exists and is allowed on both users and groups')) 'Operator workflow should explain the OBS attribute schema preflight check.'
             Assert-True ($operatorWorkflowText -like '*generated lab user password pattern fits the default domain password policy*') 'Operator workflow should explain the lab password policy preflight check.'
+            Assert-True ($operatorWorkflowText -like '*Choose Your Operator Path*') 'Operator workflow should include a path selector for production, nonpermissive, business review, lab proof, and support use.'
+            Assert-True ($operatorWorkflowText -like '*first-run-troubleshooting.md*') 'Operator workflow should link first-run troubleshooting.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
@@ -3797,6 +3827,8 @@ $tests = @(
                 Get-Content -LiteralPath $visualDoc -Raw
                 Get-Content -LiteralPath $visualReadme -Raw
                 Get-Content -LiteralPath $firstRunGuide -Raw
+                Get-Content -LiteralPath $firstRunTroubleshooting -Raw
+                Get-Content -LiteralPath $businessReviewHandoff -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw
