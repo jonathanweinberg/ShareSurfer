@@ -48,10 +48,13 @@ $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
 Test-Path "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1"
 Test-Path "$shareSurferRoot\interface\standalone-dashboard\dist\index.html"
+Get-ChildItem -Path "$shareSurferRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
 
 New-Item -ItemType Directory -Path $exportPath -Force
 New-Item -ItemType Directory -Path $inputRoot -Force
 ```
+
+The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting or re-copying the release folder.
 
 Both `Test-Path` commands should return `True`. If either returns `False`, confirm the ZIP was extracted to the expected folder before scanning.
 

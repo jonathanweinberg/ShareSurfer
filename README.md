@@ -159,9 +159,12 @@ $releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.9.zip'
 $releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.9'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
+Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
 Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
 Test-Path "$releaseRoot\interface\standalone-dashboard\dist\index.html"
 ```
+
+The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting the release ZIP.
 
 On Windows, release users do not need Node, npm, Vite, a preview server, or internet access to package and open the standalone dashboard. Use Windows PowerShell 5.1 (`powershell.exe`) for the collector and dashboard packager unless your workstation already has PowerShell 7 (`pwsh`).
 
