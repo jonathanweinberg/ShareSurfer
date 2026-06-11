@@ -89,6 +89,7 @@ Choose the starting path that matches your situation:
 | --- | --- |
 | You are new to ShareSurfer | Follow the [First-run guide](docs/first-run-guide.md) from the beginning. |
 | Your collector host is locked down | Use the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md). |
+| You want copy/paste commands for common tasks | Use the [command recipes](docs/command-recipes.md). |
 | A scan completed but looks partial, sparse, or confusing | Use the [first-run troubleshooting guide](docs/first-run-troubleshooting.md) before asking a business owner to approve the result. |
 | You are ready to send results to a business owner | Use the [business review handoff guide](docs/business-review-handoff.md). |
 | You need CSV definitions or joins | Use the [export schema](docs/export-schema.md). |
@@ -351,6 +352,7 @@ ShareSurfer separates Azure Files hard limits from migration policy warnings. Mi
 - [Management overview](docs/management-overview.md)
 - [Offline management overview slide](docs/management-overview.html)
 - [Workflow guide](docs/workflow-guides.md)
+- [Command recipes](docs/command-recipes.md)
 - [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)
 - [Standalone dashboard interface spec](docs/standalone-dashboard-interface-spec.md)
 - [WebView2 dashboard viewer concept](docs/webview2-dashboard-viewer.md)
