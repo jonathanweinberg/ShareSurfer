@@ -220,7 +220,25 @@ Invoke-ShareSurferOpenFileAssessment `
 
 This writes `open_file_manifest.csv`, `open_file_samples.csv`, `open_file_summary.csv`, and `open_file_errors.csv`. Treat it as activity evidence, not as a replacement for permission evidence.
 
-## Recipe 9: Redacted Support Bundle
+## Recipe 9: Ports and Protocols Assessment
+
+Use this before or after a scan when you need to prove which collector routes are reachable. The command is read-only.
+
+```powershell
+$exportPath = 'C:\ShareSurfer\exports\finance-001'
+
+Invoke-ShareSurferPortProtocolAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -DirectoryServer 'dc01.contoso.com' `
+  -OutputPath $exportPath
+```
+
+This writes `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv`. Package the standalone dashboard after these files are present to see the **Ports & Protocols** view below Raw Evidence. The output includes plain guidance fields such as `ReadinessSummary`, `CollectionImpact`, `OperatorGuidance`, and `RemediationHint`, which are useful for firewall tickets, server-team handoffs, and deciding whether to rerun with `-SmbCollectionProvider NativeSmbRpc`.
+
+If you are only rehearsing the workflow and are not allowed to open network sockets, add `-SkipNetworkTests`; the CSVs will show skipped checks instead of pass/fail reachability.
+
+## Recipe 10: Redacted Support Bundle
 
 Use this when you need to share bug-report evidence outside trusted handling.
 
@@ -235,7 +253,7 @@ New-ShareSurferSupportBundle `
 
 Keep raw CSVs internal unless your process allows sharing them. The support bundle uses stable tokens so support can compare rows without seeing raw identities and paths.
 
-## Recipe 10: Rerun After Mapping or Cleanup
+## Recipe 11: Rerun After Mapping or Cleanup
 
 Use a new export folder for each rerun so you can compare results.
 

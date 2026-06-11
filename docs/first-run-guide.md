@@ -283,6 +283,18 @@ Invoke-ShareSurferScan `
 
 `NativeSmbRpc` is a collection provider, not a different report format. It feeds the same CSVs and dashboard, but it uses Windows SMB/RPC and Win32 security APIs for share metadata, share permissions, owner values, and DACL evidence. It does not require WinRM/CIM, `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl` for the native provider path. It still needs enough share/file permissions to read the target evidence; unreadable paths and missing security descriptors are shown as partial data, collection errors, and scan events.
 
+Optional readiness check:
+
+```powershell
+Invoke-ShareSurferPortProtocolAssessment `
+  -ComputerName 'files01' `
+  -ShareName 'Finance' `
+  -DirectoryServer 'dc01.contoso.com' `
+  -OutputPath $exportPath
+```
+
+This adds `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv` beside the normal scan exports. The standalone dashboard shows them in **Ports & Protocols** below Raw Evidence. Use this when you need a plain-language explanation of which collector routes are reachable, what a failure means, and what to ask the firewall, server, or directory team to check. A failed WinRM/CIM row is usually a completeness/fallback warning; a failed required SMB TCP 445 row usually means the target is not scan-ready from that collector.
+
 ## Step 5: Validate the Export
 
 Run validation after every scan:
@@ -335,8 +347,10 @@ The most important CSVs for a first review are:
 | `owner_review_packets.csv` | Plain-language owner review packets showing why review is needed, where to start, and the suggested next action. |
 | `permissioned_groups.csv` | Groups that directly grant share or folder/file access, including assignment counts, rights, expanded members, and expansion health. |
 | `open_file_summary.csv` | Optional hot-folder activity summary when `Invoke-ShareSurferOpenFileAssessment` was run. |
+| `port_protocol_targets.csv` | Optional target readiness summary when `Invoke-ShareSurferPortProtocolAssessment` was run. |
+| `port_protocol_checks.csv` | Optional detailed protocol evidence with operator guidance and remediation hints. |
 
-Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group. If you also ran an open-file assessment, use `open_file_summary.csv` to spot active folders that may need migration timing or owner review.
+Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group. If you also ran an open-file assessment, use `open_file_summary.csv` to spot active folders that may need migration timing or owner review. If you ran a port/protocol assessment, use `port_protocol_targets.csv` and the dashboard **Ports & Protocols** view to decide whether blocked or warning routes need a rerun, provider change, or infrastructure ticket before approval.
 
 `owner_review_packets.csv` is generated automatically during `Invoke-ShareSurferScan`. You do not create that file by hand. To make it useful, provide `owner-mapping.csv` before the scan, run the scan, then confirm the export contains:
 

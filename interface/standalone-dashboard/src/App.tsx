@@ -44,7 +44,7 @@ import { KpiCard } from "./ui/KpiCard";
 import { Tooltip } from "./ui/Tooltip";
 import { VirtualTable } from "./ui/VirtualTable";
 
-type ViewKey = "overview" | "findings" | "migration" | "groups" | "identity" | "diagnostics" | "raw";
+type ViewKey = "overview" | "findings" | "migration" | "groups" | "identity" | "diagnostics" | "raw" | "connectivity";
 type BrokenSidMode = "all" | "only" | "hide";
 
 interface FilterState {
@@ -135,7 +135,8 @@ const views: Array<{ key: ViewKey; label: string; icon: JSX.Element; helper: str
   { key: "groups", label: "Groups", icon: <Users size={18} />, helper: "Access expansion" },
   { key: "identity", label: "Identity", icon: <UserCheck size={18} />, helper: "Org context" },
   { key: "diagnostics", label: "Diagnostics", icon: <Activity size={18} />, helper: "Scan health" },
-  { key: "raw", label: "Raw Evidence", icon: <Database size={18} />, helper: "All tables" }
+  { key: "raw", label: "Raw Evidence", icon: <Database size={18} />, helper: "All tables" },
+  { key: "connectivity", label: "Ports & Protocols", icon: <Network size={18} />, helper: "Collector reachability" }
 ];
 
 const defaultFilters: FilterState = {
@@ -176,7 +177,10 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   open_file_manifest: ["GeneratedAt", "ComputerName", "ShareNames", "Provider", "IntervalSeconds", "SampleCount"],
   open_file_samples: ["SampleTimestamp", "ShareName", "ClientUserName", "ClientComputerName", "Path", "Permissions", "Locks"],
   open_file_summary: ["ShareName", "FolderPath", "ObservationCount", "UniqueUsers", "UniqueClients", "HeatScore", "HotFolder"],
-  open_file_errors: ["Timestamp", "ComputerName", "ShareName", "Provider", "Message"]
+  open_file_errors: ["Timestamp", "ComputerName", "ShareName", "Provider", "Message"],
+  port_protocol_manifest: ["GeneratedAt", "CollectorComputerName", "CollectorUser", "IsWindows", "IsElevated", "PowerShellVersion", "TargetCount", "CheckCount"],
+  port_protocol_targets: ["Target", "TargetType", "ComputerName", "ShareName", "TargetStatus", "ReadinessSummary", "CollectionImpact", "SuggestedNextAction"],
+  port_protocol_checks: ["Target", "Protocol", "Port", "Requirement", "Provider", "Status", "Severity", "EnvironmentProfile", "CollectionImpact", "OperatorGuidance", "RemediationHint"]
 };
 
 function columnsForDataset(datasetKey: DatasetKey, showAll = false): string[] {
@@ -2223,6 +2227,175 @@ function RawEvidenceView({
   );
 }
 
+function filterPortProtocolRows(rows: DataRow[], filters: FilterState, query: string): DataRow[] {
+  const parsedQuery = parseSearchQuery(query);
+  return rows.filter((row) => {
+    const riskText = `${row.TargetStatus} ${row.Status} ${row.Severity} ${row.Requirement}`.toLowerCase();
+    const sourceText = `${row.Provider} ${row.Protocol} ${row.PackageKind}`.toLowerCase();
+    return (
+      (!filters.risk || riskText.includes(filters.risk.toLowerCase())) &&
+      (!filters.source || sourceText.includes(filters.source.toLowerCase())) &&
+      matchesParsedSearch(row, parsedQuery)
+    );
+  });
+}
+
+function summarizePortProtocolGuidance(rows: DataRow[]): DataRow[] {
+  const grouped = new Map<string, { row: DataRow; targets: Set<string> }>();
+  rows
+    .filter((row) => row.Status !== "Pass")
+    .forEach((row) => {
+      const key = [row.Protocol, row.Status, row.Severity, row.OperatorGuidance, row.RemediationHint, row.CollectionImpact].join("|");
+      const existing = grouped.get(key);
+      const target = row.Target || row.ComputerName || "Unknown target";
+      if (existing) {
+        existing.targets.add(target);
+        existing.row.Targets = Array.from(existing.targets).sort().join(", ");
+        existing.row.TargetCount = String(existing.targets.size);
+        return;
+      }
+
+      const targetSet = new Set<string>([target]);
+      grouped.set(key, {
+        row: {
+          Protocol: row.Protocol || "Unknown protocol",
+          Status: row.Status || "Unknown",
+          Severity: row.Severity || "Review",
+          EnvironmentProfile: row.EnvironmentProfile || row.Provider || "Collection support signal",
+          Targets: target,
+          TargetCount: "1",
+          CollectionImpact: row.CollectionImpact || row.Message || "Review this protocol result before relying on the scan.",
+          OperatorGuidance: row.OperatorGuidance || row.Message || "Review this protocol result.",
+          RemediationHint: row.RemediationHint || row.Detail || "Review firewall, routing, name resolution, listener state, and permissions."
+        },
+        targets: targetSet
+      });
+    });
+
+  return Array.from(grouped.values()).map((entry) => entry.row);
+}
+
+function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardModel; query: string; filters: FilterState }) {
+  const manifestRows = datasetRows(dashboard, "port_protocol_manifest");
+  const targetRows = filterPortProtocolRows(datasetRows(dashboard, "port_protocol_targets"), filters, query);
+  const checkRows = filterPortProtocolRows(datasetRows(dashboard, "port_protocol_checks"), filters, query);
+  const guidanceRows = summarizePortProtocolGuidance(checkRows);
+  const manifest = manifestRows[0] ?? {};
+  const blockedTargets = targetRows.filter((row) => row.TargetStatus === "Blocked").length;
+  const reviewTargets = targetRows.filter((row) => row.TargetStatus === "Review").length;
+  const failedRequiredChecks = checkRows.filter((row) => row.Status === "Fail" && row.Requirement === "Required").length;
+  const warningChecks = checkRows.filter((row) => row.Status === "Fail" && row.Requirement !== "Required").length;
+  const skippedChecks = checkRows.filter((row) => row.Status === "Skipped").length;
+  const hasAssessment = manifestRows.length > 0 || targetRows.length > 0 || checkRows.length > 0;
+
+  return (
+    <div className="view-grid">
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Ports & Protocols</SectionTitle>
+        <p className="panel-copy">
+          This view shows read-only reachability checks for the protocols ShareSurfer may use. Failed WinRM/CIM checks do not automatically block collection, but they explain why share-level metadata may require fallback or show as partial.
+        </p>
+        {hasAssessment ? (
+          <dl className="stat-grid">
+            <div>
+              <dt>Assessment date</dt>
+              <dd>{formatReportDate(manifest.GeneratedAt || "")}</dd>
+            </div>
+            <div>
+              <dt>Collector host</dt>
+              <dd>{manifest.CollectorComputerName || "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>Collector user</dt>
+              <dd>{[manifest.UserDomain, manifest.CollectorUser].filter(Boolean).join("\\") || "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>Elevated</dt>
+              <dd>{manifest.IsElevated || "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>PowerShell</dt>
+              <dd>{manifest.PowerShellVersion || "Not recorded"}</dd>
+            </div>
+            <div>
+              <dt>SMBShare module</dt>
+              <dd>{manifest.SmbShareModuleAvailable || "Not recorded"}</dd>
+            </div>
+          </dl>
+        ) : (
+          <div className="info-banner">
+            <strong>No ports/protocols assessment was packaged</strong>
+            <span>
+              Run <code>Invoke-ShareSurferPortProtocolAssessment</code> and place the generated <code>port_protocol_*.csv</code> files beside the scan export before packaging the standalone dashboard.
+            </span>
+          </div>
+        )}
+      </section>
+
+      <div className="kpi-grid">
+        <KpiCard label="Targets Assessed" value={formatNumber(targetRows.length)} tone="info" detail="File servers and directory endpoints" tooltip={tooltipRegistry.portsProtocols} icon={<ServerCog />} />
+        <KpiCard label="Blocked Targets" value={formatNumber(blockedTargets)} tone={blockedTargets > 0 ? "danger" : "good"} detail="Required check failed" tooltip={tooltipRegistry.portsProtocols} icon={<AlertTriangle />} />
+        <KpiCard label="Review Targets" value={formatNumber(reviewTargets)} tone={reviewTargets > 0 ? "warning" : "good"} detail="Recommended or optional gap" tooltip={tooltipRegistry.portsProtocols} icon={<Network />} />
+        <KpiCard label="Failed Required Checks" value={formatNumber(failedRequiredChecks)} tone={failedRequiredChecks > 0 ? "danger" : "good"} detail="Usually SMB 445" tooltip={tooltipRegistry.portsProtocols} icon={<ShieldAlert />} />
+        <KpiCard label="Warning Checks" value={formatNumber(warningChecks)} tone={warningChecks > 0 ? "warning" : "good"} detail="Fallback may be needed" tooltip={tooltipRegistry.portsProtocols} icon={<Activity />} />
+        <KpiCard label="Skipped Checks" value={formatNumber(skippedChecks)} tone={skippedChecks > 0 ? "warning" : "neutral"} detail="Dry-run evidence" tooltip={tooltipRegistry.portsProtocols} icon={<ClipboardCheck />} />
+      </div>
+
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Target Assessment</SectionTitle>
+        <VirtualTable
+          rows={targetRows}
+          columns={columnsForDataset("port_protocol_targets")}
+          selectableColumns={expectedColumns.port_protocol_targets}
+          pageSize={20}
+          title="Ports and protocols targets"
+          enableFieldFilters
+          enableExport
+          exportFileName="sharesurfer-port-protocol-targets-shown.csv"
+        />
+      </section>
+
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Operator Guidance</SectionTitle>
+        <p className="panel-copy">
+          These rows group the checks that need attention. Use them before rerunning a scan or asking a firewall, server, or directory team for help.
+        </p>
+        {guidanceRows.length > 0 ? (
+          <VirtualTable
+            rows={guidanceRows}
+            columns={["Severity", "Status", "Protocol", "EnvironmentProfile", "TargetCount", "Targets", "OperatorGuidance", "RemediationHint", "CollectionImpact"]}
+            selectableColumns={["Severity", "Status", "Protocol", "EnvironmentProfile", "TargetCount", "Targets", "OperatorGuidance", "RemediationHint", "CollectionImpact"]}
+            pageSize={10}
+            title="Ports and protocols guidance"
+            enableFieldFilters
+            enableExport
+            exportFileName="sharesurfer-port-protocol-guidance-shown.csv"
+          />
+        ) : (
+          <div className="info-banner">
+            <strong>No protocol guidance items in the current filter</strong>
+            <span>Passing checks stay in the detailed evidence table below, but they do not need action here.</span>
+          </div>
+        )}
+      </section>
+
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Protocol Checks</SectionTitle>
+        <VirtualTable
+          rows={checkRows}
+          columns={columnsForDataset("port_protocol_checks")}
+          selectableColumns={expectedColumns.port_protocol_checks}
+          pageSize={30}
+          title="Ports and protocols checks"
+          enableFieldFilters
+          enableExport
+          exportFileName="sharesurfer-port-protocol-checks-shown.csv"
+        />
+      </section>
+    </div>
+  );
+}
+
 function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnapshot; datasetLabel: string }) {
   const initialState = useMemo(() => loadDashboardState(), []);
   const [activeView, setActiveView] = useState<ViewKey>(initialState.activeView ?? "overview");
@@ -2458,6 +2631,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
         {activeView === "identity" ? <IdentityView dashboard={dashboard} /> : null}
         {activeView === "diagnostics" ? <DiagnosticsView snapshot={snapshot} dashboard={dashboard} /> : null}
         {activeView === "raw" ? <RawEvidenceView dashboard={dashboard} query={deferredQuery} filters={filters} datasetKey={rawDatasetKey} onDatasetChange={setRawDatasetKey} /> : null}
+        {activeView === "connectivity" ? <PortProtocolView dashboard={dashboard} query={deferredQuery} filters={filters} /> : null}
       </main>
     </div>
   );

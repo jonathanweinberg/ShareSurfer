@@ -73,6 +73,16 @@ Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with t
 | `open_file_summary.csv` | One row per observed folder | Summarizes activity by folder and marks hot folders based on repeated observations, unique users, unique clients, locks, and heat score. |
 | `open_file_errors.csv` | One row per assessment collection error | Records provider or permission failures without invalidating the rest of the assessment package. |
 
+## Optional Ports and Protocols Assessment Package
+
+`Invoke-ShareSurferPortProtocolAssessment` can add read-only collector and target reachability evidence to the same export folder. These files are optional. They are imported by the standalone dashboard when present and shown in the **Ports & Protocols** view below Raw Evidence.
+
+| File | Grain | Purpose |
+| --- | --- | --- |
+| `port_protocol_manifest.csv` | One row per ports/protocols assessment | Records the collector host, user context, PowerShell version, module availability, target count, and pass/warning/failure/skipped totals. |
+| `port_protocol_targets.csv` | One row per assessed target | Summarizes each file server/share or directory endpoint with target status, readiness summary, collection impact, and suggested next action. |
+| `port_protocol_checks.csv` | One row per protocol check | Captures SMB, WinRM/CIM, native SMB/RPC-related, RPC, and optional directory protocol reachability evidence with operator guidance and remediation hints. |
+
 ## Column Reference
 
 ### `shares.csv`
@@ -232,6 +242,24 @@ Expected columns: `ErrorId`, `AssessmentId`, `SampleId`, `Timestamp`, `ComputerN
 
 Use this file to troubleshoot missing or partial open-file activity evidence. Common causes include insufficient rights, an unavailable provider, remote-management restrictions, or a target that does not expose equivalent open-file data.
 
+### `port_protocol_manifest.csv`
+
+Expected columns: `AssessmentId`, `GeneratedAt`, `ExportVersion`, `CollectorComputerName`, `CollectorFqdn`, `CollectorUser`, `UserDomain`, `IsWindows`, `IsElevated`, `OSDescription`, `OSArchitecture`, `PowerShellVersion`, `PSEdition`, `ActiveDirectoryModuleAvailable`, `SmbShareModuleAvailable`, `TargetCount`, `CheckCount`, `PassedCount`, `WarningCount`, `FailedCount`, `SkippedCount`, `PackageKind`.
+
+Use this file to understand the system that ran the reachability assessment. It is not a permissions scan. It explains whether the collector host had the expected PowerShell environment and whether the assessment was a real network check or a dry-run package with skipped checks.
+
+### `port_protocol_targets.csv`
+
+Expected columns: `AssessmentId`, `TargetId`, `Target`, `TargetType`, `ComputerName`, `ShareName`, `UNCPath`, `CheckCount`, `PassedCount`, `WarningCount`, `FailedCount`, `SkippedCount`, `TargetStatus`, `ReadinessSummary`, `CollectionImpact`, `SuggestedNextAction`.
+
+Use this file to quickly decide whether a target is ready for ShareSurfer collection. `Blocked` means a required check failed, usually SMB TCP 445. `Review` means recommended or optional checks failed, commonly WinRM/CIM. A WinRM/CIM warning does not automatically mean ShareSurfer cannot run; it means fallback collection may be used or share-level metadata may be partial. `ReadinessSummary` is the plain-language result for the target, and `CollectionImpact` explains what the result can mean for scan completeness.
+
+### `port_protocol_checks.csv`
+
+Expected columns: `AssessmentId`, `CheckId`, `TargetId`, `Target`, `TargetType`, `ComputerName`, `ShareName`, `Protocol`, `Transport`, `Port`, `Requirement`, `Provider`, `Purpose`, `RequiredFor`, `Status`, `Severity`, `EnvironmentProfile`, `CollectionImpact`, `OperatorGuidance`, `RemediationHint`, `LatencyMs`, `RemoteAddress`, `Message`, `Detail`.
+
+Use this file as the detailed evidence behind the target summary. `Requirement=Required` is reserved for core collection routes such as SMB TCP 445. `Recommended` and `Optional` rows explain routes that improve collection completeness but may have fallbacks. `EnvironmentProfile` groups the row into operator-friendly contexts such as core SMB collection, default Windows CIM collection, native SMB/RPC fallback signal, or directory identity enrichment. `OperatorGuidance` and `RemediationHint` are intended for ticket notes and rerun planning.
+
 ## Relationship Map
 
 - `shares.ShareId` joins to `items.ShareId`, `share_permissions.ShareId`, `acl_entries.ShareId`, `conflicts.ShareId`, and `findings.ShareId`.
@@ -244,6 +272,7 @@ Use this file to troubleshoot missing or partial open-file activity evidence. Co
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.
 - `owner_review_packets` builds on owner risk pivots and related data areas to produce business-owner review packets with plain next steps.
 - `open_file_summary` and `open_file_samples` can be compared to `shares`, `items`, and owner mapping outputs by share name, folder path, and share-relative path when planning hot-folder migration windows.
+- `port_protocol_targets.Target` and `port_protocol_checks.Target` compare to share computer names and UNC roots when explaining why a scan used fallback routes or recorded partial share-level metadata.
 
 ## Common Join Recipes
 
