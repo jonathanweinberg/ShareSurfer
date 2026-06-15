@@ -71,7 +71,7 @@ For the best owner and migration review experience, also provide `OBS` and `Busi
 ## Step 1: Test The CSV
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.11'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.12'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
