@@ -1978,6 +1978,182 @@ $tests = @(
         }
     },
     @{
+        Name = 'Join-ShareSurferOwnershipSources merges partial ownership CSVs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourceOnePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipHr-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $sourceTwoPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProjects-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipEnrichment-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $commandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipEnrichment-' + [guid]::NewGuid().ToString('N') + '.rerun.ps1')
+
+            @(
+                [pscustomobject]@{
+                    employee_id = 'E1001'
+                    display_name = 'Ava Accounting'
+                    mail = 'ava.accounting@example.test'
+                    obs = 'CORP.FIN.AP'
+                    business_unit = 'Finance'
+                }
+            ) | Export-Csv -LiteralPath $sourceOnePath -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{
+                    obs = 'CORP.FIN.AP'
+                    project_code = 'AP-2026'
+                    project = 'Accounts Payable Modernization'
+                }
+            ) | Export-Csv -LiteralPath $sourceTwoPath -NoTypeInformation -Encoding UTF8
+
+            $summary = Join-ShareSurferOwnershipSources -Path @($sourceOnePath, $sourceTwoPath) -OutputPath $outputPath -ReusableCommandPath $commandPath -AdLookupMode DirectoryOnly
+            $rows = Import-Csv -LiteralPath $outputPath
+            $commandText = Get-Content -LiteralPath $commandPath -Raw
+
+            Assert-Equal $summary.RowCount 1 'Join summary should merge rows with the same EmployeeID.'
+            Assert-Equal $rows.Count 1 'Enrichment CSV should contain one merged row.'
+            Assert-Equal $rows[0].EmployeeId 'E1001' 'Merged row should preserve EmployeeID.'
+            Assert-Equal $rows[0].DisplayName 'Ava Accounting' 'Merged row should preserve person fields from the HR source.'
+            Assert-Equal $rows[0].OBS 'CORP.FIN.AP' 'Merged row should preserve OBS from the second source.'
+            Assert-Equal $rows[0].ProjectCode 'AP-2026' 'Merged row should preserve project code from the second source.'
+            Assert-True ([string]$rows[0].SourcePaths -like '*ShareSurferOwnershipHr*') 'Merged row should retain source path provenance.'
+            Assert-True ([string]$rows[0].SourcePaths -like '*ShareSurferOwnershipProjects*') 'Merged row should retain second source provenance.'
+            Assert-True ($commandText -like '*Join-ShareSurferOwnershipSources*') 'Reusable command should rerun the joined enrichment command.'
+            Assert-True ($commandText -like '*OwnershipEnrichmentPath*') 'Reusable command should explain passing the output into the scan.'
+        }
+    },
+    @{
+        Name = 'Join-ShareSurferOwnershipSources enriches by employee ID and skips forbidden OUs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipAd-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipAdEnrichment-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{ employee_id = 'E1001'; obs = 'CORP.FIN.AP' },
+                [pscustomobject]@{ employee_id = 'E2002'; obs = 'CORP.OLD.DISABLED' }
+            ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
+
+            try {
+                function global:Get-ADUser {
+                    param(
+                        [string] $LDAPFilter,
+                        [string] $Identity,
+                        [string[]] $Properties
+                    )
+
+                    if ($LDAPFilter -like '*E1001*') {
+                        return [pscustomobject]@{
+                            SamAccountName = 'Ava.Accounting'
+                            DisplayName = 'Ava Accounting'
+                            EmployeeID = 'E1001'
+                            EmployeeNumber = '1001'
+                            UserPrincipalName = 'ava.accounting@example.test'
+                            Mail = 'ava.accounting@example.test'
+                            Department = 'Accounts Payable'
+                            Title = 'Accounting Analyst'
+                            Company = 'Contoso Finance'
+                            physicalDeliveryOfficeName = 'HQ-4'
+                            Enabled = $true
+                            Manager = ''
+                            extensionAttribute10 = 'CORP.FIN.AP.AD'
+                            DistinguishedName = 'CN=Ava Accounting,OU=Users,DC=example,DC=test'
+                        }
+                    }
+                    if ($LDAPFilter -like '*E2002*') {
+                        return [pscustomobject]@{
+                            SamAccountName = 'Old.Account'
+                            DisplayName = 'Old Account'
+                            EmployeeID = 'E2002'
+                            EmployeeNumber = '2002'
+                            UserPrincipalName = 'old.account@example.test'
+                            Mail = 'old.account@example.test'
+                            Department = 'Archive'
+                            Title = 'Former Employee'
+                            Company = 'Contoso'
+                            physicalDeliveryOfficeName = 'Archive'
+                            Enabled = $false
+                            Manager = ''
+                            extensionAttribute10 = 'CORP.OLD.DISABLED.AD'
+                            DistinguishedName = 'CN=Old Account,OU=Disabled Accounts,DC=example,DC=test'
+                        }
+                    }
+                    throw ('Unexpected Get-ADUser lookup. LDAPFilter={0}; Identity={1}' -f $LDAPFilter, $Identity)
+                }
+
+                $summary = Join-ShareSurferOwnershipSources -Path $sourcePath -OutputPath $outputPath -AdLookupMode ActiveDirectory -ForbiddenOu 'OU=Disabled Accounts,DC=example,DC=test'
+                $rows = Import-Csv -LiteralPath $outputPath
+                $matched = @($rows | Where-Object { $_.EmployeeId -eq 'E1001' })[0]
+                $forbidden = @($rows | Where-Object { $_.EmployeeId -eq 'E2002' })[0]
+
+                Assert-Equal $summary.MatchedCount 1 'Join summary should count the allowed AD match.'
+                Assert-Equal $summary.ForbiddenOuSkippedCount 1 'Join summary should count the forbidden OU skip.'
+                Assert-Equal $matched.MatchStatus 'Matched' 'Allowed row should be marked as matched.'
+                Assert-Equal $matched.SamAccountName 'Ava.Accounting' 'Allowed row should be enriched with SAM account name.'
+                Assert-Equal $matched.Title 'Accounting Analyst' 'Allowed row should be enriched with title.'
+                Assert-Equal $matched.Office 'HQ-4' 'Allowed row should be enriched with office.'
+                Assert-Equal $matched.OBS 'CORP.FIN.AP' 'Source OBS should be preserved over AD OBS.'
+                Assert-Equal $matched.AdObsPath 'CORP.FIN.AP.AD' 'AD OBS should be retained separately.'
+                Assert-Equal $forbidden.MatchStatus 'ForbiddenOuSkipped' 'Forbidden OU row should be marked as skipped.'
+                Assert-True ([string]$forbidden.ForbiddenOuMatched -like '*Disabled Accounts*') 'Forbidden OU row should record the OU that caused the skip.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-ADUser -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan exports ownership enrichment evidence'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $enrichmentPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipEnrichment-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    OwnershipKey = 'EmployeeId:e1001'
+                    MatchStatus = 'Matched'
+                    MatchMethod = 'EmployeeId'
+                    SourcePaths = 'hr.csv'
+                    SourceRowNumbers = '2'
+                    EmployeeId = 'E1001'
+                    EmployeeNumber = '1001'
+                    SamAccountName = 'Ava.Accounting'
+                    UserPrincipalName = 'ava.accounting@example.test'
+                    Mail = 'ava.accounting@example.test'
+                    DisplayName = 'Ava Accounting'
+                    Title = 'Accounting Analyst'
+                    Office = 'HQ-4'
+                    Department = 'Accounts Payable'
+                    Company = 'Contoso Finance'
+                    Manager = ''
+                    ManagerLevel1 = ''
+                    ManagerLevel2 = ''
+                    ManagerLevel3 = ''
+                    ManagerLevel1Raw = ''
+                    ManagerLevel2Raw = ''
+                    ManagerLevel3Raw = ''
+                    OBS = 'CORP.FIN.AP'
+                    AdObsPath = 'CORP.FIN.AP'
+                    ObsAttribute = 'extensionAttribute10'
+                    BusinessUnit = 'Finance'
+                    DataOwner = 'Finance Operations'
+                    OwnerMail = 'finance.owner@example.test'
+                    Project = 'Accounts Payable'
+                    ProjectCode = 'AP-2026'
+                    AccountEnabled = 'True'
+                    DistinguishedName = 'CN=Ava Accounting,OU=Users,DC=example,DC=test'
+                    ForbiddenOuMatched = ''
+                    PotentialServiceAccount = 'False'
+                    ImportWarnings = ''
+                }
+            ) | Export-Csv -LiteralPath $enrichmentPath -NoTypeInformation -Encoding UTF8
+
+            $summary = Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -OwnershipEnrichmentPath $enrichmentPath -SkipIdentityEnrichment
+            $rows = Import-Csv -LiteralPath (Join-Path $outputPath 'ownership_enrichment.csv')
+
+            Assert-Equal $summary.OwnershipEnrichment 1 'Scan summary should report ownership enrichment row count.'
+            Assert-Equal $rows.Count 1 'Export should include ownership enrichment rows.'
+            Assert-Equal $rows[0].ProjectCode 'AP-2026' 'Exported ownership enrichment should preserve project code.'
+            Assert-Equal $rows[0].MatchStatus 'Matched' 'Exported ownership enrichment should preserve match status.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferOwnerMappingDraft creates admin-review rows for unmapped shares'
         Body = {
             Import-Module $moduleManifest -Force

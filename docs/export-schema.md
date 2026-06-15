@@ -20,6 +20,7 @@ Empty fields should be handled carefully. A blank `Owner`, OBS value, manager, t
 | Which shares and paths were collected? | `shares.csv` | `items.csv` |
 | Was the scan complete enough to review? | `shares.csv` partial fields | `collection_errors.csv`, `findings.csv`, Diagnostics in the report |
 | Who should review this data? | `owner_review_packets.csv` | `owner_risk_pivots.csv`, `owner_mappings.csv`, `related_data_areas.csv` |
+| Which HR/OBS/project rows were used to enrich the scan? | `ownership_enrichment.csv` | `identities.csv`, `owner_mappings.csv`, standalone dashboard Raw Evidence |
 | Which groups grant access? | `permissioned_groups.csv` | `share_permissions.csv`, `acl_entries.csv`, `group_edges.csv`, `identities.csv` |
 | Why is this path risky for migration? | `findings.csv` | `conflicts.csv`, `related_data_areas.csv`, `items.csv` |
 | Which identities look like service accounts? | `identities.csv` | `findings.csv`, `org_chains.csv` |
@@ -39,6 +40,8 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 
 ## Files
 
+`ownership_enrichment.csv` is optional. ShareSurfer writes it when the scan is run with `Invoke-ShareSurferScan -OwnershipEnrichmentPath`. Older exports and scans without pre-scan ownership enrichment remain valid when this file is absent.
+
 | File | Grain | Purpose |
 | --- | --- | --- |
 | `shares.csv` | One row per share | Defines collected SMB shares and partial-data status. |
@@ -51,6 +54,7 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | `permissioned_groups.csv` | One row per permission-bearing group | Lists groups that directly grant share or NTFS access, with assignment counts, expansion health, rights, example path context, and discounted-principal labels. |
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
+| `ownership_enrichment.csv` | One row per enriched ownership import row | Preserves merged HR, employee, OBS, project, and directory-matched rows supplied before the scan. |
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
 | `related_data_areas.csv` | One row per migration discovery area | Groups like-owned shares, folders, and files for migration planning with explainable relatedness and readiness. |
 | `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
@@ -152,6 +156,29 @@ Expected columns: `Pattern`, `Owner`, `BusinessUnit`, `Source`.
 Use this file for business ownership rules such as path prefixes, share names, or imported mapping tables.
 
 When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV must include `Pattern`, `Owner`, and `BusinessUnit`; `Source` is optional and defaults to `OwnerMappingPath`.
+
+### `ownership_enrichment.csv`
+
+Expected columns: `OwnershipKey`, `MatchStatus`, `MatchMethod`, `SourcePaths`, `SourceRowNumbers`, `EmployeeId`, `EmployeeNumber`, `SamAccountName`, `UserPrincipalName`, `Mail`, `DisplayName`, `Title`, `Office`, `Department`, `Company`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ManagerLevel1Raw`, `ManagerLevel2Raw`, `ManagerLevel3Raw`, `OBS`, `AdObsPath`, `ObsAttribute`, `BusinessUnit`, `DataOwner`, `OwnerMail`, `Project`, `ProjectCode`, `AccountEnabled`, `DistinguishedName`, `ForbiddenOuMatched`, `PotentialServiceAccount`, `ImportWarnings`.
+
+This optional file appears only when the operator runs `Join-ShareSurferOwnershipSources` before the scan and passes the resulting CSV to `Invoke-ShareSurferScan -OwnershipEnrichmentPath`.
+
+Use it to understand which imported HR, employee, OBS, OID, project, or owner rows were available to the scan and dashboard. The dashboard reads the exported `ownership_enrichment.csv` from the scan output or packaged dashboard dataset; it does not read the pre-scan input file from `C:\ShareSurfer\inputs`.
+
+Common `MatchStatus` values:
+
+- `Matched`: Employee ID or employee number found one allowed AD account.
+- `Ambiguous`: More than one allowed AD account matched the employee identifier.
+- `ForbiddenOuSkipped`: A matching account was found only under a forbidden OU selected by the operator.
+- `NotFound`: No AD account matched the supplied employee identifier.
+- `SourceOnly`: The row carried useful owner, OBS, OID, project, or business context but did not have enough account data for an AD lookup.
+- `LookupFailed`: AD lookup was requested but failed; check `ImportWarnings` for the error summary.
+
+`OBS` is the imported OBS/OID value from the source CSVs. `AdObsPath` is the value read from the selected directory `-ObsAttribute` after matching the account. Keeping both fields helps reviewers spot HR-vs-AD drift without overwriting either source.
+
+`ForbiddenOuMatched` records the OU that caused a row to be skipped. Use this when the operator selected disabled-user archives, service-account OUs, staging OUs, or test OUs as forbidden lookup locations.
+
+`PotentialServiceAccount=True` means the enriched row has no OBS, no employee ID, and no employee number after import and enrichment. Treat it as a review flag, not proof that the account is definitely a service account.
 
 ### Ownership import preparation files
 
@@ -284,6 +311,7 @@ Use this file as the detailed evidence behind the target summary. `Requirement=R
 - `group_edges` expands access from groups to child identities.
 - `permissioned_groups.Group` joins to `identities.Identity`, `group_edges.ParentGroup`, `share_permissions.Identity`, and `acl_entries.Identity` for group access review.
 - `owner_mappings` adds business context to paths and shares.
+- `ownership_enrichment` compares imported HR/OBS/project facts to directory-matched identities by `EmployeeId`, `EmployeeNumber`, `SamAccountName`, `UserPrincipalName`, or `Mail`.
 - `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.
 - `owner_review_packets` builds on owner risk pivots and related data areas to produce business-owner review packets with plain next steps.
@@ -299,5 +327,6 @@ Use this file as the detailed evidence behind the target summary. `Requirement=R
 | Expand a permissioned group | `permissioned_groups.Group` to `group_edges.ParentGroup`, then join `group_edges.ChildIdentity` to `identities.Identity`. |
 | Investigate Broken/Missing SID rows | Filter `findings.FindingType=BrokenOrMissingSid`, then use `ShareId`, `ItemId`, `FullPath`, and `Identity` to compare with `share_permissions.csv` and `acl_entries.csv`. |
 | Investigate blank file owners | Filter `findings.FindingType=OwnerMetadataUnavailable`, then join `findings.ItemId` to `items.ItemId`. |
+| Review imported HR/OBS/project enrichment | Open `ownership_enrichment.csv`, filter `MatchStatus`, then compare matched employee, SAM, UPN, or mail fields to `identities.csv`. |
 | Check whether broad admin access influenced migration relatedness | Open `discounted_principals.csv`, then compare `DiscountedPrincipal*` fields in `permissioned_groups.csv`, `owner_risk_pivots.csv`, and `related_data_areas.csv`. |
 | Compare hot folders to access evidence | Use `open_file_summary.ShareRelativeFolder` or `FolderPath`, then compare with `items.RelativePath`, `items.FullPath`, owner mappings, and related data areas. |

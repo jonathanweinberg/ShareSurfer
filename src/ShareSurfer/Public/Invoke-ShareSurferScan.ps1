@@ -31,6 +31,7 @@ function Invoke-ShareSurferScan {
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
         [string] $ManagerIdentityFormat = 'MailTo',
         [string] $OwnerMappingPath = '',
+        [string] $OwnershipEnrichmentPath = '',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
@@ -69,6 +70,21 @@ function Invoke-ShareSurferScan {
         Write-ShareSurferStatus -Phase 'Owners' -Message ('Loading owner mappings from {0}.' -f $OwnerMappingPath) -Quiet:$Quiet
     }
     $inventory = Add-ShareSurferOwnerMappings -Inventory $inventory -OwnerMappingPath $OwnerMappingPath
+
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipEnrichmentPath)) {
+        if (-not (Test-Path -LiteralPath $OwnershipEnrichmentPath)) {
+            throw "Ownership enrichment file was not found: $OwnershipEnrichmentPath"
+        }
+
+        Write-ShareSurferStatus -Phase 'Owners' -Message ('Loading ownership enrichment rows from {0}.' -f $OwnershipEnrichmentPath) -Quiet:$Quiet
+        $ownershipEnrichmentRows = @(Import-Csv -LiteralPath $OwnershipEnrichmentPath)
+        if ($null -ne $inventory.PSObject.Properties['OwnershipEnrichment']) {
+            $inventory.OwnershipEnrichment = $ownershipEnrichmentRows
+        }
+        else {
+            $inventory | Add-Member -MemberType NoteProperty -Name OwnershipEnrichment -Value $ownershipEnrichmentRows
+        }
+    }
 
     Write-ShareSurferStatus -Phase 'Export' -Message 'Normalizing findings, conflicts, identity context, and CSV output.' -Quiet:$Quiet
     $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -SourceMode $sourceMode -CollectionProvider $collectionProvider -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -Quiet:$Quiet

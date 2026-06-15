@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { deriveDashboard, normalizeSnapshot } from "./deriveDashboard";
 import { demoSnapshot } from "./fixtures";
+import { expectedColumns } from "./schema";
 
 describe("ShareSurfer dashboard data model", () => {
   test("normalizes legacy identity columns and records schema warnings", () => {
@@ -44,6 +45,87 @@ describe("ShareSurfer dashboard data model", () => {
     expect(dashboard.migrationClusters[0].relatedSignals.length).toBeGreaterThan(1);
     expect(dashboard.permissionedGroupTree[0].children.length).toBeGreaterThan(0);
     expect(dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "acl_entries")?.totalRows).toBe(3);
+  });
+
+  test("treats ownership enrichment as optional labeled raw evidence", () => {
+    const legacySnapshot = normalizeSnapshot({
+      datasets: {
+        scan_manifest: [{ GeneratedAt: "2026-06-15T12:00:00Z" }]
+      }
+    });
+
+    expect(legacySnapshot.schemaWarnings.some((warning) => warning.includes("ownership_enrichment.csv was not present"))).toBe(false);
+
+    const dashboard = deriveDashboard(
+      normalizeSnapshot({
+        datasets: {
+          ownership_enrichment: [
+            {
+              OwnershipKey: "E123",
+              MatchStatus: "Matched",
+              MatchMethod: "EmployeeId",
+              SourcePaths: "hr.csv",
+              SourceRowNumbers: "2",
+              EmployeeId: "E123",
+              DisplayName: "Ava Accounting",
+              BusinessUnit: "Finance",
+              AccountEnabled: "True",
+              PotentialServiceAccount: "False",
+              ForbiddenOuMatched: "False"
+            },
+            {
+              OwnershipKey: "svc-sharebot",
+              MatchStatus: "SourceOnly",
+              MatchMethod: "SamAccountName",
+              SourcePaths: "projects.csv",
+              SourceRowNumbers: "8",
+              SamAccountName: "svc-sharebot",
+              DisplayName: "Share Bot",
+              BusinessUnit: "Operations",
+              AccountEnabled: "True",
+              PotentialServiceAccount: "True",
+              ForbiddenOuMatched: "False"
+            },
+            {
+              OwnershipKey: "E404",
+              MatchStatus: "ForbiddenOuSkipped",
+              MatchMethod: "EmployeeId",
+              SourcePaths: "disabled.csv",
+              SourceRowNumbers: "4",
+              EmployeeId: "E404",
+              DisplayName: "Former User",
+              AccountEnabled: "False",
+              PotentialServiceAccount: "False",
+              ForbiddenOuMatched: "OU=Disabled Accounts,DC=example,DC=test"
+            },
+            {
+              OwnershipKey: "E777",
+              MatchStatus: "Ambiguous",
+              MatchMethod: "EmployeeId",
+              SourcePaths: "hr.csv",
+              SourceRowNumbers: "9",
+              EmployeeId: "E777",
+              DisplayName: "Duplicate Identity",
+              AccountEnabled: "True",
+              PotentialServiceAccount: "False",
+              ForbiddenOuMatched: "False"
+            }
+          ]
+        }
+      })
+    );
+
+    const rawEvidence = dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "ownership_enrichment");
+
+    expect(rawEvidence?.label).toBe("Ownership enrichment");
+    expect(rawEvidence?.columns).toEqual(expectedColumns.ownership_enrichment);
+    expect(rawEvidence?.totalRows).toBe(4);
+    expect(dashboard.scanSummary.ownershipEnrichmentRows).toBe(4);
+    expect(dashboard.scanSummary.ownershipEnrichmentMatched).toBe(1);
+    expect(dashboard.scanSummary.ownershipEnrichmentAmbiguous).toBe(1);
+    expect(dashboard.scanSummary.ownershipEnrichmentForbiddenOuSkipped).toBe(1);
+    expect(dashboard.scanSummary.ownershipEnrichmentSourceOnly).toBe(1);
+    expect(dashboard.scanSummary.ownershipEnrichmentPotentialServiceAccounts).toBe(1);
   });
 
   test("promotes broken SID and access-denied collection blockers for focused review", () => {
