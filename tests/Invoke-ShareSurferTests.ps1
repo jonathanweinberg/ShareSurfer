@@ -1830,6 +1830,161 @@ $tests = @(
         }
     },
     @{
+        Name = 'Test-ShareSurferOwnershipSource infers flexible ownership headers'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    employee_number = '1001'
+                    display_name = 'Ava Accounting'
+                    mail_address = 'ava.accounting@example.test'
+                    cost_center_path = 'CORP.FIN.AP'
+                    mgr_email = 'manager@example.test'
+                    title = 'Accounting Analyst'
+                    location = 'HQ-4'
+                    business_unit = 'Finance'
+                }
+            ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
+
+            $result = Test-ShareSurferOwnershipSource -Path $sourcePath
+
+            Assert-True $result.IsUsable 'Ownership source should be usable when at least one join key can be inferred.'
+            Assert-Equal $result.FieldMap.EmployeeNumber 'employee_number' 'employee_number should map to EmployeeNumber.'
+            Assert-Equal $result.FieldMap.Mail 'mail_address' 'mail_address should map to Mail.'
+            Assert-Equal $result.FieldMap.OBS 'cost_center_path' 'cost_center_path should map to OBS.'
+            Assert-Equal $result.FieldMap.ManagerMail 'mgr_email' 'mgr_email should map to ManagerMail.'
+            Assert-Equal $result.FieldMap.Office 'location' 'location should map to Office.'
+            Assert-True ([string]$result.JoinKeyFields -like '*EmployeeNumber*') 'Join key summary should mention EmployeeNumber.'
+            Assert-True ([string]$result.CanonicalHeaders -like '*EmployeeId*') 'Result should tell operators the canonical headers ShareSurfer understands.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferOwnershipSource explains missing join keys'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    friendly_name = 'Mystery Person'
+                    org_path = 'CORP.UNKNOWN'
+                }
+            ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
+
+            $result = Test-ShareSurferOwnershipSource -Path $sourcePath
+
+            Assert-True (-not $result.IsUsable) 'Ownership source should not be considered usable without a stable join key.'
+            Assert-True ((@($result.Warnings) -join ' ') -like '*EmployeeId, EmployeeNumber, SamAccountName, UserPrincipalName, or Mail*') 'Warning should tell the operator which join key headers are acceptable.'
+            Assert-True ([string]$result.CanonicalHeaders -like '*OBS*') 'Result should include the OBS canonical header in the guidance.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferOwnershipMappingProfile writes reusable header mappings'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $profilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.mapping.json')
+            @(
+                [pscustomobject]@{
+                    workerid = 'E1001'
+                    user_name = 'Ava.Accounting'
+                    org_path = 'CORP.FIN.AP'
+                    owner_email = 'finance.owner@example.test'
+                }
+            ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
+
+            $summary = New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -SourceName 'HR OBS export' -ObsHeader 'org_path'
+            $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+            $assessment = Test-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath
+
+            Assert-True (Test-Path -LiteralPath $profilePath) 'Mapping profile should be written to disk.'
+            Assert-Equal $summary.SourceName 'HR OBS export' 'Profile summary should preserve the provided source name.'
+            Assert-Equal $profile.FieldMap.EmployeeId 'workerid' 'Profile should preserve the inferred employee ID source header.'
+            Assert-Equal $profile.FieldMap.OBS 'org_path' 'Profile should preserve the operator-selected OBS header.'
+            Assert-Equal $profile.FieldMap.OwnerMail 'owner_email' 'Profile should preserve owner mail mapping.'
+            Assert-True $assessment.IsUsable 'A saved mapping profile should be reusable by the source tester.'
+        }
+    },
+    @{
+        Name = 'Import-ShareSurferOwnershipSource normalizes rows and flags review warnings'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $profilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.mapping.json')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipNormalized-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    employee_number = '1001'
+                    display_name = 'Ava Accounting'
+                    mail_address = 'ava.accounting@example.test'
+                    cost_center_path = 'CORP.FIN.AP'
+                    mgr_email = 'manager@example.test'
+                    title = 'Accounting Analyst'
+                    location = 'HQ-4'
+                    sam = 'Ava.Accounting'
+                    business_unit = 'Finance'
+                },
+                [pscustomobject]@{
+                    employee_number = '1001'
+                    display_name = 'Duplicate Employee'
+                    mail_address = 'duplicate.employee@example.test'
+                    cost_center_path = 'CORP.FIN.AP'
+                    mgr_email = 'manager@example.test'
+                    title = 'Reviewer'
+                    location = 'HQ-4'
+                    sam = 'Duplicate.Employee'
+                    business_unit = 'Finance'
+                },
+                [pscustomobject]@{
+                    employee_number = ''
+                    display_name = 'Share Bot'
+                    mail_address = 'svc.sharebot@example.test'
+                    cost_center_path = ''
+                    mgr_email = ''
+                    title = 'Automation Account'
+                    location = 'DataCenter'
+                    sam = 'svc.ShareBot'
+                    business_unit = 'IT'
+                }
+            ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
+
+            New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -Force | Out-Null
+            $summary = Import-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath -OutputPath $outputPath
+            $rows = Import-Csv -LiteralPath $outputPath
+
+            Assert-Equal $summary.RowCount 3 'Import summary should report normalized row count.'
+            Assert-Equal $summary.PotentialServiceAccountCount 1 'Import summary should count potential service-account-like rows.'
+            Assert-Equal $rows[0].EmployeeNumber '1001' 'Normalized CSV should preserve employee number.'
+            Assert-Equal $rows[0].OBS 'CORP.FIN.AP' 'Normalized CSV should preserve OBS.'
+            Assert-Equal $rows[0].ManagerMail 'manager@example.test' 'Normalized CSV should preserve manager mail.'
+            Assert-Equal $rows[0].Title 'Accounting Analyst' 'Normalized CSV should preserve title.'
+            Assert-Equal $rows[0].Office 'HQ-4' 'Normalized CSV should preserve office.'
+            Assert-True ([string]$rows[1].ImportWarnings -like '*DuplicateEmployeeNumber*') 'Duplicate employee numbers should be flagged for review.'
+            Assert-Equal $rows[2].PotentialServiceAccount 'True' 'Rows with no OBS and no employee identifiers should be flagged as potential service-account-like identities.'
+            Assert-True ([string]$rows[2].ImportWarnings -like '*PotentialServiceAccount*') 'Potential service-account-like rows should carry an import warning.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferOwnerMappingDraft creates admin-review rows for unmapped shares'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $draftPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMappingDraft-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $inventory = New-TestInventory
+            $inventory.OwnerMappings = @()
+
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            $summary = New-ShareSurferOwnerMappingDraft -ExportPath $exportPath -OutputPath $draftPath
+            $rows = Import-Csv -LiteralPath $draftPath
+
+            Assert-Equal $summary.DraftRowCount 1 'Draft summary should report one unmapped share row.'
+            Assert-Equal $rows[0].Pattern '\\files01\Finance*' 'Draft row should use the current owner mapping wildcard pattern shape.'
+            Assert-Equal $rows[0].Source 'OwnerMappingDraft' 'Draft row should identify itself as an owner mapping draft.'
+            Assert-Equal $rows[0].Confidence 'NeedsAdminReview' 'Draft row should make clear the owner still needs admin confirmation.'
+            Assert-True ([string]$rows[0].Notes -like '*Fill Owner and BusinessUnit*') 'Draft row should tell the admin what must be filled before scanning.'
+        }
+    },
+    @{
         Name = 'Test-ShareSurferExport validates the normalized CSV set'
         Body = {
             Import-Module $moduleManifest -Force
@@ -3667,6 +3822,7 @@ $tests = @(
             $businessReviewHandoff = Join-Path $repoRoot 'docs/business-review-handoff.md'
             $workflowGuide = Join-Path $repoRoot 'docs/workflow-guides.md'
             $commandRecipes = Join-Path $repoRoot 'docs/command-recipes.md'
+            $adminOwnershipImport = Join-Path $repoRoot 'docs/admin-ownership-import.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
@@ -3746,6 +3902,17 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Invoke-ShareSurferOpenFileAssessment*') 'Command recipes should include open-file assessment.'
             Assert-True ($commandRecipeText -like '*New-ShareSurferSupportBundle*') 'Command recipes should include redacted support bundle creation.'
             Assert-True ($commandRecipeText -like '*Get-FileHash -Algorithm SHA256*') 'Command recipes should include SHA256 handoff verification.'
+            Assert-True ($commandRecipeText -like '*Normalize HR, Employee, OBS, or Owner CSVs*') 'Command recipes should include ownership import guidance.'
+            Assert-True ($commandRecipeText -like '*Test-ShareSurferOwnershipSource*') 'Command recipes should include ownership source testing.'
+            Assert-True ($commandRecipeText -like '*New-ShareSurferOwnerMappingDraft*') 'Command recipes should include owner mapping draft creation.'
+            Assert-True (Test-Path -LiteralPath $adminOwnershipImport) 'Documentation should include an admin ownership import guide.'
+            $adminOwnershipImportText = Get-Content -LiteralPath $adminOwnershipImport -Raw
+            Assert-True ($adminOwnershipImportText -like '*Admin Ownership Import*') 'Admin ownership import guide should have a clear title.'
+            Assert-True ($adminOwnershipImportText -like '*without AI or LLM calls*' -or $adminOwnershipImportText -like '*does not call an AI service*') 'Admin ownership import guide should explain the workflow is deterministic and offline.'
+            Assert-True ($adminOwnershipImportText -like '*Test-ShareSurferOwnershipSource*') 'Admin ownership import guide should document source testing.'
+            Assert-True ($adminOwnershipImportText -like '*New-ShareSurferOwnershipMappingProfile*') 'Admin ownership import guide should document mapping profiles.'
+            Assert-True ($adminOwnershipImportText -like '*Import-ShareSurferOwnershipSource*') 'Admin ownership import guide should document normalized import.'
+            Assert-True ($adminOwnershipImportText -like '*PotentialServiceAccount*') 'Admin ownership import guide should explain potential service-account-like flags.'
             Assert-True (Test-Path -LiteralPath $glossary) 'Documentation should include a first-run glossary.'
             $glossaryText = Get-Content -LiteralPath $glossary -Raw
             Assert-True ($glossaryText -like '*ShareSurfer Glossary*') 'Glossary should have a clear title.'

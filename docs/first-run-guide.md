@@ -186,6 +186,39 @@ Create an owner mapping CSV when you know who should review a path:
 
 If you do not have owner mappings yet, skip `-OwnerMappingPath` for the first scan. ShareSurfer will still export evidence, but `owner_review_packets.csv` will be less useful because review rows cannot be routed as cleanly to business owners and business units.
 
+If your ownership data exists in an HR, employee, OBS, OID, cost-center, or owner CSV with unexpected headers, use the [admin ownership import guide](admin-ownership-import.md) before building `owner-mapping.csv`. The workflow is offline and deterministic:
+
+```powershell
+$sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
+$profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
+$normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
+
+Test-ShareSurferOwnershipSource -Path $sourcePath
+
+New-ShareSurferOwnershipMappingProfile `
+  -Path $sourcePath `
+  -OutputPath $profilePath `
+  -ObsHeader 'CostCenterPath' `
+  -Force
+
+Import-ShareSurferOwnershipSource `
+  -Path $sourcePath `
+  -MappingProfilePath $profilePath `
+  -OutputPath $normalizedPath `
+  -Force
+```
+
+If the scan has no owner mapping yet, create a draft for an admin to fill in after the first scan:
+
+```powershell
+New-ShareSurferOwnerMappingDraft `
+  -ExportPath $exportPath `
+  -OutputPath 'C:\ShareSurfer\inputs\owner-mapping-draft.csv' `
+  -Force
+```
+
+Open the draft, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`.
+
 If broad operational groups have access almost everywhere, create a discounted principals CSV before the scan:
 
 ```powershell
