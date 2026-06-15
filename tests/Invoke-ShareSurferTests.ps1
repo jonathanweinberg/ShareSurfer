@@ -1978,6 +1978,66 @@ $tests = @(
         }
     },
     @{
+        Name = 'Ownership import definition round-trips selected paths and settings'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $definitionPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipDefinition-' + [guid]::NewGuid().ToString('N') + '.json')
+            $sourceOne = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDefinitionHr-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $sourceTwo = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDefinitionProject-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDefinitionOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $sourceOne -Value @('EmployeeID,OBS,BusinessUnit', 'E1001,CORP.FIN.AP,Finance') -Encoding UTF8
+            Set-Content -LiteralPath $sourceTwo -Value @('OBS,ProjectCode,Project', 'CORP.FIN.AP,AP-2026,Accounts Payable') -Encoding UTF8
+
+            Join-ShareSurferOwnershipSources `
+                -Path @($sourceOne, $sourceTwo) `
+                -DefinitionPath $definitionPath `
+                -OutputPath $outputPath `
+                -ObsHeader 'Org Path' `
+                -ObsAttribute 'info' `
+                -AdLookupMode 'DirectoryOnly' `
+                -ForbiddenOu @('OU=Disabled,DC=example,DC=test') `
+                -Force | Out-Null
+
+            $definition = Get-Content -LiteralPath $definitionPath -Raw | ConvertFrom-Json
+            Assert-Equal $definition.version 1 'Definition version should be 1.'
+            Assert-Equal @($definition.selectedCsvPaths).Count 2 'Definition should preserve selected CSV paths.'
+            Assert-Equal $definition.obsHeader 'Org Path' 'Definition should preserve OBS header.'
+            Assert-Equal $definition.obsAttribute 'info' 'Definition should preserve OBS attribute.'
+            Assert-Equal $definition.adLookupMode 'DirectoryOnly' 'Definition should preserve AD lookup mode.'
+            Assert-Equal @($definition.forbiddenOus).Count 1 'Definition should preserve forbidden OUs.'
+            Assert-True (-not [string]::IsNullOrWhiteSpace([string]$definition.createdAt)) 'Definition should include created metadata.'
+            Assert-True (-not [string]::IsNullOrWhiteSpace([string]$definition.updatedAt)) 'Definition should include updated metadata.'
+        }
+    },
+    @{
+        Name = 'CSV picker state toggles files and navigates folders'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferPickerRoot-' + [guid]::NewGuid().ToString('N'))
+            $child = Join-Path $root 'Child'
+            New-Item -ItemType Directory -Path $child -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $root 'a.csv') -Value 'EmployeeID,OBS' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $child 'b.csv') -Value 'EmployeeID,OBS' -Encoding UTF8
+
+            $state = New-ShareSurferCsvPickerState -StartFolder $root
+            $view = Get-ShareSurferCsvPickerView -State $state
+            Assert-True (@($view.Entries | Where-Object { $_.Name -eq 'a.csv' }).Count -eq 1) 'Picker should show CSV files.'
+
+            Invoke-ShareSurferCsvPickerCommand -State $state -Command '2' | Out-Null
+            Assert-Equal @($state.SelectedCsvPaths).Count 1 'Numeric CSV command should toggle selection.'
+
+            Invoke-ShareSurferCsvPickerCommand -State $state -Command '1' | Out-Null
+            Assert-True ([string]$state.CurrentFolder -like '*Child') 'Numeric folder command should navigate into folder.'
+
+            Invoke-ShareSurferCsvPickerCommand -State $state -Command 'A' | Out-Null
+            Assert-Equal @($state.SelectedCsvPaths).Count 2 'A should select all CSVs in the current folder.'
+
+            Invoke-ShareSurferCsvPickerCommand -State $state -Command 'C' | Out-Null
+            Assert-Equal @($state.SelectedCsvPaths).Count 0 'C should clear selected CSVs.'
+        }
+    },
+    @{
         Name = 'Join-ShareSurferOwnershipSources merges partial ownership CSVs'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2017,6 +2077,38 @@ $tests = @(
             Assert-True ([string]$rows[0].SourcePaths -like '*ShareSurferOwnershipProjects*') 'Merged row should retain second source provenance.'
             Assert-True ($commandText -like '*Join-ShareSurferOwnershipSources*') 'Reusable command should rerun the joined enrichment command.'
             Assert-True ($commandText -like '*OwnershipEnrichmentPath*') 'Reusable command should explain passing the output into the scan.'
+        }
+    },
+    @{
+        Name = 'Join-ShareSurferOwnershipSources reruns from ownership import definition'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDefinitionRerunHr-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $definitionPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipDefinitionRerun-' + [guid]::NewGuid().ToString('N') + '.json')
+            $definitionOutputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipDefinitionOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipDefinitionRerunOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $commandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipDefinitionRerun-' + [guid]::NewGuid().ToString('N') + '.ps1')
+            Set-Content -LiteralPath $sourcePath -Value @(
+                'EmployeeID,OBS,BusinessUnit',
+                'E1001,CORP.FIN.AP,Finance'
+            ) -Encoding UTF8
+
+            Join-ShareSurferOwnershipSources `
+                -Path @($sourcePath) `
+                -DefinitionPath $definitionPath `
+                -OutputPath $definitionOutputPath `
+                -ObsAttribute 'extensionAttribute10' `
+                -AdLookupMode 'DirectoryOnly' `
+                -Force | Out-Null
+
+            $summary = Join-ShareSurferOwnershipSources -DefinitionPath $definitionPath -OutputPath $outputPath -ReusableCommandPath $commandPath -Force
+            $rows = @(Import-Csv -LiteralPath $outputPath)
+            $commandText = Get-Content -LiteralPath $commandPath -Raw
+            Assert-Equal $summary.SourceCount 1 'Definition rerun should use one source path.'
+            Assert-Equal $summary.DefinitionPath $definitionPath 'Summary should report the definition path.'
+            Assert-Equal $rows[0].EmployeeId 'E1001' 'Definition rerun should import selected CSV rows.'
+            Assert-True ($commandText -like '*DefinitionPath*') 'Reusable command should prefer the definition path.'
+            Assert-True ($commandText -like '*Join-ShareSurferOwnershipSources -DefinitionPath*') 'Reusable command should rerun from the definition.'
         }
     },
     @{
