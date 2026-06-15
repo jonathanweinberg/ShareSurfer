@@ -5,8 +5,12 @@ function Join-ShareSurferOwnershipSources {
 
         [string] $SourceFolder = '',
 
+        [switch] $BrowseForCsv,
+
         [Parameter(Mandatory = $true)]
         [string] $OutputPath,
+
+        [string] $DefinitionPath = '',
 
         [string[]] $MappingProfilePath = @(),
 
@@ -30,7 +34,37 @@ function Join-ShareSurferOwnershipSources {
         throw "Ownership enrichment output already exists: $OutputPath. Use -Force to overwrite it."
     }
 
-    $selectedPaths = @(Resolve-ShareSurferOwnershipSourcePaths -Path $Path -SourceFolder $SourceFolder -Interactive:$Interactive)
+    if ($BrowseForCsv -and -not $Interactive) {
+        throw 'BrowseForCsv requires -Interactive because it uses a text-mode picker.'
+    }
+
+    $definition = $null
+    if (-not [string]::IsNullOrWhiteSpace($DefinitionPath) -and (Test-Path -LiteralPath $DefinitionPath -PathType Leaf)) {
+        $definition = Get-ShareSurferOwnershipImportDefinition -Path $DefinitionPath
+        if ([string]::IsNullOrWhiteSpace($SourceFolder) -and -not [string]::IsNullOrWhiteSpace([string]$definition.SourceFolder)) {
+            $SourceFolder = [string]$definition.SourceFolder
+        }
+        if ($Path.Count -eq 0 -and -not $BrowseForCsv) {
+            $Path = @($definition.SelectedCsvPaths)
+        }
+        if ($MappingProfilePath.Count -eq 0) {
+            $MappingProfilePath = @($definition.MappingProfilePaths)
+        }
+        if (-not $PSBoundParameters.ContainsKey('ObsHeader') -and -not [string]::IsNullOrWhiteSpace([string]$definition.ObsHeader)) {
+            $ObsHeader = [string]$definition.ObsHeader
+        }
+        if (-not $PSBoundParameters.ContainsKey('ObsAttribute') -and -not [string]::IsNullOrWhiteSpace([string]$definition.ObsAttribute)) {
+            $ObsAttribute = [string]$definition.ObsAttribute
+        }
+        if (-not $PSBoundParameters.ContainsKey('AdLookupMode') -and -not [string]::IsNullOrWhiteSpace([string]$definition.AdLookupMode)) {
+            $AdLookupMode = [string]$definition.AdLookupMode
+        }
+        if (-not $PSBoundParameters.ContainsKey('ForbiddenOu') -and $ForbiddenOu.Count -eq 0) {
+            $ForbiddenOu = @($definition.ForbiddenOus)
+        }
+    }
+
+    $selectedPaths = @(Resolve-ShareSurferOwnershipSourcePaths -Path $Path -SourceFolder $SourceFolder -Interactive:$Interactive -BrowseForCsv:$BrowseForCsv)
     if ($selectedPaths.Count -eq 0) {
         throw 'No ownership source CSV files were selected.'
     }
@@ -38,6 +72,11 @@ function Join-ShareSurferOwnershipSources {
     $selectedForbiddenOus = @($ForbiddenOu | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($Interactive) {
         $selectedForbiddenOus = @(Select-ShareSurferForbiddenOus -ExistingForbiddenOu $selectedForbiddenOus -AdLookupMode $AdLookupMode)
+    }
+
+    $writtenDefinitionPath = ''
+    if (-not [string]::IsNullOrWhiteSpace($DefinitionPath)) {
+        $writtenDefinitionPath = Export-ShareSurferOwnershipImportDefinition -Path $DefinitionPath -SelectedCsvPaths $selectedPaths -SourceFolder $SourceFolder -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -Force
     }
 
     $mergedRows = [ordered]@{}
@@ -153,11 +192,12 @@ function Join-ShareSurferOwnershipSources {
     }
 
     Export-ShareSurferCsv -Path $OutputPath -Columns (Get-ShareSurferOwnershipEnrichmentColumns) -Rows $enrichedRows
-    $reusableCommands = New-ShareSurferOwnershipEnrichmentReusableCommands -SourcePaths $selectedPaths -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus
+    $reusableCommands = New-ShareSurferOwnershipEnrichmentReusableCommands -SourcePaths $selectedPaths -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -DefinitionPath $writtenDefinitionPath
     $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
 
     [pscustomobject]@{
         OutputPath = $OutputPath
+        DefinitionPath = $writtenDefinitionPath
         SourcePaths = (@($selectedPaths) -join '; ')
         SourceCount = $selectedPaths.Count
         RowCount = $enrichedRows.Count
@@ -180,7 +220,9 @@ function Resolve-ShareSurferOwnershipSourcePaths {
 
         [string] $SourceFolder = '',
 
-        [switch] $Interactive
+        [switch] $Interactive,
+
+        [switch] $BrowseForCsv
     )
 
     $selected = New-Object System.Collections.Generic.List[string]
@@ -208,6 +250,10 @@ function Resolve-ShareSurferOwnershipSourcePaths {
         throw "Ownership source folder was not found: $SourceFolder"
     }
 
+    if ($BrowseForCsv) {
+        return @(Read-ShareSurferCsvPickerSelection -StartFolder $SourceFolder)
+    }
+
     $candidates = @(Get-ChildItem -LiteralPath $SourceFolder -Filter '*.csv' -File | Sort-Object Name)
     if ($candidates.Count -eq 0) {
         return @()
@@ -227,6 +273,232 @@ function Resolve-ShareSurferOwnershipSourcePaths {
     $answer = Read-Host -Prompt 'CSV files to import'
     $indexes = @(ConvertFrom-ShareSurferInteractiveSelection -Selection $answer -Maximum $candidates.Count)
     @($indexes | ForEach-Object { $candidates[$_ - 1].FullName })
+}
+
+function New-ShareSurferCsvPickerState {
+    param(
+        [string] $StartFolder = ''
+    )
+
+    $resolved = if ([string]::IsNullOrWhiteSpace($StartFolder)) {
+        (Get-Location).Path
+    }
+    else {
+        (Resolve-Path -LiteralPath $StartFolder).Path
+    }
+
+    [pscustomobject]@{
+        CurrentFolder = $resolved
+        SelectedCsvPaths = New-Object System.Collections.Generic.List[string]
+        Done = $false
+        Quit = $false
+    }
+}
+
+function Get-ShareSurferCsvPickerView {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    $directories = @(Get-ChildItem -LiteralPath $State.CurrentFolder -Directory | Sort-Object Name)
+    $csvFiles = @(Get-ChildItem -LiteralPath $State.CurrentFolder -File -Filter '*.csv' | Sort-Object Name)
+    $entries = New-Object System.Collections.ArrayList
+    foreach ($directory in $directories) {
+        [void]$entries.Add([pscustomobject]@{
+            Kind = 'Directory'
+            Name = [string]$directory.Name
+            FullName = [string]$directory.FullName
+            Selected = $false
+        })
+    }
+    foreach ($file in $csvFiles) {
+        $selected = @($State.SelectedCsvPaths | Where-Object { $_.ToLowerInvariant() -eq $file.FullName.ToLowerInvariant() }).Count -gt 0
+        [void]$entries.Add([pscustomobject]@{
+            Kind = 'Csv'
+            Name = [string]$file.Name
+            FullName = [string]$file.FullName
+            Selected = $selected
+        })
+    }
+
+    [pscustomobject]@{
+        CurrentFolder = [string]$State.CurrentFolder
+        Entries = @($entries)
+    }
+}
+
+function Remove-ShareSurferCsvPickerSelectedPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    $remaining = @($State.SelectedCsvPaths | Where-Object { $_.ToLowerInvariant() -ne $Path.ToLowerInvariant() })
+    $State.SelectedCsvPaths.Clear()
+    foreach ($item in $remaining) {
+        $State.SelectedCsvPaths.Add([string]$item)
+    }
+}
+
+function Add-ShareSurferCsvPickerSelectedPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    if (-not (@($State.SelectedCsvPaths) | Where-Object { $_.ToLowerInvariant() -eq $Path.ToLowerInvariant() })) {
+        $State.SelectedCsvPaths.Add($Path)
+    }
+}
+
+function Invoke-ShareSurferCsvPickerCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [string] $Command = ''
+    )
+
+    $text = $Command.Trim()
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return $State
+    }
+
+    $upper = $text.ToUpperInvariant()
+    if ($upper -eq 'D') {
+        $State.Done = $true
+        return $State
+    }
+    if ($upper -eq 'Q') {
+        $State.Quit = $true
+        return $State
+    }
+    if ($upper -eq 'U') {
+        $parent = Split-Path -Parent $State.CurrentFolder
+        if (-not [string]::IsNullOrWhiteSpace($parent) -and (Test-Path -LiteralPath $parent -PathType Container)) {
+            $State.CurrentFolder = (Resolve-Path -LiteralPath $parent).Path
+        }
+        return $State
+    }
+    if ($upper -eq 'C') {
+        $State.SelectedCsvPaths.Clear()
+        return $State
+    }
+
+    $view = Get-ShareSurferCsvPickerView -State $State
+    if ($upper -eq 'A') {
+        foreach ($entry in @($view.Entries | Where-Object { $_.Kind -eq 'Csv' })) {
+            Add-ShareSurferCsvPickerSelectedPath -State $State -Path ([string]$entry.FullName)
+        }
+        return $State
+    }
+    if ($upper -eq 'P') {
+        return $State
+    }
+    if ($text -match '^\d+$') {
+        $index = [int]$text
+        if ($index -lt 1 -or $index -gt @($view.Entries).Count) {
+            return $State
+        }
+
+        $entry = @($view.Entries)[$index - 1]
+        if ($entry.Kind -eq 'Directory') {
+            $State.CurrentFolder = (Resolve-Path -LiteralPath ([string]$entry.FullName)).Path
+        }
+        elseif ($entry.Kind -eq 'Csv') {
+            $path = [string]$entry.FullName
+            $existing = @($State.SelectedCsvPaths | Where-Object { $_.ToLowerInvariant() -eq $path.ToLowerInvariant() })
+            if ($existing.Count -gt 0) {
+                Remove-ShareSurferCsvPickerSelectedPath -State $State -Path $path
+            }
+            else {
+                Add-ShareSurferCsvPickerSelectedPath -State $State -Path $path
+            }
+        }
+    }
+
+    $State
+}
+
+function Show-ShareSurferCsvPicker {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    $view = Get-ShareSurferCsvPickerView -State $State
+    Write-Host ''
+    Write-Host ('Current folder: {0}' -f $view.CurrentFolder)
+    Write-Host ''
+    if (@($view.Entries).Count -eq 0) {
+        Write-Host '  No subfolders or CSV files found here.'
+    }
+    else {
+        for ($index = 0; $index -lt @($view.Entries).Count; $index++) {
+            $entry = @($view.Entries)[$index]
+            $marker = if ($entry.Kind -eq 'Directory') {
+                '<DIR>'
+            }
+            elseif ($entry.Selected) {
+                '[selected]'
+            }
+            else {
+                '[ ]'
+            }
+            Write-Host ('  [{0}] {1,-10} {2}' -f ($index + 1), $marker, $entry.Name)
+        }
+    }
+
+    Write-Host ''
+    Write-Host ('Selected CSVs: {0}' -f @($State.SelectedCsvPaths).Count)
+    Write-Host 'Commands: number=open folder/toggle CSV, A=select all CSVs here, C=clear, U=up, P=show selected, D=done, Q=quit'
+}
+
+function Show-ShareSurferCsvPickerSelectedPaths {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    Write-Host ''
+    Write-Host 'Selected CSV files:'
+    if (@($State.SelectedCsvPaths).Count -eq 0) {
+        Write-Host '  None yet.'
+        return
+    }
+
+    foreach ($path in @($State.SelectedCsvPaths)) {
+        Write-Host ('  {0}' -f $path)
+    }
+}
+
+function Read-ShareSurferCsvPickerSelection {
+    param(
+        [string] $StartFolder = ''
+    )
+
+    $state = New-ShareSurferCsvPickerState -StartFolder $StartFolder
+    while (-not $state.Done -and -not $state.Quit) {
+        Show-ShareSurferCsvPicker -State $state
+        $answer = Read-Host -Prompt 'CSV picker command'
+        if ($answer.Trim().ToUpperInvariant() -eq 'P') {
+            Show-ShareSurferCsvPickerSelectedPaths -State $state
+        }
+        Invoke-ShareSurferCsvPickerCommand -State $state -Command $answer | Out-Null
+    }
+
+    if ($state.Quit) {
+        return @()
+    }
+
+    @($state.SelectedCsvPaths)
 }
 
 function Select-ShareSurferForbiddenOus {

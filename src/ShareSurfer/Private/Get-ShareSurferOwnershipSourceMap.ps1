@@ -572,6 +572,171 @@ function Write-ShareSurferReusableCommandFile {
     $Path
 }
 
+function Get-ShareSurferDefinitionArrayProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Definition,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    if ($null -eq $Definition.PSObject.Properties[$Name] -or $null -eq $Definition.PSObject.Properties[$Name].Value) {
+        return @()
+    }
+
+    @($Definition.PSObject.Properties[$Name].Value | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+}
+
+function Get-ShareSurferDefinitionStringProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Definition,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    if ($null -eq $Definition.PSObject.Properties[$Name] -or $null -eq $Definition.PSObject.Properties[$Name].Value) {
+        return ''
+    }
+
+    [string]$Definition.PSObject.Properties[$Name].Value
+}
+
+function Get-ShareSurferOwnershipImportDefinition {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Ownership import definition was not found: $Path"
+    }
+
+    $definition = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    $version = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'version'
+    if ([string]::IsNullOrWhiteSpace($version) -or [int]$version -ne 1) {
+        throw "Unsupported ownership import definition version in $Path"
+    }
+
+    [pscustomobject]@{
+        Version = [int]$version
+        SelectedCsvPaths = @(Get-ShareSurferDefinitionArrayProperty -Definition $definition -Name 'selectedCsvPaths')
+        SourceFolder = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'sourceFolder'
+        OutputPath = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'outputPath'
+        MappingProfilePaths = @(Get-ShareSurferDefinitionArrayProperty -Definition $definition -Name 'mappingProfilePaths')
+        ObsHeader = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'obsHeader'
+        ObsAttribute = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'obsAttribute'
+        AdLookupMode = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'adLookupMode'
+        ForbiddenOus = @(Get-ShareSurferDefinitionArrayProperty -Definition $definition -Name 'forbiddenOus')
+        CreatedBy = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'createdBy'
+        CreatedAt = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'createdAt'
+        UpdatedAt = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'updatedAt'
+    }
+}
+
+function Get-ShareSurferCurrentOperatorName {
+    try {
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        if ($null -ne $identity -and -not [string]::IsNullOrWhiteSpace([string]$identity.Name)) {
+            return [string]$identity.Name
+        }
+    }
+    catch {
+    }
+
+    $userName = [System.Environment]::UserName
+    if ([string]::IsNullOrWhiteSpace($userName)) {
+        $userName = $env:USERNAME
+    }
+    if ([string]::IsNullOrWhiteSpace($userName)) {
+        $userName = $env:USER
+    }
+
+    if ([string]::IsNullOrWhiteSpace($userName)) {
+        return 'unknown'
+    }
+
+    $domainName = [System.Environment]::UserDomainName
+    if (-not [string]::IsNullOrWhiteSpace($domainName) -and $domainName -ne $userName) {
+        return ('{0}\{1}' -f $domainName, $userName)
+    }
+
+    [string]$userName
+}
+
+function Export-ShareSurferOwnershipImportDefinition {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [string[]] $SelectedCsvPaths = @(),
+
+        [string] $SourceFolder = '',
+
+        [string] $OutputPath = '',
+
+        [string[]] $MappingProfilePaths = @(),
+
+        [string] $ObsHeader = '',
+
+        [string] $ObsAttribute = 'extensionAttribute10',
+
+        [string] $AdLookupMode = 'Auto',
+
+        [string[]] $ForbiddenOu = @(),
+
+        [switch] $Force
+    )
+
+    if ((Test-Path -LiteralPath $Path) -and -not $Force) {
+        throw "Ownership import definition already exists: $Path. Use -Force to overwrite it."
+    }
+
+    $parent = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    $now = [DateTimeOffset]::UtcNow.ToString('o')
+    $createdBy = Get-ShareSurferCurrentOperatorName
+    $createdAt = $now
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        try {
+            $existing = Get-ShareSurferOwnershipImportDefinition -Path $Path
+            if (-not [string]::IsNullOrWhiteSpace([string]$existing.CreatedBy)) {
+                $createdBy = [string]$existing.CreatedBy
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$existing.CreatedAt)) {
+                $createdAt = [string]$existing.CreatedAt
+            }
+        }
+        catch {
+        }
+    }
+
+    $definition = [ordered]@{
+        version = 1
+        selectedCsvPaths = @($SelectedCsvPaths | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+        sourceFolder = $SourceFolder
+        outputPath = $OutputPath
+        mappingProfilePaths = @($MappingProfilePaths | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+        obsHeader = $ObsHeader
+        obsAttribute = $ObsAttribute
+        adLookupMode = $AdLookupMode
+        forbiddenOus = @($ForbiddenOu | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+        createdBy = $createdBy
+        createdAt = $createdAt
+        updatedAt = $now
+    }
+
+    Set-Content -LiteralPath $Path -Value ($definition | ConvertTo-Json -Depth 8) -Encoding UTF8
+    $Path
+}
+
 function New-ShareSurferOwnershipImportReusableCommands {
     param(
         [Parameter(Mandatory = $true)]
@@ -707,12 +872,25 @@ function New-ShareSurferOwnershipEnrichmentReusableCommands {
 
         [string] $AdLookupMode = 'Auto',
 
-        [string[]] $ForbiddenOu = @()
+        [string[]] $ForbiddenOu = @(),
+
+        [string] $DefinitionPath = ''
     )
 
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add('# Reusable ShareSurfer ownership enrichment commands')
     $lines.Add('# This regenerates the enriched ownership CSV without repeating the interactive CSV/OU picker.')
+    if (-not [string]::IsNullOrWhiteSpace($DefinitionPath)) {
+        $lines.Add(('$definitionPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $DefinitionPath)))
+        $lines.Add(('$outputPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OutputPath)))
+        $lines.Add('')
+        $lines.Add('Join-ShareSurferOwnershipSources -DefinitionPath $definitionPath -OutputPath $outputPath -Force')
+        $lines.Add('')
+        $lines.Add('# Then pass $outputPath to Invoke-ShareSurferScan -OwnershipEnrichmentPath $outputPath.')
+
+        return ($lines -join [Environment]::NewLine)
+    }
+
     $lines.Add(('$sourcePaths = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $SourcePaths)))
     $lines.Add(('$profilePaths = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $MappingProfilePaths)))
     $lines.Add(('$forbiddenOus = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $ForbiddenOu)))

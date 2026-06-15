@@ -42,6 +42,8 @@ ShareSurfer needs consistent fields so it can correlate identity, manager, owner
 5. **Pass the enriched CSV to the scan.**
    `Invoke-ShareSurferScan -OwnershipEnrichmentPath` reads the enrichment file and exports the reviewed rows as `ownership_enrichment.csv`.
 
+For a first multi-CSV run, the easiest path is the text-only CSV picker. It works in a normal PowerShell console and does not require Windows Explorer or a graphical file dialog.
+
 Use the enrichment workflow before scanning when any of these are true:
 
 - HR has employee identifiers, but the OBS, project, or owner information lives in another file.
@@ -59,9 +61,10 @@ These two filenames are easy to mix up:
 | --- | --- | --- |
 | `normalized-ownership.csv` | You run `Import-ShareSurferOwnershipSource` for one source CSV. | A cleaned-up copy of that source with ShareSurfer-friendly headers. Use it to check whether a single HR, OBS, OID, owner, or employee file has usable columns. |
 | `C:\ShareSurfer\inputs\ownership-enrichment.csv` | You run the multi-source enrichment workflow before a scan. | A pre-scan input file that merges facts from multiple CSVs and optional AD lookup. Pass this file to `Invoke-ShareSurferScan -OwnershipEnrichmentPath`. |
+| `C:\ShareSurfer\inputs\ownership-import.definition.json` | You run `Join-ShareSurferOwnershipSources -DefinitionPath` or save a definition during the interactive picker workflow. | A reusable definition that records selected CSV paths and join settings. It helps repeat the import later, but it is not scan evidence by itself. |
 | `ownership_enrichment.csv` | The scan/export package is generated. | The exported evidence dataset copied into the scan output. The standalone dashboard reads this dataset after you package the validated export folder. |
 
-In short: `normalized-ownership.csv` helps you prepare and review source data. `ownership_enrichment.csv` is scan evidence that shows what enriched ownership context ShareSurfer used for review.
+In short: `normalized-ownership.csv` helps you prepare and review source data. `ownership-import.definition.json` remembers how to rebuild the joined input. `ownership_enrichment.csv` is scan evidence that shows what enriched ownership context ShareSurfer used for review.
 
 ## Canonical Headers
 
@@ -227,7 +230,22 @@ E1003,FIN-ARCH,Finance Archive Review,CORP.FIN.ARCH,Records Management,records@e
 
 The first file tells ShareSurfer who is in which part of the business. The second file adds project and owner context. AD enrichment can then fill missing account fields for rows such as `E1001` and `E1002`.
 
-Create the enriched file before running the scan:
+Create the enriched file before running the scan. This first-run command opens the text picker, saves the selected CSV paths and settings, writes the enriched CSV, and writes a rerun script:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -Interactive `
+  -BrowseForCsv `
+  -SourceFolder 'C:\ShareSurfer\inputs' `
+  -DefinitionPath 'C:\ShareSurfer\inputs\ownership-import.definition.json' `
+  -OutputPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
+  -ReusableCommandPath 'C:\ShareSurfer\inputs\ownership-enrichment-rerun.ps1' `
+  -Force
+```
+
+In the picker, use the numbered folder and file choices to move around and toggle CSVs. The menu also lets you select all CSVs in the current folder, clear selected paths, show selected paths, go up to the parent folder, finish, or quit.
+
+If you already know the exact files, you can still pass them directly:
 
 ```powershell
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -239,6 +257,7 @@ Join-ShareSurferOwnershipSources `
     (Join-Path $inputRoot 'hr-employee-obs.csv'),
     (Join-Path $inputRoot 'project-obs.csv')
   ) `
+  -DefinitionPath (Join-Path $inputRoot 'ownership-import.definition.json') `
   -OutputPath $enrichmentPath `
   -ObsAttribute 'extensionAttribute10' `
   -AdLookupMode Auto `
@@ -246,7 +265,16 @@ Join-ShareSurferOwnershipSources `
   -Force
 ```
 
-If you already saved mapping profiles for the same files, pass them with `-MappingProfilePath`. If the CSVs are in one folder and you want ShareSurfer to guide you through selecting them, use `-SourceFolder` and `-Interactive`.
+If you already saved mapping profiles for the same files, pass them with `-MappingProfilePath`.
+
+Later, rerun the same join from the saved definition without repeating the picker choices:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -DefinitionPath 'C:\ShareSurfer\inputs\ownership-import.definition.json' `
+  -OutputPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
+  -Force
+```
 
 Pass the enriched file to the scan:
 
@@ -255,7 +283,7 @@ Invoke-ShareSurferScan `
   -TargetPath '\\files01\Finance' `
   -OutputPath 'C:\ShareSurfer\exports\scan-001' `
   -ObsAttribute 'extensionAttribute10' `
-  -OwnershipEnrichmentPath $enrichmentPath
+  -OwnershipEnrichmentPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv'
 ```
 
 After the scan/export package is generated, ShareSurfer writes the enriched rows into the export set as `ownership_enrichment.csv`. Package the validated export folder with `scripts\New-ShareSurferStandaloneDashboard.ps1`; the standalone dashboard uses the exported `ownership_enrichment.csv` dataset, not the input file sitting in `C:\ShareSurfer\inputs`.
@@ -276,6 +304,7 @@ Example:
 ```powershell
 Join-ShareSurferOwnershipSources `
   -SourceFolder 'C:\ShareSurfer\inputs\ownership-sources' `
+  -BrowseForCsv `
   -OutputPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
   -ObsAttribute 'extensionAttribute10' `
   -AdLookupMode Auto `
@@ -300,6 +329,7 @@ The ownership import workflow can leave behind files that make the next refresh 
 | `hr-obs.mapping.json` | `New-ShareSurferOwnershipMappingProfile` | Keep it beside the source CSV. Reuse it when the same team sends a refreshed file with the same headers. |
 | `normalized-ownership.csv` | `Import-ShareSurferOwnershipSource` | Review the canonical ownership rows, duplicate warnings, and `PotentialServiceAccount` flags. |
 | `ownership-import-rerun.ps1` | `-ReusableCommandPath` | Run it later to retest the source and regenerate `normalized-ownership.csv` without repeating the header interview. |
+| `ownership-import.definition.json` | `Join-ShareSurferOwnershipSources -DefinitionPath` | Keep it with the input files. It records selected CSV paths and settings so the next admin can rebuild `ownership-enrichment.csv`; it is not scan evidence by itself. |
 | `ownership-enrichment.csv` | `Join-ShareSurferOwnershipSources` | Pass this pre-scan input to `Invoke-ShareSurferScan -OwnershipEnrichmentPath` when the scan should carry merged ownership context. |
 | `ownership-enrichment-rerun.ps1` | `Join-ShareSurferOwnershipSources -ReusableCommandPath` | Run it later to repeat the same multi-CSV join, AD enrichment, OBS attribute, and forbidden-OU choices. |
 | `ownership_enrichment.csv` | `Invoke-ShareSurferScan` export | Review it in the scan export folder and standalone dashboard after the export package is generated. |

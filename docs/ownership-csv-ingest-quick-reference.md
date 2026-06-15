@@ -20,6 +20,7 @@ $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
 $enrichmentPath = 'C:\ShareSurfer\inputs\ownership-enrichment.csv'
+$definitionPath = 'C:\ShareSurfer\inputs\ownership-import.definition.json'
 $rerunPath = 'C:\ShareSurfer\inputs\ownership-import-rerun.ps1'
 $enrichmentRerunPath = 'C:\ShareSurfer\inputs\ownership-enrichment-rerun.ps1'
 
@@ -109,18 +110,22 @@ E1003,FIN-ARCH,Finance Archive Review,CORP.FIN.ARCH,Records Management,records@e
 
 AD enrichment can fill empty account fields such as `SamAccountName`, `UserPrincipalName`, `Mail`, `DisplayName`, `Title`, `Department`, manager values, enabled state, and distinguished name.
 
+For a first run, let ShareSurfer show a text-only CSV picker:
+
 ```powershell
 Join-ShareSurferOwnershipSources `
-  -Path @(
-    'C:\ShareSurfer\inputs\hr-employee-obs.csv',
-    'C:\ShareSurfer\inputs\project-obs.csv'
-  ) `
+  -Interactive `
+  -BrowseForCsv `
+  -SourceFolder 'C:\ShareSurfer\inputs' `
+  -DefinitionPath $definitionPath `
   -OutputPath $enrichmentPath `
-  -ObsAttribute 'extensionAttribute10' `
-  -AdLookupMode Auto `
   -ReusableCommandPath $enrichmentRerunPath `
   -Force
 ```
+
+In the picker, you can browse folders, toggle CSV files, select all CSVs in the current folder, clear selected paths, show selected paths, go up, finish, or quit.
+
+The definition JSON remembers the selected CSV paths and settings. It is useful for reruns, but it is not scan evidence by itself.
 
 Pass the enriched file to the scan:
 
@@ -133,6 +138,15 @@ Invoke-ShareSurferScan `
 ```
 
 The scan exports the rows as `ownership_enrichment.csv`. After you package the validated export folder, the standalone dashboard uses that exported dataset for ownership enrichment review.
+
+To rerun the same join later without the picker:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -DefinitionPath $definitionPath `
+  -OutputPath $enrichmentPath `
+  -Force
+```
 
 ## Fields ShareSurfer Understands
 
@@ -198,6 +212,8 @@ Example:
 ```powershell
 Join-ShareSurferOwnershipSources `
   -SourceFolder 'C:\ShareSurfer\inputs\ownership-sources' `
+  -BrowseForCsv `
+  -DefinitionPath $definitionPath `
   -OutputPath $enrichmentPath `
   -ObsAttribute 'extensionAttribute10' `
   -AdLookupMode Auto `
@@ -242,3 +258,14 @@ C:\ShareSurfer\inputs\ownership-import-rerun.ps1
 ```
 
 That reuses the saved mapping profile and regenerates `normalized-ownership.csv` without repeating the header interview.
+
+For the multi-CSV enrichment file, rerun from the saved definition:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -DefinitionPath 'C:\ShareSurfer\inputs\ownership-import.definition.json' `
+  -OutputPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
+  -Force
+```
+
+Then run `Invoke-ShareSurferScan -OwnershipEnrichmentPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv'` so the scan exports fresh `ownership_enrichment.csv` evidence.
