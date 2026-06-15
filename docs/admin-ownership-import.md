@@ -4,6 +4,8 @@ Use this guide when you have an HR, identity, employee, OBS, OID, cost-center, o
 
 This workflow is offline and deterministic. ShareSurfer does not call an AI service, upload the CSV, or guess silently. It reads the headers, suggests mappings from known synonyms, tells you what is missing, and lets you save a reusable mapping profile.
 
+For a shorter copy/paste version to send in team chat, use the [ownership CSV ingest quick reference](ownership-csv-ingest-quick-reference.md).
+
 ![Ownership import and reusable commands workflow](visuals/readme-flow-guides/ownership-import-reusable-commands.png)
 
 ## Why This Exists

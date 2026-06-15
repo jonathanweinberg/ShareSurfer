@@ -3842,6 +3842,7 @@ $tests = @(
             $workflowGuide = Join-Path $repoRoot 'docs/workflow-guides.md'
             $commandRecipes = Join-Path $repoRoot 'docs/command-recipes.md'
             $adminOwnershipImport = Join-Path $repoRoot 'docs/admin-ownership-import.md'
+            $ownershipCsvIngestQuickReference = Join-Path $repoRoot 'docs/ownership-csv-ingest-quick-reference.md'
             $managementOverview = Join-Path $repoRoot 'docs/management-overview.md'
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
@@ -3938,6 +3939,15 @@ $tests = @(
             Assert-True ($adminOwnershipImportText -like '*PotentialServiceAccount*') 'Admin ownership import guide should explain potential service-account-like flags.'
             Assert-True ($adminOwnershipImportText -like '*ReusableCommands*') 'Admin ownership import guide should explain reusable command output.'
             Assert-True ($adminOwnershipImportText -like '*-ReusableCommandPath*') 'Admin ownership import guide should document reusable command file output.'
+            Assert-True ($adminOwnershipImportText -like '*ownership-csv-ingest-quick-reference.md*') 'Admin ownership import guide should link the ownership CSV ingest quick reference.'
+            Assert-True (Test-Path -LiteralPath $ownershipCsvIngestQuickReference) 'Documentation should include an ownership CSV ingest quick reference.'
+            $ownershipCsvIngestQuickReferenceText = Get-Content -LiteralPath $ownershipCsvIngestQuickReference -Raw
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*Ownership CSV Ingest Quick Reference*') 'Ownership CSV ingest quick reference should have a clear title.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*Test-ShareSurferOwnershipSource*') 'Ownership CSV ingest quick reference should show source testing.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*New-ShareSurferOwnershipMappingProfile*') 'Ownership CSV ingest quick reference should show mapping profile creation.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*Import-ShareSurferOwnershipSource*') 'Ownership CSV ingest quick reference should show normalized import.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*ownership-import-rerun.ps1*') 'Ownership CSV ingest quick reference should show reusable rerun script usage.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*PotentialServiceAccount=True*') 'Ownership CSV ingest quick reference should explain potential service-account review flags.'
             Assert-True (Test-Path -LiteralPath $glossary) 'Documentation should include a first-run glossary.'
             $glossaryText = Get-Content -LiteralPath $glossary -Raw
             Assert-True ($glossaryText -like '*ShareSurfer Glossary*') 'Glossary should have a clear title.'
@@ -4012,6 +4022,7 @@ $tests = @(
             Assert-True ($readmeText -like '*docs/workflow-guides.md*') 'README should link the workflow guide.'
             Assert-True ($readmeText -like '*docs/command-recipes.md*') 'README should link the command recipes.'
             Assert-True ($readmeText -like '*docs/glossary.md*') 'README should link the glossary.'
+            Assert-True ($readmeText -like '*docs/ownership-csv-ingest-quick-reference.md*') 'README should link the ownership CSV ingest quick reference.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/first-scan-owner-review.png*') 'README should show the first scan owner review visual.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/ownership-import-reusable-commands.png*') 'README should show the ownership import reusable commands visual.'
             Assert-True (Test-Path -LiteralPath (Join-Path $repoRoot 'docs/visuals/readme-flow-guides/ownership-import-reusable-commands.png')) 'Documentation should include the ownership import reusable commands visual asset.'
@@ -4192,6 +4203,7 @@ $tests = @(
                 Get-Content -LiteralPath $workflowGuide -Raw
                 Get-Content -LiteralPath $commandRecipes -Raw
                 Get-Content -LiteralPath $adminOwnershipImport -Raw
+                Get-Content -LiteralPath $ownershipCsvIngestQuickReference -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw
