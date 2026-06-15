@@ -12,6 +12,8 @@ function New-ShareSurferOwnerMappingDraft {
 
         [int] $MaximumRows = 500,
 
+        [string] $ReusableCommandPath = '',
+
         [switch] $Force
     )
 
@@ -96,6 +98,8 @@ function New-ShareSurferOwnerMappingDraft {
     }
 
     $draftRows | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding UTF8
+    $reusableCommands = New-ShareSurferOwnerMappingDraftReusableCommands -ExportPath $ExportPath -DraftPath $OutputPath -Scope $Scope -MaximumRows $MaximumRows
+    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
 
     [pscustomobject]@{
         ExportPath = $ExportPath
@@ -105,5 +109,7 @@ function New-ShareSurferOwnerMappingDraft {
         ExistingOwnerMappingCount = $ownerMappings.Count
         CandidateCount = $candidates.Count
         MaximumRows = $MaximumRows
+        ReusableCommandPath = $writtenReusableCommandPath
+        ReusableCommands = $reusableCommands
     }
 }

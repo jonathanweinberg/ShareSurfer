@@ -81,6 +81,7 @@ $releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.11'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
+$rerunPath = 'C:\ShareSurfer\inputs\ownership-import-rerun.ps1'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
 
@@ -91,32 +92,42 @@ New-ShareSurferOwnershipMappingProfile `
   -OutputPath $profilePath `
   -SourceName 'HR employee OBS export' `
   -ObsHeader 'CostCenterPath' `
+  -ReusableCommandPath $rerunPath `
   -Force
 
 Import-ShareSurferOwnershipSource `
   -Path $sourcePath `
   -MappingProfilePath $profilePath `
   -OutputPath $normalizedPath `
+  -ReusableCommandPath $rerunPath `
   -Force
 ```
 
 The normalized CSV keeps fields such as employee ID, employee number, account name, mail, title, office, manager mail levels, OBS, business unit, data owner, and owner mail in consistent columns. Rows with no OBS and no employee ID or employee number are flagged as potential service-account-like identities for review.
 
-If you need ShareSurfer to ask you about each header in the console, add `-Interactive` to `New-ShareSurferOwnershipMappingProfile`.
+This recipe creates three reusable files:
+
+- `hr-obs.mapping.json`: saved header mapping profile.
+- `normalized-ownership.csv`: canonical ownership rows for review.
+- `ownership-import-rerun.ps1`: reusable commands to retest the source and regenerate the normalized CSV without repeating the header interview.
+
+If you need ShareSurfer to ask you about each header in the console, add `-Interactive` to `New-ShareSurferOwnershipMappingProfile`. The saved rerun file still uses the profile afterward.
 
 After a scan, create a draft owner mapping for paths that do not have owner routing yet:
 
 ```powershell
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $draftPath = 'C:\ShareSurfer\inputs\owner-mapping-draft.csv'
+$draftRerunPath = 'C:\ShareSurfer\inputs\owner-mapping-rerun.ps1'
 
 New-ShareSurferOwnerMappingDraft `
   -ExportPath $exportPath `
   -OutputPath $draftPath `
+  -ReusableCommandPath $draftRerunPath `
   -Force
 ```
 
-Open the draft CSV, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`.
+Open the draft CSV, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. The `owner-mapping-rerun.ps1` file shows the draft regeneration command and the copy/use pattern for the completed owner mapping.
 
 For more detail, see the [admin ownership import guide](admin-ownership-import.md).
 

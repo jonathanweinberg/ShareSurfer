@@ -13,6 +13,8 @@ function New-ShareSurferOwnershipMappingProfile {
 
         [switch] $Interactive,
 
+        [string] $ReusableCommandPath = '',
+
         [switch] $Force
     )
 
@@ -107,6 +109,8 @@ function New-ShareSurferOwnershipMappingProfile {
     }
 
     $profile | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+    $reusableCommands = New-ShareSurferOwnershipProfileReusableCommands -SourcePath $Path -ProfilePath $OutputPath
+    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
 
     [pscustomobject]@{
         ProfilePath = $OutputPath
@@ -117,5 +121,7 @@ function New-ShareSurferOwnershipMappingProfile {
         ObsHeader = $assessment.ObsHeader
         IgnoredHeaders = @($ignoredHeaders)
         Warnings = @($assessment.Warnings)
+        ReusableCommandPath = $writtenReusableCommandPath
+        ReusableCommands = $reusableCommands
     }
 }

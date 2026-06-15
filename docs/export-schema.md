@@ -167,6 +167,8 @@ Use `Import-ShareSurferOwnershipSource` to write a normalized ownership CSV. Exp
 
 Use `New-ShareSurferOwnerMappingDraft` after a scan to create an admin-fillable owner mapping starter CSV for unmapped shares or top-level folders. The draft includes the scan-compatible columns `Pattern`, `Owner`, `BusinessUnit`, and `Source`, plus helper columns such as `PathPrefix`, `OwnerMail`, `OBS`, `Confidence`, and `Notes`.
 
+`New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, and `New-ShareSurferOwnerMappingDraft` also return a `ReusableCommands` property. When called with `-ReusableCommandPath`, they write a reusable `.ps1` command file such as `ownership-import-rerun.ps1` or `owner-mapping-rerun.ps1`. Those files are operator convenience artifacts; they are not part of the required normalized scan export set.
+
 ### `owner_risk_pivots.csv`
 
 Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RiskLevel`, `ReadinessSignals`, `DiscountedPrincipal`, `DiscountedPrincipalCount`, `DiscountedGroupCount`, `DiscountedPrincipals`, `DiscountReason`.

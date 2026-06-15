@@ -204,3 +204,156 @@ function ConvertTo-ShareSurferOwnershipFieldMapHashtable {
 function Get-ShareSurferOwnershipJoinKeyFields {
     @('EmployeeId', 'EmployeeNumber', 'SamAccountName', 'UserPrincipalName', 'Mail')
 }
+
+function ConvertTo-ShareSurferPowerShellLiteral {
+    param(
+        [AllowNull()]
+        [string] $Value
+    )
+
+    if ($null -eq $Value) {
+        return "''"
+    }
+
+    "'{0}'" -f ([string]$Value).Replace("'", "''")
+}
+
+function Write-ShareSurferReusableCommandFile {
+    param(
+        [string] $Path = '',
+
+        [Parameter(Mandatory = $true)]
+        [string] $CommandText
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return ''
+    }
+
+    $parent = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    Set-Content -LiteralPath $Path -Value $CommandText -Encoding UTF8
+    $Path
+}
+
+function New-ShareSurferOwnershipImportReusableCommands {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $OutputPath,
+
+        [string] $MappingProfilePath = '',
+
+        [string] $ObsHeader = ''
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('# Reusable ShareSurfer ownership import commands')
+    $lines.Add('# Run this after replacing paths only when your input or output location changes.')
+    $lines.Add(('$sourcePath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $SourcePath)))
+    $lines.Add(('$normalizedPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OutputPath)))
+
+    if (-not [string]::IsNullOrWhiteSpace($MappingProfilePath)) {
+        $lines.Add(('$profilePath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $MappingProfilePath)))
+        $lines.Add('')
+        $lines.Add('Test-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath')
+        $lines.Add('Import-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath -OutputPath $normalizedPath -Force')
+    }
+    else {
+        if (-not [string]::IsNullOrWhiteSpace($ObsHeader)) {
+            $lines.Add(('$obsHeader = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsHeader)))
+            $lines.Add('')
+            $lines.Add('Test-ShareSurferOwnershipSource -Path $sourcePath -ObsHeader $obsHeader')
+            $lines.Add('Import-ShareSurferOwnershipSource -Path $sourcePath -ObsHeader $obsHeader -OutputPath $normalizedPath -Force')
+        }
+        else {
+            $lines.Add('')
+            $lines.Add('Test-ShareSurferOwnershipSource -Path $sourcePath')
+            $lines.Add('Import-ShareSurferOwnershipSource -Path $sourcePath -OutputPath $normalizedPath -Force')
+        }
+    }
+
+    $lines -join [Environment]::NewLine
+}
+
+function New-ShareSurferOwnershipProfileReusableCommands {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ProfilePath,
+
+        [string] $NormalizedOutputPath = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($NormalizedOutputPath)) {
+        $parent = Split-Path -Parent $ProfilePath
+        if ([string]::IsNullOrWhiteSpace($parent)) {
+            $parent = Split-Path -Parent $SourcePath
+        }
+        if ([string]::IsNullOrWhiteSpace($parent)) {
+            $NormalizedOutputPath = 'normalized-ownership.csv'
+        }
+        else {
+            $NormalizedOutputPath = Join-Path $parent 'normalized-ownership.csv'
+        }
+    }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('# Reusable ShareSurfer ownership profile commands')
+    $lines.Add('# This reuses the saved mapping profile so you do not need to repeat the header interview.')
+    $lines.Add(('$sourcePath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $SourcePath)))
+    $lines.Add(('$profilePath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ProfilePath)))
+    $lines.Add(('$normalizedPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $NormalizedOutputPath)))
+    $lines.Add('')
+    $lines.Add('Test-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath')
+    $lines.Add('Import-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath -OutputPath $normalizedPath -Force')
+
+    $lines -join [Environment]::NewLine
+}
+
+function New-ShareSurferOwnerMappingDraftReusableCommands {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ExportPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $DraftPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Scope,
+
+        [Parameter(Mandatory = $true)]
+        [int] $MaximumRows
+    )
+
+    $parent = Split-Path -Parent $DraftPath
+    $ownerMappingPath = if ([string]::IsNullOrWhiteSpace($parent)) {
+        'owner-mapping.csv'
+    }
+    else {
+        Join-Path $parent 'owner-mapping.csv'
+    }
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('# Reusable ShareSurfer owner mapping draft commands')
+    $lines.Add('# First regenerate the draft if the scan export changes.')
+    $lines.Add(('$exportPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath)))
+    $lines.Add(('$draftPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $DraftPath)))
+    $lines.Add(('$ownerMappingPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ownerMappingPath)))
+    $lines.Add('')
+    $lines.Add(('New-ShareSurferOwnerMappingDraft -ExportPath $exportPath -OutputPath $draftPath -Scope {0} -MaximumRows {1} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $Scope), $MaximumRows))
+    $lines.Add('')
+    $lines.Add('# Then edit owner-mapping-draft.csv, fill Owner and BusinessUnit, and save it as owner-mapping.csv.')
+    $lines.Add('Copy-Item -LiteralPath $draftPath -Destination $ownerMappingPath -Force')
+    $lines.Add('')
+    $lines.Add('# Use $ownerMappingPath with Invoke-ShareSurferScan -OwnerMappingPath $ownerMappingPath on the next scan.')
+
+    $lines -join [Environment]::NewLine
+}

@@ -192,6 +192,7 @@ If your ownership data exists in an HR, employee, OBS, OID, cost-center, or owne
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
+$rerunPath = 'C:\ShareSurfer\inputs\ownership-import-rerun.ps1'
 
 Test-ShareSurferOwnershipSource -Path $sourcePath
 
@@ -199,14 +200,18 @@ New-ShareSurferOwnershipMappingProfile `
   -Path $sourcePath `
   -OutputPath $profilePath `
   -ObsHeader 'CostCenterPath' `
+  -ReusableCommandPath $rerunPath `
   -Force
 
 Import-ShareSurferOwnershipSource `
   -Path $sourcePath `
   -MappingProfilePath $profilePath `
   -OutputPath $normalizedPath `
+  -ReusableCommandPath $rerunPath `
   -Force
 ```
+
+This creates `hr-obs.mapping.json`, `normalized-ownership.csv`, and `ownership-import-rerun.ps1`. Keep the rerun script with the input files so the next HR/OBS refresh can reuse the saved profile instead of repeating the header mapping interview.
 
 If the scan has no owner mapping yet, create a draft for an admin to fill in after the first scan:
 
@@ -214,10 +219,11 @@ If the scan has no owner mapping yet, create a draft for an admin to fill in aft
 New-ShareSurferOwnerMappingDraft `
   -ExportPath $exportPath `
   -OutputPath 'C:\ShareSurfer\inputs\owner-mapping-draft.csv' `
+  -ReusableCommandPath 'C:\ShareSurfer\inputs\owner-mapping-rerun.ps1' `
   -Force
 ```
 
-Open the draft, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`.
+Open the draft, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. The reusable `owner-mapping-rerun.ps1` file shows how to regenerate the draft from the same export and where the completed `owner-mapping.csv` belongs.
 
 If broad operational groups have access almost everywhere, create a discounted principals CSV before the scan:
 

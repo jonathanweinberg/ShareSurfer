@@ -8,9 +8,11 @@ This page gives operators and business reviewers a visual map of the V1 workflow
 
 ## README Flow Guides
 
-The README includes three descriptive workflow maps for first-time readers:
+The README includes four descriptive workflow maps for first-time readers:
 
 ![First scan to owner review workflow](visuals/readme-flow-guides/first-scan-owner-review.png)
+
+![Ownership import and reusable commands workflow](visuals/readme-flow-guides/ownership-import-reusable-commands.png)
 
 ![Locked-down collector to dashboard host workflow](visuals/readme-flow-guides/locked-down-collector-dashboard-host.png)
 

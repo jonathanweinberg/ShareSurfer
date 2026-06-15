@@ -11,6 +11,8 @@ function Import-ShareSurferOwnershipSource {
 
         [string] $ObsHeader = '',
 
+        [string] $ReusableCommandPath = '',
+
         [switch] $Force
     )
 
@@ -144,6 +146,9 @@ function Import-ShareSurferOwnershipSource {
     $normalizedRows | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding UTF8
 
     $warningRows = @($normalizedRows | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.ImportWarnings) })
+    $reusableCommands = New-ShareSurferOwnershipImportReusableCommands -SourcePath $Path -OutputPath $OutputPath -MappingProfilePath $MappingProfilePath -ObsHeader $ObsHeader
+    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
+
     [pscustomobject]@{
         SourcePath = $Path
         OutputPath = $OutputPath
@@ -154,5 +159,7 @@ function Import-ShareSurferOwnershipSource {
         JoinKeyFields = ($joinKeyFields -join ', ')
         ObsHeader = if ($fieldMap.PSObject.Properties['OBS']) { [string]$fieldMap.OBS } else { '' }
         Warnings = @($warnings)
+        ReusableCommandPath = $writtenReusableCommandPath
+        ReusableCommands = $reusableCommands
     }
 }
