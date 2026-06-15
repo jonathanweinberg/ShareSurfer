@@ -1884,6 +1884,7 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
             $profilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.mapping.json')
+            $commandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.rerun.ps1')
             @(
                 [pscustomobject]@{
                     workerid = 'E1001'
@@ -1893,9 +1894,10 @@ $tests = @(
                 }
             ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
 
-            $summary = New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -SourceName 'HR OBS export' -ObsHeader 'org_path'
+            $summary = New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -SourceName 'HR OBS export' -ObsHeader 'org_path' -ReusableCommandPath $commandPath
             $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
             $assessment = Test-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath
+            $commandText = Get-Content -LiteralPath $commandPath -Raw
 
             Assert-True (Test-Path -LiteralPath $profilePath) 'Mapping profile should be written to disk.'
             Assert-Equal $summary.SourceName 'HR OBS export' 'Profile summary should preserve the provided source name.'
@@ -1903,6 +1905,11 @@ $tests = @(
             Assert-Equal $profile.FieldMap.OBS 'org_path' 'Profile should preserve the operator-selected OBS header.'
             Assert-Equal $profile.FieldMap.OwnerMail 'owner_email' 'Profile should preserve owner mail mapping.'
             Assert-True $assessment.IsUsable 'A saved mapping profile should be reusable by the source tester.'
+            Assert-Equal $summary.ReusableCommandPath $commandPath 'Profile summary should report the reusable command file path.'
+            Assert-True ([string]$summary.ReusableCommands -like '*Import-ShareSurferOwnershipSource*') 'Profile summary should return reusable import commands.'
+            Assert-True ([string]$summary.ReusableCommands -like '*MappingProfilePath*') 'Reusable profile commands should reuse the saved mapping profile.'
+            Assert-True ($commandText -like '*Test-ShareSurferOwnershipSource*') 'Reusable command file should include a source test command.'
+            Assert-True ($commandText -like '*normalized-ownership.csv*') 'Reusable command file should include a default normalized output path.'
         }
     },
     @{
@@ -1912,6 +1919,7 @@ $tests = @(
             $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
             $profilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.mapping.json')
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipNormalized-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $commandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipNormalized-' + [guid]::NewGuid().ToString('N') + '.rerun.ps1')
             @(
                 [pscustomobject]@{
                     employee_number = '1001'
@@ -1949,8 +1957,9 @@ $tests = @(
             ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
 
             New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -Force | Out-Null
-            $summary = Import-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath -OutputPath $outputPath
+            $summary = Import-ShareSurferOwnershipSource -Path $sourcePath -MappingProfilePath $profilePath -OutputPath $outputPath -ReusableCommandPath $commandPath
             $rows = Import-Csv -LiteralPath $outputPath
+            $commandText = Get-Content -LiteralPath $commandPath -Raw
 
             Assert-Equal $summary.RowCount 3 'Import summary should report normalized row count.'
             Assert-Equal $summary.PotentialServiceAccountCount 1 'Import summary should count potential service-account-like rows.'
@@ -1962,6 +1971,10 @@ $tests = @(
             Assert-True ([string]$rows[1].ImportWarnings -like '*DuplicateEmployeeNumber*') 'Duplicate employee numbers should be flagged for review.'
             Assert-Equal $rows[2].PotentialServiceAccount 'True' 'Rows with no OBS and no employee identifiers should be flagged as potential service-account-like identities.'
             Assert-True ([string]$rows[2].ImportWarnings -like '*PotentialServiceAccount*') 'Potential service-account-like rows should carry an import warning.'
+            Assert-Equal $summary.ReusableCommandPath $commandPath 'Import summary should report the reusable command file path.'
+            Assert-True ([string]$summary.ReusableCommands -like '*Import-ShareSurferOwnershipSource*') 'Import summary should return reusable import commands.'
+            Assert-True ($commandText -like '*MappingProfilePath*') 'Reusable import command file should keep the mapping profile path.'
+            Assert-True ($commandText -like '*OutputPath `$normalizedPath*') 'Reusable import command file should preserve the normalized output variable.'
         }
     },
     @{
@@ -1970,18 +1983,24 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
             $draftPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMappingDraft-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $commandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMappingDraft-' + [guid]::NewGuid().ToString('N') + '.rerun.ps1')
             $inventory = New-TestInventory
             $inventory.OwnerMappings = @()
 
             Invoke-ShareSurferScan -InputObject $inventory -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
-            $summary = New-ShareSurferOwnerMappingDraft -ExportPath $exportPath -OutputPath $draftPath
+            $summary = New-ShareSurferOwnerMappingDraft -ExportPath $exportPath -OutputPath $draftPath -ReusableCommandPath $commandPath
             $rows = Import-Csv -LiteralPath $draftPath
+            $commandText = Get-Content -LiteralPath $commandPath -Raw
 
             Assert-Equal $summary.DraftRowCount 1 'Draft summary should report one unmapped share row.'
             Assert-Equal $rows[0].Pattern '\\files01\Finance*' 'Draft row should use the current owner mapping wildcard pattern shape.'
             Assert-Equal $rows[0].Source 'OwnerMappingDraft' 'Draft row should identify itself as an owner mapping draft.'
             Assert-Equal $rows[0].Confidence 'NeedsAdminReview' 'Draft row should make clear the owner still needs admin confirmation.'
             Assert-True ([string]$rows[0].Notes -like '*Fill Owner and BusinessUnit*') 'Draft row should tell the admin what must be filled before scanning.'
+            Assert-Equal $summary.ReusableCommandPath $commandPath 'Draft summary should report the reusable command file path.'
+            Assert-True ([string]$summary.ReusableCommands -like '*New-ShareSurferOwnerMappingDraft*') 'Draft summary should return reusable draft commands.'
+            Assert-True ($commandText -like '*owner-mapping.csv*') 'Reusable draft command file should show the completed owner mapping destination.'
+            Assert-True ($commandText -like '*Invoke-ShareSurferScan -OwnerMappingPath*') 'Reusable draft command file should explain how to use the completed owner mapping on the next scan.'
         }
     },
     @{
@@ -3905,14 +3924,20 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Normalize HR, Employee, OBS, or Owner CSVs*') 'Command recipes should include ownership import guidance.'
             Assert-True ($commandRecipeText -like '*Test-ShareSurferOwnershipSource*') 'Command recipes should include ownership source testing.'
             Assert-True ($commandRecipeText -like '*New-ShareSurferOwnerMappingDraft*') 'Command recipes should include owner mapping draft creation.'
+            Assert-True ($commandRecipeText -like '*-ReusableCommandPath*') 'Command recipes should show reusable command file output.'
+            Assert-True ($commandRecipeText -like '*ownership-import-rerun.ps1*') 'Command recipes should name the ownership import rerun script.'
+            Assert-True ($commandRecipeText -like '*owner-mapping-rerun.ps1*') 'Command recipes should name the owner mapping rerun script.'
             Assert-True (Test-Path -LiteralPath $adminOwnershipImport) 'Documentation should include an admin ownership import guide.'
             $adminOwnershipImportText = Get-Content -LiteralPath $adminOwnershipImport -Raw
             Assert-True ($adminOwnershipImportText -like '*Admin Ownership Import*') 'Admin ownership import guide should have a clear title.'
             Assert-True ($adminOwnershipImportText -like '*without AI or LLM calls*' -or $adminOwnershipImportText -like '*does not call an AI service*') 'Admin ownership import guide should explain the workflow is deterministic and offline.'
+            Assert-True ($adminOwnershipImportText -like '*visuals/readme-flow-guides/ownership-import-reusable-commands.png*') 'Admin ownership import guide should show the ownership import visual.'
             Assert-True ($adminOwnershipImportText -like '*Test-ShareSurferOwnershipSource*') 'Admin ownership import guide should document source testing.'
             Assert-True ($adminOwnershipImportText -like '*New-ShareSurferOwnershipMappingProfile*') 'Admin ownership import guide should document mapping profiles.'
             Assert-True ($adminOwnershipImportText -like '*Import-ShareSurferOwnershipSource*') 'Admin ownership import guide should document normalized import.'
             Assert-True ($adminOwnershipImportText -like '*PotentialServiceAccount*') 'Admin ownership import guide should explain potential service-account-like flags.'
+            Assert-True ($adminOwnershipImportText -like '*ReusableCommands*') 'Admin ownership import guide should explain reusable command output.'
+            Assert-True ($adminOwnershipImportText -like '*-ReusableCommandPath*') 'Admin ownership import guide should document reusable command file output.'
             Assert-True (Test-Path -LiteralPath $glossary) 'Documentation should include a first-run glossary.'
             $glossaryText = Get-Content -LiteralPath $glossary -Raw
             Assert-True ($glossaryText -like '*ShareSurfer Glossary*') 'Glossary should have a clear title.'
@@ -3988,8 +4013,12 @@ $tests = @(
             Assert-True ($readmeText -like '*docs/command-recipes.md*') 'README should link the command recipes.'
             Assert-True ($readmeText -like '*docs/glossary.md*') 'README should link the glossary.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/first-scan-owner-review.png*') 'README should show the first scan owner review visual.'
+            Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/ownership-import-reusable-commands.png*') 'README should show the ownership import reusable commands visual.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $repoRoot 'docs/visuals/readme-flow-guides/ownership-import-reusable-commands.png')) 'Documentation should include the ownership import reusable commands visual asset.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/locked-down-collector-dashboard-host.png*') 'README should show the locked-down collector dashboard visual.'
             Assert-True ($readmeText -like '*docs/visuals/readme-flow-guides/migration-discovery-cleanup-planning.png*') 'README should show the migration discovery visual.'
+            Assert-True ($readmeText -like '*ownership-import-rerun.ps1*') 'README should document the reusable ownership import command file.'
+            Assert-True ($readmeText -like '*owner-mapping-rerun.ps1*') 'README should document the reusable owner mapping draft command file.'
             Assert-True ($readmeText -like '*Nonpermissive collector workflow*') 'README should present the nonpermissive collector use case.'
             Assert-True ($readmeText -like '*Nonpermissive / Two-Host Operation*') 'README should include the nonpermissive operating model on the main page.'
             Assert-True ($readmeText -like '*docs/visuals/nonpermissive-collector-workflow.svg*') 'README should show the nonpermissive collector workflow visual.'
@@ -4072,6 +4101,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*visuals/report-dashboard-migration.png*') 'First-run guide should show an example migration discovery screenshot.'
             Assert-True ($firstRunText -like '*Raw Evidence Tables*') 'First-run guide should explain the raw evidence report view.'
             Assert-True ($firstRunText -like '*owner_review_packets.csv*') 'First-run guide should explain owner review packet exports.'
+            Assert-True ($firstRunText -like '*ownership-import-rerun.ps1*') 'First-run guide should show reusable ownership import commands.'
+            Assert-True ($firstRunText -like '*owner-mapping-rerun.ps1*') 'First-run guide should show reusable owner mapping draft commands.'
             Assert-True ($firstRunText -like '*What Needs Review First*') 'First-run guide should point users to the owner review queue.'
             Assert-True ($firstRunText -like '*Access Model*') 'First-run guide should point users to the access model view.'
             Assert-True ($firstRunText -like '*OwnerMetadataUnavailable*') 'First-run guide should explain owner metadata unavailable findings.'
@@ -4160,6 +4191,7 @@ $tests = @(
                 Get-Content -LiteralPath $businessReviewHandoff -Raw
                 Get-Content -LiteralPath $workflowGuide -Raw
                 Get-Content -LiteralPath $commandRecipes -Raw
+                Get-Content -LiteralPath $adminOwnershipImport -Raw
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw

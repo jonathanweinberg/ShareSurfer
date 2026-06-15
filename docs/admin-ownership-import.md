@@ -4,6 +4,8 @@ Use this guide when you have an HR, identity, employee, OBS, OID, cost-center, o
 
 This workflow is offline and deterministic. ShareSurfer does not call an AI service, upload the CSV, or guess silently. It reads the headers, suggests mappings from known synonyms, tells you what is missing, and lets you save a reusable mapping profile.
 
+![Ownership import and reusable commands workflow](visuals/readme-flow-guides/ownership-import-reusable-commands.png)
+
 ## Why This Exists
 
 Business ownership data often arrives with different column names:
@@ -100,12 +102,14 @@ If ShareSurfer cannot find a stable join key, it tells you which headers to prov
 
 ```powershell
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
+$rerunPath = 'C:\ShareSurfer\inputs\ownership-import-rerun.ps1'
 
 New-ShareSurferOwnershipMappingProfile `
   -Path $sourcePath `
   -OutputPath $profilePath `
   -SourceName 'HR employee OBS export' `
   -ObsHeader 'CostCenterPath' `
+  -ReusableCommandPath $rerunPath `
   -Force
 ```
 
@@ -119,6 +123,7 @@ New-ShareSurferOwnershipMappingProfile `
   -OutputPath $profilePath `
   -SourceName 'HR employee OBS export' `
   -Interactive `
+  -ReusableCommandPath $rerunPath `
   -Force
 ```
 
@@ -133,6 +138,7 @@ Import-ShareSurferOwnershipSource `
   -Path $sourcePath `
   -MappingProfilePath $profilePath `
   -OutputPath $normalizedPath `
+  -ReusableCommandPath $rerunPath `
   -Force
 ```
 
@@ -147,6 +153,18 @@ The normalized CSV uses the canonical headers listed above and adds review field
 
 Rows with `PotentialServiceAccount=True` may be service accounts, automation accounts, shared accounts, or incomplete directory records. Review them before using the data for business-owner routing.
 
+## Reusable Outputs
+
+The ownership import workflow can leave behind files that make the next refresh much easier:
+
+| Output | Created By | What To Do With It |
+| --- | --- | --- |
+| `hr-obs.mapping.json` | `New-ShareSurferOwnershipMappingProfile` | Keep it beside the source CSV. Reuse it when the same team sends a refreshed file with the same headers. |
+| `normalized-ownership.csv` | `Import-ShareSurferOwnershipSource` | Review the canonical ownership rows, duplicate warnings, and `PotentialServiceAccount` flags. |
+| `ownership-import-rerun.ps1` | `-ReusableCommandPath` | Run it later to retest the source and regenerate `normalized-ownership.csv` without repeating the header interview. |
+
+Each command also returns a `ReusableCommands` property. If you do not write a `.ps1` file, you can still copy that text from the command output.
+
 ## Draft Owner Mappings From A Scan
 
 If a scan has no owner mapping yet, create a draft CSV for an admin to fill in:
@@ -154,11 +172,13 @@ If a scan has no owner mapping yet, create a draft CSV for an admin to fill in:
 ```powershell
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $draftPath = 'C:\ShareSurfer\inputs\owner-mapping-draft.csv'
+$draftRerunPath = 'C:\ShareSurfer\inputs\owner-mapping-rerun.ps1'
 
 New-ShareSurferOwnerMappingDraft `
   -ExportPath $exportPath `
   -OutputPath $draftPath `
   -Scope Share `
+  -ReusableCommandPath $draftRerunPath `
   -Force
 ```
 
@@ -169,6 +189,8 @@ Copy-Item -LiteralPath $draftPath -Destination 'C:\ShareSurfer\inputs\owner-mapp
 ```
 
 The draft includes extra columns such as `PathPrefix`, `OwnerMail`, `OBS`, `Confidence`, and `Notes` to help the admin review the rows. `Invoke-ShareSurferScan -OwnerMappingPath` only needs `Pattern`, `Owner`, `BusinessUnit`, and optional `Source`.
+
+`owner-mapping-rerun.ps1` records the draft regeneration command plus the copy/use pattern for `owner-mapping.csv`. Keep it with the draft so another admin can repeat the same owner-routing preparation later.
 
 ## What This Does Not Do Yet
 
@@ -181,4 +203,3 @@ Use it to:
 - Flag likely service-account-like rows.
 - Help build better `owner-mapping.csv` files.
 - Improve future owner, OBS, and business-unit correlation workflows.
-
