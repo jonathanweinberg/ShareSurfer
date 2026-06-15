@@ -124,7 +124,7 @@ Enriched rows can add these review fields:
 ## Step 1: Test The CSV
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.13'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.14'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
