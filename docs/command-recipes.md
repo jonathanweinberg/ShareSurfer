@@ -72,6 +72,54 @@ Use discounted principals for broad HelpDesk, admin, backup, scanner, or platfor
 
 If you do not have either file yet, leave it absent. The scan recipes below only pass optional input paths when the files exist.
 
+## Recipe 2A: Normalize HR, Employee, OBS, or Owner CSVs
+
+Use this when another team gives you a CSV with useful owner or OBS data but the headers do not match ShareSurfer's expected owner mapping format.
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.10'
+$sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
+$profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
+$normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
+
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+Test-ShareSurferOwnershipSource -Path $sourcePath
+
+New-ShareSurferOwnershipMappingProfile `
+  -Path $sourcePath `
+  -OutputPath $profilePath `
+  -SourceName 'HR employee OBS export' `
+  -ObsHeader 'CostCenterPath' `
+  -Force
+
+Import-ShareSurferOwnershipSource `
+  -Path $sourcePath `
+  -MappingProfilePath $profilePath `
+  -OutputPath $normalizedPath `
+  -Force
+```
+
+The normalized CSV keeps fields such as employee ID, employee number, account name, mail, title, office, manager mail levels, OBS, business unit, data owner, and owner mail in consistent columns. Rows with no OBS and no employee ID or employee number are flagged as potential service-account-like identities for review.
+
+If you need ShareSurfer to ask you about each header in the console, add `-Interactive` to `New-ShareSurferOwnershipMappingProfile`.
+
+After a scan, create a draft owner mapping for paths that do not have owner routing yet:
+
+```powershell
+$exportPath = 'C:\ShareSurfer\exports\finance-001'
+$draftPath = 'C:\ShareSurfer\inputs\owner-mapping-draft.csv'
+
+New-ShareSurferOwnerMappingDraft `
+  -ExportPath $exportPath `
+  -OutputPath $draftPath `
+  -Force
+```
+
+Open the draft CSV, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`.
+
+For more detail, see the [admin ownership import guide](admin-ownership-import.md).
+
 ## Recipe 3: Quick UNC Path Scan
 
 Use this when you already know the share path and want a first reviewable export.

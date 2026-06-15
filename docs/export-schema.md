@@ -153,6 +153,20 @@ Use this file for business ownership rules such as path prefixes, share names, o
 
 When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV must include `Pattern`, `Owner`, and `BusinessUnit`; `Source` is optional and defaults to `OwnerMappingPath`.
 
+### Ownership import preparation files
+
+These files are operator-created preparation artifacts, not required scan exports.
+
+Use `Test-ShareSurferOwnershipSource` when an HR, employee, OBS, OID, cost-center, or owner CSV has unexpected headers. The command tells you which canonical ShareSurfer fields can be mapped and whether a stable join key was found.
+
+Use `New-ShareSurferOwnershipMappingProfile` to save the header mapping as JSON. The profile records mappings for fields such as `EmployeeId`, `EmployeeNumber`, `SamAccountName`, `UserPrincipalName`, `Mail`, `Title`, `Office`, `ManagerMail`, `ManagerLevel2Mail`, `ManagerLevel3Mail`, `OBS`, `BusinessUnit`, `DataOwner`, and `OwnerMail`.
+
+Use `Import-ShareSurferOwnershipSource` to write a normalized ownership CSV. Expected normalized columns include `EmployeeId`, `EmployeeNumber`, `SamAccountName`, `UserPrincipalName`, `Mail`, `DisplayName`, `Title`, `Office`, `Department`, `Company`, `ManagerMail`, `ManagerLevel2Mail`, `ManagerLevel3Mail`, `OBS`, `BusinessUnit`, `DataOwner`, `OwnerMail`, `PotentialServiceAccount`, `SourceRowNumber`, `SourcePath`, and `ImportWarnings`.
+
+`PotentialServiceAccount=True` means the row has no OBS, no employee ID, and no employee number. Treat it as a review clue, not proof that the account is safe, unsafe, or definitely a service account.
+
+Use `New-ShareSurferOwnerMappingDraft` after a scan to create an admin-fillable owner mapping starter CSV for unmapped shares or top-level folders. The draft includes the scan-compatible columns `Pattern`, `Owner`, `BusinessUnit`, and `Source`, plus helper columns such as `PathPrefix`, `OwnerMail`, `OBS`, `Confidence`, and `Notes`.
+
 ### `owner_risk_pivots.csv`
 
 Expected columns: `BusinessUnit`, `Owner`, `Pattern`, `Source`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `RiskLevel`, `ReadinessSignals`, `DiscountedPrincipal`, `DiscountedPrincipalCount`, `DiscountedGroupCount`, `DiscountedPrincipals`, `DiscountReason`.

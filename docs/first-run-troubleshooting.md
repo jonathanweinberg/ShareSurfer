@@ -30,6 +30,9 @@ Do not ask a business owner to approve a scan just because `Test-ShareSurferExpo
 | Symptom | What it usually means | What to do next |
 | --- | --- | --- |
 | `Owner mapping file was not found` | `-OwnerMappingPath` was passed, but the CSV does not exist at that path. | Remove `-OwnerMappingPath` for the first run, or create `owner-mapping.csv` with `Pattern`, `Owner`, and `BusinessUnit`. Prefer the splatted examples in the first-run guide because they only pass optional paths when files exist. |
+| `Test-ShareSurferOwnershipSource` says no stable join key was mapped | The HR, employee, OBS, OID, or owner CSV does not have a mapped `EmployeeId`, `EmployeeNumber`, `SamAccountName`, `UserPrincipalName`, or `Mail` column. | Add one of those columns, or rerun `New-ShareSurferOwnershipMappingProfile -Interactive` and map the source header manually. The [admin ownership import guide](admin-ownership-import.md) lists the canonical headers. |
+| Normalized ownership rows show `PotentialServiceAccount=True` | The row has no OBS, no employee ID, and no employee number after import. | Treat it as a review clue, not proof. It may be a service account, automation account, shared account, or incomplete HR/directory record. |
+| `owner-mapping-draft.csv` has blank owners | The draft is a starter file, not a completed owner mapping. | Fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. |
 | `Discounted principals file was not found` | `-DiscountedPrincipalPath` was passed, but the CSV does not exist. | Remove the parameter until the file exists, or create `discounted-principals.csv` with at least an `Identity` column. |
 | `Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"` returns `False` | The release ZIP may have been extracted into a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.10\ShareSurfer-0.1.0-pre.10`. | Move the inner release folder up one level, or extract the ZIP again to `C:\ShareSurfer` so `$releaseRoot` points at `C:\ShareSurfer\ShareSurfer-0.1.0-pre.10`. |
 | WinRM or CIM cannot connect | The target does not allow the remote management route used for share metadata and share permissions. | If scanning a Windows SMB share by `-ComputerName` and `-ShareName`, try `-SmbCollectionProvider NativeSmbRpc`. If that still cannot prove share permissions, treat share-level data as partial and review `collection_errors.csv`. |
@@ -56,6 +59,7 @@ Rerun the scan when:
 - `shares.csv` has `PartialData=True` for the share a business owner is being asked to approve.
 - The scan ran without an elevated/admin token and the missing proof layer matters to your review.
 - The wrong `-ObsAttribute`, owner mapping, discounted principals list, manager format, or file-inclusion setting was used.
+- `Test-ShareSurferOwnershipSource` or `Import-ShareSurferOwnershipSource` showed missing join keys, duplicate IDs, or potential service-account-like rows that affect owner routing.
 - `owner_review_packets.csv` cannot route the review to a meaningful owner or business unit.
 
 ## When To Hand Off To Reviewers
