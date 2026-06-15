@@ -16,7 +16,49 @@ function Get-ShareSurferOwnershipFieldDefinitions {
         [pscustomobject]@{ Field = 'OBS'; Required = $false; Recommended = $true; Synonyms = @('obs', 'oid', 'orgpath', 'org_path', 'org path', 'organizationpath', 'organization_path', 'costcenterpath', 'cost_center_path', 'cost center path', 'departmentpath', 'department_path', 'divisionpath', 'division_path', 'extensionattribute10') },
         [pscustomobject]@{ Field = 'BusinessUnit'; Required = $false; Recommended = $true; Synonyms = @('businessunit', 'business_unit', 'business unit', 'bu', 'division', 'lineofbusiness', 'line_of_business', 'lob') },
         [pscustomobject]@{ Field = 'DataOwner'; Required = $false; Recommended = $false; Synonyms = @('dataowner', 'data_owner', 'data owner', 'owner', 'businessowner', 'business_owner', 'business owner') },
-        [pscustomobject]@{ Field = 'OwnerMail'; Required = $false; Recommended = $false; Synonyms = @('ownermail', 'owner_mail', 'owneremail', 'owner_email', 'dataowneremail', 'data_owner_email') }
+        [pscustomobject]@{ Field = 'OwnerMail'; Required = $false; Recommended = $false; Synonyms = @('ownermail', 'owner_mail', 'owneremail', 'owner_email', 'dataowneremail', 'data_owner_email') },
+        [pscustomobject]@{ Field = 'Project'; Required = $false; Recommended = $false; Synonyms = @('project', 'projectname', 'project_name', 'project name', 'program', 'programname', 'program_name') },
+        [pscustomobject]@{ Field = 'ProjectCode'; Required = $false; Recommended = $false; Synonyms = @('projectcode', 'project_code', 'project code', 'programcode', 'program_code', 'chargecode', 'charge_code', 'wbs', 'wbsid') }
+    )
+}
+
+function Get-ShareSurferOwnershipEnrichmentColumns {
+    @(
+        'OwnershipKey',
+        'MatchStatus',
+        'MatchMethod',
+        'SourcePaths',
+        'SourceRowNumbers',
+        'EmployeeId',
+        'EmployeeNumber',
+        'SamAccountName',
+        'UserPrincipalName',
+        'Mail',
+        'DisplayName',
+        'Title',
+        'Office',
+        'Department',
+        'Company',
+        'Manager',
+        'ManagerLevel1',
+        'ManagerLevel2',
+        'ManagerLevel3',
+        'ManagerLevel1Raw',
+        'ManagerLevel2Raw',
+        'ManagerLevel3Raw',
+        'OBS',
+        'AdObsPath',
+        'ObsAttribute',
+        'BusinessUnit',
+        'DataOwner',
+        'OwnerMail',
+        'Project',
+        'ProjectCode',
+        'AccountEnabled',
+        'DistinguishedName',
+        'ForbiddenOuMatched',
+        'PotentialServiceAccount',
+        'ImportWarnings'
     )
 }
 
@@ -205,6 +247,281 @@ function Get-ShareSurferOwnershipJoinKeyFields {
     @('EmployeeId', 'EmployeeNumber', 'SamAccountName', 'UserPrincipalName', 'Mail')
 }
 
+function Get-ShareSurferOwnershipMergeKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row
+    )
+
+    foreach ($field in @(Get-ShareSurferOwnershipJoinKeyFields)) {
+        $property = $Row.PSObject.Properties[$field]
+        if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            return ('{0}:{1}' -f $field, ([string]$property.Value).Trim().ToLowerInvariant())
+        }
+    }
+
+    $source = ''
+    if ($null -ne $Row.PSObject.Properties['SourcePaths']) {
+        $source = [string]$Row.SourcePaths
+    }
+    $rowNumber = ''
+    if ($null -ne $Row.PSObject.Properties['SourceRowNumbers']) {
+        $rowNumber = [string]$Row.SourceRowNumbers
+    }
+
+    'SourceOnly:{0}:{1}' -f $source.ToLowerInvariant(), $rowNumber
+}
+
+function Test-ShareSurferOwnershipStrongJoinKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row
+    )
+
+    foreach ($field in @(Get-ShareSurferOwnershipJoinKeyFields)) {
+        $property = $Row.PSObject.Properties[$field]
+        if ($null -ne $property -and -not [string]::IsNullOrWhiteSpace([string]$property.Value)) {
+            return $true
+        }
+    }
+
+    $false
+}
+
+function Get-ShareSurferOwnershipObsMergeKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row
+    )
+
+    $obs = ''
+    if ($null -ne $Row.PSObject.Properties['OBS']) {
+        $obs = [string]$Row.OBS
+    }
+    if ([string]::IsNullOrWhiteSpace($obs) -and $null -ne $Row.PSObject.Properties['AdObsPath']) {
+        $obs = [string]$Row.AdObsPath
+    }
+    if ([string]::IsNullOrWhiteSpace($obs)) {
+        return ''
+    }
+
+    'OBS:{0}' -f $obs.Trim().ToLowerInvariant()
+}
+
+function Add-ShareSurferDelimitedValue {
+    param(
+        [string] $Existing = '',
+
+        [string] $Value = '',
+
+        [string] $Delimiter = '; '
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $Existing
+    }
+
+    $values = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($Existing -split [regex]::Escape($Delimiter))) {
+        if (-not [string]::IsNullOrWhiteSpace($item)) {
+            $values.Add($item.Trim())
+        }
+    }
+
+    $candidate = $Value.Trim()
+    if (-not (@($values) | Where-Object { $_.ToLowerInvariant() -eq $candidate.ToLowerInvariant() })) {
+        $values.Add($candidate)
+    }
+
+    (@($values) -join $Delimiter)
+}
+
+function Merge-ShareSurferOwnershipEnrichmentRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Existing,
+
+        [Parameter(Mandatory = $true)]
+        $Incoming
+    )
+
+    foreach ($column in @(Get-ShareSurferOwnershipEnrichmentColumns)) {
+        if ($column -eq 'OwnershipKey') {
+            continue
+        }
+
+        $incomingProperty = $Incoming.PSObject.Properties[$column]
+        if ($null -eq $incomingProperty -or $null -eq $incomingProperty.Value -or [string]::IsNullOrWhiteSpace([string]$incomingProperty.Value)) {
+            continue
+        }
+
+        if ($column -in @('SourcePaths', 'SourceRowNumbers', 'ImportWarnings')) {
+            $existingValue = ''
+            if ($null -ne $Existing.PSObject.Properties[$column]) {
+                $existingValue = [string]$Existing.PSObject.Properties[$column].Value
+            }
+            $Existing.PSObject.Properties[$column].Value = Add-ShareSurferDelimitedValue -Existing $existingValue -Value ([string]$incomingProperty.Value)
+            continue
+        }
+
+        $existingProperty = $Existing.PSObject.Properties[$column]
+        if ($null -ne $existingProperty -and [string]::IsNullOrWhiteSpace([string]$existingProperty.Value)) {
+            $existingProperty.Value = [string]$incomingProperty.Value
+        }
+    }
+
+    $Existing
+}
+
+function New-ShareSurferOwnershipEnrichmentRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        $SourceRow,
+
+        [Parameter(Mandatory = $true)]
+        $FieldMap,
+
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [int] $SourceRowNumber,
+
+        [string] $ObsAttribute = 'extensionAttribute10'
+    )
+
+    $employeeId = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'EmployeeId'
+    $employeeNumber = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'EmployeeNumber'
+    $samAccountName = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'SamAccountName'
+    $userPrincipalName = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'UserPrincipalName'
+    $mail = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Mail'
+    $obs = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'OBS'
+
+    $warnings = New-Object System.Collections.Generic.List[string]
+    if ([string]::IsNullOrWhiteSpace($employeeId) -and [string]::IsNullOrWhiteSpace($employeeNumber) -and [string]::IsNullOrWhiteSpace($samAccountName) -and [string]::IsNullOrWhiteSpace($userPrincipalName) -and [string]::IsNullOrWhiteSpace($mail)) {
+        $warnings.Add('NoJoinKey')
+    }
+
+    $row = [pscustomobject]@{
+        OwnershipKey = ''
+        MatchStatus = 'SourceOnly'
+        MatchMethod = ''
+        SourcePaths = $SourcePath
+        SourceRowNumbers = [string]$SourceRowNumber
+        EmployeeId = $employeeId
+        EmployeeNumber = $employeeNumber
+        SamAccountName = $samAccountName
+        UserPrincipalName = $userPrincipalName
+        Mail = $mail
+        DisplayName = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'DisplayName'
+        Title = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Title'
+        Office = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Office'
+        Department = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Department'
+        Company = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Company'
+        Manager = ''
+        ManagerLevel1 = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'ManagerMail'
+        ManagerLevel2 = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'ManagerLevel2Mail'
+        ManagerLevel3 = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'ManagerLevel3Mail'
+        ManagerLevel1Raw = ''
+        ManagerLevel2Raw = ''
+        ManagerLevel3Raw = ''
+        OBS = $obs
+        AdObsPath = ''
+        ObsAttribute = $ObsAttribute
+        BusinessUnit = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'BusinessUnit'
+        DataOwner = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'DataOwner'
+        OwnerMail = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'OwnerMail'
+        Project = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Project'
+        ProjectCode = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'ProjectCode'
+        AccountEnabled = ''
+        DistinguishedName = ''
+        ForbiddenOuMatched = ''
+        PotentialServiceAccount = [string]([string]::IsNullOrWhiteSpace($obs) -and [string]::IsNullOrWhiteSpace($employeeId) -and [string]::IsNullOrWhiteSpace($employeeNumber))
+        ImportWarnings = (@($warnings) -join '; ')
+    }
+    $row.OwnershipKey = Get-ShareSurferOwnershipMergeKey -Row $row
+    $row
+}
+
+function Update-ShareSurferOwnershipRowFromDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row,
+
+        [Parameter(Mandatory = $true)]
+        $LookupResult
+    )
+
+    if ($null -eq $LookupResult) {
+        return $Row
+    }
+
+    if ($null -ne $LookupResult.PSObject.Properties['Status'] -and -not [string]::IsNullOrWhiteSpace([string]$LookupResult.Status)) {
+        $Row.MatchStatus = [string]$LookupResult.Status
+    }
+    if ($null -ne $LookupResult.PSObject.Properties['MatchMethod']) {
+        $Row.MatchMethod = [string]$LookupResult.MatchMethod
+    }
+    if ($null -ne $LookupResult.PSObject.Properties['ForbiddenOuMatched']) {
+        $Row.ForbiddenOuMatched = [string]$LookupResult.ForbiddenOuMatched
+    }
+    if ($null -ne $LookupResult.PSObject.Properties['Message'] -and -not [string]::IsNullOrWhiteSpace([string]$LookupResult.Message)) {
+        $Row.ImportWarnings = Add-ShareSurferDelimitedValue -Existing ([string]$Row.ImportWarnings) -Value ([string]$LookupResult.Message)
+    }
+
+    if ($null -eq $LookupResult.PSObject.Properties['IdentityRecord'] -or $null -eq $LookupResult.IdentityRecord) {
+        return $Row
+    }
+
+    $identity = $LookupResult.IdentityRecord
+    foreach ($pair in @(
+        @('SamAccountName', 'SamAccountName'),
+        @('UserPrincipalName', 'UserPrincipalName'),
+        @('Mail', 'Mail'),
+        @('DisplayName', 'DisplayName'),
+        @('Title', 'Title'),
+        @('Office', 'Office'),
+        @('Department', 'Department'),
+        @('Company', 'Company'),
+        @('Manager', 'Manager'),
+        @('ManagerLevel1', 'ManagerLevel1'),
+        @('ManagerLevel2', 'ManagerLevel2'),
+        @('ManagerLevel3', 'ManagerLevel3'),
+        @('ManagerLevel1', 'ManagerLevel1Raw'),
+        @('ManagerLevel2', 'ManagerLevel2Raw'),
+        @('ManagerLevel3', 'ManagerLevel3Raw'),
+        @('AccountEnabled', 'AccountEnabled'),
+        @('DistinguishedName', 'DistinguishedName')
+    )) {
+        $sourceProperty = $identity.PSObject.Properties[$pair[0]]
+        if ($null -eq $sourceProperty -or $null -eq $sourceProperty.Value -or [string]::IsNullOrWhiteSpace([string]$sourceProperty.Value)) {
+            continue
+        }
+
+        $targetProperty = $Row.PSObject.Properties[$pair[1]]
+        if ($null -ne $targetProperty -and [string]::IsNullOrWhiteSpace([string]$targetProperty.Value)) {
+            $targetProperty.Value = [string]$sourceProperty.Value
+        }
+    }
+
+    if ($null -ne $identity.PSObject.Properties['EmployeeId'] -and [string]::IsNullOrWhiteSpace([string]$Row.EmployeeId)) {
+        $Row.EmployeeId = [string]$identity.EmployeeId
+    }
+    if ($null -ne $identity.PSObject.Properties['EmployeeNumber'] -and [string]::IsNullOrWhiteSpace([string]$Row.EmployeeNumber)) {
+        $Row.EmployeeNumber = [string]$identity.EmployeeNumber
+    }
+    if ($null -ne $identity.PSObject.Properties['ObsPath'] -and -not [string]::IsNullOrWhiteSpace([string]$identity.ObsPath)) {
+        $Row.AdObsPath = [string]$identity.ObsPath
+        if ([string]::IsNullOrWhiteSpace([string]$Row.OBS)) {
+            $Row.OBS = [string]$identity.ObsPath
+        }
+    }
+
+    $Row.PotentialServiceAccount = [string]([string]::IsNullOrWhiteSpace([string]$Row.OBS) -and [string]::IsNullOrWhiteSpace([string]$Row.AdObsPath) -and [string]::IsNullOrWhiteSpace([string]$Row.EmployeeId) -and [string]::IsNullOrWhiteSpace([string]$Row.EmployeeNumber))
+    $Row.OwnershipKey = Get-ShareSurferOwnershipMergeKey -Row $Row
+    $Row
+}
+
 function ConvertTo-ShareSurferPowerShellLiteral {
     param(
         [AllowNull()]
@@ -216,6 +533,22 @@ function ConvertTo-ShareSurferPowerShellLiteral {
     }
 
     "'{0}'" -f ([string]$Value).Replace("'", "''")
+}
+
+function ConvertTo-ShareSurferPowerShellArrayLiteral {
+    param(
+        [string[]] $Values = @()
+    )
+
+    $items = @($Values | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object {
+        ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$_)
+    })
+
+    if ($items.Count -eq 0) {
+        return '@()'
+    }
+
+    '@({0})' -f ($items -join ', ')
 }
 
 function Write-ShareSurferReusableCommandFile {
@@ -354,6 +687,52 @@ function New-ShareSurferOwnerMappingDraftReusableCommands {
     $lines.Add('Copy-Item -LiteralPath $draftPath -Destination $ownerMappingPath -Force')
     $lines.Add('')
     $lines.Add('# Use $ownerMappingPath with Invoke-ShareSurferScan -OwnerMappingPath $ownerMappingPath on the next scan.')
+
+    $lines -join [Environment]::NewLine
+}
+
+function New-ShareSurferOwnershipEnrichmentReusableCommands {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $SourcePaths,
+
+        [Parameter(Mandatory = $true)]
+        [string] $OutputPath,
+
+        [string[]] $MappingProfilePaths = @(),
+
+        [string] $ObsHeader = '',
+
+        [string] $ObsAttribute = 'extensionAttribute10',
+
+        [string] $AdLookupMode = 'Auto',
+
+        [string[]] $ForbiddenOu = @()
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('# Reusable ShareSurfer ownership enrichment commands')
+    $lines.Add('# This regenerates the enriched ownership CSV without repeating the interactive CSV/OU picker.')
+    $lines.Add(('$sourcePaths = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $SourcePaths)))
+    $lines.Add(('$profilePaths = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $MappingProfilePaths)))
+    $lines.Add(('$forbiddenOus = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $ForbiddenOu)))
+    $lines.Add(('$outputPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OutputPath)))
+    $lines.Add(('$obsAttribute = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsAttribute)))
+    $lines.Add(('$adLookupMode = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AdLookupMode)))
+    if (-not [string]::IsNullOrWhiteSpace($ObsHeader)) {
+        $lines.Add(('$obsHeader = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsHeader)))
+    }
+    $lines.Add('')
+    $command = 'Join-ShareSurferOwnershipSources -Path $sourcePaths -OutputPath $outputPath -ObsAttribute $obsAttribute -AdLookupMode $adLookupMode -ForbiddenOu $forbiddenOus -Force'
+    if ($MappingProfilePaths.Count -gt 0) {
+        $command += ' -MappingProfilePath $profilePaths'
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ObsHeader)) {
+        $command += ' -ObsHeader $obsHeader'
+    }
+    $lines.Add($command)
+    $lines.Add('')
+    $lines.Add('# Then pass $outputPath to Invoke-ShareSurferScan -OwnershipEnrichmentPath $outputPath.')
 
     $lines -join [Environment]::NewLine
 }

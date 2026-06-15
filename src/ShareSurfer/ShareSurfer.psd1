@@ -13,6 +13,7 @@
         'Invoke-ShareSurferOpenFileAssessment',
         'Invoke-ShareSurferPortProtocolAssessment',
         'Invoke-ShareSurferScan',
+        'Join-ShareSurferOwnershipSources',
         'New-ShareSurferOwnershipMappingProfile',
         'New-ShareSurferOwnerMappingDraft',
         'New-ShareSurferLabFixture',

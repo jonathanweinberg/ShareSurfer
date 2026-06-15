@@ -25,7 +25,7 @@ Business ownership data often arrives with different column names:
 
 ShareSurfer needs consistent fields so it can correlate identity, manager, owner, business unit, and OBS context. The import commands help you convert unexpected CSVs into a normalized file that is easier to review and reuse.
 
-## The Three-Step Workflow
+## The Normal Workflow
 
 1. **Test the source CSV.**
    ShareSurfer reads the headers and tells you which useful fields it can identify.
@@ -33,8 +33,35 @@ ShareSurfer needs consistent fields so it can correlate identity, manager, owner
 2. **Create a mapping profile.**
    The profile records which source header maps to each ShareSurfer field. You can reuse it when the same team gives you a refreshed CSV.
 
-3. **Import a normalized ownership CSV.**
+3. **Import a normalized ownership CSV when you are cleaning up one file.**
    ShareSurfer writes a consistent CSV with canonical headers, duplicate warnings, and potential service-account-like flags.
+
+4. **Run ownership enrichment before the scan when you have more than one ownership source or want AD to fill gaps.**
+   ShareSurfer joins HR, OBS, project, and owner files, optionally looks up matching AD accounts by employee identifier, skips any forbidden OUs you select, and writes an enriched CSV for the scan.
+
+5. **Pass the enriched CSV to the scan.**
+   `Invoke-ShareSurferScan -OwnershipEnrichmentPath` reads the enrichment file and exports the reviewed rows as `ownership_enrichment.csv`.
+
+Use the enrichment workflow before scanning when any of these are true:
+
+- HR has employee identifiers, but the OBS, project, or owner information lives in another file.
+- The source CSV has only employee IDs and business structure, and you want AD to fill display name, mail, account name, title, manager, enabled state, or distinguished name.
+- You need to exclude disabled-account archives, service-account OUs, staging OUs, or test OUs from automatic AD matches.
+- You want the dashboard to show the ownership context that was available at scan time.
+
+If you only need to clean up one CSV for manual review, `normalized-ownership.csv` is enough. If the scan and dashboard should use the joined ownership facts, create an enriched CSV and pass it to the scan.
+
+## Normalized CSV Versus Enriched Export
+
+These two filenames are easy to mix up:
+
+| File | Created When | What It Means |
+| --- | --- | --- |
+| `normalized-ownership.csv` | You run `Import-ShareSurferOwnershipSource` for one source CSV. | A cleaned-up copy of that source with ShareSurfer-friendly headers. Use it to check whether a single HR, OBS, OID, owner, or employee file has usable columns. |
+| `C:\ShareSurfer\inputs\ownership-enrichment.csv` | You run the multi-source enrichment workflow before a scan. | A pre-scan input file that merges facts from multiple CSVs and optional AD lookup. Pass this file to `Invoke-ShareSurferScan -OwnershipEnrichmentPath`. |
+| `ownership_enrichment.csv` | The scan/export package is generated. | The exported evidence dataset copied into the scan output. The standalone dashboard reads this dataset after you package the validated export folder. |
+
+In short: `normalized-ownership.csv` helps you prepare and review source data. `ownership_enrichment.csv` is scan evidence that shows what enriched ownership context ShareSurfer used for review.
 
 ## Canonical Headers
 
@@ -42,23 +69,25 @@ ShareSurfer understands these normalized ownership fields:
 
 | Header | Purpose |
 | --- | --- |
-| `EmployeeId` | Stable employee join key. |
-| `EmployeeNumber` | Alternate employee join key. |
-| `SamAccountName` | AD account join key. |
-| `UserPrincipalName` | UPN or email-like identity join key. |
-| `Mail` | User email address. |
-| `DisplayName` | Human-readable name. |
-| `Title` | Optional job title. |
-| `Office` | Optional office, site, or location. |
-| `Department` | Optional department name. |
-| `Company` | Optional company or organization name. |
-| `ManagerMail` | Manager level 1 email address. |
-| `ManagerLevel2Mail` | Manager level 2 email address. |
-| `ManagerLevel3Mail` | Manager level 3 email address. |
-| `OBS` | OBS, OID, org path, or business hierarchy path. |
-| `BusinessUnit` | Business-facing unit or division. |
-| `DataOwner` | Explicit data owner when known. |
-| `OwnerMail` | Explicit owner contact when known. |
+| `EmployeeId` | The main employee identifier from HR or AD. This is usually the best way to join an HR row to a directory account. |
+| `EmployeeNumber` | A second employee identifier used by some directories or HR exports. |
+| `SamAccountName` | The short Windows logon name, such as `jsmith`. |
+| `UserPrincipalName` | The sign-in name that often looks like an email address, such as `jsmith@example.com`. |
+| `Mail` | The user's email address. |
+| `DisplayName` | The readable person or account name shown to reviewers. |
+| `Title` | Job title from HR or AD. |
+| `Office` | Office, site, region, or location. |
+| `Department` | Department name from HR or AD. |
+| `Company` | Company, subsidiary, or organization name. |
+| `ManagerMail` | Direct manager email address from the source CSV. |
+| `ManagerLevel2Mail` | Second-level manager email address when the source already provides it. |
+| `ManagerLevel3Mail` | Third-level manager email address when the source already provides it. |
+| `OBS` | OBS, OID, org path, cost-center path, or business hierarchy path. This is the business structure that helps group related data. |
+| `BusinessUnit` | Business-facing unit, division, department, or cost-center name. |
+| `DataOwner` | Named data owner when the source file already knows who should review the data. |
+| `OwnerMail` | Email address for the explicit data owner. |
+| `Project` | Project, program, application, or initiative name tied to the account or data area. |
+| `ProjectCode` | Short project, cost, application, or investment code tied to the account or data area. |
 
 At least one stable join key is strongly recommended:
 
@@ -69,6 +98,25 @@ At least one stable join key is strongly recommended:
 - `Mail`
 
 For the best owner and migration review experience, also provide `OBS` and `BusinessUnit` when you have them.
+
+Enriched rows can add these review fields:
+
+| Header | Meaning |
+| --- | --- |
+| `OwnershipKey` | ShareSurfer's best join key for the merged row. It is usually an employee ID, employee number, account name, UPN, or mail value. |
+| `MatchStatus` | How confident the enrichment was. Common values include matched, ambiguous, source-only, and skipped because a forbidden OU matched. |
+| `MatchMethod` | The field used to match the row, such as employee ID, employee number, account name, UPN, mail, or source-only. |
+| `SourcePaths` | CSV source files that contributed facts to the row. |
+| `SourceRowNumbers` | Source row numbers that contributed facts to the row. |
+| `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3` | Directory manager values filled from AD when available. |
+| `ManagerLevel1Raw`, `ManagerLevel2Raw`, `ManagerLevel3Raw` | Raw directory manager values before display formatting. |
+| `AdObsPath` | OBS or org path read from AD by using the selected `-ObsAttribute`. |
+| `ObsAttribute` | The AD attribute used for OBS lookup, such as `extensionAttribute10`. |
+| `AccountEnabled` | Whether the matched AD account is enabled. |
+| `DistinguishedName` | Full AD location for the matched account. This is useful for OU review. |
+| `ForbiddenOuMatched` | The forbidden OU that caused an AD match to be skipped, when one applies. |
+| `PotentialServiceAccount` | `True` when the row looks service-account-like because it lacks normal employee and OBS clues. Treat this as a review clue, not proof. |
+| `ImportWarnings` | Row-specific warnings, such as duplicate source keys, ambiguous matches, or missing join fields. |
 
 ## Step 1: Test The CSV
 
@@ -155,6 +203,94 @@ The normalized CSV uses the canonical headers listed above and adds review field
 
 Rows with `PotentialServiceAccount=True` may be service accounts, automation accounts, shared accounts, or incomplete directory records. Review them before using the data for business-owner routing.
 
+## Multi-CSV Ownership Enrichment Before A Scan
+
+Use enrichment when several simple files need to become one scan input. A common pattern is:
+
+- HR file: employee ID plus OBS or department structure.
+- Project or OBS file: project code, project name, OBS path, business unit, or data owner, but no employee details.
+- AD lookup: fills missing account name, UPN, mail, display name, title, manager, enabled state, and distinguished name.
+
+Example source files:
+
+```csv
+EmployeeID,OBS,BusinessUnit
+E1001,CORP.FIN.AP,Finance
+E1002,CORP.FIN.TAX,Finance
+```
+
+```csv
+EmployeeID,ProjectCode,Project,OBS,DataOwner,OwnerMail
+E1001,FIN-AP,Accounts Payable Modernization,CORP.FIN.AP,Finance Operations,finops@example.com
+E1003,FIN-ARCH,Finance Archive Review,CORP.FIN.ARCH,Records Management,records@example.com
+```
+
+The first file tells ShareSurfer who is in which part of the business. The second file adds project and owner context. AD enrichment can then fill missing account fields for rows such as `E1001` and `E1002`.
+
+Create the enriched file before running the scan:
+
+```powershell
+$inputRoot = 'C:\ShareSurfer\inputs'
+$enrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+$enrichmentRerunPath = Join-Path $inputRoot 'ownership-enrichment-rerun.ps1'
+
+Join-ShareSurferOwnershipSources `
+  -Path @(
+    (Join-Path $inputRoot 'hr-employee-obs.csv'),
+    (Join-Path $inputRoot 'project-obs.csv')
+  ) `
+  -OutputPath $enrichmentPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -ReusableCommandPath $enrichmentRerunPath `
+  -Force
+```
+
+If you already saved mapping profiles for the same files, pass them with `-MappingProfilePath`. If the CSVs are in one folder and you want ShareSurfer to guide you through selecting them, use `-SourceFolder` and `-Interactive`.
+
+Pass the enriched file to the scan:
+
+```powershell
+Invoke-ShareSurferScan `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath 'C:\ShareSurfer\exports\scan-001' `
+  -ObsAttribute 'extensionAttribute10' `
+  -OwnershipEnrichmentPath $enrichmentPath
+```
+
+After the scan/export package is generated, ShareSurfer writes the enriched rows into the export set as `ownership_enrichment.csv`. Package the validated export folder with `scripts\New-ShareSurferStandaloneDashboard.ps1`; the standalone dashboard uses the exported `ownership_enrichment.csv` dataset, not the input file sitting in `C:\ShareSurfer\inputs`.
+
+## Forbidden OUs
+
+Forbidden OUs tell ShareSurfer which AD account locations should not be used for automatic enrichment matches. They do not delete accounts, disable accounts, or change AD. They only prevent those directory results from filling a row in the enriched CSV.
+
+Use forbidden OUs when matching by employee ID could find accounts that are technically present in AD but should not be used as the normal business identity:
+
+- disabled-account archives, such as `OU=Disabled Users,DC=example,DC=com`
+- service account OUs, such as `OU=Service Accounts,DC=example,DC=com`
+- staging or test OUs, such as `OU=Staging,DC=example,DC=com` or `OU=Test Users,DC=example,DC=com`
+- migration holding areas where accounts are not ready for owner review
+
+Example:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -SourceFolder 'C:\ShareSurfer\inputs\ownership-sources' `
+  -OutputPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -ForbiddenOu @(
+    'OU=Disabled Users,DC=example,DC=com',
+    'OU=Service Accounts,DC=example,DC=com',
+    'OU=Staging,DC=example,DC=com'
+  ) `
+  -Interactive `
+  -ReusableCommandPath 'C:\ShareSurfer\inputs\ownership-enrichment-rerun.ps1' `
+  -Force
+```
+
+If an AD account match is found under a forbidden OU, ShareSurfer keeps the source row for review and records the skipped OU in `ForbiddenOuMatched`. This helps an admin see why a row did not receive AD values.
+
 ## Reusable Outputs
 
 The ownership import workflow can leave behind files that make the next refresh much easier:
@@ -164,6 +300,9 @@ The ownership import workflow can leave behind files that make the next refresh 
 | `hr-obs.mapping.json` | `New-ShareSurferOwnershipMappingProfile` | Keep it beside the source CSV. Reuse it when the same team sends a refreshed file with the same headers. |
 | `normalized-ownership.csv` | `Import-ShareSurferOwnershipSource` | Review the canonical ownership rows, duplicate warnings, and `PotentialServiceAccount` flags. |
 | `ownership-import-rerun.ps1` | `-ReusableCommandPath` | Run it later to retest the source and regenerate `normalized-ownership.csv` without repeating the header interview. |
+| `ownership-enrichment.csv` | `Join-ShareSurferOwnershipSources` | Pass this pre-scan input to `Invoke-ShareSurferScan -OwnershipEnrichmentPath` when the scan should carry merged ownership context. |
+| `ownership-enrichment-rerun.ps1` | `Join-ShareSurferOwnershipSources -ReusableCommandPath` | Run it later to repeat the same multi-CSV join, AD enrichment, OBS attribute, and forbidden-OU choices. |
+| `ownership_enrichment.csv` | `Invoke-ShareSurferScan` export | Review it in the scan export folder and standalone dashboard after the export package is generated. |
 
 Each command also returns a `ReusableCommands` property. If you do not write a `.ps1` file, you can still copy that text from the command output.
 
@@ -194,9 +333,9 @@ The draft includes extra columns such as `PathPrefix`, `OwnerMail`, `OBS`, `Conf
 
 `owner-mapping-rerun.ps1` records the draft regeneration command plus the copy/use pattern for `owner-mapping.csv`. Keep it with the draft so another admin can repeat the same owner-routing preparation later.
 
-## What This Does Not Do Yet
+## What This Does Not Do
 
-The normalized ownership CSV is a preparation artifact. It does not automatically rewrite AD, modify permissions, or decide business ownership by itself.
+The normalized or enriched ownership CSV is review evidence. It does not rewrite AD, modify permissions, enable or disable accounts, or decide business ownership by itself.
 
 Use it to:
 
@@ -204,4 +343,4 @@ Use it to:
 - Create reusable mapping profiles.
 - Flag likely service-account-like rows.
 - Help build better `owner-mapping.csv` files.
-- Improve future owner, OBS, and business-unit correlation workflows.
+- Feed scan and dashboard review with owner, OBS, project, and business-unit context.

@@ -6,6 +6,7 @@ function Test-ShareSurferExport {
     )
 
     $schema = Get-ShareSurferExportSchema
+    $optionalFiles = @('ownership_enrichment.csv')
     $missingFiles = New-Object System.Collections.ArrayList
     $schemaErrors = New-Object System.Collections.ArrayList
     $fileResults = New-Object System.Collections.ArrayList
@@ -13,10 +14,14 @@ function Test-ShareSurferExport {
     foreach ($fileName in $schema.Keys) {
         $path = Join-Path $ExportPath $fileName
         if (-not (Test-Path -LiteralPath $path)) {
-            [void]$missingFiles.Add($fileName)
+            $isOptionalFile = @($optionalFiles | Where-Object { $_ -eq $fileName }).Count -gt 0
+            if (-not $isOptionalFile) {
+                [void]$missingFiles.Add($fileName)
+            }
             [void]$fileResults.Add([pscustomobject]@{
                 FileName = $fileName
                 Exists = $false
+                Optional = $isOptionalFile
                 RowCount = 0
                 ExpectedColumns = @($schema[$fileName])
                 ActualColumns = @()
@@ -32,6 +37,7 @@ function Test-ShareSurferExport {
             [void]$fileResults.Add([pscustomobject]@{
                 FileName = $fileName
                 Exists = $true
+                Optional = $false
                 RowCount = 0
                 ExpectedColumns = @($schema[$fileName])
                 ActualColumns = @()
@@ -65,6 +71,7 @@ function Test-ShareSurferExport {
         [void]$fileResults.Add([pscustomobject]@{
             FileName = $fileName
             Exists = $true
+            Optional = $false
             RowCount = $rowCount
             ExpectedColumns = @($expectedColumns)
             ActualColumns = @($actualColumns)

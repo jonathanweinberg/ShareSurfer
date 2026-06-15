@@ -37,6 +37,10 @@ function Export-ShareSurferInventory {
     $groupEdges = @(ConvertTo-ShareSurferArray $Inventory.GroupEdges)
     $orgChains = @(ConvertTo-ShareSurferArray $Inventory.OrgChains)
     $ownerMappings = @(ConvertTo-ShareSurferArray $Inventory.OwnerMappings)
+    $ownershipEnrichment = @()
+    if ($null -ne $Inventory.PSObject.Properties['OwnershipEnrichment']) {
+        $ownershipEnrichment = @(ConvertTo-ShareSurferArray $Inventory.OwnershipEnrichment)
+    }
     $discountedPrincipals = @(Import-ShareSurferDiscountedPrincipals -Path $DiscountedPrincipalPath)
     $scanErrors = @()
     if ($null -ne $Inventory.PSObject.Properties['ScanErrors']) {
@@ -169,6 +173,7 @@ function Export-ShareSurferInventory {
         'permissioned_groups.csv' = $permissionedGroups
         'org_chains.csv' = $orgChains
         'owner_mappings.csv' = $ownerMappings
+        'ownership_enrichment.csv' = $ownershipEnrichment
         'owner_risk_pivots.csv' = $ownerRiskPivots
         'related_data_areas.csv' = $relatedDataAreas
         'owner_review_packets.csv' = $ownerReviewPackets
@@ -203,6 +208,7 @@ function Export-ShareSurferInventory {
         CollectionErrors = @($collectionErrors).Count
         PartialShares = @($partialShares).Count
         DiscountedPrincipals = $discountedPrincipals.Count
+        OwnershipEnrichment = $ownershipEnrichment.Count
         PermissionedGroups = $permissionedGroups.Count
         RelatedDataAreas = $relatedDataAreas.Count
         OwnerReviewPackets = $ownerReviewPackets.Count

@@ -31,6 +31,12 @@ export interface ScanSummary {
   permissionedGroups: number;
   expandedMembers: number;
   potentialServiceAccounts: number;
+  ownershipEnrichmentRows: number;
+  ownershipEnrichmentMatched: number;
+  ownershipEnrichmentAmbiguous: number;
+  ownershipEnrichmentForbiddenOuSkipped: number;
+  ownershipEnrichmentSourceOnly: number;
+  ownershipEnrichmentPotentialServiceAccounts: number;
   brokenSidFindings: number;
   scanConfidence: number;
   confidenceLabel: "Good" | "Review" | "Partial";
@@ -195,8 +201,10 @@ function normalizeText(value: unknown): string {
   return String(value);
 }
 
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values.filter((value) => value.trim() !== ""))).sort((a, b) => a.localeCompare(b));
+function unique(values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.filter((value): value is string => typeof value === "string" && value.trim() !== ""))).sort((a, b) =>
+    a.localeCompare(b)
+  );
 }
 
 function splitReasonList(value: string): string[] {
@@ -222,6 +230,10 @@ function inferPotentialServiceAccount(row: DataRow): string {
   const isUser = row.ObjectClass.trim().toLowerCase() === "user";
   const lacksOwnerSignals = !row.ObsPath.trim() && !row.EmployeeId.trim() && !row.EmployeeNumber.trim();
   return isUser && lacksOwnerSignals ? "True" : "False";
+}
+
+function statusMatches(row: DataRow, status: string): boolean {
+  return row.MatchStatus.trim().toLowerCase() === status.toLowerCase();
 }
 
 function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warnings: Set<string>): DataRow[] {
@@ -706,6 +718,7 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
   const criticalScanBlocks = buildCriticalScanBlocks(snapshot.datasets.collection_errors);
   const expandedMembers = permissionedGroups.reduce((sum, group) => sum + group.expandedMembers, 0);
   const brokenSidFindings = snapshot.datasets.findings.filter((row) => categoryForFinding(row.FindingType) === "Broken/Missing SID").length;
+  const ownershipEnrichmentRows = snapshot.datasets.ownership_enrichment;
   const baseSummary = {
     generatedAt: snapshot.manifest.GeneratedAt || snapshot.generatedAt,
     sourceMode: snapshot.manifest.SourceMode || "Snapshot",
@@ -720,6 +733,14 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
     permissionedGroups: snapshot.datasets.permissioned_groups.length,
     expandedMembers,
     potentialServiceAccounts: serviceAccounts.length,
+    ownershipEnrichmentRows: ownershipEnrichmentRows.length,
+    ownershipEnrichmentMatched: ownershipEnrichmentRows.filter((row) => statusMatches(row, "Matched")).length,
+    ownershipEnrichmentAmbiguous: ownershipEnrichmentRows.filter((row) => statusMatches(row, "Ambiguous")).length,
+    ownershipEnrichmentForbiddenOuSkipped: ownershipEnrichmentRows.filter(
+      (row) => isTruthy(row.ForbiddenOuMatched) || row.MatchStatus.toLowerCase().includes("forbidden")
+    ).length,
+    ownershipEnrichmentSourceOnly: ownershipEnrichmentRows.filter((row) => statusMatches(row, "SourceOnly")).length,
+    ownershipEnrichmentPotentialServiceAccounts: ownershipEnrichmentRows.filter((row) => isTruthy(row.PotentialServiceAccount)).length,
     brokenSidFindings,
     collectionErrors: snapshot.datasets.collection_errors.length
   };
