@@ -15,7 +15,7 @@ C:\ShareSurfer\inputs\hr-obs.csv
 ## 2. Set Paths And Import ShareSurfer
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.13'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.14'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
