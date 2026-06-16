@@ -2,6 +2,8 @@
 
 This folder preserves evidence retrieved from the designated ShareSurfer Windows/AD lab host after the enterprise-scale live lab run.
 
+For shared context on why ShareSurfer tracks synthetic/project-lab evidence, what it proves, what it does not prove, and how to read host, domain, and path-looking values, start with the [lab evidence overview](../README.md).
+
 ## Host and Scope
 
 - Host: `WINSERVER`
