@@ -71,6 +71,7 @@ function Protect-ShareSurferValue {
     $preserveColumns = @(
         'AccessControlType',
         'Rights',
+        'AccessMask',
         'Source',
         'Sources',
         'ItemType',

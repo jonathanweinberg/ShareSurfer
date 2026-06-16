@@ -231,6 +231,7 @@ export const demoSnapshot: RawSnapshot = {
         ShareId: "share-finance",
         Identity: "CONTOSO\\FinanceReaders",
         Rights: "Read",
+        AccessMask: "",
         AccessControlType: "Allow",
         Source: "Get-SmbShareAccess"
       },
@@ -238,6 +239,7 @@ export const demoSnapshot: RawSnapshot = {
         ShareId: "share-finance",
         Identity: "Everyone",
         Rights: "Change",
+        AccessMask: "",
         AccessControlType: "Allow",
         Source: "Get-SmbShareAccess"
       }
@@ -249,6 +251,7 @@ export const demoSnapshot: RawSnapshot = {
         FullPath: "\\\\files01\\Finance",
         Identity: "CONTOSO\\FinanceReaders",
         Rights: "ReadAndExecute",
+        AccessMask: "",
         AccessControlType: "Allow",
         IsInherited: "True",
         InheritanceFlags: "ContainerInherit,ObjectInherit",
@@ -261,6 +264,7 @@ export const demoSnapshot: RawSnapshot = {
         FullPath: "\\\\files01\\Finance\\Payroll",
         Identity: "CONTOSO\\PayrollTeam",
         Rights: "Modify",
+        AccessMask: "",
         AccessControlType: "Allow",
         IsInherited: "False",
         InheritanceFlags: "ContainerInherit,ObjectInherit",
@@ -273,6 +277,7 @@ export const demoSnapshot: RawSnapshot = {
         FullPath: "\\\\files01\\Finance\\Payroll",
         Identity: "CONTOSO\\svc.ShareBot",
         Rights: "Read",
+        AccessMask: "",
         AccessControlType: "Allow",
         IsInherited: "False",
         InheritanceFlags: "ContainerInherit",

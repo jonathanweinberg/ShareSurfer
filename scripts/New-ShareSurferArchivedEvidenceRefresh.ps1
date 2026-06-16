@@ -89,6 +89,27 @@ if (Test-Path -LiteralPath $outputExportPath) {
     Remove-Item -LiteralPath $outputExportPath -Recurse -Force
 }
 Copy-Item -LiteralPath $exportPath -Destination $outputExportPath -Recurse -Force
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'share_permissions.csv') -Columns @(
+    'ShareId',
+    'Identity',
+    'Rights',
+    'AccessMask',
+    'AccessControlType',
+    'Source'
+)
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'acl_entries.csv') -Columns @(
+    'ItemId',
+    'ShareId',
+    'FullPath',
+    'Identity',
+    'Rights',
+    'AccessMask',
+    'AccessControlType',
+    'IsInherited',
+    'InheritanceFlags',
+    'PropagationFlags',
+    'Depth'
+)
 Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'identities.csv') -Columns @(
     'Identity',
     'SamAccountName',

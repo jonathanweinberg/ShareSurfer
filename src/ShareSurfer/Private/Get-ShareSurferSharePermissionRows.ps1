@@ -45,6 +45,7 @@ function Get-ShareSurferSharePermissionRows {
                 ShareId = $ShareId
                 Identity = [string]$access.AccountName
                 Rights = [string]$access.AccessRight
+                AccessMask = ''
                 AccessControlType = [string]$access.AccessControlType
                 Source = 'Get-SmbShareAccess'
             }

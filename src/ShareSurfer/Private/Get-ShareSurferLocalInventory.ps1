@@ -178,6 +178,7 @@ function Get-ShareSurferLocalInventory {
                             FullPath = $scanItemDisplayPath
                             Identity = [string]$access.IdentityReference
                             Rights = [string]$access.FileSystemRights
+                            AccessMask = ''
                             AccessControlType = [string]$access.AccessControlType
                             IsInherited = [bool]$access.IsInherited
                             InheritanceFlags = [string]$access.InheritanceFlags

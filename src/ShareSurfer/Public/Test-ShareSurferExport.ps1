@@ -5,18 +5,53 @@ function Test-ShareSurferExport {
         [string] $ExportPath
     )
 
-    $schema = Get-ShareSurferExportSchema
-    $optionalFiles = @('ownership_enrichment.csv')
+    $schema = [ordered]@{}
+    $baseSchema = Get-ShareSurferExportSchema
+    foreach ($fileName in $baseSchema.Keys) {
+        $schema[$fileName] = $baseSchema[$fileName]
+    }
+
+    $optionalFiles = New-Object System.Collections.ArrayList
+    [void]$optionalFiles.Add('ownership_enrichment.csv')
+    $requiredOptionalFiles = New-Object System.Collections.ArrayList
+    $optionalPackages = @(
+        (Get-ShareSurferOpenFileExportSchema),
+        (Get-ShareSurferPortProtocolExportSchema)
+    )
+    foreach ($packageSchema in $optionalPackages) {
+        $packageFiles = @($packageSchema.Keys)
+        $packagePresent = @($packageFiles | Where-Object {
+            Test-Path -LiteralPath (Join-Path $ExportPath $_)
+        }).Count -gt 0
+
+        if (-not $packagePresent) {
+            continue
+        }
+
+        foreach ($fileName in $packageFiles) {
+            $schema[$fileName] = $packageSchema[$fileName]
+            if (-not $optionalFiles.Contains($fileName)) {
+                [void]$optionalFiles.Add($fileName)
+            }
+            if (-not $requiredOptionalFiles.Contains($fileName)) {
+                [void]$requiredOptionalFiles.Add($fileName)
+            }
+        }
+    }
+
     $missingFiles = New-Object System.Collections.ArrayList
     $schemaErrors = New-Object System.Collections.ArrayList
     $fileResults = New-Object System.Collections.ArrayList
 
     foreach ($fileName in $schema.Keys) {
+        $isOptionalFile = $optionalFiles.Contains($fileName)
         $path = Join-Path $ExportPath $fileName
         if (-not (Test-Path -LiteralPath $path)) {
-            $isOptionalFile = @($optionalFiles | Where-Object { $_ -eq $fileName }).Count -gt 0
             if (-not $isOptionalFile) {
                 [void]$missingFiles.Add($fileName)
+            }
+            elseif ($requiredOptionalFiles.Contains($fileName)) {
+                [void]$schemaErrors.Add("$fileName is missing from an optional assessment package that is present.")
             }
             [void]$fileResults.Add([pscustomobject]@{
                 FileName = $fileName
@@ -37,7 +72,7 @@ function Test-ShareSurferExport {
             [void]$fileResults.Add([pscustomobject]@{
                 FileName = $fileName
                 Exists = $true
-                Optional = $false
+                Optional = $isOptionalFile
                 RowCount = 0
                 ExpectedColumns = @($schema[$fileName])
                 ActualColumns = @()
@@ -71,7 +106,7 @@ function Test-ShareSurferExport {
         [void]$fileResults.Add([pscustomobject]@{
             FileName = $fileName
             Exists = $true
-            Optional = $false
+            Optional = $isOptionalFile
             RowCount = $rowCount
             ExpectedColumns = @($expectedColumns)
             ActualColumns = @($actualColumns)

@@ -162,8 +162,8 @@ const searchScopeFields: Record<SearchScope, string[]> = {
 const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   shares: ["ShareId", "ShareName", "UNCPath", "PartialData", "PartialReason"],
   items: ["ItemId", "ShareId", "ItemType", "FullPath", "Depth", "InheritanceEnabled"],
-  share_permissions: ["ShareId", "Identity", "Rights", "AccessControlType", "Source"],
-  acl_entries: ["ShareId", "FullPath", "Identity", "Rights", "AccessControlType", "IsInherited", "Depth"],
+  share_permissions: ["ShareId", "Identity", "Rights", "AccessMask", "AccessControlType", "Source"],
+  acl_entries: ["ShareId", "FullPath", "Identity", "Rights", "AccessMask", "AccessControlType", "IsInherited", "Depth"],
   identities: ["Identity", "DisplayName", "ObjectClass", "Department", "Title", "ObsPath", "PotentialServiceAccount"],
   group_edges: ["ParentGroup", "ChildIdentity", "ChildObjectClass", "Depth", "IsCycle", "IsTruncated"],
   permissioned_groups: ["Group", "DisplayName", "ShareAssignments", "NtfsAssignments", "ExpandedMembers", "MaxDepth", "HasCycle", "IsTruncated"],
