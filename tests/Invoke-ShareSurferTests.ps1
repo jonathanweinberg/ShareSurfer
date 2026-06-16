@@ -500,6 +500,37 @@ function New-TestDiscountedPrincipalInventory {
 
 $tests = @(
     @{
+        Name = 'Archived enterprise proof verifier refreshes to temp output and validates current export schema'
+        Body = {
+            $verifierScript = Join-Path $repoRoot 'scripts/Test-ShareSurferArchivedEnterpriseProof.ps1'
+
+            Assert-True (Test-Path -LiteralPath $verifierScript) 'Repository should include a one-command archived enterprise proof verifier.'
+            $verifierText = Get-Content -LiteralPath $verifierScript -Raw
+            Assert-True ($verifierText -like '*windows-ad-enterprise-20260605-101639*20260605-101639*') 'Verifier should default to the archived enterprise proof run root.'
+            Assert-True ($verifierText -like '*New-ShareSurferArchivedEvidenceRefresh.ps1*') 'Verifier should call the archived evidence refresh flow.'
+            Assert-True ($verifierText -like '*Test-ShareSurferExport*') 'Verifier should explicitly validate the regenerated export schema.'
+
+            $result = & $verifierScript
+            $expectedProperties = 'IsValid,OutputPath,ExportPath,AcceptanceIsValid,AcceptanceFailedCheckCount,LiveEvidenceIsValid,LiveEvidenceFallbackCount,MissingFiles,SchemaErrorCount'
+
+            Assert-Equal (@($result.PSObject.Properties.Name) -join ',') $expectedProperties 'Verifier should emit the small integration object expected by automation.'
+            Assert-True ([bool]$result.IsValid) 'Archived enterprise proof should be valid against the current verifier.'
+            Assert-True ([bool]$result.AcceptanceIsValid) 'Archived enterprise proof should pass V1 acceptance.'
+            Assert-Equal ([int]$result.AcceptanceFailedCheckCount) 0 'Archived enterprise proof should have no failed acceptance checks.'
+            Assert-True ([bool]$result.LiveEvidenceIsValid) 'Archived enterprise proof should pass the live evidence gate.'
+            Assert-Equal ([int]$result.LiveEvidenceFallbackCount) 0 'Archived enterprise proof should have no live evidence fallbacks.'
+            Assert-Equal (@($result.MissingFiles).Count) 0 'Regenerated export should not be missing current schema files.'
+            Assert-Equal ([int]$result.SchemaErrorCount) 0 'Regenerated export should have no current schema errors.'
+
+            $outputFullPath = [System.IO.Path]::GetFullPath([string]$result.OutputPath)
+            $repoFullPath = [System.IO.Path]::GetFullPath($repoRoot)
+            Assert-True (-not $outputFullPath.StartsWith($repoFullPath, [System.StringComparison]::OrdinalIgnoreCase)) 'Verifier default output should be outside the repository.'
+            Assert-Equal ([string]$result.ExportPath) (Join-Path ([string]$result.OutputPath) 'export') 'Verifier should validate the export regenerated inside the output path.'
+            Assert-True (Test-Path -LiteralPath ([string]$result.ExportPath) -PathType Container) 'Verifier should leave the regenerated export in the output path.'
+            Assert-True (Test-Path -LiteralPath (Join-Path ([string]$result.ExportPath) 'discounted_principals.csv')) 'Regenerated export should include the current discounted principals schema file.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferLabFixture returns a deterministic AD and share fixture plan without mutating when OutputPlanOnly is used'
         Body = {
             Import-Module $moduleManifest -Force
@@ -4116,6 +4147,7 @@ $tests = @(
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
             $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
             $labEvidenceOverview = Join-Path $repoRoot 'docs/lab-evidence/README.md'
+            $enterpriseEvidenceReadme = Join-Path $repoRoot 'docs/lab-evidence/windows-ad-enterprise-20260605-101639/README.md'
             $nonpermissiveWorkflow = Join-Path $repoRoot 'docs/nonpermissive-collection-dashboard-workflow.md'
             $webView2ViewerDoc = Join-Path $repoRoot 'docs/webview2-dashboard-viewer.md'
             $webView2ViewerProject = Join-Path $repoRoot 'apps/ShareSurfer.DashboardViewer/ShareSurfer.DashboardViewer.csproj'
@@ -4357,6 +4389,9 @@ $tests = @(
             Assert-True ($acceptanceAuditText -like '*Optional rich enterprise support bundle*') 'Acceptance audit should explain optional rich support-bundle scope.'
             Assert-True ($acceptanceAuditText -like '*Proof issues: #1, #3, #5, and #6 are closed after human review*') 'Acceptance audit should record the accepted phase-1 proof issue state.'
             Assert-True ($acceptanceAuditText -like '*issuecomment-4635064013*') 'Acceptance audit should link the issue #5 human-review closeout comment.'
+            Assert-True ($acceptanceAuditText -like '*Current-schema verifier*Test-ShareSurferArchivedEnterpriseProof.ps1*') 'Acceptance audit should name the one-command current-schema verifier.'
+            Assert-True ($acceptanceAuditText.Contains('regenerated export, not `refreshed-evidence/export`')) 'Acceptance audit should steer readers away from the untracked refreshed export path.'
+            Assert-True ($acceptanceAuditText -like '*fresh live lab rerun*new host-side AD, filesystem, or collector evidence*') 'Acceptance audit should distinguish archived proof refresh from fresh live rerun needs.'
 
             Assert-True (Test-Path -LiteralPath $firstRunGuide) 'Documentation should include an amateur-admin-friendly first-run guide.'
             Assert-True (Test-Path -LiteralPath $firstRunTroubleshooting) 'Documentation should include first-run troubleshooting guidance.'
@@ -4466,7 +4501,14 @@ $tests = @(
             Assert-True ($labEvidenceText -like '*host, domain, and path-looking values*') 'Lab evidence overview should explain host/domain/path-looking values.'
             Assert-True ($labEvidenceText -like '*What it proves*') 'Lab evidence overview should say what the evidence proves.'
             Assert-True ($labEvidenceText -like '*What it does not prove*') 'Lab evidence overview should say what the evidence does not prove.'
-            Assert-True ((Get-Content -LiteralPath (Join-Path $repoRoot 'docs/lab-evidence/windows-ad-enterprise-20260605-101639/README.md') -Raw) -like '*../README.md*') 'Enterprise lab evidence README should link to the shared lab-evidence overview.'
+            $enterpriseEvidenceText = Get-Content -LiteralPath $enterpriseEvidenceReadme -Raw
+            Assert-True ($enterpriseEvidenceText -like '*../README.md*') 'Enterprise lab evidence README should link to the shared lab-evidence overview.'
+            Assert-True ($enterpriseEvidenceText -like '*historical run evidence*') 'Enterprise lab evidence README should identify the original historical run evidence.'
+            Assert-True ($enterpriseEvidenceText -like '*current-schema refresh output*') 'Enterprise lab evidence README should identify generated current-schema refresh output.'
+            Assert-True ($enterpriseEvidenceText -like '*Test-ShareSurferArchivedEnterpriseProof.ps1*') 'Enterprise lab evidence README should document the one-command archived enterprise proof verifier.'
+            Assert-True ($enterpriseEvidenceText -like '*temporary output folder*') 'Enterprise lab evidence README should explain the verifier default output location.'
+            Assert-True ($enterpriseEvidenceText.Contains('`refreshed-evidence/export` is not tracked')) 'Enterprise lab evidence README should warn readers not to validate an untracked refreshed export folder.'
+            Assert-True ($enterpriseEvidenceText -like '*fresh live lab rerun*new host-side AD, filesystem, or collector evidence*') 'Enterprise lab evidence README should say when a fresh live rerun is needed.'
             Assert-True ((Get-Content -LiteralPath (Join-Path $repoRoot 'docs/lab-evidence/issue184-native-smb-rpc-20260610-183619/README.md') -Raw) -like '*../README.md*') 'Native SMB/RPC evidence README should link to the shared lab-evidence overview.'
 
             $publicText = @(
