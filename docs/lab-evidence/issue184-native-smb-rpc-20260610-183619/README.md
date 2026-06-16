@@ -2,6 +2,8 @@
 
 This folder contains a focused Windows/AD lab validation snapshot for issue #184, which added the `NativeSmbRpc` SMB collection provider.
 
+For shared context on why ShareSurfer tracks synthetic/project-lab evidence, what it proves, what it does not prove, and how to read host, domain, and path-looking values, start with the [lab evidence overview](../README.md).
+
 ## Run Summary
 
 - Run stamp: `20260610-183619`

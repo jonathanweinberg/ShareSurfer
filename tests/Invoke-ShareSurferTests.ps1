@@ -4115,6 +4115,7 @@ $tests = @(
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
             $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
+            $labEvidenceOverview = Join-Path $repoRoot 'docs/lab-evidence/README.md'
             $nonpermissiveWorkflow = Join-Path $repoRoot 'docs/nonpermissive-collection-dashboard-workflow.md'
             $webView2ViewerDoc = Join-Path $repoRoot 'docs/webview2-dashboard-viewer.md'
             $webView2ViewerProject = Join-Path $repoRoot 'apps/ShareSurfer.DashboardViewer/ShareSurfer.DashboardViewer.csproj'
@@ -4457,6 +4458,16 @@ $tests = @(
             Assert-True ($operatorWorkflowText -like '*generated lab user password pattern fits the default domain password policy*') 'Operator workflow should explain the lab password policy preflight check.'
             Assert-True ($operatorWorkflowText -like '*Choose Your Operator Path*') 'Operator workflow should include a path selector for production, nonpermissive, business review, lab proof, and support use.'
             Assert-True ($operatorWorkflowText -like '*first-run-troubleshooting.md*') 'Operator workflow should link first-run troubleshooting.'
+            Assert-True (Test-Path -LiteralPath $labEvidenceOverview) 'Documentation should include a shared lab-evidence overview.'
+            $labEvidenceText = Get-Content -LiteralPath $labEvidenceOverview -Raw
+            Assert-True ($labEvidenceText -like '*synthetic/project-lab evidence*') 'Lab evidence overview should explain the snapshot provenance.'
+            Assert-True ($labEvidenceText -like '*purpose-built*') 'Lab evidence overview should explain why the evidence is tracked.'
+            Assert-True ($labEvidenceText -like '*not production*') 'Lab evidence overview should distinguish lab evidence from production evidence.'
+            Assert-True ($labEvidenceText -like '*host, domain, and path-looking values*') 'Lab evidence overview should explain host/domain/path-looking values.'
+            Assert-True ($labEvidenceText -like '*What it proves*') 'Lab evidence overview should say what the evidence proves.'
+            Assert-True ($labEvidenceText -like '*What it does not prove*') 'Lab evidence overview should say what the evidence does not prove.'
+            Assert-True ((Get-Content -LiteralPath (Join-Path $repoRoot 'docs/lab-evidence/windows-ad-enterprise-20260605-101639/README.md') -Raw) -like '*../README.md*') 'Enterprise lab evidence README should link to the shared lab-evidence overview.'
+            Assert-True ((Get-Content -LiteralPath (Join-Path $repoRoot 'docs/lab-evidence/issue184-native-smb-rpc-20260610-183619/README.md') -Raw) -like '*../README.md*') 'Native SMB/RPC evidence README should link to the shared lab-evidence overview.'
 
             $publicText = @(
                 Get-Content -LiteralPath (Join-Path $repoRoot 'README.md') -Raw
@@ -4475,6 +4486,7 @@ $tests = @(
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw
+                Get-Content -LiteralPath $labEvidenceOverview -Raw
                 Get-Content -LiteralPath $nonpermissiveWorkflow -Raw
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
                 Get-Content -LiteralPath (Join-Path $visualRoot 'enterprise-lab-validation.svg') -Raw
