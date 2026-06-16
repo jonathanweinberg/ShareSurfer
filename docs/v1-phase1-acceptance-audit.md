@@ -7,10 +7,11 @@ This audit maps the phase-1 plan to the current implementation evidence. It reco
 - Implementation status: phase-1 proof accepted.
 - V1 acceptance summary: `IsValid=True`, `PassedCheckCount=19`, `FailedCheckCount=0`.
 - Live evidence gate: `IsValid=True`, `FallbackCount=0`.
+- Current-schema verifier: `.\scripts\Test-ShareSurferArchivedEnterpriseProof.ps1` regenerates the archived enterprise proof into a temp folder, validates the regenerated export, not `refreshed-evidence/export`, and throws if the current proof is invalid.
 - Optional rich enterprise support bundle: skipped by policy for phase 1, not a proof blocker.
 - Proof issues: #1, #3, #5, and #6 are closed after human review.
 
-Future proof changes should use new issues or follow-up branches rather than reopening the accepted phase-1 proof unless the evidence itself is found to be wrong.
+Future proof changes should use new issues or follow-up branches rather than reopening the accepted phase-1 proof unless the evidence itself is found to be wrong. Use a fresh live lab rerun when reviewers need new host-side AD, filesystem, or collector evidence rather than a current-schema check of the archived files.
 
 ## Evidence Pack
 
@@ -22,6 +23,8 @@ Primary archived enterprise proof:
 - [Live evidence gate](lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/live-evidence.json)
 - [Validation closeout checklist](lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/validation-closeout-checklist.md)
 - [Issue summary](lab-evidence/windows-ad-enterprise-20260605-101639/20260605-101639/refreshed-evidence/issue-summary.md)
+
+The linked `refreshed-evidence/` files are tracked review artifacts. They do not include the regenerated export folder; run `.\scripts\Test-ShareSurferArchivedEnterpriseProof.ps1` to create a current temp proof package and validate the regenerated export against today's schema.
 
 Posted proof comments:
 

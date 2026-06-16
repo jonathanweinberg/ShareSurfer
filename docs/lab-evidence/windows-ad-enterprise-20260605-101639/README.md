@@ -51,7 +51,7 @@ The live lab was established under `C:\ShareSurferEnterpriseLab`.
 - Offline report retrieved: `20260605-101639/report.html`
 - Dashboard review retrieved: `20260605-101639/dashboard-review.md`
 
-## Historical Live Evidence Metadata
+## Historical Run Evidence
 
 `20260605-101639/live-evidence.json` reports:
 
@@ -68,11 +68,23 @@ FocusedAclScenarios, Required=True, Passed=True, EvidenceStatus=PlanOnly, Eviden
 
 All other required criteria in the original live evidence review were backed by live evidence. This section describes the historical run metadata as captured before the verifier was tightened; use the refreshed evidence section below for the current archived-export proof status.
 
-## Current Verifier Refresh
+## Current-Schema Refresh Output
 
 After the archived evidence was retrieved, ShareSurfer's validation helper was updated to prove `FocusedAclScenarios` from scan/export evidence instead of leaving it plan-only. The historical raw files above are preserved as captured.
 
-The derived review under `20260605-101639/refreshed-evidence/` was generated from the archived CSV export with:
+The tracked `20260605-101639/refreshed-evidence/` folder contains generated current-schema refresh output: refreshed criteria, live-evidence, live-evidence-review, V1 acceptance, issue-summary, closeout-checklist, issue-comment, and dry-run publish-preview artifacts. It is derived from the archived export, not a new lab collection.
+
+Use the one-command verifier when you need to prove the archived enterprise run against the current schema:
+
+```powershell
+.\scripts\Test-ShareSurferArchivedEnterpriseProof.ps1
+```
+
+By default, the verifier reads `docs\lab-evidence\windows-ad-enterprise-20260605-101639\20260605-101639`, writes the regenerated proof package to a temporary output folder, validates the regenerated `export` folder with `Test-ShareSurferExport`, and throws if current proof is invalid. Supply `-OutputPath` when you want a specific regenerated output directory for review.
+
+Do not validate `20260605-101639/refreshed-evidence/export`: `refreshed-evidence/export` is not tracked. The current-schema export exists in the verifier output path, either the default temporary output folder or the directory supplied with `-OutputPath`.
+
+The tracked derived review under `20260605-101639/refreshed-evidence/` was generated from the archived CSV export with:
 
 ```powershell
 .\scripts\New-ShareSurferArchivedEvidenceRefresh.ps1 `
@@ -84,6 +96,8 @@ The derived review under `20260605-101639/refreshed-evidence/` was generated fro
 ```
 
 That refresh preserves the original AD, filesystem, and scan evidence rows, strengthens only the stale `FocusedAclScenarios` row when the archived CSV export proves it, then writes refreshed criteria, live-evidence, live-evidence-review, V1 acceptance, issue-summary, closeout-checklist, issue-comment, and dry-run publish-preview artifacts.
+
+A fresh live lab rerun is needed when reviewers need new host-side AD, filesystem, or collector evidence. The current-schema refresh output is the right path when the question is whether the archived proof still satisfies today's export and acceptance schema.
 
 `20260605-101639/refreshed-evidence/v1-acceptance-summary.json` reports:
 
