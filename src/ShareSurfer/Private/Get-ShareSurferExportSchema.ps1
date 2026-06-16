@@ -26,6 +26,7 @@ function Get-ShareSurferExportSchema {
             'ShareId',
             'Identity',
             'Rights',
+            'AccessMask',
             'AccessControlType',
             'Source'
         )
@@ -35,6 +36,7 @@ function Get-ShareSurferExportSchema {
             'FullPath',
             'Identity',
             'Rights',
+            'AccessMask',
             'AccessControlType',
             'IsInherited',
             'InheritanceFlags',

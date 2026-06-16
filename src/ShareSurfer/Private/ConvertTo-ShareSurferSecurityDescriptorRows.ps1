@@ -73,7 +73,7 @@ function ConvertTo-ShareSurferShareRights {
     $genericWrite = 0x40000000
     $genericRead = 0x80000000
     $fileAllAccess = 0x001F01FF
-    $fileGenericWrite = 0x00120116
+    $fileWriteSpecific = 0x00000116
     $delete = 0x00010000
     $writeDac = 0x00040000
     $writeOwner = 0x00080000
@@ -82,7 +82,7 @@ function ConvertTo-ShareSurferShareRights {
         return 'Full'
     }
 
-    if ((($AccessMask -band $genericWrite) -ne 0) -or (($AccessMask -band $fileGenericWrite) -ne 0) -or (($AccessMask -band $delete) -ne 0) -or (($AccessMask -band $writeDac) -ne 0) -or (($AccessMask -band $writeOwner) -ne 0)) {
+    if ((($AccessMask -band $genericWrite) -ne 0) -or (($AccessMask -band $fileWriteSpecific) -ne 0) -or (($AccessMask -band $delete) -ne 0) -or (($AccessMask -band $writeDac) -ne 0) -or (($AccessMask -band $writeOwner) -ne 0)) {
         return 'Change'
     }
 
@@ -103,6 +103,38 @@ function ConvertTo-ShareSurferFileSystemRights {
     }
     catch {
         return ('0x{0:X8}' -f $AccessMask)
+    }
+}
+
+function ConvertTo-ShareSurferAccessMaskText {
+    param(
+        [long] $AccessMask
+    )
+
+    $normalizedMask = [uint32]($AccessMask -band 0xFFFFFFFFL)
+    '0x{0:X8}' -f $normalizedMask
+}
+
+function ConvertTo-ShareSurferNativeRightsEvidence {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Share', 'FileSystem')]
+        [string] $PermissionKind,
+
+        [Parameter(Mandatory = $true)]
+        [long] $AccessMask
+    )
+
+    $rights = if ($PermissionKind -eq 'Share') {
+        ConvertTo-ShareSurferShareRights -AccessMask $AccessMask
+    }
+    else {
+        ConvertTo-ShareSurferFileSystemRights -AccessMask $AccessMask
+    }
+
+    [pscustomobject]@{
+        Rights = $rights
+        AccessMask = ConvertTo-ShareSurferAccessMaskText -AccessMask $AccessMask
     }
 }
 
@@ -192,18 +224,14 @@ function ConvertTo-ShareSurferSecurityDescriptorAclRows {
         }
 
         $identity = ConvertTo-ShareSurferIdentityReference -SecurityIdentifier $ace.SecurityIdentifier
-        $rights = if ($PermissionKind -eq 'Share') {
-            ConvertTo-ShareSurferShareRights -AccessMask ([long]$ace.AccessMask)
-        }
-        else {
-            ConvertTo-ShareSurferFileSystemRights -AccessMask ([long]$ace.AccessMask)
-        }
+        $rightsEvidence = ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind $PermissionKind -AccessMask ([long]$ace.AccessMask)
 
         if ($PermissionKind -eq 'Share') {
             [void]$rows.Add([pscustomobject]@{
                 ShareId = $ShareId
                 Identity = $identity
-                Rights = $rights
+                Rights = $rightsEvidence.Rights
+                AccessMask = $rightsEvidence.AccessMask
                 AccessControlType = $accessControlType
                 Source = 'NativeSmbRpc'
             })
@@ -216,7 +244,8 @@ function ConvertTo-ShareSurferSecurityDescriptorAclRows {
                 ShareId = $ShareId
                 FullPath = $FullPath
                 Identity = $identity
-                Rights = $rights
+                Rights = $rightsEvidence.Rights
+                AccessMask = $rightsEvidence.AccessMask
                 AccessControlType = $accessControlType
                 IsInherited = (($aceFlagValue -band [int][System.Security.AccessControl.AceFlags]::Inherited) -ne 0)
                 InheritanceFlags = ConvertTo-ShareSurferAceFlagText -AceFlags $aceFlags -FlagType 'Inheritance'

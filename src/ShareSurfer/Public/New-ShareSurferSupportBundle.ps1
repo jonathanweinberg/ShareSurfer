@@ -1165,6 +1165,7 @@ function Test-ShareSurferRedactionAuditValue {
     $preserveColumns = @(
         'AccessControlType',
         'Rights',
+        'AccessMask',
         'Source',
         'Sources',
         'ItemType',

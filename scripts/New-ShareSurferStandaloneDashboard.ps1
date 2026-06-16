@@ -20,8 +20,8 @@ function New-ShareSurferStandaloneSchema {
     [ordered]@{
         'shares.csv' = @('ShareId', 'Source', 'ComputerName', 'ShareName', 'UNCPath', 'LocalPath', 'Description', 'PartialData', 'PartialReason')
         'items.csv' = @('ItemId', 'ShareId', 'ItemType', 'FullPath', 'RelativePath', 'Depth', 'Owner', 'InheritanceEnabled', 'InheritanceBrokenAt')
-        'share_permissions.csv' = @('ShareId', 'Identity', 'Rights', 'AccessControlType', 'Source')
-        'acl_entries.csv' = @('ItemId', 'ShareId', 'FullPath', 'Identity', 'Rights', 'AccessControlType', 'IsInherited', 'InheritanceFlags', 'PropagationFlags', 'Depth')
+        'share_permissions.csv' = @('ShareId', 'Identity', 'Rights', 'AccessMask', 'AccessControlType', 'Source')
+        'acl_entries.csv' = @('ItemId', 'ShareId', 'FullPath', 'Identity', 'Rights', 'AccessMask', 'AccessControlType', 'IsInherited', 'InheritanceFlags', 'PropagationFlags', 'Depth')
         'identities.csv' = @('Identity', 'SamAccountName', 'DisplayName', 'ObjectClass', 'EmployeeId', 'EmployeeNumber', 'UserPrincipalName', 'Mail', 'Department', 'Title', 'Company', 'Office', 'AccountEnabled', 'Manager', 'ManagerLevel1', 'ManagerLevel2', 'ManagerLevel3', 'ManagerLevel1Raw', 'ManagerLevel2Raw', 'ManagerLevel3Raw', 'ObsPath', 'ObsAttribute', 'PotentialServiceAccount', 'DistinguishedName')
         'group_edges.csv' = @('ParentGroup', 'ChildIdentity', 'ChildObjectClass', 'Depth', 'IsCycle', 'IsTruncated')
         'discounted_principals.csv' = @('Identity', 'Reason', 'Scope', 'MatchType')

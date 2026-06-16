@@ -94,13 +94,14 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "InheritanceEnabled",
     "InheritanceBrokenAt"
   ],
-  share_permissions: ["ShareId", "Identity", "Rights", "AccessControlType", "Source"],
+  share_permissions: ["ShareId", "Identity", "Rights", "AccessMask", "AccessControlType", "Source"],
   acl_entries: [
     "ItemId",
     "ShareId",
     "FullPath",
     "Identity",
     "Rights",
+    "AccessMask",
     "AccessControlType",
     "IsInherited",
     "InheritanceFlags",

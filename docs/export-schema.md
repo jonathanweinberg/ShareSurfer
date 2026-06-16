@@ -38,6 +38,8 @@ Empty fields should be handled carefully. A blank `Owner`, OBS value, manager, t
 
 Extra columns are reported for review but do not fail validation. Missing V1 columns fail validation.
 
+Optional assessment packages stay additive: baseline scan exports validate when optional assessment files are absent. When any open-file or port/protocol assessment CSV is present, `Test-ShareSurferExport` validates that package's CSV headers too and reports missing files or missing columns for that package.
+
 ## Files
 
 `ownership_enrichment.csv` is optional. ShareSurfer writes it when the scan is run with `Invoke-ShareSurferScan -OwnershipEnrichmentPath`. Older exports and scans without pre-scan ownership enrichment remain valid when this file is absent.
@@ -46,8 +48,8 @@ Extra columns are reported for review but do not fail validation. Missing V1 col
 | --- | --- | --- |
 | `shares.csv` | One row per share | Defines collected SMB shares and partial-data status. |
 | `items.csv` | One row per file or folder | Defines filesystem items under each share. |
-| `share_permissions.csv` | One row per share permission ACE | Captures the share-level access gate. |
-| `acl_entries.csv` | One row per NTFS ACL ACE | Captures item-level filesystem permissions. |
+| `share_permissions.csv` | One row per share permission ACE | Captures the share-level access gate, including readable rights and raw native masks when available. |
+| `acl_entries.csv` | One row per NTFS ACL ACE | Captures item-level filesystem permissions, including readable rights and raw native masks when available. |
 | `identities.csv` | One row per enriched identity | Normalizes user, group, and service identity metadata, including extra directory fields that help correlate owners and business units. |
 | `group_edges.csv` | One row per group membership edge | Represents nested group expansion. |
 | `discounted_principals.csv` | One row per configured discounted principal | Preserves the operator-supplied broad-access identities that stay visible but do not drive migration relatedness. |
@@ -103,15 +105,15 @@ Expected columns: `ItemId`, `ShareId`, `ItemType`, `FullPath`, `RelativePath`, `
 
 ### `share_permissions.csv`
 
-Expected columns: `ShareId`, `Identity`, `Rights`, `AccessControlType`, `Source`.
+Expected columns: `ShareId`, `Identity`, `Rights`, `AccessMask`, `AccessControlType`, `Source`.
 
-Use this file to evaluate the share gate. A permissive NTFS ACL does not grant access when the identity is blocked or absent at the share layer.
+Use this file to evaluate the share gate. A permissive NTFS ACL does not grant access when the identity is blocked or absent at the share layer. `Rights` is the readable normalized value ShareSurfer uses for review, such as `Read`, `Change`, or `Full`. `AccessMask` preserves the raw native mask as hexadecimal when the evidence came from a security descriptor; it may be blank for provider-supplied rows that already expose only friendly rights.
 
 ### `acl_entries.csv`
 
-Expected columns: `ItemId`, `ShareId`, `FullPath`, `Identity`, `Rights`, `AccessControlType`, `IsInherited`, `InheritanceFlags`, `PropagationFlags`, `Depth`.
+Expected columns: `ItemId`, `ShareId`, `FullPath`, `Identity`, `Rights`, `AccessMask`, `AccessControlType`, `IsInherited`, `InheritanceFlags`, `PropagationFlags`, `Depth`.
 
-Use `IsInherited=False` plus a high `Depth` to identify explicit ACEs buried deep in the tree.
+Use `IsInherited=False` plus a high `Depth` to identify explicit ACEs buried deep in the tree. `Rights` is the readable filesystem rights text used for review and conflict summaries. `AccessMask` preserves the raw native mask as hexadecimal when available so troubleshooting can compare ShareSurfer's normalized rights back to the source descriptor.
 
 ### `identities.csv`
 

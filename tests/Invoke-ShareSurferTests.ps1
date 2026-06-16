@@ -676,15 +676,15 @@ $tests = @(
                 [pscustomobject]@{ ConflictId = 'conflict-001'; ConflictType = 'NtfsIdentityMissingShareGate'; ShareId = 'share-001'; ItemId = 'item-001'; Identity = 'CONTOSO\Editors'; ShareRights = ''; NtfsRights = 'Modify'; Severity = 'High'; Message = 'Conflict evidence' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'conflicts.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\Readers'; Rights = 'Read'; AccessControlType = 'Allow'; Source = 'Get-SmbShareAccess' }
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\Readers'; Rights = 'Read'; AccessMask = ''; AccessControlType = 'Allow'; Source = 'Get-SmbShareAccess' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'share_permissions.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ ErrorId = 'collection-error-001'; ShareId = 'share-002'; ItemId = ''; FullPath = '\\files01\Share002'; ErrorType = 'SharePermissionCollectionUnavailable'; Message = 'Share permission proof was unavailable'; Detail = 'Unit test collection gap evidence' }
                 [pscustomobject]@{ ErrorId = 'collection-error-002'; ShareId = 'share-001'; ItemId = 'item-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; ErrorType = 'AclReadError'; Message = 'ACL read failed'; Detail = 'Unit test ACL error evidence' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'collection_errors.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ ItemId = 'item-001'; ShareId = 'share-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = 'CONTOSO\Editors'; Rights = 'Modify'; AccessControlType = 'Allow'; IsInherited = 'False'; InheritanceFlags = 'ContainerInherit,ObjectInherit'; PropagationFlags = 'None'; Depth = '7' },
-                [pscustomobject]@{ ItemId = 'item-002'; ShareId = 'share-001'; FullPath = '\\files01\Share001\file02.txt'; Identity = 'CONTOSO\FileReaders'; Rights = 'Read'; AccessControlType = 'Allow'; IsInherited = 'False'; InheritanceFlags = 'None'; PropagationFlags = 'None'; Depth = '1' }
+                [pscustomobject]@{ ItemId = 'item-001'; ShareId = 'share-001'; FullPath = '\\files01\Share001\Deep\Path\file01.txt'; Identity = 'CONTOSO\Editors'; Rights = 'Modify'; AccessMask = ''; AccessControlType = 'Allow'; IsInherited = 'False'; InheritanceFlags = 'ContainerInherit,ObjectInherit'; PropagationFlags = 'None'; Depth = '7' },
+                [pscustomobject]@{ ItemId = 'item-002'; ShareId = 'share-001'; FullPath = '\\files01\Share001\file02.txt'; Identity = 'CONTOSO\FileReaders'; Rights = 'Read'; AccessMask = ''; AccessControlType = 'Allow'; IsInherited = 'False'; InheritanceFlags = 'None'; PropagationFlags = 'None'; Depth = '1' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'acl_entries.csv') -NoTypeInformation -Encoding UTF8
             @(
                 [pscustomobject]@{ ParentGroup = 'CONTOSO\Readers'; ChildIdentity = 'CONTOSO\SSUser00001'; ChildObjectClass = 'user'; Depth = '1'; IsCycle = 'False'; IsTruncated = 'False' }
@@ -2329,7 +2329,7 @@ $tests = @(
             Assert-Equal ([int]$manifestResult.RowCount) 1 'Export validation should report the single scan manifest row.'
 
             $aclPath = Join-Path $outputPath 'acl_entries.csv'
-            $brokenRows = Import-Csv -LiteralPath $aclPath | Select-Object ItemId, ShareId, FullPath, Rights, AccessControlType, IsInherited, InheritanceFlags, PropagationFlags, Depth
+            $brokenRows = Import-Csv -LiteralPath $aclPath | Select-Object ItemId, ShareId, FullPath, Rights, AccessMask, AccessControlType, IsInherited, InheritanceFlags, PropagationFlags, Depth
             $brokenRows | Export-Csv -LiteralPath $aclPath -NoTypeInformation -Encoding UTF8
 
             $brokenResult = Test-ShareSurferExport -ExportPath $outputPath
@@ -2337,6 +2337,100 @@ $tests = @(
             Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a required column is missing.'
             Assert-True ($brokenAclResult.MissingColumns -contains 'Identity') 'File-level validation should report the missing column.'
             Assert-True ($brokenResult.SchemaErrors -contains 'acl_entries.csv is missing column Identity.') 'Top-level schema errors should keep the readable error message.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferExport validates optional open-file assessment package when present'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOptionalOpenFiles-' + [guid]::NewGuid().ToString('N'))
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            $baselineResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True $baselineResult.IsValid 'Baseline export validation should pass without optional open-file assessment files.'
+            Assert-Equal (@($baselineResult.FileResults | Where-Object { $_.FileName -like 'open_file_*.csv' }).Count) 0 'Baseline validation should not require absent open-file assessment files.'
+
+            $global:ShareSurferOpenFileProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string[]] $ShareName,
+                    [string] $AssessmentId,
+                    [string] $SampleId,
+                    [string] $SampleTimestamp,
+                    [string] $Provider
+                )
+
+                [pscustomobject]@{
+                    AssessmentId = $AssessmentId
+                    SampleId = $SampleId
+                    SampleTimestamp = $SampleTimestamp
+                    ComputerName = $ComputerName
+                    ShareName = 'Finance'
+                    Provider = $Provider
+                    FileId = '1001'
+                    SessionId = '2001'
+                    ClientComputerName = 'WKSTN-001'
+                    ClientUserName = 'CONTOSO\Ava.Accounting'
+                    Path = 'C:\Shares\Finance\AP\invoice.xlsx'
+                    FolderPath = 'C:\Shares\Finance\AP'
+                    ShareRelativePath = 'AP\invoice.xlsx'
+                    ShareRelativeFolder = 'AP'
+                    Permissions = 'Read'
+                    Locks = 1
+                    Source = 'MockOpenFileProvider'
+                    CollectionStatus = 'Open'
+                    ErrorMessage = ''
+                }
+            }
+
+            try {
+                Invoke-ShareSurferOpenFileAssessment -ComputerName 'files01' -ShareName 'Finance' -OutputPath $outputPath -Provider NativeRpc -IntervalSeconds 0 -SampleCount 1 -Quiet | Out-Null
+
+                $withPackageResult = Test-ShareSurferExport -ExportPath $outputPath
+                $openFileResults = @($withPackageResult.FileResults | Where-Object { $_.FileName -like 'open_file_*.csv' })
+                Assert-True $withPackageResult.IsValid 'Export validation should pass when a complete optional open-file package is present.'
+                Assert-Equal $openFileResults.Count 4 'Export validation should inspect all open-file assessment CSVs when any are present.'
+                Assert-True (@($openFileResults | Where-Object { -not $_.Optional }).Count -eq 0) 'Open-file package file results should be marked optional.'
+
+                $samplesPath = Join-Path $outputPath 'open_file_samples.csv'
+                $brokenSamples = Import-Csv -LiteralPath $samplesPath | Select-Object AssessmentId, SampleId, SampleTimestamp, ComputerName, ShareName, Provider, FileId, SessionId, ClientComputerName, ClientUserName, Path, FolderPath, ShareRelativePath, ShareRelativeFolder, Permissions, Locks, Source, CollectionStatus
+                $brokenSamples | Export-Csv -LiteralPath $samplesPath -NoTypeInformation -Encoding UTF8
+
+                $brokenResult = Test-ShareSurferExport -ExportPath $outputPath
+                Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a present optional open-file package is missing a required column.'
+                Assert-True ($brokenResult.SchemaErrors -contains 'open_file_samples.csv is missing column ErrorMessage.') 'Optional open-file schema errors should keep readable file and column names.'
+            }
+            finally {
+                Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferExport validates optional port protocol assessment package when present'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOptionalPortProtocol-' + [guid]::NewGuid().ToString('N'))
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            $baselineResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True $baselineResult.IsValid 'Baseline export validation should pass without optional port/protocol assessment files.'
+            Assert-Equal (@($baselineResult.FileResults | Where-Object { $_.FileName -like 'port_protocol_*.csv' }).Count) 0 'Baseline validation should not require absent port/protocol assessment files.'
+
+            Invoke-ShareSurferPortProtocolAssessment -ComputerName 'files01' -ShareName 'Finance' -DirectoryServer 'dc01.contoso.test' -OutputPath $outputPath -SkipNetworkTests -Force | Out-Null
+
+            $withPackageResult = Test-ShareSurferExport -ExportPath $outputPath
+            $portProtocolResults = @($withPackageResult.FileResults | Where-Object { $_.FileName -like 'port_protocol_*.csv' })
+            Assert-True $withPackageResult.IsValid 'Export validation should pass when a complete optional port/protocol package is present.'
+            Assert-Equal $portProtocolResults.Count 3 'Export validation should inspect all port/protocol assessment CSVs when any are present.'
+            Assert-True (@($portProtocolResults | Where-Object { -not $_.Optional }).Count -eq 0) 'Port/protocol package file results should be marked optional.'
+
+            $checksPath = Join-Path $outputPath 'port_protocol_checks.csv'
+            $brokenChecks = Import-Csv -LiteralPath $checksPath | Select-Object AssessmentId, CheckId, TargetId, Target, TargetType, ComputerName, ShareName, Protocol, Transport, Port, Requirement, Provider, Purpose, RequiredFor, Status, Severity, EnvironmentProfile, CollectionImpact, OperatorGuidance, RemediationHint, LatencyMs, RemoteAddress, Message
+            $brokenChecks | Export-Csv -LiteralPath $checksPath -NoTypeInformation -Encoding UTF8
+
+            $brokenResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a present optional port/protocol package is missing a required column.'
+            Assert-True ($brokenResult.SchemaErrors -contains 'port_protocol_checks.csv is missing column Detail.') 'Optional port/protocol schema errors should keep readable file and column names.'
         }
     },
     @{
@@ -3078,6 +3172,35 @@ $tests = @(
                 Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
                 Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
             }
+        }
+    },
+    @{
+        Name = 'Native ACL rights evidence normalizes readable rights and preserves raw masks'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+
+            $shareFull = & $module {
+                ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind Share -AccessMask 0x001F01FF
+            }
+            $shareChange = & $module {
+                ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind Share -AccessMask 0x00120116
+            }
+            $shareRead = & $module {
+                ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind Share -AccessMask 0x00120089
+            }
+            $fileRead = & $module {
+                ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind FileSystem -AccessMask 0x00120089
+            }
+
+            Assert-Equal $shareFull.Rights 'Full' 'Share full-control masks should normalize to readable Full rights.'
+            Assert-Equal $shareFull.AccessMask '0x001F01FF' 'Share full-control evidence should preserve the raw access mask.'
+            Assert-Equal $shareChange.Rights 'Change' 'Share change masks should normalize to readable Change rights.'
+            Assert-Equal $shareChange.AccessMask '0x00120116' 'Share change evidence should preserve the raw access mask.'
+            Assert-Equal $shareRead.Rights 'Read' 'Share read masks should not be promoted to Change because of shared standard rights bits.'
+            Assert-Equal $shareRead.AccessMask '0x00120089' 'Share read evidence should preserve the raw access mask.'
+            Assert-True ([string]$fileRead.Rights -like '*Read*') 'Filesystem read masks should normalize to readable filesystem rights text.'
+            Assert-Equal $fileRead.AccessMask '0x00120089' 'Filesystem rights evidence should preserve the raw access mask.'
         }
     },
     @{
