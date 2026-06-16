@@ -71,6 +71,9 @@ function Convert-ShareSurferArchivedCsvToSchema {
             if ($row.PSObject.Properties[$column]) {
                 $record[$column] = [string]$row.PSObject.Properties[$column].Value
             }
+            elseif ($Path -like '*scan_manifest.csv' -and @('RequestedSmbCollectionProvider', 'EffectiveSmbCollectionProvider') -contains $column -and $row.PSObject.Properties['CollectionProvider']) {
+                $record[$column] = [string]$row.CollectionProvider
+            }
             else {
                 $record[$column] = ''
             }
@@ -137,6 +140,8 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'scan_
     'ObsAttribute',
     'SourceMode',
     'CollectionProvider',
+    'RequestedSmbCollectionProvider',
+    'EffectiveSmbCollectionProvider',
     'OperationalPathLengthThreshold',
     'AzurePathComponentLimit',
     'AzureFullPathLimit',

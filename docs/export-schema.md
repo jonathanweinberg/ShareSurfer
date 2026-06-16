@@ -257,9 +257,9 @@ Use this file to troubleshoot collection behavior without scraping console outpu
 
 ### `scan_manifest.csv`
 
-Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `SourceMode`, `CollectionProvider`, `OperationalPathLengthThreshold`, `AzurePathComponentLimit`, `AzureFullPathLimit`, `ExplicitAceDepthThreshold`, `GroupExpansionMaxDepth`, `AdLookupMode`, `ManagerIdentityFormat`, `IncludeFiles`.
+Expected columns: `ScanId`, `GeneratedAt`, `ExportVersion`, `ObsAttribute`, `SourceMode`, `CollectionProvider`, `RequestedSmbCollectionProvider`, `EffectiveSmbCollectionProvider`, `OperationalPathLengthThreshold`, `AzurePathComponentLimit`, `AzureFullPathLimit`, `ExplicitAceDepthThreshold`, `GroupExpansionMaxDepth`, `AdLookupMode`, `ManagerIdentityFormat`, `IncludeFiles`.
 
-Use the manifest to reproduce scan settings and explain incomplete data. `CollectionProvider` records the collector route, such as `Auto`, `PowerShellCim`, `NativeSmbRpc`, `TargetPath`, or `InputObject`. `ManagerIdentityFormat` records how manager fields were presented in identity and org exports. `IncludeFiles` records whether file objects were included in addition to folders, which matters for enterprise validation and migration-readiness evidence.
+Use the manifest to reproduce scan settings and explain incomplete data. `CollectionProvider` is the legacy/overall collector route, such as `Auto`, `PowerShellCim`, `NativeSmbRpc`, `TargetPath`, or `InputObject`. For SMB share scans, `RequestedSmbCollectionProvider` records what the operator asked for with `-SmbCollectionProvider`, while `EffectiveSmbCollectionProvider` records what ShareSurfer actually used after provider selection or fallback. For example, a scan can request `Auto` and report `NativeSmbRpc` as effective when WinRM/CIM collection was unavailable and SMB/RPC metadata fallback supplied the share evidence. `ManagerIdentityFormat` records how manager fields were presented in identity and org exports. `IncludeFiles` records whether file objects were included in addition to folders, which matters for enterprise validation and migration-readiness evidence.
 
 ### `open_file_manifest.csv`
 

@@ -173,7 +173,7 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   findings: ["Severity", "FindingType", "ShareId", "Identity", "FullPath", "Message"],
   collection_errors: ["ErrorType", "ShareId", "FullPath", "Message"],
   scan_events: ["Timestamp", "Level", "EventType", "Message"],
-  scan_manifest: ["GeneratedAt", "ExportVersion", "SourceMode", "GroupExpansionMaxDepth", "AdLookupMode", "IncludeFiles"],
+  scan_manifest: ["GeneratedAt", "ExportVersion", "SourceMode", "CollectionProvider", "RequestedSmbCollectionProvider", "EffectiveSmbCollectionProvider", "GroupExpansionMaxDepth", "AdLookupMode", "IncludeFiles"],
   open_file_manifest: ["GeneratedAt", "ComputerName", "ShareNames", "Provider", "IntervalSeconds", "SampleCount"],
   open_file_samples: ["SampleTimestamp", "ShareName", "ClientUserName", "ClientComputerName", "Path", "Permissions", "Locks"],
   open_file_summary: ["ShareName", "FolderPath", "ObservationCount", "UniqueUsers", "UniqueClients", "HeatScore", "HotFolder"],

@@ -307,6 +307,8 @@ function Get-ShareSurferExportSchema {
             'ObsAttribute',
             'SourceMode',
             'CollectionProvider',
+            'RequestedSmbCollectionProvider',
+            'EffectiveSmbCollectionProvider',
             'OperationalPathLengthThreshold',
             'AzurePathComponentLimit',
             'AzureFullPathLimit',

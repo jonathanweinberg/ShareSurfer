@@ -257,6 +257,10 @@ function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warn
           record[column] = inferPotentialServiceAccount(record);
         } else if (datasetKey === "org_chains" && column === "PotentialServiceAccount") {
           record[column] = "False";
+        } else if (datasetKey === "scan_manifest" && column === "RequestedSmbCollectionProvider") {
+          record[column] = record.CollectionProvider ?? "";
+        } else if (datasetKey === "scan_manifest" && column === "EffectiveSmbCollectionProvider") {
+          record[column] = record.CollectionProvider ?? "";
         } else {
           record[column] = "";
         }
