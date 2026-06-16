@@ -208,5 +208,7 @@ function Get-ShareSurferNativeSmbShareInventory {
         OwnerMappings = @()
         ScanErrors = @($scanErrors)
         ScanEvents = @($scanEvents)
+        RequestedSmbCollectionProvider = 'NativeSmbRpc'
+        EffectiveSmbCollectionProvider = 'NativeSmbRpc'
     }
 }

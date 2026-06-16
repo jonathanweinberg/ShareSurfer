@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, test } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { App } from "./App";
 import { demoSnapshot } from "./data/fixtures";
 
@@ -109,6 +109,11 @@ describe("dashboard workbench interactions", () => {
     delete window.__SHARESURFER_SNAPSHOT__;
     window.sessionStorage.clear();
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+    delete window.__SHARESURFER_SNAPSHOT__;
   });
 
   test("missing runtime data shows an onboarding screen instead of silently rendering demo rows", () => {

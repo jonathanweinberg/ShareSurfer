@@ -3058,6 +3058,7 @@ $tests = @(
                 $items = Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv')
                 $permissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
                 $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+                $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv'))
 
                 Assert-Equal $shares[0].Source 'SmbRpcNetShareGetInfo' 'SMB RPC fallback should be recorded as the share metadata source.'
                 Assert-Equal $shares[0].LocalPath $shareRoot 'SMB RPC fallback should populate the resolved local path when available.'
@@ -3068,6 +3069,8 @@ $tests = @(
                 Assert-Equal @($permissions).Count 0 'SMB RPC fallback should not fabricate share-level permissions.'
                 Assert-True ($events.EventType -contains 'SmbRpcShareInfoResolved') 'SMB RPC metadata fallback should be logged as scan evidence.'
                 Assert-True (($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Source -eq 'SmbRpcNetShareGetInfo' }).Count -ge 1) 'Share target resolution should record the RPC fallback source.'
+                Assert-Equal $manifest[0].RequestedSmbCollectionProvider 'Auto' 'Scan manifest should preserve the operator-requested SMB collection provider.'
+                Assert-Equal $manifest[0].EffectiveSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should expose the effective provider used after SMB RPC fallback.'
             }
             finally {
                 Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
@@ -3216,6 +3219,8 @@ $tests = @(
                 Assert-True ($permissions.Source -contains 'NativeSmbRpc') 'Native provider should populate share permissions from native provider evidence.'
                 Assert-True ($aclRows.Identity -contains 'CONTOSO\NativeEditors') 'Native provider should populate file/folder ACL rows through native security evidence.'
                 Assert-Equal $manifest[0].CollectionProvider 'NativeSmbRpc' 'Scan manifest should record NativeSmbRpc provider selection.'
+                Assert-Equal $manifest[0].RequestedSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should preserve explicit NativeSmbRpc requests.'
+                Assert-Equal $manifest[0].EffectiveSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should show NativeSmbRpc as the effective provider.'
                 Assert-True ($events.EventType -contains 'CollectionProviderSelected') 'Native provider should log provider selection.'
                 Assert-True (@($events | Where-Object { $_.EventType -eq 'RemoteCimSessionCreated' }).Count -eq 0) 'Native provider should not create remote CIM sessions.'
             }
@@ -3484,6 +3489,8 @@ $tests = @(
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
             Assert-True ($redactedManifest -like '*CollectionProvider*') 'Redacted manifest should preserve collection provider as a support diagnostic setting.'
+            Assert-True ($redactedManifest -like '*RequestedSmbCollectionProvider*') 'Redacted manifest should preserve requested SMB collection provider as a support diagnostic setting.'
+            Assert-True ($redactedManifest -like '*EffectiveSmbCollectionProvider*') 'Redacted manifest should preserve effective SMB collection provider as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*InputObject*') 'Redacted manifest should preserve safe collection provider values.'
             Assert-True (Test-Path -LiteralPath $redactedReportPath) 'Support bundle should include a regenerated redacted report when requested.'
             $redactedReport = Get-Content -LiteralPath $redactedReportPath -Raw
@@ -3534,7 +3541,11 @@ $tests = @(
             Assert-True (@($bundleDiagnostics.Rollups.CollectionErrorsByType | Where-Object { $_.Name -eq 'AclReadError' }).Count -gt 0) 'Support bundle diagnostics should include collection error type rollups.'
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'AdLookupMode') 'Support bundle diagnostics should preserve safe scan settings.'
             Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'CollectionProvider') 'Support bundle diagnostics should preserve collection provider scan settings.'
+            Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'RequestedSmbCollectionProvider') 'Support bundle diagnostics should preserve requested SMB provider scan settings.'
+            Assert-True ($bundleDiagnostics.ScanSettings.PSObject.Properties.Name -contains 'EffectiveSmbCollectionProvider') 'Support bundle diagnostics should preserve effective SMB provider scan settings.'
             Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'CollectionProvider' }).Count -eq 0) 'Collection provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
+            Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'RequestedSmbCollectionProvider' }).Count -eq 0) 'Requested SMB provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
+            Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'EffectiveSmbCollectionProvider' }).Count -eq 0) 'Effective SMB provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
             Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.OwnerReviewPacketCount -gt 0) 'Support bundle diagnostics should summarize owner review packet counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.PermissionedGroupCount -gt 0) 'Support bundle diagnostics should summarize permissioned group counts.'

@@ -18,6 +18,8 @@ function Export-ShareSurferInventory {
         [string] $ManagerIdentityFormat = 'MailTo',
         [string] $SourceMode = 'InputObject',
         [string] $CollectionProvider = '',
+        [string] $RequestedSmbCollectionProvider = '',
+        [string] $EffectiveSmbCollectionProvider = '',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
@@ -40,6 +42,20 @@ function Export-ShareSurferInventory {
     $ownershipEnrichment = @()
     if ($null -ne $Inventory.PSObject.Properties['OwnershipEnrichment']) {
         $ownershipEnrichment = @(ConvertTo-ShareSurferArray $Inventory.OwnershipEnrichment)
+    }
+    if ([string]::IsNullOrWhiteSpace($RequestedSmbCollectionProvider) -and $null -ne $Inventory.PSObject.Properties['RequestedSmbCollectionProvider']) {
+        $RequestedSmbCollectionProvider = [string]$Inventory.RequestedSmbCollectionProvider
+    }
+    if ([string]::IsNullOrWhiteSpace($EffectiveSmbCollectionProvider) -and $null -ne $Inventory.PSObject.Properties['EffectiveSmbCollectionProvider']) {
+        $EffectiveSmbCollectionProvider = [string]$Inventory.EffectiveSmbCollectionProvider
+    }
+    if ($SourceMode -eq 'SmbShare') {
+        if ([string]::IsNullOrWhiteSpace($RequestedSmbCollectionProvider)) {
+            $RequestedSmbCollectionProvider = $CollectionProvider
+        }
+        if ([string]::IsNullOrWhiteSpace($EffectiveSmbCollectionProvider)) {
+            $EffectiveSmbCollectionProvider = $CollectionProvider
+        }
     }
     $discountedPrincipals = @(Import-ShareSurferDiscountedPrincipals -Path $DiscountedPrincipalPath)
     $scanErrors = @()
@@ -150,6 +166,8 @@ function Export-ShareSurferInventory {
             ObsAttribute = $ObsAttribute
             SourceMode = $SourceMode
             CollectionProvider = $CollectionProvider
+            RequestedSmbCollectionProvider = $RequestedSmbCollectionProvider
+            EffectiveSmbCollectionProvider = $EffectiveSmbCollectionProvider
             OperationalPathLengthThreshold = $OperationalPathLengthThreshold
             AzurePathComponentLimit = $AzurePathComponentLimit
             AzureFullPathLimit = $AzureFullPathLimit

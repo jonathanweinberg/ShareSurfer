@@ -15,7 +15,10 @@ function Get-ShareSurferSmbShareInventory {
     )
 
     if ($SmbCollectionProvider -eq 'NativeSmbRpc') {
-        return Get-ShareSurferNativeSmbShareInventory -ComputerName $ComputerName -ShareName $ShareName -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+        $nativeInventory = Get-ShareSurferNativeSmbShareInventory -ComputerName $ComputerName -ShareName $ShareName -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+        $nativeInventory | Add-Member -MemberType NoteProperty -Name RequestedSmbCollectionProvider -Value $SmbCollectionProvider -Force
+        $nativeInventory | Add-Member -MemberType NoteProperty -Name EffectiveSmbCollectionProvider -Value 'NativeSmbRpc' -Force
+        return $nativeInventory
     }
 
     $shares = New-Object System.Collections.ArrayList
@@ -28,6 +31,7 @@ function Get-ShareSurferSmbShareInventory {
     $cimSession = $null
     $remoteCimSessionAttempted = $false
     $remoteCimSessionAvailable = $false
+    $effectiveProviders = New-Object System.Collections.ArrayList
 
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'CollectionProviderSelected' -Source $SmbCollectionProvider -Message ('Using {0} SMB collection provider for {1} explicit share target(s) on {2}.' -f $SmbCollectionProvider, @($ShareName).Count, $ComputerName) -Detail 'PowerShell SMB/CIM collector path'))
 
@@ -98,6 +102,7 @@ function Get-ShareSurferSmbShareInventory {
                             $scanPath = $localPath
                         }
                         $source = 'Get-SmbShare'
+                        [void]$effectiveProviders.Add('PowerShellCim')
                     }
                 }
                 catch {
@@ -127,6 +132,7 @@ function Get-ShareSurferSmbShareInventory {
                         if ($source -eq '') {
                             $source = 'SmbRpcNetShareGetInfo'
                         }
+                        [void]$effectiveProviders.Add('NativeSmbRpc')
                         [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'SmbRpcShareInfoResolved' -Source $source -ShareId $shareId -Message ('Resolved share metadata for {0} through SMB/RPC fallback.' -f $uncPath) -Detail $localPath))
                     }
                     else {
@@ -142,6 +148,10 @@ function Get-ShareSurferSmbShareInventory {
                     })
                     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'SmbRpcShareLookupError' -Source 'SmbRpcNetShareGetInfo' -Level 'Warning' -ShareId $shareId -Message ('SMB/RPC fallback failed for {0}.' -f $uncPath) -Detail ([string]$_.Exception.Message)))
                 }
+            }
+
+            if ($source -eq 'BestEffort') {
+                [void]$effectiveProviders.Add('BestEffort')
             }
 
             [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source $source -ShareId $shareId -Message ('Resolved share target {0}' -f $uncPath) -Detail $scanPath))
@@ -238,6 +248,17 @@ function Get-ShareSurferSmbShareInventory {
         }
     }
 
+    $effectiveProviderNames = @($effectiveProviders | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)
+    $effectiveSmbCollectionProvider = if ($effectiveProviderNames.Count -eq 0) {
+        $SmbCollectionProvider
+    }
+    elseif ($effectiveProviderNames.Count -eq 1) {
+        [string]$effectiveProviderNames[0]
+    }
+    else {
+        'Mixed'
+    }
+
     [pscustomobject]@{
         Shares = @($shares)
         Items = @($items)
@@ -249,5 +270,7 @@ function Get-ShareSurferSmbShareInventory {
         OwnerMappings = @()
         ScanErrors = @($scanErrors)
         ScanEvents = @($scanEvents)
+        RequestedSmbCollectionProvider = $SmbCollectionProvider
+        EffectiveSmbCollectionProvider = $effectiveSmbCollectionProvider
     }
 }
