@@ -344,6 +344,58 @@ Validation gates:
 - dashboard schema parity remains green
 - no release package drift
 
+## Execution Goal Prompts
+
+Use these copy/paste prompts when turning this plan into implementation work. Each implementation slice should still get its own GitHub issue, branch, commit-linked issue comment, PR, CI pass, merge, and closeout.
+
+Main coordinating goal:
+
+```text
+/goal Coordinate ShareSurfer production-readiness execution from docs/reviews/production-readiness-tui-usability-2026-06-17.md. Keep work issue-first and branch-first. Preserve PowerShell 5.1 collector compatibility, offline operation, static dashboard packaging, and no required third-party TUI dependency for collection. Dispatch focused subagents for implementation, spec review, quality review, and security/readiness review before merge.
+```
+
+First implementation slice:
+
+```text
+/goal Implement ShareSurfer production-readiness slice: pure PowerShell operator assistant skeleton. Create or use the focused GitHub issue, branch from main, add the smallest useful assistant flow with reusable run-plan/rerun output, keep all behavior scriptable, and validate with PowerShell tests plus documentation updates.
+```
+
+Implementation subagent:
+
+```text
+/goal Implement the assigned ShareSurfer production-readiness subtask from docs/reviews/production-readiness-tui-usability-2026-06-17.md. Stay within the issue acceptance criteria, preserve PowerShell 5.1 and offline collector constraints, write focused tests, and report changed files, validation, and follow-up risks back to MainThread.
+```
+
+TUI usability review subagent:
+
+```text
+/goal Review the ShareSurfer text-mode assistant or picker changes for TUI usability. Check visibility of current state, plain-language prompts, back/quit paths, recoverability, keyboard-only operation, no-color fallback, command preview, and transcript-test coverage against the production-readiness TUI plan.
+```
+
+Spec compliance subagent:
+
+```text
+/goal Review the ShareSurfer production-readiness implementation for compliance with the active GitHub issue and docs/reviews/production-readiness-tui-usability-2026-06-17.md. Identify any requirement that is missing, weakened, or implemented in a way that conflicts with offline, PowerShell 5.1, or issue-first delivery constraints.
+```
+
+Quality gatekeeper subagent:
+
+```text
+/goal Review the ShareSurfer production-readiness implementation for regression risk, maintainability, validation gaps, release-package impact, and operator confusion. Confirm the local validation gates are appropriate for the touched surfaces and call out any skipped gates before MainThread opens or merges the PR.
+```
+
+Security and privacy subagent:
+
+```text
+/goal Review the ShareSurfer production-readiness implementation for read-only safety, data exposure, CSV/script injection risk, support-bundle privacy, release trust, and accidental external-network behavior. Keep the review defensive and repo-grounded, and report blocking findings with file and line references.
+```
+
+Release and lab validation subagent:
+
+```text
+/goal Review the ShareSurfer production-readiness implementation for release and lab-validation readiness. Check release metadata, package contents, dependency-age evidence, Windows PowerShell 5.1 proof, dashboard package proof, and whether current live enterprise lab validation is required before the slice can be called done.
+```
+
 ## Proposed Issue Sequence
 
 1. `TUI: add pure PowerShell operator assistant skeleton`
