@@ -44,6 +44,10 @@ $shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = "C:\ShareSurfer\exports\$scanId"
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+$ownershipSourcePath = Join-Path $inputRoot 'hr-obs.csv'
+$ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+$ownershipDefinitionPath = Join-Path $inputRoot 'ownership-import.definition.json'
+$ownershipRerunPath = Join-Path $inputRoot 'ownership-enrichment-rerun.ps1'
 $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
 Test-Path "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1"
@@ -85,6 +89,26 @@ Create a discounted principals CSV when broad HelpDesk, admin, scanner, backup, 
 
 Discounted does not mean ignored, safe, approved, or remediated. ShareSurfer still shows the access in the CSVs and report.
 
+If HR, employee, OBS, project, or owner CSVs are available before the scan, normalize them on the collector while it can still read AD. The simplest locked-down pattern is to place the first candidate file at `C:\ShareSurfer\inputs\hr-obs.csv`; use the full admin ownership import guide when several CSVs need to be selected with the text picker.
+
+```powershell
+if (Test-Path -LiteralPath $ownershipSourcePath) {
+  Import-Module "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+  Join-ShareSurferOwnershipSources `
+    -Path $ownershipSourcePath `
+    -OutputPath $ownershipEnrichmentPath `
+    -DefinitionPath $ownershipDefinitionPath `
+    -ObsAttribute 'extensionAttribute10' `
+    -AdLookupMode Auto `
+    -ForbiddenOu @('OU=Service Accounts,DC=contoso,DC=com', 'OU=Admins,DC=contoso,DC=com') `
+    -ReusableCommandPath $ownershipRerunPath `
+    -Force
+}
+```
+
+This uses employee ID or employee number values from the CSV to gather matching AD data when directory lookup is allowed, fills available account, mail, title, office, manager, and OBS fields, and writes `ownership-enrichment.csv` for the scan. The definition JSON and rerun script make the same import repeatable after a refreshed HR/OBS file arrives. If your environment stores OBS outside `extensionAttribute10`, change `-ObsAttribute` before running this command.
+
 ## 2. Run Collection Read-Only
 
 Import the module:
@@ -111,6 +135,10 @@ if (Test-Path -LiteralPath $ownerMappingPath) {
   $scanParams.OwnerMappingPath = $ownerMappingPath
 }
 
+if (Test-Path -LiteralPath $ownershipEnrichmentPath) {
+  $scanParams.OwnershipEnrichmentPath = $ownershipEnrichmentPath
+}
+
 if (Test-Path -LiteralPath $discountedPrincipalPath) {
   $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
 }
@@ -120,7 +148,7 @@ Invoke-ShareSurferScan @scanParams
 
 Use the correct `-ObsAttribute` for your directory. `extensionAttribute10` is the default, but some environments use another attribute such as `info`.
 
-Do not pass optional input paths unless the files exist. The splatted command above checks for the owner mapping and discounted principals CSVs before adding those parameters, so a first scan can still run without optional inputs.
+Do not pass optional input paths unless the files exist. The splatted command above checks for the owner mapping, ownership enrichment, and discounted principals CSVs before adding those parameters, so a first scan can still run without optional inputs.
 
 Optional: record open-file activity before packaging the dataset. This helps reviewers see hot folders that were active during a migration or owner-review window. A one-sample run is good for an ad hoc check:
 

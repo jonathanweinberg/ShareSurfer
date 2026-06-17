@@ -148,6 +148,42 @@ This recipe creates three reusable files:
 
 If you need ShareSurfer to ask you about each header in the console, add `-Interactive` to `New-ShareSurferOwnershipMappingProfile`. The saved rerun file still uses the profile afterward.
 
+To gather AD data from an HR or OBS file before scanning, create an enrichment CSV. ShareSurfer uses employee ID or employee number values from the source CSV to look up matching AD accounts when `-AdLookupMode Auto` or `ActiveDirectory` can read the directory. It fills available account, mail, title, office, manager, and OBS fields, then writes a local CSV that travels with the scan evidence.
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+$ownershipDefinitionPath = Join-Path $inputRoot 'ownership-import.definition.json'
+$ownershipRerunPath = Join-Path $inputRoot 'ownership-enrichment-rerun.ps1'
+
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+Join-ShareSurferOwnershipSources `
+  -Interactive `
+  -BrowseForCsv `
+  -SourceFolder $inputRoot `
+  -OutputPath $ownershipEnrichmentPath `
+  -DefinitionPath $ownershipDefinitionPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -ForbiddenOu @('OU=Service Accounts,DC=contoso,DC=com', 'OU=Admins,DC=contoso,DC=com') `
+  -ReusableCommandPath $ownershipRerunPath `
+  -Force
+```
+
+Use `-ObsAttribute` for the AD attribute that stores OBS/OID in your directory. The text picker can select one or more CSVs, including one file that only has OBS/project data and another that has employee IDs. The definition JSON saves the selected CSV paths, OBS attribute, AD lookup mode, and forbidden OU choices. Later, rerun the same import without the picker:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -DefinitionPath $ownershipDefinitionPath `
+  -OutputPath $ownershipEnrichmentPath `
+  -ReusableCommandPath $ownershipRerunPath `
+  -Force
+```
+
+Pass `ownership-enrichment.csv` to the scan with `-OwnershipEnrichmentPath`. The scan exports it as `ownership_enrichment.csv`, and the report/dashboard can show matched, ambiguous, source-only, forbidden-OU-skipped, and potential service-account rows beside the permission evidence.
+
 After a scan, create a draft owner mapping for paths that do not have owner routing yet:
 
 ```powershell
@@ -174,6 +210,7 @@ Use this when you already know the share path and want a first reviewable export
 $releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
+$ownershipEnrichmentPath = 'C:\ShareSurfer\inputs\ownership-enrichment.csv'
 $discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -191,6 +228,10 @@ $scanParams = @{
 
 if (Test-Path -LiteralPath $ownerMappingPath) {
   $scanParams.OwnerMappingPath = $ownerMappingPath
+}
+
+if (Test-Path -LiteralPath $ownershipEnrichmentPath) {
+  $scanParams.OwnershipEnrichmentPath = $ownershipEnrichmentPath
 }
 
 if (Test-Path -LiteralPath $discountedPrincipalPath) {
