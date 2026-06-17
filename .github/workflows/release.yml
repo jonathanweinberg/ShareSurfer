@@ -1,5 +1,8 @@
 name: Pre-1.0 Release
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   workflow_dispatch:
     inputs:
@@ -21,12 +24,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -41,6 +44,12 @@ jobs:
       - name: Run ShareSurfer PowerShell tests
         shell: pwsh
         run: pwsh -NoLogo -NoProfile -File tests/Invoke-ShareSurferTests.ps1
+
+      - name: Run Windows PowerShell 5.1 validation
+        shell: powershell
+        run: >
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass
+          -File scripts/Test-ShareSurferWindowsPowerShell51.ps1
 
       - name: Resolve package version
         id: release_metadata
@@ -98,7 +107,7 @@ jobs:
           | ConvertTo-Json -Depth 6
 
       - name: Upload unsigned release package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.release_metadata.outputs.package_name }}-unsigned
           path: |

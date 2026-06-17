@@ -2692,6 +2692,110 @@ $tests = @(
         }
     },
     @{
+        Name = 'CI workflows include runtime and release-readiness gates'
+        Body = {
+            $ciWorkflowPath = Join-Path $repoRoot '.github/workflows/ci.yml'
+            $releaseWorkflowPath = Join-Path $repoRoot '.github/workflows/release.yml'
+            Assert-True (Test-Path -LiteralPath $ciWorkflowPath -PathType Leaf) 'CI workflow should exist.'
+            Assert-True (Test-Path -LiteralPath $releaseWorkflowPath -PathType Leaf) 'Release workflow should exist.'
+
+            $ciWorkflow = Get-Content -LiteralPath $ciWorkflowPath -Raw
+            $releaseWorkflow = Get-Content -LiteralPath $releaseWorkflowPath -Raw
+            Assert-True ($ciWorkflow -like '*FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true*') 'CI should opt release-relevant JavaScript actions into the Node 24 runtime.'
+            Assert-True ($releaseWorkflow -like '*FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true*') 'Release workflow should opt JavaScript actions into the Node 24 runtime.'
+            Assert-True ($ciWorkflow -like '*windows-powershell-51:*') 'CI should include a Windows PowerShell 5.1 validation lane.'
+            Assert-True ($ciWorkflow -like '*shell: powershell*') 'Windows PowerShell 5.1 lane should use the Windows PowerShell shell.'
+            Assert-True ($ciWorkflow -like '*Test-ShareSurferWindowsPowerShell51.ps1*') 'CI should run the Windows PowerShell 5.1 smoke script.'
+            Assert-True ($ciWorkflow -like '*Test-ShareSurferReleaseReadiness.ps1*') 'CI should run the release-readiness helper.'
+            Assert-True ($ciWorkflow -like '*-DashboardBuildPath interface/standalone-dashboard/dist*') 'Release-readiness CI should reuse the built standalone dashboard assets.'
+            Assert-True ($ciWorkflow -notlike '*-SkipDependencyAgeCheck*') 'Release-readiness CI should not skip dependency-age validation.'
+        }
+    },
+    @{
+        Name = 'Windows PowerShell 5.1 smoke helper validates parser and import behavior'
+        Body = {
+            $result = & (Join-Path $repoRoot 'scripts/Test-ShareSurferWindowsPowerShell51.ps1') -AllowPowerShellCore -PassThru
+            Assert-True ([bool]$result.IsValid) 'Windows PowerShell smoke helper should report a valid compatibility check.'
+            Assert-True ([int]$result.ParsedFileCount -gt 0) 'Windows PowerShell smoke helper should parse project PowerShell files.'
+            Assert-True ([int]$result.RequiredCommandCount -ge 5) 'Windows PowerShell smoke helper should verify public command imports.'
+            Assert-Equal $result.ModuleVersion '0.1.0' 'Windows PowerShell smoke helper should read the module manifest version.'
+        }
+    },
+    @{
+        Name = 'Release-readiness helper validates package and dependency-age evidence without publishing'
+        Body = {
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReadinessDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReleaseReadiness-' + [guid]::NewGuid().ToString('N'))
+            $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReadinessDependencyAge-' + [guid]::NewGuid().ToString('N') + '.json')
+            $assetPath = Join-Path $buildPath 'assets'
+            New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferReadinessLoaded = true;' -Encoding UTF8
+            Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
+                isValid = $true
+                skipped = $false
+                minimumAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
+                dependencyCount = 1
+                violationCount = 0
+                unknownCount = 0
+                violations = @()
+                unknown = @()
+                dependencies = @(@{
+                    name = 'react'
+                    version = '18.3.1'
+                    status = 'Allowed'
+                    ageDays = 30
+                })
+            } | ConvertTo-Json -Depth 8) -Encoding UTF8
+
+            $result = & (Join-Path $repoRoot 'scripts/Test-ShareSurferReleaseReadiness.ps1') -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -DependencyAgeReportPath $dependencyAgeReportPath -SkipNpmInstall -PassThru
+
+            Assert-True ([bool]$result.IsValid) 'Release-readiness helper should report valid readiness.'
+            Assert-Equal $result.Version $releaseMetadata.packageVersion 'Release-readiness helper should package the metadata version.'
+            Assert-Equal $result.CurrentPrereleaseTag $releaseMetadata.currentPrereleaseTag 'Release-readiness helper should report the metadata prerelease tag.'
+            Assert-Equal ([int]$result.MinimumDependencyAgeDays) ([int]$releaseMetadata.minimumDependencyAgeDays) 'Release-readiness helper should apply the metadata dependency-age policy.'
+            Assert-True (Test-Path -LiteralPath $result.PackageRoot -PathType Container) 'Release-readiness helper should create a package root.'
+            Assert-True (Test-Path -LiteralPath $result.ZipPath -PathType Leaf) 'Release-readiness helper should create a zip.'
+            Assert-True (Test-Path -LiteralPath $result.DependencyAgeReportPath -PathType Leaf) 'Release-readiness helper should preserve dependency-age evidence.'
+        }
+    },
+    @{
+        Name = 'Release-readiness helper rejects skipped dependency-age reports before packaging'
+        Body = {
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSkippedAgeDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSkippedAgeReadiness-' + [guid]::NewGuid().ToString('N'))
+            $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSkippedAge-' + [guid]::NewGuid().ToString('N') + '.json')
+            New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
+                isValid = $true
+                skipped = $true
+                minimumAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
+                dependencyCount = 0
+                violationCount = 0
+                unknownCount = 0
+                violations = @()
+                unknown = @()
+                dependencies = @()
+            } | ConvertTo-Json -Depth 8) -Encoding UTF8
+
+            $failedClosed = $false
+            try {
+                & (Join-Path $repoRoot 'scripts/Test-ShareSurferReleaseReadiness.ps1') -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -DependencyAgeReportPath $dependencyAgeReportPath -PassThru | Out-Null
+            }
+            catch {
+                $failedClosed = ($_.Exception.Message -like '*supplied report is marked skipped*')
+            }
+
+            Assert-True $failedClosed 'Release-readiness helper should reject skipped dependency-age reports before packaging.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $releaseOutput $releaseMetadata.packageName) -PathType Container)) 'Release-readiness helper should not create a package for skipped dependency-age evidence.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $releaseOutput $releaseMetadata.zipAssetName) -PathType Leaf)) 'Release-readiness helper should not create a zip for skipped dependency-age evidence.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferRelease rejects a manual version that differs from release metadata'
         Body = {
             $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
@@ -2844,6 +2948,82 @@ $tests = @(
             Assert-True (@($zipEntries | Where-Object { $_ -like '*/interface/standalone-dashboard/dist/assets/index-demo.js' }).Count -gt 0) 'Release zip should include prebuilt dashboard assets.'
             Assert-True (@($zipEntries | Where-Object { $_ -like '*/docs/reviews/*' }).Count -eq 0) 'Release zip should exclude internal quality-review docs.'
             Assert-True (@($zipEntries | Where-Object { $_ -like '*/docs/superpowers/*' }).Count -eq 0) 'Release zip should exclude internal planning docs.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferReleaseReadiness creates a no-publish package and dependency age report'
+        Body = {
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $assetPath = Join-Path $buildPath 'assets'
+            $outputRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReleaseReadiness-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferReleaseReadinessLoaded = true;' -Encoding UTF8
+
+            $result = & (Join-Path $repoRoot 'scripts/Test-ShareSurferReleaseReadiness.ps1') -OutputRoot $outputRoot -DashboardBuildPath $buildPath -SkipDependencyAgeNetwork -PassThru
+
+            Assert-True $result.IsValid 'Release readiness check should return a valid result.'
+            Assert-Equal $result.Version $releaseMetadata.packageVersion 'Release readiness check should use the metadata package version.'
+            Assert-Equal $result.MinimumDependencyAgeDays ([int]$releaseMetadata.minimumDependencyAgeDays) 'Release readiness should use the metadata dependency age policy.'
+            Assert-True (Test-Path -LiteralPath $result.PackageRoot -PathType Container) 'Release readiness should create an unpacked package.'
+            Assert-True (Test-Path -LiteralPath $result.ZipPath -PathType Leaf) 'Release readiness should create a zip artifact.'
+            Assert-True (Test-Path -LiteralPath $result.DependencyAgeReportPath -PathType Leaf) 'Release readiness should create a dependency age report.'
+            Assert-True (-not [bool]$result.DependencyAgeCheckSkipped) 'Release readiness should exercise dependency age report validation instead of skipping it.'
+            $dependencyAgeReport = Get-Content -LiteralPath $result.DependencyAgeReportPath -Raw | ConvertFrom-Json
+            Assert-True ([bool]$dependencyAgeReport.isValid) 'Generated dependency age report should be valid.'
+            Assert-True (-not [bool]$dependencyAgeReport.skipped) 'Generated dependency age report should not be marked skipped.'
+            Assert-Equal $dependencyAgeReport.minimumAgeDays ([int]$releaseMetadata.minimumDependencyAgeDays) 'Generated dependency age report should record the metadata age policy.'
+            Assert-True ([int]$dependencyAgeReport.dependencyCount -gt 0) 'Generated dependency age report should enumerate package-lock dependencies.'
+            Assert-Equal ([int]$dependencyAgeReport.violationCount) 0 'Generated dependency age report should have no violations in no-network mode.'
+            Assert-Equal ([int]$dependencyAgeReport.unknownCount) 0 'Generated dependency age report should have no unknown packages in no-network mode.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferReleaseReadiness preserves existing output unless forced'
+        Body = {
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReadinessForceDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $assetPath = Join-Path $buildPath 'assets'
+            $outputRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReleaseReadinessForce-' + [guid]::NewGuid().ToString('N'))
+            $packageRoot = Join-Path $outputRoot $releaseMetadata.packageName
+            $markerPath = Join-Path $packageRoot 'keep-marker.txt'
+            New-Item -ItemType Directory -Path $assetPath -Force | Out-Null
+            New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+            Set-Content -LiteralPath $markerPath -Value 'do not replace without force' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script><script type="module" src="./assets/index-demo.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { datasets: {} };' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $assetPath 'index-demo.js') -Value 'window.ShareSurferReleaseReadinessLoaded = true;' -Encoding UTF8
+
+            $failedClosed = $false
+            try {
+                & (Join-Path $repoRoot 'scripts/Test-ShareSurferReleaseReadiness.ps1') -OutputRoot $outputRoot -DashboardBuildPath $buildPath -SkipDependencyAgeNetwork -PassThru | Out-Null
+            }
+            catch {
+                $failedClosed = ($_.Exception.Message -like '*Release output already exists*')
+            }
+
+            Assert-True $failedClosed 'Release readiness should honor the release packager force contract.'
+            Assert-True (Test-Path -LiteralPath $markerPath -PathType Leaf) 'Release readiness should preserve existing package output when -Force is not supplied.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferReleaseReadiness fails closed when dashboard build is missing'
+        Body = {
+            $outputRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReleaseReadinessFailure-' + [guid]::NewGuid().ToString('N'))
+            $missingBuildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMissingDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $failedClosed = $false
+
+            try {
+                & (Join-Path $repoRoot 'scripts/Test-ShareSurferReleaseReadiness.ps1') -OutputRoot $outputRoot -DashboardBuildPath $missingBuildPath -SkipDependencyAgeNetwork -PassThru | Out-Null
+            }
+            catch {
+                $failedClosed = ($_.Exception.Message -like '*Dashboard build output not found*')
+            }
+
+            Assert-True $failedClosed 'Release readiness should fail closed when dashboard build assets are missing.'
+            Assert-True (-not (Test-Path -LiteralPath $outputRoot -PathType Container)) 'Release readiness should not create output after a missing dashboard build failure.'
         }
     },
     @{
