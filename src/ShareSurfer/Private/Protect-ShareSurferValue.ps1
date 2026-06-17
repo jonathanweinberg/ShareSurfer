@@ -92,6 +92,11 @@ function Protect-ShareSurferValue {
         'DiscountReason',
         'DiscountScope',
         'DiscountedPrincipals',
+        'ConfirmedOwner',
+        'ConfirmedBusinessUnit',
+        'Reviewer',
+        'Notes',
+        'SourceDecisionPath',
         'Message',
         'Detail'
     )
@@ -142,10 +147,15 @@ function Protect-ShareSurferValue {
         'DiscountedGroupCount',
         'MatchType',
         'ReviewPacketId',
+        'DecisionId',
+        'Decision',
+        'DecisionStatus',
+        'AllowedDecisions',
         'ReviewStatus',
         'WhyReview',
         'WhatToReviewFirst',
         'RelatedDataAreaCount',
+        'ReviewedAt',
         'RiskLevel',
         'ObjectClass',
         'ChildObjectClass',
@@ -180,6 +190,17 @@ function Protect-ShareSurferValue {
         'PotentialServiceAccount',
         'CollectionError'
     )
+
+    if ($ColumnName -eq 'Decision') {
+        $allowedDecisionValues = @(Get-ShareSurferReviewDecisionAllowedValues)
+        if ($allowedDecisionValues -contains $text) {
+            return $text
+        }
+        if ($RedactionMode -eq 'Strict') {
+            return '[redacted]'
+        }
+        return Get-ShareSurferStableToken -Value $text -Salt $RedactionSalt
+    }
 
     if ($RedactionMode -eq 'Strict') {
         if ($preserveColumns -contains $ColumnName -or ($ColumnName -eq 'ObservedValue' -and $observedValueSafeRows -contains $RowType)) {

@@ -20,6 +20,7 @@ Empty fields should be handled carefully. A blank `Owner`, OBS value, manager, t
 | Which shares and paths were collected? | `shares.csv` | `items.csv` |
 | Was the scan complete enough to review? | `evidence_confidence.csv` | `shares.csv` partial fields, `collection_errors.csv`, `findings.csv`, Diagnostics in the report |
 | Who should review this data? | `owner_review_packets.csv` | `owner_risk_pivots.csv`, `owner_mappings.csv`, `related_data_areas.csv` |
+| What decisions did reviewers record? | `owner_review_decisions.csv` | `migration_cluster_decisions.csv`, `owner_review_packets.csv`, `related_data_areas.csv` |
 | Which HR/OBS/project rows were used to enrich the scan? | `ownership_enrichment.csv` | `identities.csv`, `owner_mappings.csv`, standalone dashboard Raw Evidence |
 | Which groups grant access? | `permissioned_groups.csv` | `share_permissions.csv`, `acl_entries.csv`, `group_edges.csv`, `identities.csv` |
 | Why is this path risky for migration? | `findings.csv` | `conflicts.csv`, `related_data_areas.csv`, `items.csv` |
@@ -46,6 +47,8 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 
 `evidence_confidence.csv` is written by current scans. Older exports created before evidence confidence existed remain valid when this file is absent; the dashboard falls back to the older share and collection-error signals, but current scans should include the exported confidence rows.
 
+`owner_review_decisions.csv` and `migration_cluster_decisions.csv` are written as header-only files by current scans. Use `New-ShareSurferReviewDecisionDraft` after a scan to populate reviewer-ready templates, then use `Import-ShareSurferReviewDecisions` after reviewers edit them. Older exports remain valid when these files are absent.
+
 | File | Grain | Purpose |
 | --- | --- | --- |
 | `shares.csv` | One row per share | Defines collected SMB shares and partial-data status. |
@@ -62,6 +65,8 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
 | `related_data_areas.csv` | One row per migration discovery area | Groups like-owned shares, folders, and files for migration planning with explainable relatedness and readiness. |
 | `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
+| `owner_review_decisions.csv` | One row per owner review packet decision | Records reviewer decisions for owner packets after a draft/export/import loop. |
+| `migration_cluster_decisions.csv` | One row per migration discovery decision | Records reviewer decisions for related-data-area migration candidates after a draft/export/import loop. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
 | `evidence_confidence.csv` | One scan row plus one row per share | Summarizes evidence completeness, score/label, provider fallback, stop/review gates, and recommended action. This is not permission approval. |
@@ -217,7 +222,21 @@ Use this file before migration planning to find shares, folders, and files that 
 
 Expected columns: `ReviewPacketId`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `ReviewStatus`, `WhyReview`, `WhatToReviewFirst`, `SuggestedNextAction`, `MatchingItems`, `Directories`, `Files`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectIdentityCount`, `DirectGroupCount`, `ExpandedMemberCount`, `MigrationReadiness`, `RelatedDataAreaCount`, `RelatednessStrength`, `RelationshipSignalCount`, `ReadinessSignals`, `DiscountedPrincipal`, `DiscountedPrincipalCount`, `DiscountedGroupCount`, `DiscountedPrincipals`, `DiscountReason`.
 
-Use this file when business owners need a CSV-first review packet instead of raw ACL evidence. `WhyReview`, `WhatToReviewFirst`, and `SuggestedNextAction` are plain-language fields generated from owner pivots, findings, conflicts, partial-share counts, non-discounted group counts, and related-data-area readiness. The packet is view-only current-state evidence, not approval or planning state. Per-cluster review packet export and interactive planning states are later roadmap features.
+Use this file when business owners need a CSV-first review packet instead of raw ACL evidence. `WhyReview`, `WhatToReviewFirst`, and `SuggestedNextAction` are plain-language fields generated from owner pivots, findings, conflicts, partial-share counts, non-discounted group counts, and related-data-area readiness. The packet is view-only current-state evidence, not approval or planning state. Use `owner_review_decisions.csv` when reviewers need to record decisions beside these packets.
+
+### `owner_review_decisions.csv`
+
+Expected columns: `DecisionId`, `ReviewPacketId`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RiskLevel`, `ReviewStatus`, `MigrationReadiness`, `RelatednessStrength`, `MatchingItems`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectGroupCount`, `ExpandedMemberCount`, `Decision`, `DecisionStatus`, `ConfirmedOwner`, `ConfirmedBusinessUnit`, `Reviewer`, `ReviewedAt`, `Notes`, `NextAction`, `AllowedDecisions`, `SourceDecisionPath`, `ImportWarnings`.
+
+Use this file to carry owner-review decisions with the export. Run `New-ShareSurferReviewDecisionDraft -ExportPath <export> -OutputPath <review-folder>` to create a reviewer-editable CSV, fill in `Decision`, `ConfirmedOwner`, `ConfirmedBusinessUnit`, `Reviewer`, `ReviewedAt`, and `Notes`, then run `Import-ShareSurferReviewDecisions -ExportPath <export> -DecisionPath <review-folder>` to normalize the decisions back into the export folder.
+
+Allowed `Decision` values are `ConfirmedOwner`, `CleanupNeeded`, `RerunNeeded`, `MigrationCandidate`, and `WrongOwner`. Friendly values such as `confirmed owner`, `cleanup`, `rescan`, `ready for migration`, and `not my data` normalize to the canonical values. Blank decisions remain `Pending`; valid nonblank decisions become `Reviewed`; invalid values are preserved with `DecisionStatus=NeedsCorrection` and an `ImportWarnings` explanation.
+
+### `migration_cluster_decisions.csv`
+
+Expected columns: `DecisionId`, `RelatedAreaId`, `RelatedDataArea`, `BusinessUnit`, `Owner`, `Pattern`, `Source`, `RelatednessStrength`, `RiskLevel`, `MigrationReadiness`, `MatchingShares`, `MatchingItems`, `ReviewItemCount`, `FindingCount`, `ConflictCount`, `PartialShareCount`, `DirectGroupCount`, `ExpandedMemberCount`, `Decision`, `DecisionStatus`, `ConfirmedOwner`, `ConfirmedBusinessUnit`, `Reviewer`, `ReviewedAt`, `Notes`, `NextAction`, `AllowedDecisions`, `SourceDecisionPath`, `ImportWarnings`.
+
+Use this file to record decisions for Migration Discovery clusters from `related_data_areas.csv`. It uses the same decision values and import behavior as `owner_review_decisions.csv`, but it is keyed by `RelatedAreaId` instead of `ReviewPacketId`. This keeps migration-planning choices local, CSV-first, and offline while preserving the current scan context around each cluster.
 
 ### `conflicts.csv`
 

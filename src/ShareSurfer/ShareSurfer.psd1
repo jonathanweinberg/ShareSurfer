@@ -9,6 +9,7 @@
     PowerShellVersion = '5.1'
     FunctionsToExport = @(
         'ConvertTo-ShareSurferReport',
+        'Import-ShareSurferReviewDecisions',
         'Import-ShareSurferOwnershipSource',
         'Invoke-ShareSurferOpenFileAssessment',
         'Invoke-ShareSurferPortProtocolAssessment',
@@ -16,6 +17,7 @@
         'Join-ShareSurferOwnershipSources',
         'New-ShareSurferOwnershipMappingProfile',
         'New-ShareSurferOwnerMappingDraft',
+        'New-ShareSurferReviewDecisionDraft',
         'New-ShareSurferLabFixture',
         'New-ShareSurferSupportBundle',
         'Test-ShareSurferExport',

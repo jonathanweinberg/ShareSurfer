@@ -14,6 +14,8 @@ function Test-ShareSurferExport {
     $optionalFiles = New-Object System.Collections.ArrayList
     [void]$optionalFiles.Add('ownership_enrichment.csv')
     [void]$optionalFiles.Add('evidence_confidence.csv')
+    [void]$optionalFiles.Add('owner_review_decisions.csv')
+    [void]$optionalFiles.Add('migration_cluster_decisions.csv')
     $requiredOptionalFiles = New-Object System.Collections.ArrayList
     $optionalPackages = @(
         (Get-ShareSurferOpenFileExportSchema),

@@ -47,7 +47,9 @@ $exportedCommands = @(Get-Command -Module ShareSurfer | Select-Object -ExpandPro
 $requiredCommands = @(
     'Invoke-ShareSurferScan',
     'ConvertTo-ShareSurferReport',
+    'Import-ShareSurferReviewDecisions',
     'New-ShareSurferLabFixture',
+    'New-ShareSurferReviewDecisionDraft',
     'New-ShareSurferSupportBundle',
     'Test-ShareSurferExport'
 )
@@ -112,6 +114,19 @@ $validation = Test-ShareSurferExport -ExportPath $outputPath
 Assert-True ([bool]$validation.IsValid) 'Windows PowerShell 5.1 core scan/export validation should pass.'
 Assert-True (Test-Path -LiteralPath (Join-Path $outputPath 'shares.csv') -PathType Leaf) 'Windows PowerShell 5.1 scan should write shares.csv.'
 Assert-True (Test-Path -LiteralPath (Join-Path $outputPath 'acl_entries.csv') -PathType Leaf) 'Windows PowerShell 5.1 scan should write acl_entries.csv.'
+
+$reviewDecisionPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferWindowsPowerShellReview-' + [guid]::NewGuid().ToString('N'))
+New-ShareSurferReviewDecisionDraft -ExportPath $outputPath -OutputPath $reviewDecisionPath -Force | Out-Null
+$ownerDecisionPath = Join-Path $reviewDecisionPath 'owner_review_decisions.csv'
+$ownerDecisionRows = @(Import-Csv -LiteralPath $ownerDecisionPath)
+if ($ownerDecisionRows.Count -gt 0) {
+    $ownerDecisionRows[0].Decision = 'ConfirmedOwner'
+    $ownerDecisionRows[0].Reviewer = 'Windows PowerShell 5.1 smoke'
+    $ownerDecisionRows | Export-Csv -LiteralPath $ownerDecisionPath -NoTypeInformation -Encoding UTF8
+}
+$decisionImport = Import-ShareSurferReviewDecisions -ExportPath $outputPath -DecisionPath $reviewDecisionPath -Force
+Assert-True ([bool]$decisionImport.IsValid) 'Windows PowerShell 5.1 review-decision import should pass.'
+Assert-True (Test-Path -LiteralPath (Join-Path $outputPath 'owner_review_decisions.csv') -PathType Leaf) 'Windows PowerShell 5.1 decision import should write owner_review_decisions.csv.'
 
 $manifestData = Import-PowerShellDataFile -LiteralPath $moduleManifest
 $result = [pscustomobject]@{

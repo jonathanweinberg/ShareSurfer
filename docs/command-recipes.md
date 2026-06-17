@@ -239,7 +239,66 @@ Release users do not need Node, npm, Vite, a development server, or internet acc
 
 Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confidence panel. The score and label summarize evidence completeness only. Stop gates, partial data, collection errors, and provider fallback should be resolved, rerun, supplemented, or explicitly documented before approval.
 
-## Recipe 7: Locked-Down Collector Handoff
+## Recipe 7: Record Owner and Migration Review Decisions
+
+Use this after a scan has produced `owner_review_packets.csv` and `related_data_areas.csv`. The draft files are plain CSVs that can be edited in Excel, reviewed in a meeting, and imported back into the export folder before rebuilding the report or standalone dashboard.
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$exportPath = 'C:\ShareSurfer\exports\finance-001'
+$decisionPath = 'C:\ShareSurfer\reviews\finance-001'
+$decisionRerunPath = Join-Path $decisionPath 'review-decisions-rerun.ps1'
+
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+New-ShareSurferReviewDecisionDraft `
+  -ExportPath $exportPath `
+  -OutputPath $decisionPath `
+  -ReusableCommandPath $decisionRerunPath `
+  -Force
+```
+
+Open these files and fill in the reviewer columns:
+
+```text
+C:\ShareSurfer\reviews\finance-001\owner_review_decisions.csv
+C:\ShareSurfer\reviews\finance-001\migration_cluster_decisions.csv
+```
+
+Allowed `Decision` values are:
+
+```text
+ConfirmedOwner
+CleanupNeeded
+RerunNeeded
+MigrationCandidate
+WrongOwner
+```
+
+Then import the edited decisions back into the export and rebuild review artifacts:
+
+```powershell
+Import-ShareSurferReviewDecisions `
+  -ExportPath $exportPath `
+  -DecisionPath $decisionPath `
+  -ReusableCommandPath $decisionRerunPath `
+  -Force
+
+Test-ShareSurferExport -ExportPath $exportPath
+
+ConvertTo-ShareSurferReport `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\report.html"
+
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
+  -ExportPath $exportPath `
+  -OutputPath "$exportPath\standalone-dashboard" `
+  -Force
+```
+
+`New-ShareSurferReviewDecisionDraft` and `Import-ShareSurferReviewDecisions` both write reusable command text when `-ReusableCommandPath` is supplied. Keep that `.ps1` file beside the review CSVs so a later scan can regenerate the same decision workflow without retyping commands.
+
+## Recipe 8: Locked-Down Collector Handoff
 
 Use this when collection happens on a restricted host but review happens on a dashboard host.
 

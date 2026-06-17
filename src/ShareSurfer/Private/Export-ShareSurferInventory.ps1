@@ -196,6 +196,8 @@ function Export-ShareSurferInventory {
         'owner_risk_pivots.csv' = $ownerRiskPivots
         'related_data_areas.csv' = $relatedDataAreas
         'owner_review_packets.csv' = $ownerReviewPackets
+        'owner_review_decisions.csv' = @()
+        'migration_cluster_decisions.csv' = @()
         'conflicts.csv' = $conflicts
         'findings.csv' = $findings
         'evidence_confidence.csv' = $evidenceConfidence
