@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.16",
-  "packageVersion": "0.1.0-pre.16",
-  "packageName": "ShareSurfer-0.1.0-pre.16",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.16.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.16",
+  "currentPrereleaseTag": "v0.1.0-pre.17",
+  "packageVersion": "0.1.0-pre.17",
+  "packageName": "ShareSurfer-0.1.0-pre.17",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.17.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.17",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
