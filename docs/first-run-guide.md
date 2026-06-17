@@ -360,6 +360,7 @@ What good looks like after validation:
 
 - `IsValid` is `True`.
 - `scan_manifest.csv` shows the expected target mode, OBS attribute, manager identity format, thresholds, and `IncludeFiles` value.
+- `evidence_confidence.csv` shows an evidence-completeness label and no unresolved stop gates for the review scope.
 - `shares.csv` has the shares you expected to scan.
 - Any `PartialData=True` share row has been reviewed in `collection_errors.csv`, `findings.csv`, and the report Diagnostics view.
 - `owner_review_packets.csv` and `owner_risk_pivots.csv` contain useful owner/business-unit rows if you supplied owner mappings.
@@ -380,6 +381,7 @@ The most important CSVs for a first review are:
 | `acl_entries.csv` | Folder and file permissions. |
 | `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, Broken/Missing SID rows, unavailable owner metadata, collection errors, and potential service account review flags. |
 | `conflicts.csv` | Share-vs-NTFS access mismatches. |
+| `evidence_confidence.csv` | Scan/share evidence completeness, stop/review gates, requested/effective provider, provider fallback, counted partial shares, counted collection errors, and recommended action. This is not permission approval. |
 | `identities.csv` | Users, groups, manager fields, OBS values, potential service-account flags, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
 | `group_edges.csv` | Expanded group membership paths. |
 | `org_chains.csv` | Manager, manager's manager, and third-level manager context when populated. |
@@ -392,7 +394,7 @@ The most important CSVs for a first review are:
 | `port_protocol_targets.csv` | Optional target readiness summary when `Invoke-ShareSurferPortProtocolAssessment` was run. |
 | `port_protocol_checks.csv` | Optional detailed protocol evidence with operator guidance and remediation hints. |
 
-Start with `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group. If you also ran an open-file assessment, use `open_file_summary.csv` to spot active folders that may need migration timing or owner review. If you ran a port/protocol assessment, use `port_protocol_targets.csv` and the dashboard **Ports & Protocols** view to decide whether blocked or warning routes need a rerun, provider change, or infrastructure ticket before approval.
+Start with `evidence_confidence.csv`, `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, `permissioned_groups.csv`, `findings.csv`, and `conflicts.csv`, then use the report to pivot by business unit, owner, manager, OBS path, and group. Confidence is evidence completeness, not permission approval. Partial data or collection errors can block owner signoff until the operator resolves, reruns, supplements, or explicitly documents the gap. If you also ran an open-file assessment, use `open_file_summary.csv` to spot active folders that may need migration timing or owner review. If you ran a port/protocol assessment, use `port_protocol_targets.csv` and the dashboard **Ports & Protocols** view to decide whether blocked or warning routes need a rerun, provider change, or infrastructure ticket before approval.
 
 `owner_review_packets.csv` is generated automatically during `Invoke-ShareSurferScan`. You do not create that file by hand. To make it useful, provide `owner-mapping.csv` before the scan, run the scan, then confirm the export contains:
 
@@ -503,6 +505,7 @@ Use the dashboard to review:
 Before sending the report to a business owner, make sure you can answer:
 
 - Was the scan complete enough for this owner to review?
+- Does `evidence_confidence.csv` show any stop gates or review gates that should be resolved before owner signoff?
 - Which owner/business-unit mapping caused this owner to see these paths?
 - Are there collection gaps, Broken/Missing SID rows, no-owner rows, or potential service-account flags that need admin review first?
 - Are broad HelpDesk/admin groups visible but discounted from Migration Discovery relatedness where appropriate?

@@ -20,7 +20,7 @@ In ShareSurfer, **Owner** means the mapped business or data reviewer for a share
 
 ![ShareSurfer evidence pipeline](docs/visuals/field-guide/evidence-pipeline.png)
 
-The collector reads share permission evidence, file and folder ACLs, owner values, inheritance state, AD identities, groups, and org attributes. The output is a normalized evidence set: CSVs, findings, conflicts, `scan_manifest.csv`, `report.html`, and optional standalone dashboard files.
+The collector reads share permission evidence, file and folder ACLs, owner values, inheritance state, AD identities, groups, and org attributes. The output is a normalized evidence set: CSVs, findings, conflicts, `scan_manifest.csv`, `evidence_confidence.csv`, `report.html`, and optional standalone dashboard files.
 
 ### 2. Share access and file/folder access are both reviewed
 
@@ -44,7 +44,7 @@ Migration Discovery helps avoid moving one part of a business data area while le
 
 ![Diagnostics and trust review](docs/visuals/field-guide/diagnostics-trust-review.png)
 
-Warnings do not always mean the scan failed. They tell the operator what needs review before asking owners to approve anything: access denied paths, WinRM/CIM gaps, partial share evidence, broken or missing SIDs, critical scan information blocks, and paths that may need a rerun with different rights or a different provider.
+Warnings do not always mean the scan failed. They tell the operator what needs review before asking owners to approve anything: access denied paths, WinRM/CIM gaps, partial share evidence, broken or missing SIDs, critical scan information blocks, and paths that may need a rerun with different rights or a different provider. `evidence_confidence.csv` summarizes evidence completeness, stop/review gates, provider fallback, and the recommended next action. It is not permission approval.
 
 ### 6. Support evidence can be redacted before handoff
 
@@ -75,6 +75,7 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 | Migration discovery | Scan related shares with file/folder evidence and owner mappings | `related_data_areas.csv`, long-path findings, inheritance breaks, and share-vs-NTFS conflicts |
 | Hot folder activity review | Add an open-file assessment after the scan | `open_file_summary.csv`, `open_file_samples.csv`, and dashboard Raw Evidence Tables |
 | Port and protocol readiness | Run a port/protocol assessment before packaging the dashboard | `port_protocol_targets.csv`, `port_protocol_checks.csv`, and dashboard Ports & Protocols |
+| Evidence confidence review | Validate whether the scan is complete enough for owner signoff | `evidence_confidence.csv`, `collection_errors.csv`, partial rows in `shares.csv`, and dashboard Scan Confidence |
 | Nonpermissive collector workflow | Collect on a locked-down Windows host, then transfer the validated dataset to a dashboard host | Validated CSV export folder, `report.html`, optional standalone dashboard folder |
 | Broad admin or HelpDesk access cleanup | Provide a discounted principals CSV | Visible access evidence that does not inflate Migration Discovery relatedness |
 | Support or bug report | Create a redacted support bundle after export validation | Stable-token CSVs, manifests, and optional redacted report |
@@ -276,6 +277,8 @@ New-ShareSurferOwnerMappingDraft `
 `Invoke-ShareSurferOpenFileAssessment` is optional. It records open-file activity into `open_file_manifest.csv`, `open_file_samples.csv`, `open_file_summary.csv`, and `open_file_errors.csv` in the same export folder. Use a one-sample quick run for ad hoc checks, or increase `-SampleCount` and `-IntervalSeconds` for a longer observation window. The assessment helps identify hot folders by repeated open-file observations; it is activity evidence, not a replacement for share and NTFS permission evidence.
 
 `Invoke-ShareSurferPortProtocolAssessment` is optional. It records collector host context and read-only reachability checks into `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv`. The standalone dashboard shows those rows in **Ports & Protocols** below Raw Evidence. A failed WinRM/CIM check is not automatically fatal; it usually means ShareSurfer may need SMB/native fallback or may mark share-level metadata partial. A passed SMB/RPC check proves the network route is reachable; it does not prove the collector account can read or parse share security descriptors, owner values, or folder/file DACLs. The assessment also writes operator guidance fields that explain the likely collection impact, suggested next action, and remediation hint for common SMB, WinRM/CIM, RPC, and directory protocol results.
+
+Every scan also writes `evidence_confidence.csv`. This is an evidence-completeness signal, not permission approval. Use it to see whether partial data, collection errors, high-severity collection gaps, missing share evidence, or provider fallback should block owner signoff or trigger a rerun before migration planning. The standalone dashboard shows the score, label, stop/review gates, and recommended action in Overview and Diagnostics.
 
 Run the collector from an elevated Windows PowerShell prompt when possible. Without an elevated/admin token, ShareSurfer may miss or partially record share-level permission proof, protected ACLs, owner values, denied folders/files, and security descriptor details that require higher privileges. The scan keeps going best-effort and records those gaps as partial data, collection errors, and critical scan information blocks.
 

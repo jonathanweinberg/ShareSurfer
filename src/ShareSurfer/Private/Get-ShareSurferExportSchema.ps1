@@ -280,6 +280,28 @@ function Get-ShareSurferExportSchema {
             'PolicyValue',
             'Message'
         )
+        'evidence_confidence.csv' = @(
+            'ConfidenceId',
+            'Scope',
+            'ScopeId',
+            'ScopeName',
+            'ConfidenceLabel',
+            'ConfidenceScore',
+            'StopGate',
+            'ReviewGate',
+            'SignalCount',
+            'Signals',
+            'PartialShareCount',
+            'CollectionErrorCount',
+            'HighSeverityErrorCount',
+            'TotalShares',
+            'TotalItems',
+            'RequestedProvider',
+            'EffectiveProvider',
+            'ProviderFallback',
+            'RecommendedAction',
+            'Detail'
+        )
         'collection_errors.csv' = @(
             'ErrorId',
             'ShareId',

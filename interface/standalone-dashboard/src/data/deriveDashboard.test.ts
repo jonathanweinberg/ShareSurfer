@@ -47,6 +47,175 @@ describe("ShareSurfer dashboard data model", () => {
     expect(dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "acl_entries")?.totalRows).toBe(3);
   });
 
+  test("prefers exported evidence confidence while keeping legacy fallback available", () => {
+    const legacyDashboard = deriveDashboard(
+      normalizeSnapshot({
+        datasets: {
+          shares: [
+            {
+              ShareId: "share-legacy",
+              PartialData: "True"
+            }
+          ],
+          collection_errors: [
+            {
+              ErrorId: "error-legacy",
+              ErrorType: "AclReadError",
+              Severity: "High",
+              Message: "Access denied while reading ACLs."
+            }
+          ]
+        }
+      })
+    );
+
+    expect(legacyDashboard.scanSummary.scanConfidence).toBe(80);
+    expect(legacyDashboard.scanSummary.confidenceLabel).toBe("Review");
+
+    const exportedDashboard = deriveDashboard(
+      normalizeSnapshot({
+        datasets: {
+          shares: [
+            {
+              ShareId: "share-exported",
+              PartialData: "True"
+            }
+          ],
+          collection_errors: [
+            {
+              ErrorId: "error-exported",
+              ErrorType: "AclReadError",
+              Severity: "High",
+              Message: "Access denied while reading ACLs."
+            }
+          ],
+          evidence_confidence: [
+            {
+              ConfidenceId: "confidence-scan",
+              Scope: "Scan",
+              ScopeId: "scan",
+              ScopeName: "Scan evidence completeness",
+              ConfidenceLabel: "Partial",
+              ConfidenceScore: "62",
+              StopGate: "",
+              ReviewGate: "Partial collection evidence; provider fallback changed metadata path.",
+              SignalCount: "3",
+              Signals: "Partial shares: 1; collection errors: 1; provider fallback used.",
+              PartialShareCount: "1",
+              CollectionErrorCount: "1",
+              HighSeverityErrorCount: "1",
+              TotalShares: "1",
+              TotalItems: "0",
+              RequestedProvider: "Auto",
+              EffectiveProvider: "NativeSmbRpc",
+              ProviderFallback: "True",
+              RecommendedAction: "Review Diagnostics before owner signoff."
+            }
+          ]
+        }
+      })
+    );
+
+    expect(exportedDashboard.scanSummary.scanConfidence).toBe(62);
+    expect(exportedDashboard.scanSummary.confidenceLabel).toBe("Partial");
+    expect(exportedDashboard.scanSummary.confidenceScope).toBe("Scan");
+    expect(exportedDashboard.scanSummary.confidenceSignals).toContain("provider fallback");
+    expect(exportedDashboard.scanSummary.confidenceProviderFallback).toBe(true);
+    expect(exportedDashboard.scanSummary.confidenceRecommendedAction).toBe("Review Diagnostics before owner signoff.");
+    expect(exportedDashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "evidence_confidence")?.totalRows).toBe(1);
+
+    const inconsistentExportedDashboard = deriveDashboard(
+      normalizeSnapshot({
+        datasets: {
+          shares: [],
+          evidence_confidence: [
+            {
+              ConfidenceId: "confidence-bad",
+              Scope: "Scan",
+              ScopeId: "scan",
+              ScopeName: "Scan evidence completeness",
+              ConfidenceLabel: "Good",
+              ConfidenceScore: "96",
+              StopGate: "No share evidence was exported.",
+              ReviewGate: "",
+              Signals: "No shares were exported.",
+              ProviderFallback: "False",
+              RecommendedAction: "Rerun collection."
+            }
+          ]
+        }
+      })
+    );
+
+    expect(inconsistentExportedDashboard.scanSummary.scanConfidence).toBe(64);
+    expect(inconsistentExportedDashboard.scanSummary.confidenceLabel).toBe("Partial");
+  });
+
+  test("derives port and protocol stop and review gates without treating reachability as security descriptor proof", () => {
+    const dashboard = deriveDashboard(normalizeSnapshot(demoSnapshot));
+
+    const stopGate = dashboard.protocolReadinessGates.find((gate) => gate.gateType === "Stop" && gate.protocol === "SMB");
+    const winRmGate = dashboard.protocolReadinessGates.find((gate) => gate.gateType === "Review" && gate.protocol.includes("WinRM"));
+    const smbProofNote = dashboard.protocolReadinessGates.find((gate) => gate.gateType === "Info" && gate.protocol === "SMB");
+
+    expect(stopGate?.message).toContain("Required SMB reachability failed");
+    expect(stopGate?.recommendedAction).toContain("Resolve required SMB reachability");
+    expect(winRmGate?.message).toMatch(/fallback|partial metadata/i);
+    expect(smbProofNote?.message).toMatch(/does not prove ACL or security descriptor readability/i);
+
+    const edgeDashboard = deriveDashboard(
+      normalizeSnapshot({
+        datasets: {
+          port_protocol_checks: [
+            {
+              CheckId: "winrm-pass",
+              Target: "\\\\files01\\Finance",
+              TargetType: "SmbTarget",
+              Protocol: "WinRM HTTP",
+              Port: "5985",
+              Requirement: "Recommended",
+              Provider: "CIM",
+              Purpose: "Remote SMB metadata collection",
+              RequiredFor: "Get-SmbShare and Get-SmbShareAccess through CIM",
+              Status: "Pass",
+              Severity: "Info"
+            },
+            {
+              CheckId: "rpc-pass",
+              Target: "\\\\files01\\Finance",
+              TargetType: "SmbTarget",
+              Protocol: "RPC Endpoint Mapper",
+              Port: "135",
+              Requirement: "Recommended",
+              Provider: "NativeSmbRpc",
+              Purpose: "Native share metadata route",
+              RequiredFor: "Native SMB/RPC metadata",
+              Status: "Pass",
+              Severity: "Info"
+            },
+            {
+              CheckId: "smb-skipped",
+              Target: "\\\\files02\\Archive",
+              TargetType: "SmbTarget",
+              Protocol: "SMB",
+              Port: "445",
+              Requirement: "Required",
+              Provider: "SMB",
+              Purpose: "File share and ACL evidence",
+              RequiredFor: "SMB enumeration",
+              Status: "Skipped",
+              Severity: "Info"
+            }
+          ]
+        }
+      })
+    );
+
+    expect(edgeDashboard.protocolReadinessGates.some((gate) => gate.gateType === "Info" && gate.protocol === "WinRM HTTP")).toBe(false);
+    expect(edgeDashboard.protocolReadinessGates.some((gate) => gate.gateType === "Info" && gate.protocol === "RPC Endpoint Mapper" && /only proves that this RPC route answered/.test(gate.message))).toBe(true);
+    expect(edgeDashboard.protocolReadinessGates.some((gate) => gate.gateType === "Stop" && gate.protocol === "SMB" && /skipped/i.test(gate.message))).toBe(true);
+  });
+
   test("treats ownership enrichment as optional labeled raw evidence", () => {
     const legacySnapshot = normalizeSnapshot({
       datasets: {

@@ -41,6 +41,32 @@ function runtimeSchema(): SchemaMap {
 }
 
 describe("ShareSurfer dashboard schema parity", () => {
+  test("dashboard runtime schema includes exported evidence confidence", () => {
+    expect(datasetKeys as readonly string[]).toContain("evidence_confidence");
+    expect(expectedColumns["evidence_confidence" as keyof typeof expectedColumns]).toEqual([
+      "ConfidenceId",
+      "Scope",
+      "ScopeId",
+      "ScopeName",
+      "ConfidenceLabel",
+      "ConfidenceScore",
+      "StopGate",
+      "ReviewGate",
+      "SignalCount",
+      "Signals",
+      "PartialShareCount",
+      "CollectionErrorCount",
+      "HighSeverityErrorCount",
+      "TotalShares",
+      "TotalItems",
+      "RequestedProvider",
+      "EffectiveProvider",
+      "ProviderFallback",
+      "RecommendedAction",
+      "Detail"
+    ]);
+  });
+
   test("standalone packager schema covers every normalized PowerShell export CSV", () => {
     const exportSchema = parsePowerShellSchema("src/ShareSurfer/Private/Get-ShareSurferExportSchema.ps1");
     const packagerSchema = parsePowerShellSchema("scripts/New-ShareSurferStandaloneDashboard.ps1");

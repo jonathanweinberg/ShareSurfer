@@ -7,10 +7,11 @@ Use this guide when a first scan finishes with warnings, looks sparse, or does n
 Open these files from the scan export folder first:
 
 1. `scan_manifest.csv` to confirm the scan settings, OBS attribute, manager format, source mode, collection provider, and whether files were included.
-2. `shares.csv` to see whether any share row has `PartialData=True` and what `PartialReason` says.
-3. `collection_errors.csv` to see collection gaps such as access denied, share-permission collection unavailable, path resolution failure, ACL read failure, or folder enumeration failure.
-4. `findings.csv` to see review signals such as `CollectionError`, `OwnerMetadataUnavailable`, `BrokenOrMissingSid`, `PotentialServiceAccount`, long paths, broken inheritance, and deep explicit ACEs.
-5. `scan_events.csv` or `scan_events.jsonl` when you need the timeline of what the collector was doing.
+2. `evidence_confidence.csv` to check the evidence-completeness label, stop gate, review gate, requested/effective provider, provider fallback, and recommended action.
+3. `shares.csv` to see whether any share row has `PartialData=True` and what `PartialReason` says.
+4. `collection_errors.csv` to see collection gaps such as access denied, share-permission collection unavailable, path resolution failure, ACL read failure, or folder enumeration failure.
+5. `findings.csv` to see review signals such as `CollectionError`, `OwnerMetadataUnavailable`, `BrokenOrMissingSid`, `PotentialServiceAccount`, long paths, broken inheritance, and deep explicit ACEs.
+6. `scan_events.csv` or `scan_events.jsonl` when you need the timeline of what the collector was doing.
 
 Run this quick check from Windows PowerShell:
 
@@ -18,12 +19,15 @@ Run this quick check from Windows PowerShell:
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 
 Import-Csv "$exportPath\scan_manifest.csv" | Format-List
+Import-Csv "$exportPath\evidence_confidence.csv" | Format-List Scope,ConfidenceScore,ConfidenceLabel,StopGate,ReviewGate,RecommendedAction
 Import-Csv "$exportPath\shares.csv" | Where-Object { $_.PartialData -eq 'True' } | Format-Table ShareName,PartialReason -AutoSize
 Import-Csv "$exportPath\collection_errors.csv" | Select-Object -First 20 | Format-Table ErrorType,Severity,Source,FullPath -AutoSize
 Import-Csv "$exportPath\findings.csv" | Group-Object FindingType | Sort-Object Count -Descending | Format-Table Count,Name -AutoSize
 ```
 
 Do not ask a business owner to approve a scan just because `Test-ShareSurferExport` says the CSV structure is valid. Validation proves the files and columns exist. It does not prove the collector reached every folder, file, share permission, owner value, or directory attribute.
+
+Also do not treat a high confidence label as permission approval. Confidence is a scan-completeness signal. Stop gates and review gates in `evidence_confidence.csv` should be resolved, rerun, supplemented, or explicitly documented before owner signoff.
 
 ## Common Problems
 

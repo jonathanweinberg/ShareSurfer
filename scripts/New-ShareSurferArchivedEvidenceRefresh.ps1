@@ -21,9 +21,13 @@ $issueSummaryScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssu
 $issueCommentScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationIssueComments.ps1'
 $issueCommentPublisherScriptPath = Join-Path $PSScriptRoot 'Publish-ShareSurferValidationIssueComments.ps1'
 $closeoutChecklistScriptPath = Join-Path $PSScriptRoot 'New-ShareSurferValidationCloseoutChecklist.ps1'
+$stableTokenScriptPath = Join-Path (Join-Path (Join-Path $repoRoot 'src') 'ShareSurfer') (Join-Path 'Private' 'Get-ShareSurferStableToken.ps1')
+$evidenceConfidenceScriptPath = Join-Path (Join-Path (Join-Path $repoRoot 'src') 'ShareSurfer') (Join-Path 'Private' 'Get-ShareSurferEvidenceConfidenceRows.ps1')
 
 Import-Module $modulePath -Force -ErrorAction Stop
 . $helperPath
+. $stableTokenScriptPath
+. $evidenceConfidenceScriptPath
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $RunRoot 'refreshed-evidence'
@@ -288,6 +292,35 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'owner
     'DiscountedPrincipals',
     'DiscountReason'
 )
+
+$archivedShares = @()
+$archivedItems = @()
+$archivedCollectionErrors = @()
+$archivedManifestRows = @()
+if (Test-Path -LiteralPath (Join-Path $outputExportPath 'shares.csv')) {
+    $archivedShares = @(Import-Csv -LiteralPath (Join-Path $outputExportPath 'shares.csv'))
+}
+if (Test-Path -LiteralPath (Join-Path $outputExportPath 'items.csv')) {
+    $archivedItems = @(Import-Csv -LiteralPath (Join-Path $outputExportPath 'items.csv'))
+}
+if (Test-Path -LiteralPath (Join-Path $outputExportPath 'collection_errors.csv')) {
+    $archivedCollectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputExportPath 'collection_errors.csv'))
+}
+if (Test-Path -LiteralPath (Join-Path $outputExportPath 'scan_manifest.csv')) {
+    $archivedManifestRows = @(Import-Csv -LiteralPath (Join-Path $outputExportPath 'scan_manifest.csv'))
+}
+
+$archivedManifest = if ($archivedManifestRows.Count -gt 0) { $archivedManifestRows[0] } else { [pscustomobject]@{} }
+$requestedProvider = ''
+$effectiveProvider = ''
+if ($archivedManifest.PSObject.Properties['RequestedSmbCollectionProvider']) {
+    $requestedProvider = [string]$archivedManifest.RequestedSmbCollectionProvider
+}
+if ($archivedManifest.PSObject.Properties['EffectiveSmbCollectionProvider']) {
+    $effectiveProvider = [string]$archivedManifest.EffectiveSmbCollectionProvider
+}
+$archivedConfidenceRows = @(Get-ShareSurferEvidenceConfidenceRows -Shares $archivedShares -Items $archivedItems -CollectionErrors $archivedCollectionErrors -RequestedProvider $requestedProvider -EffectiveProvider $effectiveProvider)
+$archivedConfidenceRows | Export-Csv -LiteralPath (Join-Path $outputExportPath 'evidence_confidence.csv') -NoTypeInformation -Encoding UTF8
 
 $plan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
 $existingCriteria = @(Import-Csv -LiteralPath $criteriaPath)

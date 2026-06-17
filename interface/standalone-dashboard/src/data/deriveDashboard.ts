@@ -40,6 +40,13 @@ export interface ScanSummary {
   brokenSidFindings: number;
   scanConfidence: number;
   confidenceLabel: "Good" | "Review" | "Partial";
+  confidenceScope: string;
+  confidenceSignals: string;
+  confidenceProviderState: string;
+  confidenceProviderFallback: boolean;
+  confidenceStopGates: string;
+  confidenceReviewGates: string;
+  confidenceRecommendedAction: string;
 }
 
 export interface ReviewQueueRow {
@@ -127,6 +134,20 @@ export interface DiagnosticSummary {
   scanEvents: DataRow[];
 }
 
+export interface ProtocolReadinessGate {
+  gateId: string;
+  gateType: "Stop" | "Review" | "Info";
+  scope: string;
+  target: string;
+  protocol: string;
+  status: string;
+  severity: string;
+  message: string;
+  collectionImpact: string;
+  recommendedAction: string;
+  raw: DataRow;
+}
+
 export interface CriticalScanBlock extends DataRow {
   ErrorId: string;
   ErrorType: string;
@@ -150,6 +171,7 @@ export interface DashboardModel {
   reviewQueue: ReviewQueueRow[];
   issueSummaries: IssueSummary[];
   criticalScanBlocks: CriticalScanBlock[];
+  protocolReadinessGates: ProtocolReadinessGate[];
   migrationClusters: MigrationCluster[];
   permissionedGroupTree: GroupTreeRow[];
   identityReviewSignals: IdentityReviewSignals;
@@ -695,18 +717,225 @@ function buildGroups(snapshot: NormalizedSnapshot): GroupTreeRow[] {
   }));
 }
 
+function confidenceLabel(value: string, fallback: "Good" | "Review" | "Partial"): "Good" | "Review" | "Partial" {
+  if (value === "Good" || value === "Review" || value === "Partial") {
+    return value;
+  }
+  return fallback;
+}
+
 function confidence(
-  summary: Omit<ScanSummary, "scanConfidence" | "confidenceLabel"> & { collectionErrors: number }
-): Pick<ScanSummary, "scanConfidence" | "confidenceLabel"> {
+  summary: Omit<
+    ScanSummary,
+    | "scanConfidence"
+    | "confidenceLabel"
+    | "confidenceScope"
+    | "confidenceSignals"
+    | "confidenceProviderState"
+    | "confidenceProviderFallback"
+    | "confidenceStopGates"
+    | "confidenceReviewGates"
+    | "confidenceRecommendedAction"
+  > & { collectionErrors: number },
+  confidenceRows: DataRow[]
+): Pick<
+  ScanSummary,
+  | "scanConfidence"
+  | "confidenceLabel"
+  | "confidenceScope"
+  | "confidenceSignals"
+  | "confidenceProviderState"
+  | "confidenceProviderFallback"
+  | "confidenceStopGates"
+  | "confidenceReviewGates"
+  | "confidenceRecommendedAction"
+> {
   const penalties =
     Math.min(35, summary.partialShares * 12) +
     Math.min(30, summary.collectionErrors * 8) +
     Math.min(15, summary.totalShares === 0 ? 15 : 0);
   const score = Math.max(20, 100 - penalties);
-  return {
+  const fallbackStopGates = [
+    summary.totalShares === 0 ? "No shares were exported; rerun or supplement collection before owner signoff." : "",
+    summary.collectionErrors > 0 ? `Collection errors recorded: ${summary.collectionErrors}. Resolve, rerun, or document them before owner signoff.` : ""
+  ]
+    .filter(Boolean)
+    .join("; ");
+  const fallbackReviewGates = [
+    summary.partialShares > 0 ? `Partial share evidence recorded: ${summary.partialShares}. Review Diagnostics before owner signoff.` : "",
+    summary.conflicts > 0 ? `Access conflicts recorded: ${summary.conflicts}. Confirm the access model before approval.` : ""
+  ]
+    .filter(Boolean)
+    .join("; ");
+  const fallbackLabel: ScanSummary["confidenceLabel"] = score >= 85 ? "Good" : score >= 65 ? "Review" : "Partial";
+  const fallback = {
     scanConfidence: score,
-    confidenceLabel: score >= 85 ? "Good" : score >= 65 ? "Review" : "Partial"
+    confidenceLabel: fallbackLabel,
+    confidenceScope: "Scan",
+    confidenceSignals: `shares=${summary.totalShares}; partial shares=${summary.partialShares}; collection errors=${summary.collectionErrors}`,
+    confidenceProviderState: "No exported confidence provider state was available.",
+    confidenceProviderFallback: false,
+    confidenceStopGates: fallbackStopGates,
+    confidenceReviewGates: fallbackReviewGates,
+    confidenceRecommendedAction:
+      fallbackStopGates !== ""
+        ? "Resolve stop gates or rerun/supplement collection before owner signoff."
+        : fallbackReviewGates !== ""
+          ? "Review gates with the owner or platform team before signoff."
+          : "Evidence is complete enough for owner review; confirm business intent before approval."
   };
+
+  const exported = confidenceRows.find((row) => row.Scope.trim().toLowerCase() === "scan") ?? confidenceRows[0];
+  if (!exported) {
+    return fallback;
+  }
+
+  const exportedScore = toNumber(exported.ConfidenceScore);
+  const boundedScore = exportedScore > 0 ? Math.max(0, Math.min(100, exportedScore)) : fallback.scanConfidence;
+  const exportedStopGates = exported.StopGate || exported.StopGates || fallback.confidenceStopGates;
+  const exportedReviewGates = exported.ReviewGate || exported.ReviewGates || fallback.confidenceReviewGates;
+  const gatedExportedScore =
+    exportedStopGates !== ""
+      ? Math.min(boundedScore, 64)
+      : exportedReviewGates !== ""
+        ? Math.min(boundedScore, 84)
+        : boundedScore;
+  const exportedLabel: ScanSummary["confidenceLabel"] =
+    gatedExportedScore >= 85 ? "Good" : gatedExportedScore >= 65 ? "Review" : "Partial";
+  return {
+    scanConfidence: gatedExportedScore,
+    confidenceLabel: confidenceLabel(exportedLabel, fallback.confidenceLabel),
+    confidenceScope: exported.Scope || fallback.confidenceScope,
+    confidenceSignals: exported.Signals || fallback.confidenceSignals,
+    confidenceProviderState:
+      exported.Detail ||
+      exported.ProviderState ||
+      [exported.RequestedProvider ? `Requested provider: ${exported.RequestedProvider}` : "", exported.EffectiveProvider ? `effective provider: ${exported.EffectiveProvider}` : ""]
+        .filter(Boolean)
+        .join("; ") ||
+      fallback.confidenceProviderState,
+    confidenceProviderFallback: isTruthy(exported.ProviderFallback),
+    confidenceStopGates: exportedStopGates,
+    confidenceReviewGates: exportedReviewGates,
+    confidenceRecommendedAction: exported.RecommendedAction || fallback.confidenceRecommendedAction
+  };
+}
+
+function protocolText(row: DataRow): string {
+  return `${row.Protocol} ${row.Provider} ${row.Purpose} ${row.RequiredFor} ${row.EnvironmentProfile}`.toLowerCase();
+}
+
+function isProtocolProblem(row: DataRow): boolean {
+  const status = row.Status.trim().toLowerCase();
+  const severity = row.Severity.trim().toLowerCase();
+  return ["fail", "failed", "warning", "blocked", "error", "review", "skipped"].includes(status) || ["warning", "high", "critical"].includes(severity);
+}
+
+function isSkippedProtocolCheck(row: DataRow): boolean {
+  return row.Status.trim().toLowerCase() === "skipped";
+}
+
+function isExplicitSmbCheck(row: DataRow): boolean {
+  const protocol = row.Protocol.trim().toLowerCase();
+  const port = row.Port.trim();
+  return protocol === "smb" || protocol === "smb/rpc" || protocol === "smb rpc" || port === "445";
+}
+
+function isExplicitNativeRpcCheck(row: DataRow): boolean {
+  const protocol = row.Protocol.trim().toLowerCase();
+  const provider = row.Provider.trim().toLowerCase();
+  const port = row.Port.trim();
+  return protocol.includes("rpc") || provider === "nativesmbrpc" || port === "135";
+}
+
+function buildProtocolReadinessGates(checkRows: DataRow[]): ProtocolReadinessGate[] {
+  const gates: ProtocolReadinessGate[] = [];
+
+  checkRows.forEach((row, index) => {
+    const protocol = row.Protocol || row.Provider || "Protocol";
+    const target = row.Target || row.ComputerName || "Target";
+    const status = row.Status || "Unknown";
+    const severity = row.Severity || "Review";
+    const isRequired = row.Requirement.trim().toLowerCase() === "required";
+    const text = protocolText(row);
+    const isSmb = isExplicitSmbCheck(row);
+    const isNativeRpc = isExplicitNativeRpcCheck(row);
+    const isWinRmOrCim = row.Protocol.trim().toLowerCase().includes("winrm") || row.Provider.trim().toLowerCase() === "cim";
+    const problem = isProtocolProblem(row);
+    const skipped = isSkippedProtocolCheck(row);
+
+    if (isRequired && isSmb && problem) {
+      const skippedMessage = skipped
+        ? `Required SMB reachability was skipped for ${target}. Required SMB checks are stop gates until live reachability is proven.`
+        : `Required SMB reachability failed for ${target}. Failed required SMB checks are stop gates before relying on collection evidence.`;
+      gates.push({
+        gateId: row.CheckId || `protocol-stop-${index}`,
+        gateType: "Stop",
+        scope: row.TargetType || "Port/protocol check",
+        target,
+        protocol,
+        status,
+        severity,
+        message: skippedMessage,
+        collectionImpact: row.CollectionImpact || "Core SMB collection may be blocked or severely incomplete.",
+        recommendedAction: skipped
+          ? row.RemediationHint
+            ? `Prove required SMB reachability before scanning or owner signoff. ${row.RemediationHint}`
+            : "Prove required SMB reachability before scanning or owner signoff."
+          : row.RemediationHint
+            ? `Resolve required SMB reachability before scanning or owner signoff. ${row.RemediationHint}`
+            : "Resolve required SMB reachability before scanning or owner signoff.",
+        raw: row
+      });
+    }
+
+    if (isWinRmOrCim && problem) {
+      const winRmMessage = skipped
+        ? `WinRM/CIM reachability was skipped for ${target}; this leaves fallback and partial metadata risk unproven.`
+        : `WinRM/CIM reachability for ${target} may require provider fallback or explain partial metadata risk.`;
+      gates.push({
+        gateId: `${row.CheckId || `protocol-review-${index}`}-winrm-cim`,
+        gateType: "Review",
+        scope: row.TargetType || "Port/protocol check",
+        target,
+        protocol,
+        status,
+        severity,
+        message: winRmMessage,
+        collectionImpact:
+          row.CollectionImpact || "ShareSurfer may continue through another provider, but share-level metadata can be partial.",
+        recommendedAction:
+          row.OperatorGuidance || row.RemediationHint || "Confirm whether WinRM/CIM is expected or use an explicit fallback provider and review partial metadata.",
+        raw: row
+      });
+    }
+
+    if ((isSmb || isNativeRpc) && status.trim().toLowerCase() === "pass") {
+      const proofRoute = isSmb ? "SMB" : protocol;
+      const proofLimit = isSmb
+        ? `${proofRoute} reachability does not prove ACL or security descriptor readability.`
+        : `${proofRoute} reachability only proves that this RPC route answered; it does not prove dynamic RPC rules, share security descriptor reads, ACL reads, or the full native SMB/RPC metadata path.`;
+      gates.push({
+        gateId: `${row.CheckId || `protocol-info-${index}`}-smb-proof`,
+        gateType: "Info",
+        scope: row.TargetType || "Port/protocol check",
+        target,
+        protocol,
+        status,
+        severity,
+        message: `${proofRoute} reachability passed for ${target}. ${proofLimit}`,
+        collectionImpact:
+          row.CollectionImpact || "Network reachability only proves the route; permissions and descriptor reads still determine evidence completeness.",
+        recommendedAction: "Use scan evidence, collection errors, and partial-share rows to prove what ShareSurfer could read.",
+        raw: row
+      });
+    }
+  });
+
+  return gates.sort((a, b) => {
+    const gateRank = { Stop: 3, Review: 2, Info: 1 };
+    return gateRank[b.gateType] - gateRank[a.gateType] || a.target.localeCompare(b.target) || a.protocol.localeCompare(b.protocol);
+  });
 }
 
 export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
@@ -748,7 +977,8 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
     brokenSidFindings,
     collectionErrors: snapshot.datasets.collection_errors.length
   };
-  const confidenceResult = confidence(baseSummary);
+  const confidenceResult = confidence(baseSummary, snapshot.datasets.evidence_confidence);
+  const protocolReadinessGates = buildProtocolReadinessGates(snapshot.datasets.port_protocol_checks);
   const rawEvidenceCatalog = datasetKeys.map((key) => ({
     key,
     label: datasetLabels[key],
@@ -760,12 +990,12 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
   return {
     scanSummary: {
       ...baseSummary,
-      scanConfidence: confidenceResult.scanConfidence,
-      confidenceLabel: confidenceResult.confidenceLabel
+      ...confidenceResult
     },
     reviewQueue,
     issueSummaries: buildIssues(snapshot, ownerLookup),
     criticalScanBlocks,
+    protocolReadinessGates,
     migrationClusters: buildMigrationClusters(snapshot.datasets.related_data_areas),
     permissionedGroupTree: permissionedGroups,
     identityReviewSignals: {
