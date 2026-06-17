@@ -4,6 +4,20 @@ This guide is for a first-time ShareSurfer operator. You do not need to be a sen
 
 If report or command terms are unfamiliar, keep the [glossary](glossary.md) open while you work.
 
+## Start Here
+
+For a first useful scan:
+
+1. Extract the current `v0.1.0-pre.18` release ZIP to `C:\ShareSurfer\`. If that checkpoint tag is not visible on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) yet, use the latest published prerelease and substitute that version in the paths below.
+2. Use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
+3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
+4. Pick one known share and the correct `-ObsAttribute`.
+5. Run the collector, validate the export, and build `report.html`.
+6. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
+7. Check the stop gates before sending anything to a business owner.
+
+Stop gates are conditions that make the scan unsafe to treat as complete owner-review evidence. They include unresolved partial data, collection errors, wrong or missing OBS attributes, template dashboard confusion, protocol readiness blockers, and missing owner/business-unit mapping when owner review is expected.
+
 ## What ShareSurfer Does
 
 ShareSurfer reads Windows file-share information and turns it into CSV files and an offline report.
@@ -75,17 +89,17 @@ $PSVersionTable.PSVersion
 
 The major version should be `5`.
 
-If you are using the `v0.1.0-pre.17` release ZIP, extract it to `C:\ShareSurfer\`. The extracted release root should be:
+If you are using the `v0.1.0-pre.18` release ZIP, extract it to `C:\ShareSurfer\`. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below. The extracted release root should be:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.17\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.17`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.17.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.18.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
@@ -579,12 +593,12 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The [v0.1.0-pre.17 release package](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.17) also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
+The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The v0.1.0-pre.18 release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
 If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `

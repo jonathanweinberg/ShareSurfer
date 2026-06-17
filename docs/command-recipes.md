@@ -5,18 +5,53 @@ This page collects the most common first-run commands in one place. Use it when 
 The examples assume the current quickstart release is unpacked here:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.17\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\
 ```
 
-They also assume Windows PowerShell 5.1 unless a command explicitly says otherwise.
+If `v0.1.0-pre.18` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in every `ShareSurfer-0.1.0-pre.18` path and ZIP name below. The commands also assume Windows PowerShell 5.1 unless a command explicitly says otherwise.
+
+## Start Here
+
+1. Unpack and unblock the release.
+2. Create optional input CSVs only when you have the data.
+3. Run one scan shape: quick UNC path, Windows SMB computer/share, or NativeSmbRpc fallback.
+4. Validate the export and build `report.html`.
+5. Package the standalone dashboard from the validated export folder when reviewers need the richer local dashboard.
+6. Check stop gates before owner signoff.
+
+## Command Inventory by Workflow
+
+| Workflow | Copy/paste recipe | Commands and scripts |
+| --- | --- | --- |
+| Release setup | Recipe 1 | `Expand-Archive`, `Unblock-File`, `Import-Module` |
+| Lab and fixture planning | README Lab Fixture section | `New-ShareSurferLabFixture` |
+| Optional owner/admin inputs | Recipe 2 | `owner-mapping.csv`, `discounted-principals.csv` |
+| Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
+| Core scan | Recipes 3-5 | `Invoke-ShareSurferScan`, optional `-SmbCollectionProvider NativeSmbRpc` |
+| Validation and dashboards | Recipe 6 | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `New-ShareSurferStandaloneDashboard.ps1` |
+| Review decisions | Recipe 7 | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
+| Locked-down handoff | Recipe 8 | `Compress-Archive`, `Get-FileHash` |
+| Optional assessments | Recipes 9-10 | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment` |
+| Support and rerun | Recipes 11-12 | `New-ShareSurferSupportBundle`, rerun scan commands |
+
+## Stop Gates Before Owner Signoff
+
+`Test-ShareSurferExport` proves the files and columns are usable. It does not prove the scan reached every path or collected every security detail. Pause before owner review when:
+
+- `evidence_confidence.csv` has a stop gate, review gate, provider fallback, or low confidence label that affects the review scope.
+- `shares.csv` has `PartialData=True` or `collection_errors.csv` has access denied, unauthorized operation, native security descriptor, path resolution, ACL read, or owner read failures.
+- `scan_manifest.csv` shows the wrong `ObsAttribute`, or `identities.csv`/`org_chains.csv` show blank OBS values where reviewer routing depends on OBS.
+- The dashboard opened from the release template folder instead of a generated `$exportPath\standalone-dashboard` folder.
+- `owner_review_packets.csv` and `owner_risk_pivots.csv` are blank, generic, or missing expected owner/business-unit mappings.
+- `port_protocol_targets.csv` or `port_protocol_checks.csv` shows protocol readiness blockers for the collection route you intended to trust.
 
 ## Recipe 1: Unpack and Import the Release
 
-Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.17.zip` from the GitHub release on an approved connected workstation.
+Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.18.zip` from the GitHub release on an approved connected workstation. If that checkpoint ZIP is not published yet, download the latest published prerelease ZIP and update `$releaseZip` and `$releaseRoot` to match it.
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.17.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.18.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
@@ -30,7 +65,7 @@ Get-Command -Module ShareSurfer
 
 The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting the release ZIP.
 
-Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.17\ShareSurfer-0.1.0-pre.17`.
+Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\ShareSurfer-0.1.0-pre.18`.
 
 ## Recipe 2: Create Optional Input CSVs
 
@@ -77,7 +112,7 @@ If you do not have either file yet, leave it absent. The scan recipes below only
 Use this when another team gives you a CSV with useful owner or OBS data but the headers do not match ShareSurfer's expected owner mapping format.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
@@ -136,7 +171,7 @@ For more detail, see the [admin ownership import guide](admin-ownership-import.m
 Use this when you already know the share path and want a first reviewable export.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
 $discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
@@ -172,7 +207,7 @@ Use this recipe first if you are new to the tool. It can still record partial-da
 Use this when you know the Windows file server and share name and want ShareSurfer to collect share metadata.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -194,7 +229,7 @@ Use `-IncludeFiles` only when file-level rows matter for the review. Large share
 Use this when a Windows SMB target is reachable but default remote CIM or SMB cmdlets cannot prove share metadata cleanly.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-native-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -217,7 +252,7 @@ Invoke-ShareSurferScan `
 Run this after the collector finishes.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Test-ShareSurferExport -ExportPath $exportPath
@@ -244,7 +279,7 @@ Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confi
 Use this after a scan has produced `owner_review_packets.csv` and `related_data_areas.csv`. The draft files are plain CSVs that can be edited in Excel, reviewed in a meeting, and imported back into the export folder before rebuilding the report or standalone dashboard.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $decisionPath = 'C:\ShareSurfer\reviews\finance-001'
 $decisionRerunPath = Join-Path $decisionPath 'review-decisions-rerun.ps1'
@@ -326,7 +361,7 @@ $actualHash -eq $expectedHash
 
 The result should be `True`.
 
-## Recipe 8: Open-File Activity Assessment
+## Recipe 9: Open-File Activity Assessment
 
 Use this after or near a scan when you need a quick look at active use.
 
@@ -343,7 +378,7 @@ Invoke-ShareSurferOpenFileAssessment `
 
 This writes `open_file_manifest.csv`, `open_file_samples.csv`, `open_file_summary.csv`, and `open_file_errors.csv`. Treat it as activity evidence, not as a replacement for permission evidence.
 
-## Recipe 9: Ports and Protocols Assessment
+## Recipe 10: Ports and Protocols Assessment
 
 Use this before or after a scan when you need to prove which collector routes are reachable. The command is read-only.
 
@@ -361,7 +396,7 @@ This writes `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port
 
 If you are only rehearsing the workflow and are not allowed to open network sockets, add `-SkipNetworkTests`; the CSVs will show skipped checks instead of pass/fail reachability.
 
-## Recipe 10: Redacted Support Bundle
+## Recipe 11: Redacted Support Bundle
 
 Use this when you need to share bug-report evidence outside trusted handling.
 
@@ -376,7 +411,7 @@ New-ShareSurferSupportBundle `
 
 Keep raw CSVs internal unless your process allows sharing them. The support bundle uses stable tokens so support can compare rows without seeing raw identities and paths.
 
-## Recipe 11: Rerun After Mapping or Cleanup
+## Recipe 12: Rerun After Mapping or Cleanup
 
 Use a new export folder for each rerun so you can compare results.
 

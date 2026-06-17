@@ -14,8 +14,10 @@ C:\ShareSurfer\inputs\hr-obs.csv
 
 ## 2. Set Paths And Import ShareSurfer
 
+If `v0.1.0-pre.18` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
+
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.16'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
