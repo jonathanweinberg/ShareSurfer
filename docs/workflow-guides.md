@@ -4,6 +4,29 @@ This guide explains the three main ShareSurfer operating flows shown in the READ
 
 ShareSurfer is read-only. It collects evidence, validates the export set, and presents review views. It does not change permissions, approve access, migrate data, or fix broken ACLs.
 
+## Start Here
+
+For a first operator run:
+
+1. Extract the current release ZIP to `C:\ShareSurfer\` and use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\` as the release root. If `v0.1.0-pre.18` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in the example paths.
+2. Recursively unblock the extracted `.ps1`, `.psm1`, and `.psd1` files before importing the module.
+3. Scan one known share first, not a whole file server.
+4. Validate the export with `Test-ShareSurferExport`.
+5. Open `report.html`, or package the standalone dashboard from the validated export folder.
+6. Review the stop gates below before asking an owner to sign off.
+
+## Stop Gates For Owner Review
+
+Pause before business-owner signoff when:
+
+| Stop gate | Why it matters |
+| --- | --- |
+| Partial data or collection errors affect the review scope | The report may be usable, but the missing proof can hide access, owner, path, or security descriptor evidence. |
+| The selected OBS attribute is wrong, blank, or missing | Owner, manager, and business-unit pivots may send the review to the wrong place. |
+| The standalone dashboard was opened from the release template assets | The release template proves the app is present; it is not real scan evidence until a validated export is packaged. |
+| Evidence confidence or protocol readiness rows show blockers | SMB/RPC or WinRM/CIM reachability does not guarantee readable share permissions, owner values, or DACLs. |
+| Owner or business-unit mapping is missing when owner review is expected | The reviewer may not understand why they received the packet or what they are being asked to approve. |
+
 ## First Scan to Owner Review
 
 ![First scan to owner review workflow](visuals/readme-flow-guides/first-scan-owner-review.png)
@@ -21,7 +44,7 @@ Use this flow when you want one business owner or business unit to understand a 
 Fast starter command:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.16'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -65,7 +88,7 @@ Use this flow when the collector host is locked down, has no internet access, ca
 Collector-side handoff command:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.16'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 
@@ -86,7 +109,7 @@ Get-FileHash -Algorithm SHA256 -Path $handoffPath
 Dashboard-host command:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.16'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\received\scan-001'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `

@@ -5156,10 +5156,13 @@ $tests = @(
             }
             Assert-True (Test-Path -LiteralPath $workflowGuide) 'Documentation should include a README workflow guide.'
             $workflowGuideText = Get-Content -LiteralPath $workflowGuide -Raw
+            Assert-True ($workflowGuideText -like '*Start Here*') 'Workflow guide should include a short operator start-here path.'
+            Assert-True ($workflowGuideText -like '*latest published prerelease*') 'Workflow guide should explain what to do if the checkpoint tag is not published yet.'
             Assert-True ($workflowGuideText -like '*First Scan to Owner Review*') 'Workflow guide should explain first scan to owner review.'
             Assert-True ($workflowGuideText -like '*Locked-Down Collector to Dashboard Host*') 'Workflow guide should explain the two-host flow.'
             Assert-True ($workflowGuideText -like '*Migration Discovery and Cleanup Planning*') 'Workflow guide should explain migration discovery cleanup planning.'
             Assert-True ($workflowGuideText -like '*Stop gate*') 'Workflow guide should include stop gates.'
+            Assert-True ($workflowGuideText -like '*Stop Gates For Owner Review*') 'Workflow guide should include owner-review stop gates.'
             Assert-True ($workflowGuideText -like '*Go gate*') 'Workflow guide should include go gates.'
             Assert-True ($workflowGuideText -like '*Discounted principals*' -or $workflowGuideText -like '*discounted access principals*') 'Workflow guide should explain discounted access signal handling.'
             Assert-True ($workflowGuideText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Workflow guide should show dashboard packaging.'
@@ -5167,6 +5170,11 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath $commandRecipes) 'Documentation should include first-run command recipes.'
             $commandRecipeText = Get-Content -LiteralPath $commandRecipes -Raw
             Assert-True ($commandRecipeText -like '*ShareSurfer Command Recipes*') 'Command recipes should have a clear title.'
+            Assert-True ($commandRecipeText -like '*Command Inventory by Workflow*') 'Command recipes should include a workflow-grouped command inventory.'
+            Assert-True ($commandRecipeText -like '*Join-ShareSurferOwnershipSources*') 'Command recipes should include multi-source ownership join guidance.'
+            Assert-True ($commandRecipeText -like '*New-ShareSurferLabFixture*') 'Command recipes should include lab fixture command inventory.'
+            Assert-True ($commandRecipeText -like '*Stop Gates Before Owner Signoff*') 'Command recipes should include signoff stop gates.'
+            Assert-True ($commandRecipeText -like '*latest published prerelease*') 'Command recipes should explain what to do if the checkpoint tag is not published yet.'
             Assert-True ($commandRecipeText -like '*Quick UNC Path Scan*') 'Command recipes should include UNC path scan guidance.'
             Assert-True ($commandRecipeText -like '*SMB Scan When WinRM or CIM Is Blocked*') 'Command recipes should include NativeSmbRpc fallback guidance.'
             Assert-True ($commandRecipeText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Command recipes should include standalone dashboard packaging.'
@@ -5262,6 +5270,13 @@ $tests = @(
             Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
+            Assert-True ($readmeText -like '*Start Here*') 'README should include a short operator start-here path.'
+            Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
+            Assert-True ($readmeText -like '*Command Inventory by Workflow*') 'README should group public commands by workflow.'
+            Assert-True ($readmeText -like '*Test-ShareSurferOwnershipSource*' -and $readmeText -like '*New-ShareSurferReviewDecisionDraft*') 'README command inventory should include ownership and review decision commands.'
+            Assert-True ($readmeText -like '*Evidence confidence or protocol readiness blockers*') 'README stop gates should mention evidence confidence and protocol readiness blockers.'
+            Assert-True ($readmeText -like '*Missing owner or business-unit mapping*') 'README stop gates should mention missing owner or business-unit mapping.'
+            Assert-True ($readmeText -like '*latest published prerelease*') 'README should explain what to do if the checkpoint tag is not published yet.'
             Assert-True ($readmeText -like '*How ShareSurfer Works*') 'README should tell the ShareSurfer story near the top.'
             Assert-True ($readmeText -like '*Owner** means the mapped business or data reviewer*') 'README should define ShareSurfer owner in the early story section.'
             Assert-True ($readmeText -like '*docs/visuals/field-guide/evidence-pipeline.png*') 'README should show the evidence pipeline visual in the early story section.'
@@ -5353,6 +5368,9 @@ $tests = @(
             $firstRunText = Get-Content -LiteralPath $firstRunGuide -Raw
             $firstRunTroubleshootingText = Get-Content -LiteralPath $firstRunTroubleshooting -Raw
             $businessReviewHandoffText = Get-Content -LiteralPath $businessReviewHandoff -Raw
+            Assert-True ($firstRunText -like '*Start Here*') 'First-run guide should include a short start-here section.'
+            Assert-True ($firstRunText -like '*Stop gates are conditions*') 'First-run guide should explain stop gates before the longer walkthrough.'
+            Assert-True ($firstRunText -like '*latest published prerelease*') 'First-run guide should explain what to do if the checkpoint tag is not published yet.'
             Assert-True ($firstRunText -like '*first-time*') 'First-run guide should explicitly address first-time operators.'
             Assert-True ($firstRunText -like '*glossary*') 'First-run guide should link glossary definitions.'
             Assert-True ($firstRunText -like '*command recipes*') 'First-run guide should link command recipes.'
@@ -5413,6 +5431,7 @@ $tests = @(
             Assert-True ($nonpermissiveText -like '*Collector handoff checklist*') 'Nonpermissive workflow should include a collector handoff checklist.'
             Assert-True ($nonpermissiveText -like '*Dashboard host received-package checklist*') 'Nonpermissive workflow should include a dashboard-host intake checklist.'
             Assert-True ($nonpermissiveText -like '*$actualHash -eq $expectedHash*') 'Nonpermissive workflow should show a dashboard-host hash verification check.'
+            Assert-True ($nonpermissiveText -like '*latest published prerelease*') 'Nonpermissive workflow should explain what to do if the checkpoint tag is not published yet.'
 
             Assert-True (Test-Path -LiteralPath $managementOverview) 'Documentation should include a management overview artifact.'
             Assert-True (Test-Path -LiteralPath $managementSlide) 'Documentation should include an offline management overview slide.'

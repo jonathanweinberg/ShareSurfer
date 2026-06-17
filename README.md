@@ -54,15 +54,44 @@ Raw exports can contain real identities, paths, employee attributes, manager con
 
 The deeper [visual field guide](docs/visual-field-guide.md) explains each diagram with review questions and primary output files.
 
-## Commands
+## Start Here
 
-- `New-ShareSurferLabFixture`
-- `Invoke-ShareSurferScan`
-- `Invoke-ShareSurferOpenFileAssessment`
-- `Invoke-ShareSurferPortProtocolAssessment`
-- `ConvertTo-ShareSurferReport`
-- `New-ShareSurferSupportBundle`
-- `Test-ShareSurferExport`
+Use this path for the first real operator run:
+
+1. Open the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) on an approved connected workstation and download the ZIP and SHA256 file for the current package tag, `v0.1.0-pre.18`. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below until `v0.1.0-pre.18` appears.
+2. Extract the ZIP to `C:\ShareSurfer\` so the release root is `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\`.
+3. Recursively unblock the extracted PowerShell files before importing the module.
+4. Decide the scan shape: normal UNC path, Windows `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked.
+5. Pick the right `-ObsAttribute` before scanning. `extensionAttribute10` is the default, but some environments need another attribute such as `info`.
+6. Run `Invoke-ShareSurferScan`, then always run `Test-ShareSurferExport`.
+7. Open `report.html` or package a real export with `scripts\New-ShareSurferStandaloneDashboard.ps1`. Do not use the release template dashboard assets as scan evidence.
+8. Review the stop gates below before asking a business owner to approve or plan migration from the results.
+
+If this is your first time using ShareSurfer, open the [First-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby for copy/paste commands.
+
+## Pause Before Owner Signoff
+
+Stop or explicitly document the gap before owner review when any of these are true:
+
+| Stop gate | Where to look | What it means |
+| --- | --- | --- |
+| Partial data or collection errors | `evidence_confidence.csv`, `shares.csv`, `collection_errors.csv`, dashboard Diagnostics | The export may be structurally valid, but the collector could not prove every share, path, ACL, owner, or security descriptor needed for the review. |
+| Wrong or missing OBS attribute | `scan_manifest.csv`, `identities.csv`, `org_chains.csv` | Reviewer routing may be wrong or blank if `-ObsAttribute` points at an empty or unavailable directory attribute. |
+| Template dashboard confusion | `interface\standalone-dashboard\dist\index.html` versus `$exportPath\standalone-dashboard\index.html` | The release folder contains template assets. Real review requires packaging a validated export folder first. |
+| Evidence confidence or protocol readiness blockers | `evidence_confidence.csv`, `port_protocol_targets.csv`, `port_protocol_checks.csv` | A network route can be reachable while share or ACL security evidence remains unreadable or unparseable. |
+| Missing owner or business-unit mapping | `owner_mappings.csv`, `owner_review_packets.csv`, `owner_risk_pivots.csv` | ShareSurfer can still collect evidence, but business owners may not know why they received the packet or what they own. |
+
+## Command Inventory by Workflow
+
+| Workflow | Commands and scripts | Use when |
+| --- | --- | --- |
+| Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` | You need deterministic Windows/AD test data or enterprise lab validation. |
+| Scan collection | `Invoke-ShareSurferScan` | You need share permissions, NTFS ACLs, ownership, inheritance, identities, groups, findings, conflicts, and migration signals. |
+| Optional readiness assessments | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment` | You need hot-folder activity evidence or collector route readiness evidence beside the scan. |
+| Ownership import and mapping | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` | You have HR, employee, OBS, OID, owner, project, or cost-center CSVs that need to become scan-ready ownership inputs. |
+| Review decisions | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` | You want owner and migration review decisions to round-trip through local CSVs and stay with the export evidence. |
+| Validation and reports | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `scripts\New-ShareSurferStandaloneDashboard.ps1` | You need to prove the export shape, generate `report.html`, or package the richer offline dashboard from a real export. |
+| Support and packaging | `New-ShareSurferSupportBundle`, `scripts\New-ShareSurferRelease.ps1`, `scripts\Test-ShareSurferReleaseReadiness.ps1` | You need a redacted support bundle or maintainer release-package validation. |
 
 ## Basic Use Cases
 
@@ -154,19 +183,19 @@ Choose the starting path that matches your situation:
 | You need CSV definitions or joins | Use the [export schema](docs/export-schema.md). |
 | You are validating the enterprise lab | Use the [operator workflow](docs/operator-workflow.md) and [Windows lab readiness checklist](docs/windows-lab-readiness-checklist.md). |
 
-Current pre-release quickstart package: [v0.1.0-pre.17](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.17). Download `ShareSurfer-0.1.0-pre.17.zip` and `ShareSurfer-0.1.0-pre.17.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets.
+Current pre-release quickstart package target: `v0.1.0-pre.18`. Open the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), download `ShareSurfer-0.1.0-pre.18.zip` and `ShareSurfer-0.1.0-pre.18.zip.sha256` from that release on an approved connected workstation, verify or record the SHA256 value, then move the zip by your normal approved process. The package is unsigned, but it is fully built and includes the PowerShell module, scripts, documentation, release manifest, dependency-age report, SHA256 files, and prebuilt standalone dashboard template assets. If this docs branch has landed before the checkpoint prerelease appears, use the latest published prerelease until `v0.1.0-pre.18` is visible.
 
 When the ZIP is extracted to `C:\ShareSurfer\`, the release root is:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.17\
+C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.17`, change the destination to `C:\ShareSurfer` to avoid a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.17\ShareSurfer-0.1.0-pre.17`. From PowerShell, use:
+If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18`, change the destination to `C:\ShareSurfer` to avoid a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\ShareSurfer-0.1.0-pre.18`. From PowerShell, use:
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.17.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.18.zip'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
 Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
@@ -181,7 +210,7 @@ On Windows, release users do not need Node, npm, Vite, a preview server, or inte
 `Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. At the end, look for the `ShareSurfer Summary` lines. They show the scan counts, output path, any partial-data or collection-gap warning, and the next `Test-ShareSurferExport` command. Add `-Quiet` only for automation where console progress is not wanted.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
@@ -308,10 +337,10 @@ In ShareSurfer, **Owner** means the mapped business/data reviewer. It is separat
 
 ### Quick Start in a Nonpermissive Environment
 
-Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the [v0.1.0-pre.17 release zip](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.17) for first-time Windows use because it already includes the built dashboard assets. Copy the unpacked ShareSurfer release folder to the collector host first. If the ZIP is extracted to `C:\ShareSurfer\`, use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.17` as `$shareSurferRoot`. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
+Use this path when the collector host cannot use internet access, npm, browser tooling, or a dashboard preview server. Prefer the `v0.1.0-pre.18` release zip from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) for first-time Windows use because it already includes the built dashboard assets. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below. Copy the unpacked ShareSurfer release folder to the collector host first. If the ZIP is extracted to `C:\ShareSurfer\`, use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18` as `$shareSurferRoot`. The collector only needs PowerShell 5.1, read access to the target share, and directory read access for identity enrichment.
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -394,7 +423,7 @@ The dashboard files included in the release are template assets. Opening `interf
 Package a validated export folder as a standalone dashboard from the release zip on Windows:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.17'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `
@@ -435,7 +464,7 @@ A future signed Windows dashboard viewer can wrap this same static dashboard pac
 
 ## Pre-1.0 Release Packaging
 
-The first ShareSurfer release packages are unsigned but fully built. The current quickstart release is [v0.1.0-pre.17](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.17). It includes the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
+The first ShareSurfer release packages are unsigned but fully built. The current quickstart release target is `v0.1.0-pre.18` on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases). If that checkpoint tag is not visible yet, use the latest published prerelease until `v0.1.0-pre.18` appears. It includes the PowerShell module, scripts, documentation, SHA256 hash files, a dependency-age report, a release manifest, and prebuilt standalone dashboard template assets. The release manifest records `signingStatus` as `UnsignedPre1.0` so operators can distinguish this basic package from a future signed release.
 
 Release identity is tracked in [release-metadata.json](release-metadata.json). Update that file first when preparing the next prerelease; the release packager and workflow fail closed when a manual version or tag does not match it.
 
