@@ -1,0 +1,5 @@
+ExpectedClusterId,BusinessUnit,Owner,Pattern,ExpectedRelatednessStrength,ExpectedMigrationReadiness,ExpectedMatchingShares,MinimumRelationshipSignalCount,RequiredRelationshipSignals,RequiredSupportingEvidence
+finance-ap,Finance,Accounts Payable,\\files??\Finance-AP*,Strong,Review,2,3,same owner; same business unit; shared non-discounted business permission group,path/share/folder naming similarity
+legal-hold,Legal,Legal Operations,\\files??\Legal-AP*,Strong,Candidate,1,3,same owner; same business unit; shared non-discounted business permission group,path/share/folder naming similarity
+project-phoenix,,Project Phoenix,\\files03\Project-Phoenix*,Possible,Candidate,1,1,same owner,path/share/folder naming similarity
+unknown-legacy,,,\\files04\Legacy-Unknown*,Needs Evidence,Candidate,1,0,,path/share/folder naming similarity

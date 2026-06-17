@@ -35,6 +35,22 @@ function Assert-Equal {
     }
 }
 
+function Assert-SignalContains {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Actual,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Expected,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Message
+    )
+
+    $tokens = @([string]$Actual -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })
+    Assert-True ($tokens -contains $Expected) $Message
+}
+
 function New-TestSecurityDescriptorBytes {
     param(
         [Parameter(Mandatory = $true)]
@@ -493,6 +509,189 @@ function New-TestDiscountedPrincipalInventory {
                 BusinessUnit = 'Legal'
                 Source = 'unit-test'
             }
+        )
+        IdentityDirectory = @()
+    }
+}
+
+function New-TestMigrationDiscoveryQualityInventory {
+    [pscustomobject]@{
+        Shares = @(
+            [pscustomobject]@{
+                ShareId = 'share-finance-ap-active'
+                Source = 'Fixture'
+                ComputerName = 'files01'
+                ShareName = 'Finance-AP'
+                UNCPath = '\\files01\Finance-AP'
+                LocalPath = 'C:\ShareSurferLab\Finance-AP'
+                Description = 'Finance AP active share'
+                PartialData = $false
+                PartialReason = ''
+            },
+            [pscustomobject]@{
+                ShareId = 'share-finance-ap-archive'
+                Source = 'Fixture'
+                ComputerName = 'files02'
+                ShareName = 'Finance-AP-Archive'
+                UNCPath = '\\files02\Finance-AP-Archive'
+                LocalPath = 'D:\ShareSurferLab\Finance-AP-Archive'
+                Description = 'Finance AP archive share'
+                PartialData = $false
+                PartialReason = ''
+            },
+            [pscustomobject]@{
+                ShareId = 'share-legal-ap-hold'
+                Source = 'Fixture'
+                ComputerName = 'files01'
+                ShareName = 'Legal-AP-Hold'
+                UNCPath = '\\files01\Legal-AP-Hold'
+                LocalPath = 'C:\ShareSurferLab\Legal-AP-Hold'
+                Description = 'Legal AP hold share'
+                PartialData = $false
+                PartialReason = ''
+            },
+            [pscustomobject]@{
+                ShareId = 'share-project-phoenix'
+                Source = 'Fixture'
+                ComputerName = 'files03'
+                ShareName = 'Project-Phoenix'
+                UNCPath = '\\files03\Project-Phoenix'
+                LocalPath = 'C:\ShareSurferLab\Project-Phoenix'
+                Description = 'Project Phoenix collaboration share'
+                PartialData = $false
+                PartialReason = ''
+            },
+            [pscustomobject]@{
+                ShareId = 'share-legacy-unknown'
+                Source = 'Fixture'
+                ComputerName = 'files04'
+                ShareName = 'Legacy-Unknown'
+                UNCPath = '\\files04\Legacy-Unknown'
+                LocalPath = 'C:\ShareSurferLab\Legacy-Unknown'
+                Description = 'Legacy share with insufficient ownership evidence'
+                PartialData = $false
+                PartialReason = ''
+            }
+        )
+        Items = @(
+            [pscustomobject]@{
+                ItemId = 'item-finance-ap-active-root'
+                ShareId = 'share-finance-ap-active'
+                ItemType = 'Directory'
+                FullPath = '\\files01\Finance-AP'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\FinanceOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-finance-ap-active-invoices'
+                ShareId = 'share-finance-ap-active'
+                ItemType = 'Directory'
+                FullPath = '\\files01\Finance-AP\Invoices'
+                RelativePath = 'Invoices'
+                Depth = 1
+                Owner = 'CONTOSO\FinanceOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-finance-ap-archive-root'
+                ShareId = 'share-finance-ap-archive'
+                ItemType = 'Directory'
+                FullPath = '\\files02\Finance-AP-Archive'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\FinanceOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-finance-ap-archive-deep'
+                ShareId = 'share-finance-ap-archive'
+                ItemType = 'Directory'
+                FullPath = '\\files02\Finance-AP-Archive\FY2024\Closed\Invoices\Vendor'
+                RelativePath = 'FY2024\Closed\Invoices\Vendor'
+                Depth = 4
+                Owner = 'CONTOSO\FinanceOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-legal-ap-hold-root'
+                ShareId = 'share-legal-ap-hold'
+                ItemType = 'Directory'
+                FullPath = '\\files01\Legal-AP-Hold'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\LegalOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-project-phoenix-root'
+                ShareId = 'share-project-phoenix'
+                ItemType = 'Directory'
+                FullPath = '\\files03\Project-Phoenix'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\ProjectOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            },
+            [pscustomobject]@{
+                ItemId = 'item-legacy-unknown-root'
+                ShareId = 'share-legacy-unknown'
+                ItemType = 'Directory'
+                FullPath = '\\files04\Legacy-Unknown'
+                RelativePath = ''
+                Depth = 0
+                Owner = 'CONTOSO\LegacyOwner'
+                InheritanceEnabled = $true
+                InheritanceBrokenAt = ''
+            }
+        )
+        SharePermissions = @(
+            [pscustomobject]@{ ShareId = 'share-finance-ap-active'; Identity = 'CONTOSO\FinanceAPAccess'; Rights = 'Read'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-finance-ap-active'; Identity = 'CONTOSO\HelpDeskOps'; Rights = 'Full'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-finance-ap-archive'; Identity = 'CONTOSO\FinanceAPAccess'; Rights = 'Read'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-finance-ap-archive'; Identity = 'CONTOSO\HelpDeskOps'; Rights = 'Full'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-legal-ap-hold'; Identity = 'CONTOSO\LegalHoldAccess'; Rights = 'Change'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-legal-ap-hold'; Identity = 'CONTOSO\HelpDeskOps'; Rights = 'Full'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-project-phoenix'; Identity = 'CONTOSO\HelpDeskOps'; Rights = 'Full'; AccessControlType = 'Allow'; Source = 'quality-harness' },
+            [pscustomobject]@{ ShareId = 'share-legacy-unknown'; Identity = 'CONTOSO\HelpDeskOps'; Rights = 'Full'; AccessControlType = 'Allow'; Source = 'quality-harness' }
+        )
+        AclEntries = @(
+            [pscustomobject]@{
+                ItemId = 'item-finance-ap-archive-deep'
+                ShareId = 'share-finance-ap-archive'
+                FullPath = '\\files02\Finance-AP-Archive\FY2024\Closed\Invoices\Vendor'
+                Identity = 'CONTOSO\FinanceAPAccess'
+                Rights = 'Modify'
+                AccessControlType = 'Allow'
+                IsInherited = $false
+                InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                PropagationFlags = 'None'
+                Depth = 4
+            }
+        )
+        Identities = @(
+            [pscustomobject]@{ Identity = 'CONTOSO\FinanceAPAccess'; SamAccountName = 'FinanceAPAccess'; DisplayName = 'Finance AP Access'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; UserPrincipalName = ''; Mail = 'finance.ap.access@example.test'; Department = 'Accounts Payable'; Title = ''; Company = 'Contoso Finance'; Office = 'HQ-4'; AccountEnabled = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.FIN.AP'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = $false; DistinguishedName = 'CN=Finance AP Access,OU=Groups,DC=example,DC=test' },
+            [pscustomobject]@{ Identity = 'CONTOSO\LegalHoldAccess'; SamAccountName = 'LegalHoldAccess'; DisplayName = 'Legal Hold Access'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; UserPrincipalName = ''; Mail = 'legal.hold.access@example.test'; Department = 'Legal'; Title = ''; Company = 'Contoso Legal'; Office = 'HQ-3'; AccountEnabled = ''; Manager = ''; ManagerLevel1 = ''; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.LEGAL'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = $false; DistinguishedName = 'CN=Legal Hold Access,OU=Groups,DC=example,DC=test' },
+            [pscustomobject]@{ Identity = 'CONTOSO\HelpDeskOps'; SamAccountName = 'HelpDeskOps'; DisplayName = 'HelpDesk Operators'; ObjectClass = 'group'; EmployeeId = ''; EmployeeNumber = ''; UserPrincipalName = ''; Mail = 'helpdesk@example.test'; Department = 'Technology Support'; Title = ''; Company = 'Contoso'; Office = 'HQ-IT'; AccountEnabled = ''; Manager = ''; ManagerLevel1 = 'CONTOSO\IT.Manager'; ManagerLevel2 = ''; ManagerLevel3 = ''; ObsPath = 'CORP.IT.HELPDESK'; ObsAttribute = 'extensionAttribute10'; PotentialServiceAccount = $false; DistinguishedName = 'CN=HelpDesk Operators,OU=Groups,DC=example,DC=test' }
+        )
+        GroupEdges = @(
+            [pscustomobject]@{ ParentGroup = 'CONTOSO\FinanceAPAccess'; ChildIdentity = 'CONTOSO\Ava.Accounting'; ChildObjectClass = 'user'; Depth = 1; IsCycle = $false; IsTruncated = $false },
+            [pscustomobject]@{ ParentGroup = 'CONTOSO\LegalHoldAccess'; ChildIdentity = 'CONTOSO\Lena.Legal'; ChildObjectClass = 'user'; Depth = 1; IsCycle = $false; IsTruncated = $false },
+            [pscustomobject]@{ ParentGroup = 'CONTOSO\HelpDeskOps'; ChildIdentity = 'CONTOSO\Casey.Support'; ChildObjectClass = 'user'; Depth = 1; IsCycle = $false; IsTruncated = $false }
+        )
+        OrgChains = @()
+        OwnerMappings = @(
+            [pscustomobject]@{ Pattern = '\\files??\Finance-AP*'; Owner = 'Accounts Payable'; BusinessUnit = 'Finance'; Source = 'migration-quality-harness' },
+            [pscustomobject]@{ Pattern = '\\files??\Legal-AP*'; Owner = 'Legal Operations'; BusinessUnit = 'Legal'; Source = 'migration-quality-harness' },
+            [pscustomobject]@{ Pattern = '\\files03\Project-Phoenix*'; Owner = 'Project Phoenix'; BusinessUnit = ''; Source = 'migration-quality-harness' },
+            [pscustomobject]@{ Pattern = '\\files04\Legacy-Unknown*'; Owner = ''; BusinessUnit = ''; Source = 'migration-quality-harness' }
         )
         IdentityDirectory = @()
     }
@@ -1352,6 +1551,76 @@ $tests = @(
                 Assert-True ($packet.DiscountedPrincipal -eq 'True') 'Owner review packets should keep discounted access visible in the main review hub.'
                 Assert-True ($packet.DiscountReason -like '*Broad helpdesk access*') 'Owner review packets should carry the discount reason.'
                 Assert-True ($packet.WhyReview -notlike '*permission-bearing security groups*') 'Discounted-only groups should not make owner packets look related by permissioned groups.'
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan proves migration discovery expected clusters and explainable signals'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMigrationQualityExport-' + [guid]::NewGuid().ToString('N'))
+            $discountedPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMigrationQualityDiscounted-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $expectedPath = Join-Path $repoRoot 'tests/fixtures/migration-discovery-quality/expected_related_data_areas.csv'
+            Assert-True (Test-Path -LiteralPath $expectedPath) 'Migration discovery quality harness should include durable expected cluster data.'
+
+            @(
+                [pscustomobject]@{
+                    Identity = 'CONTOSO\HelpDeskOps'
+                    Reason = 'Broad operational support access'
+                    Scope = 'All quality-harness shares'
+                }
+            ) | Export-Csv -LiteralPath $discountedPath -NoTypeInformation -Encoding UTF8
+
+            Invoke-ShareSurferScan -InputObject (New-TestMigrationDiscoveryQualityInventory) -OutputPath $outputPath -DiscountedPrincipalPath $discountedPath -SkipIdentityEnrichment | Out-Null
+
+            $expectedRows = @(Import-Csv -LiteralPath $expectedPath)
+            $relatedDataAreas = @(Import-Csv -LiteralPath (Join-Path $outputPath 'related_data_areas.csv'))
+            $ownerRiskPivots = @(Import-Csv -LiteralPath (Join-Path $outputPath 'owner_risk_pivots.csv'))
+            Assert-Equal $relatedDataAreas.Count $expectedRows.Count 'Migration quality harness should emit exactly the expected related data areas.'
+            Assert-Equal $ownerRiskPivots.Count $expectedRows.Count 'Owner risk pivots should stay aligned with the expected migration harness clusters.'
+
+            foreach ($expected in $expectedRows) {
+                $actualMatches = @($relatedDataAreas | Where-Object {
+                    [string]$_.BusinessUnit -eq [string]$expected.BusinessUnit -and
+                        [string]$_.Owner -eq [string]$expected.Owner -and
+                        [string]$_.Pattern -eq [string]$expected.Pattern
+                })
+                Assert-Equal $actualMatches.Count 1 ("Expected exactly one related data area for harness cluster {0}." -f $expected.ExpectedClusterId)
+                $actual = $actualMatches[0]
+
+                Assert-Equal $actual.RelatednessStrength $expected.ExpectedRelatednessStrength ("Relatedness strength should match harness expectation for {0}." -f $expected.ExpectedClusterId)
+                Assert-Equal $actual.MigrationReadiness $expected.ExpectedMigrationReadiness ("Migration readiness should match harness expectation for {0}." -f $expected.ExpectedClusterId)
+                Assert-Equal ([int]$actual.MatchingShares) ([int]$expected.ExpectedMatchingShares) ("Matching share count should match harness expectation for {0}." -f $expected.ExpectedClusterId)
+                Assert-True ([int]$actual.RelationshipSignalCount -ge [int]$expected.MinimumRelationshipSignalCount) ("Relationship signal count should meet harness expectation for {0}." -f $expected.ExpectedClusterId)
+
+                foreach ($signal in @([string]$expected.RequiredRelationshipSignals -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })) {
+                    Assert-SignalContains -Actual $actual.RelationshipSignals -Expected $signal -Message ("Cluster {0} should explain relationship signal {1}." -f $expected.ExpectedClusterId, $signal)
+                    Assert-SignalContains -Actual $actual.RelatedBecause -Expected $signal -Message ("Cluster {0} should include relationship signal {1} in RelatedBecause." -f $expected.ExpectedClusterId, $signal)
+                }
+                foreach ($signal in @([string]$expected.RequiredSupportingEvidence -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' })) {
+                    Assert-SignalContains -Actual $actual.SupportingEvidence -Expected $signal -Message ("Cluster {0} should explain supporting evidence {1}." -f $expected.ExpectedClusterId, $signal)
+                    Assert-SignalContains -Actual $actual.RelatedBecause -Expected $signal -Message ("Cluster {0} should include supporting evidence {1} in RelatedBecause." -f $expected.ExpectedClusterId, $signal)
+                }
+                Assert-SignalContains -Actual $actual.RelatedBecause -Expected ('{0} confidence' -f $expected.ExpectedRelatednessStrength) -Message ("Cluster {0} should include visible confidence language." -f $expected.ExpectedClusterId)
+                Assert-True ($actual.CoreFiveChips -like '*Confidence:*' -and $actual.CoreFiveChips -like '*Readiness:*' -and $actual.CoreFiveChips -like '*Evidence:*') ("Cluster {0} should carry the Core Five chip summary." -f $expected.ExpectedClusterId)
+            }
+
+            $financeArea = @($relatedDataAreas | Where-Object { $_.BusinessUnit -eq 'Finance' -and $_.Owner -eq 'Accounts Payable' })[0]
+            $legalArea = @($relatedDataAreas | Where-Object { $_.BusinessUnit -eq 'Legal' -and $_.Owner -eq 'Legal Operations' })[0]
+            $projectArea = @($relatedDataAreas | Where-Object { $_.Owner -eq 'Project Phoenix' })[0]
+            $unknownArea = @($relatedDataAreas | Where-Object { $_.Pattern -eq '\\files04\Legacy-Unknown*' })[0]
+
+            Assert-Equal ([int]$financeArea.MatchingShares) 2 'False split harness: Finance AP active and archive shares should appear as one related area.'
+            Assert-Equal ([int]$legalArea.MatchingShares) 1 'False merge harness: similarly named Legal AP content should remain outside the Finance AP area.'
+            Assert-True ($financeArea.RelatedBecause -notlike '*shared review risk*') 'Readiness risks should not be used as relationship proof.'
+            Assert-True ($financeArea.ReadinessSignals -like '*deep explicit ACE*') 'Finance AP readiness should preserve migration cleanup evidence.'
+            Assert-Equal $projectArea.RelatednessStrength 'Possible' 'Owner plus path pattern should be possible relatedness, not strong.'
+            Assert-Equal $unknownArea.RelatednessStrength 'Needs Evidence' 'Pattern-only legacy areas should remain needs-evidence.'
+
+            foreach ($area in @($relatedDataAreas)) {
+                Assert-True ($area.DiscountedPrincipal -eq 'True') 'Discounted HelpDesk access should remain visible on every harness area.'
+                Assert-True ($area.DiscountReason -like '*visible but not used for migration relatedness*') 'Discount reason should explain that support access was not used for relatedness.'
+                Assert-True ($area.RelatedBecause -notlike '*HelpDeskOps*') 'Discounted HelpDesk access should not become relationship proof.'
             }
         }
     },
