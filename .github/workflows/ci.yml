@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     branches:
@@ -14,10 +17,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -36,13 +39,27 @@ jobs:
         shell: pwsh
         run: pwsh -NoLogo -NoProfile -File tests/Invoke-ShareSurferTests.ps1
 
-      - name: Create unsigned pre-1.0 package smoke artifact
+      - name: Run release-readiness package check
         shell: pwsh
         run: >
-          pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferRelease.ps1
-          -OutputRoot artifacts
-          -SkipNpmInstall
-          -SkipDependencyAgeCheck
+          pwsh -NoLogo -NoProfile -File scripts/Test-ShareSurferReleaseReadiness.ps1
+          -OutputRoot artifacts/release-readiness
+          -DashboardBuildPath interface/standalone-dashboard/dist
+          -SkipDependencyAgeNetwork
           -Force
           -PassThru
           | ConvertTo-Json -Depth 6
+
+  windows-powershell-51:
+    name: Windows PowerShell 5.1 smoke
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Run parser and module import smoke under Windows PowerShell 5.1
+        shell: powershell
+        run: >
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass
+          -File scripts/Test-ShareSurferWindowsPowerShell51.ps1
