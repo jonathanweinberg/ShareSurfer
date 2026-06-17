@@ -170,6 +170,8 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   permissioned_groups: ["Group", "DisplayName", "ShareAssignments", "NtfsAssignments", "ExpandedMembers", "MaxDepth", "HasCycle", "IsTruncated"],
   owner_review_packets: ["Owner", "BusinessUnit", "RiskLevel", "ReviewStatus", "WhyReview", "WhatToReviewFirst", "SuggestedNextAction"],
   related_data_areas: ["RelatedDataArea", "Owner", "BusinessUnit", "RiskLevel", "MigrationReadiness", "RelatedBecause", "SuggestedNextAction"],
+  owner_review_decisions: ["ReviewPacketId", "Owner", "BusinessUnit", "Decision", "DecisionStatus", "ConfirmedOwner", "Reviewer", "NextAction", "ImportWarnings"],
+  migration_cluster_decisions: ["RelatedAreaId", "RelatedDataArea", "Decision", "DecisionStatus", "ConfirmedOwner", "Reviewer", "NextAction", "ImportWarnings"],
   conflicts: ["Severity", "ConflictType", "ShareId", "Identity", "Message"],
   findings: ["Severity", "FindingType", "ShareId", "Identity", "FullPath", "Message"],
   evidence_confidence: ["Scope", "ScopeName", "ConfidenceLabel", "ConfidenceScore", "StopGate", "ReviewGate", "Signals", "RequestedProvider", "EffectiveProvider", "ProviderFallback", "RecommendedAction"],

@@ -9,6 +9,7 @@ foreach ($script in @($privateScripts + $publicScripts)) {
 
 Export-ModuleMember -Function @(
     'ConvertTo-ShareSurferReport',
+    'Import-ShareSurferReviewDecisions',
     'Import-ShareSurferOwnershipSource',
     'Invoke-ShareSurferOpenFileAssessment',
     'Invoke-ShareSurferPortProtocolAssessment',
@@ -16,6 +17,7 @@ Export-ModuleMember -Function @(
     'Join-ShareSurferOwnershipSources',
     'New-ShareSurferOwnershipMappingProfile',
     'New-ShareSurferOwnerMappingDraft',
+    'New-ShareSurferReviewDecisionDraft',
     'New-ShareSurferLabFixture',
     'New-ShareSurferSupportBundle',
     'Test-ShareSurferExport',

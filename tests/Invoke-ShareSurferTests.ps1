@@ -1133,6 +1133,8 @@ $tests = @(
                 'owner_risk_pivots.csv',
                 'related_data_areas.csv',
                 'owner_review_packets.csv',
+                'owner_review_decisions.csv',
+                'migration_cluster_decisions.csv',
                 'conflicts.csv',
                 'findings.csv',
                 'evidence_confidence.csv',
@@ -2330,6 +2332,130 @@ $tests = @(
         }
     },
     @{
+        Name = 'New-ShareSurferReviewDecisionDraft creates owner and migration decision CSVs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewDraftExport-' + [guid]::NewGuid().ToString('N'))
+            $commandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewDraft-' + [guid]::NewGuid().ToString('N') + '.rerun.ps1')
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+
+            $summary = New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -ReusableCommandPath $commandPath -Force
+            $ownerRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'owner_review_decisions.csv'))
+            $migrationRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'migration_cluster_decisions.csv'))
+            $commandText = Get-Content -LiteralPath $commandPath -Raw
+
+            Assert-Equal $summary.OwnerReviewDecisionCount 1 'Draft summary should report owner review decision row count.'
+            Assert-Equal $summary.MigrationClusterDecisionCount 1 'Draft summary should report migration decision row count.'
+            Assert-Equal $ownerRows[0].ReviewPacketId 'owner-review-0001' 'Owner decision draft should be keyed by ReviewPacketId.'
+            Assert-Equal $ownerRows[0].DecisionStatus 'Pending' 'Blank owner decision drafts should start as pending.'
+            Assert-Equal $ownerRows[0].Decision '' 'Draft decision should be blank for reviewer input.'
+            Assert-True ($ownerRows[0].AllowedDecisions -like '*ConfirmedOwner*WrongOwner*') 'Draft rows should show allowed decision values.'
+            Assert-Equal $migrationRows[0].RelatedAreaId 'related-area-0001' 'Migration decision draft should be keyed by RelatedAreaId.'
+            Assert-Equal $migrationRows[0].DecisionStatus 'Pending' 'Blank migration decision drafts should start as pending.'
+            Assert-Equal $summary.ReusableCommandPath $commandPath 'Draft summary should report reusable command path.'
+            Assert-True ($commandText -like '*New-ShareSurferReviewDecisionDraft*') 'Reusable command file should show how to regenerate the draft.'
+            Assert-True ($commandText -like '*Import-ShareSurferReviewDecisions*') 'Reusable command file should show how to import reviewed decisions.'
+            Assert-True ($commandText -like '*$importOutputPath*') 'Reusable command file should make the normalized import output path explicit.'
+            Assert-True ($commandText -like '*# New-ShareSurferReviewDecisionDraft*') 'Reusable command file should not overwrite reviewer edits when run as-is.'
+            Assert-True ($commandText -like '*-OutputPath $importOutputPath -Force*') 'Reusable import command should explicitly overwrite normalized decision outputs.'
+
+            $scopedPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewDraftOwnerOnly-' + [guid]::NewGuid().ToString('N'))
+            $scopedCommandPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewDraftOwnerOnly-' + [guid]::NewGuid().ToString('N') + '.rerun.ps1')
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $scopedPath -DecisionScope OwnerReview -ReusableCommandPath $scopedCommandPath -Force | Out-Null
+            $scopedCommandText = Get-Content -LiteralPath $scopedCommandPath -Raw
+            Assert-True (Test-Path -LiteralPath (Join-Path $scopedPath 'owner_review_decisions.csv')) 'Owner-only decision drafts should write owner_review_decisions.csv.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $scopedPath 'migration_cluster_decisions.csv'))) 'Owner-only decision drafts should not write migration_cluster_decisions.csv.'
+            Assert-True ($scopedCommandText -like '*-DecisionScope OwnerReview*') 'Owner-only reusable commands should preserve the selected decision scope.'
+            Assert-True ($scopedCommandText -like '*-OwnerDecisionPath*') 'Owner-only reusable commands should import owner decision CSVs.'
+            Assert-True ($scopedCommandText -notlike '*-MigrationDecisionPath*') 'Owner-only reusable commands should not point at a missing migration decision CSV.'
+        }
+    },
+    @{
+        Name = 'Import-ShareSurferReviewDecisions normalizes aliases and retains invalid decisions for correction'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewImportExport-' + [guid]::NewGuid().ToString('N'))
+            $reviewPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewImportSource-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $reviewPath -Force | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $reviewPath -Force | Out-Null
+
+            $ownerRows = @(Import-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv'))
+            $ownerRows[0].Decision = 'confirmed owner'
+            $ownerRows[0].ConfirmedOwner = 'Finance Ops Confirmed'
+            $ownerRows[0].ConfirmedBusinessUnit = 'Finance Confirmed'
+            $ownerRows[0].Reviewer = 'Riley Reviewer'
+            $ownerRows[0].ReviewedAt = '2026-06-17T12:00:00Z'
+            $ownerRows[0].Notes = 'Owner confirmed from review meeting.'
+            $ownerRows[0].NextAction = 'Proceed with migration planning.'
+            $ownerRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+
+            $migrationRows = @(Import-Csv -LiteralPath (Join-Path $reviewPath 'migration_cluster_decisions.csv'))
+            $migrationRows[0].Decision = 'not sure yet'
+            $migrationRows[0].DecisionStatus = 'reviewed'
+            $migrationRows[0].Reviewer = 'Riley Reviewer'
+            $migrationRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'migration_cluster_decisions.csv') -NoTypeInformation -Encoding UTF8
+
+            $summary = Import-ShareSurferReviewDecisions -ExportPath $exportPath -DecisionPath $reviewPath -Force
+            $normalizedOwnerRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'owner_review_decisions.csv'))
+            $normalizedMigrationRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'migration_cluster_decisions.csv'))
+
+            Assert-Equal $summary.OwnerReviewDecisionCount 1 'Import summary should report normalized owner decision rows.'
+            Assert-Equal $summary.MigrationClusterDecisionCount 1 'Import summary should report normalized migration decision rows.'
+            Assert-Equal $normalizedOwnerRows[0].Decision 'ConfirmedOwner' 'Friendly owner decision aliases should normalize to canonical values.'
+            Assert-Equal $normalizedOwnerRows[0].DecisionStatus 'Reviewed' 'Valid nonblank decisions should default to reviewed.'
+            Assert-Equal $normalizedOwnerRows[0].ConfirmedOwner 'Finance Ops Confirmed' 'Reviewer-entered owner confirmation should be preserved.'
+            Assert-Equal $normalizedMigrationRows[0].Decision 'not sure yet' 'Invalid decisions should be retained for reviewer correction.'
+            Assert-Equal $normalizedMigrationRows[0].DecisionStatus 'NeedsCorrection' 'Invalid decisions should be marked as needing correction.'
+            Assert-True ($normalizedMigrationRows[0].ImportWarnings -like '*Allowed values:*ConfirmedOwner*WrongOwner*') 'Invalid decisions should explain allowed values.'
+
+            $normalizedMigrationRows[0].Decision = 'rerun'
+            $normalizedMigrationRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'migration_cluster_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -DecisionPath $reviewPath -Force | Out-Null
+            $correctedMigrationRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'migration_cluster_decisions.csv'))
+            Assert-Equal $correctedMigrationRows[0].Decision 'RerunNeeded' 'Corrected invalid decisions should normalize on a later import.'
+            Assert-Equal $correctedMigrationRows[0].DecisionStatus 'Reviewed' 'Corrected invalid decisions should become reviewed.'
+            Assert-True ($correctedMigrationRows[0].ImportWarnings -notlike '*Invalid decision*') 'Corrected decisions should not keep stale invalid-decision warnings.'
+        }
+    },
+    @{
+        Name = 'Import-ShareSurferReviewDecisions merges reviewer edits and refreshes source context'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewMergeExport-' + [guid]::NewGuid().ToString('N'))
+            $reviewPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewMergeSource-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $reviewPath -Force | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $reviewPath -Force | Out-Null
+
+            $firstOwnerRows = @(Import-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv'))
+            $firstOwnerRows[0].Decision = 'CleanupNeeded'
+            $firstOwnerRows[0].Reviewer = 'Initial Reviewer'
+            $firstOwnerRows[0].Notes = 'Initial cleanup note.'
+            $firstOwnerRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -DecisionPath $reviewPath -Force | Out-Null
+
+            $packetRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv'))
+            $packetRows[0].Owner = 'Finance Operations Updated'
+            $packetRows[0].RiskLevel = 'Review'
+            $packetRows | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv') -NoTypeInformation -Encoding UTF8
+
+            $secondOwnerRows = @(Import-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv'))
+            $secondOwnerRows[0].Decision = 'WrongOwner'
+            $secondOwnerRows[0].Reviewer = 'Second Reviewer'
+            $secondOwnerRows[0].Notes = 'Updated owner is wrong.'
+            $secondOwnerRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -DecisionPath $reviewPath -Force | Out-Null
+
+            $mergedRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'owner_review_decisions.csv'))
+            Assert-Equal $mergedRows.Count 1 'Merge should keep one row for the same ReviewPacketId.'
+            Assert-Equal $mergedRows[0].Decision 'WrongOwner' 'Later reviewer edits should update reviewer-editable fields.'
+            Assert-Equal $mergedRows[0].Reviewer 'Second Reviewer' 'Later reviewer should replace the previous reviewer value.'
+            Assert-Equal $mergedRows[0].Owner 'Finance Operations Updated' 'Merge should refresh context from current owner review packets.'
+            Assert-Equal $mergedRows[0].RiskLevel 'Review' 'Merge should refresh current risk context.'
+        }
+    },
+    @{
         Name = 'Test-ShareSurferExport validates the normalized CSV set'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2375,6 +2501,72 @@ $tests = @(
             Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a required column is missing.'
             Assert-True ($brokenAclResult.MissingColumns -contains 'Identity') 'File-level validation should report the missing column.'
             Assert-True ($brokenResult.SchemaErrors -contains 'acl_entries.csv is missing column Identity.') 'Top-level schema errors should keep the readable error message.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferExport treats review decision CSVs as optional but validates them when present'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDecisionValidation-' + [guid]::NewGuid().ToString('N'))
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            Remove-Item -LiteralPath (Join-Path $outputPath 'owner_review_decisions.csv') -Force
+            Remove-Item -LiteralPath (Join-Path $outputPath 'migration_cluster_decisions.csv') -Force
+            $legacyResult = Test-ShareSurferExport -ExportPath $outputPath
+            $legacyDecisionResults = @($legacyResult.FileResults | Where-Object { $_.FileName -in @('owner_review_decisions.csv', 'migration_cluster_decisions.csv') })
+            Assert-True $legacyResult.IsValid 'Legacy exports should remain valid when decision CSVs are absent.'
+            Assert-Equal $legacyDecisionResults.Count 2 'Validation should still report optional decision file status.'
+            Assert-True (@($legacyDecisionResults | Where-Object { -not $_.Optional }).Count -eq 0) 'Decision file results should be marked optional.'
+
+            New-ShareSurferReviewDecisionDraft -ExportPath $outputPath -Force | Out-Null
+            $validResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True $validResult.IsValid 'Draft decision CSVs should validate when present.'
+
+            $ownerDecisionPath = Join-Path $outputPath 'owner_review_decisions.csv'
+            $brokenRows = Import-Csv -LiteralPath $ownerDecisionPath | Select-Object ReviewPacketId, BusinessUnit, Owner, Pattern, Source, RiskLevel, ReviewStatus, MigrationReadiness, RelatedDataAreaCount, RelatednessStrength, SuggestedNextAction, Decision, ConfirmedOwner, ConfirmedBusinessUnit, Reviewer, ReviewedAt, Notes, NextAction, SourceDecisionPath, ImportWarnings, AllowedDecisions
+            $brokenRows | Export-Csv -LiteralPath $ownerDecisionPath -NoTypeInformation -Encoding UTF8
+
+            $brokenResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a present decision CSV is missing a required column.'
+            Assert-True ($brokenResult.SchemaErrors -contains 'owner_review_decisions.csv is missing column DecisionStatus.') 'Decision schema errors should keep readable file and column names.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferSupportBundle redacts reviewer fields while preserving decision status'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDecisionBundleExport-' + [guid]::NewGuid().ToString('N'))
+            $reviewPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDecisionBundleReview-' + [guid]::NewGuid().ToString('N'))
+            $bundlePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDecisionBundle-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $reviewPath -Force | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $reviewPath -Force | Out-Null
+
+            $ownerRows = @(Import-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv'))
+            $ownerRows[0].Decision = 'ConfirmedOwner'
+            $ownerRows[0].ConfirmedOwner = 'Finance Sensitive Owner'
+            $ownerRows[0].ConfirmedBusinessUnit = 'Finance Sensitive Unit'
+            $ownerRows[0].Reviewer = 'Riley Sensitive Reviewer'
+            $ownerRows[0].Notes = 'Sensitive business context that must not leak.'
+            $ownerRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+
+            $migrationRows = @(Import-Csv -LiteralPath (Join-Path $reviewPath 'migration_cluster_decisions.csv'))
+            $migrationRows[0].Decision = 'Do not migrate Legal Secret Area'
+            $migrationRows | Export-Csv -LiteralPath (Join-Path $reviewPath 'migration_cluster_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -DecisionPath $reviewPath -Force | Out-Null
+
+            New-ShareSurferSupportBundle -ExportPath $exportPath -OutputPath $bundlePath -RedactionMode StableToken -RedactionSalt 'decision-test' | Out-Null
+            $bundledRows = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'owner_review_decisions.csv'))
+            $bundledMigrationRows = @(Import-Csv -LiteralPath (Join-Path $bundlePath 'migration_cluster_decisions.csv'))
+
+            Assert-Equal $bundledRows[0].Decision 'ConfirmedOwner' 'Decision enum should remain readable in support bundles.'
+            Assert-Equal $bundledRows[0].DecisionStatus 'Reviewed' 'Decision status should remain readable in support bundles.'
+            Assert-True ($bundledRows[0].ConfirmedOwner -ne 'Finance Sensitive Owner') 'Confirmed owner should be redacted.'
+            Assert-True ($bundledRows[0].ConfirmedBusinessUnit -ne 'Finance Sensitive Unit') 'Confirmed business unit should be redacted.'
+            Assert-True ($bundledRows[0].Reviewer -ne 'Riley Sensitive Reviewer') 'Reviewer should be redacted.'
+            Assert-True ($bundledRows[0].Notes -ne 'Sensitive business context that must not leak.') 'Reviewer notes should be redacted.'
+            Assert-Equal $bundledMigrationRows[0].DecisionStatus 'NeedsCorrection' 'Invalid decision status should remain readable in support bundles.'
+            Assert-True ($bundledMigrationRows[0].Decision -ne 'Do not migrate Legal Secret Area') 'Invalid free-text decisions should be redacted in support bundles.'
         }
     },
     @{
@@ -2664,6 +2856,8 @@ $tests = @(
                 Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
             }
             Invoke-ShareSurferPortProtocolAssessment -ComputerName 'files01' -ShareName 'Finance' -DirectoryServer 'dc01.contoso.test' -OutputPath $exportPath -SkipNetworkTests -Force | Out-Null
+            Remove-Item -LiteralPath (Join-Path $exportPath 'owner_review_decisions.csv') -Force
+            Remove-Item -LiteralPath (Join-Path $exportPath 'migration_cluster_decisions.csv') -Force
 
             $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -ExportPath $exportPath -DashboardBuildPath $buildPath -OutputPath $standalonePath -PassThru
 
@@ -2688,6 +2882,8 @@ $tests = @(
             Assert-True ([int]$manifest.rowCounts.open_file_samples -gt 0) 'Dashboard manifest should include imported open-file sample counts when present.'
             Assert-True ([int]$manifest.rowCounts.open_file_summary -gt 0) 'Dashboard manifest should include imported open-file summary counts when present.'
             Assert-True ([int]$manifest.rowCounts.port_protocol_checks -gt 0) 'Dashboard manifest should include imported port/protocol check counts when present.'
+            Assert-True ([string]::Join(';', @($manifest.schemaWarnings)) -notlike '*owner_review_decisions.csv*') 'Standalone dashboard packaging should not warn when optional owner decision CSVs are absent.'
+            Assert-True ([string]::Join(';', @($manifest.schemaWarnings)) -notlike '*migration_cluster_decisions.csv*') 'Standalone dashboard packaging should not warn when optional migration decision CSVs are absent.'
             Assert-True ($dataScript -like '*"open_file_samples"*') 'Dashboard snapshot should carry open-file datasets for raw evidence review.'
             Assert-True ($dataScript -like '*"port_protocol_checks"*') 'Dashboard snapshot should carry port/protocol datasets for connectivity review.'
         }

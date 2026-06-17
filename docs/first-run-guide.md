@@ -389,6 +389,8 @@ The most important CSVs for a first review are:
 | `owner_risk_pivots.csv` | Owner/business-unit review queue with mapped item counts, direct identities, direct groups, expanded members, findings, conflicts, partial shares, and risk level. |
 | `related_data_areas.csv` | Migration discovery rows for like-owned shares, folders, and files that should be reviewed together before migration planning. |
 | `owner_review_packets.csv` | Plain-language owner review packets showing why review is needed, where to start, and the suggested next action. |
+| `owner_review_decisions.csv` | Optional owner packet review decisions after an admin generates a draft and imports reviewer edits. Current scans write this file header-only until decisions are imported. |
+| `migration_cluster_decisions.csv` | Optional Migration Discovery decisions after reviewers classify related data areas. Current scans write this file header-only until decisions are imported. |
 | `permissioned_groups.csv` | Groups that directly grant share or folder/file access, including assignment counts, rights, expanded members, and expansion health. |
 | `open_file_summary.csv` | Optional hot-folder activity summary when `Invoke-ShareSurferOpenFileAssessment` was run. |
 | `port_protocol_targets.csv` | Optional target readiness summary when `Invoke-ShareSurferPortProtocolAssessment` was run. |
@@ -403,6 +405,34 @@ Import-Csv "$exportPath\owner_review_packets.csv" | Select-Object -First 10
 ```
 
 If the file exists but owner or business-unit values are blank or too generic, update `owner-mapping.csv` and rerun the scan.
+
+After a business owner or migration team reviews the packets, record their decisions with a local CSV round trip:
+
+```powershell
+$decisionPath = 'C:\ShareSurfer\reviews\finance-001'
+
+New-ShareSurferReviewDecisionDraft `
+  -ExportPath $exportPath `
+  -OutputPath $decisionPath `
+  -ReusableCommandPath "$decisionPath\review-decisions-rerun.ps1" `
+  -Force
+```
+
+Ask reviewers to edit `owner_review_decisions.csv` and `migration_cluster_decisions.csv` in that folder. Use one of these `Decision` values: `ConfirmedOwner`, `CleanupNeeded`, `RerunNeeded`, `MigrationCandidate`, or `WrongOwner`.
+
+Then import the reviewed CSVs back into the export and rebuild the report/dashboard:
+
+```powershell
+Import-ShareSurferReviewDecisions `
+  -ExportPath $exportPath `
+  -DecisionPath $decisionPath `
+  -ReusableCommandPath "$decisionPath\review-decisions-rerun.ps1" `
+  -Force
+
+Test-ShareSurferExport -ExportPath $exportPath
+```
+
+The generated `review-decisions-rerun.ps1` file is reusable. Keep it with the decision CSVs so the same workflow can be repeated after a rerun without rebuilding the command from memory.
 
 If `Owner` is blank in `items.csv`, ShareSurfer did not receive a usable NTFS owner value for that item. That can mean the owner read was denied, the object has an unresolved owner SID, the path was partially collected, or the source did not return owner metadata. It does not automatically mean the file has no real Windows owner.
 
