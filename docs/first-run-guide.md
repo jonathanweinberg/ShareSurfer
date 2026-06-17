@@ -12,9 +12,10 @@ For a first useful scan:
 2. Use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
-5. Run the collector, validate the export, and build `report.html`.
-6. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
-7. Check the stop gates before sending anything to a business owner.
+5. If HR, employee, OBS, project, or owner CSVs exist, normalize them and build `ownership-enrichment.csv` before scanning.
+6. Run the collector, validate the export, and build `report.html`.
+7. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
+8. Check the stop gates before sending anything to a business owner.
 
 Stop gates are conditions that make the scan unsafe to treat as complete owner-review evidence. They include unresolved partial data, collection errors, wrong or missing OBS attributes, template dashboard confusion, protocol readiness blockers, and missing owner/business-unit mapping when owner review is expected.
 
@@ -43,6 +44,7 @@ Write these answers down before the first scan:
 - Export folder: use a new folder such as `C:\ShareSurfer\exports\scan-001`.
 - OBS attribute: default is `extensionAttribute10`, but your directory may use another attribute such as `info`.
 - Owner mapping: decide whether you already have `owner-mapping.csv`, or whether the first scan will run without owner routing.
+- Ownership enrichment: decide whether HR, employee, OBS, OID, project, or owner CSVs should be joined with AD data before scanning.
 - Discounted principals: decide whether broad HelpDesk, admin, scanner, backup, or platform groups should be listed in `discounted-principals.csv`.
 - Collector account: confirm whether the PowerShell prompt is elevated and whether the account can read shares, folders, files, ACLs, owner values, and directory data.
 - Dashboard path: decide whether the same machine will open the report, or whether you need the two-host workflow.
@@ -227,6 +229,29 @@ Import-ShareSurferOwnershipSource `
 
 This creates `hr-obs.mapping.json`, `normalized-ownership.csv`, and `ownership-import-rerun.ps1`. Keep the rerun script with the input files so the next HR/OBS refresh can reuse the saved profile instead of repeating the header mapping interview.
 
+If HR/OBS data should enrich the scan itself, build `ownership-enrichment.csv` before Step 4. This is the file that `Invoke-ShareSurferScan -OwnershipEnrichmentPath` reads. It can combine more than one CSV, use employee ID or employee number to find matching AD accounts, fill available mail/title/office/manager/OBS details from AD, and skip matches under forbidden OUs.
+
+```powershell
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+$ownershipDefinitionPath = Join-Path $inputRoot 'ownership-import.definition.json'
+$ownershipRerunPath = Join-Path $inputRoot 'ownership-enrichment-rerun.ps1'
+
+Join-ShareSurferOwnershipSources `
+  -Interactive `
+  -BrowseForCsv `
+  -SourceFolder $inputRoot `
+  -OutputPath $ownershipEnrichmentPath `
+  -DefinitionPath $ownershipDefinitionPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -ForbiddenOu @('OU=Service Accounts,DC=contoso,DC=com', 'OU=Admins,DC=contoso,DC=com') `
+  -ReusableCommandPath $ownershipRerunPath `
+  -Force
+```
+
+Use the text picker to choose one or more candidate CSVs. For example, one file might contain employee IDs and OBS, while another has project or business-unit context. The saved `ownership-import.definition.json` records the selected CSV paths, OBS attribute, AD lookup mode, and forbidden OU choices; `ownership-enrichment-rerun.ps1` rebuilds the same file later without repeating the picker.
+
 If the scan has no owner mapping yet, create a draft for an admin to fill in after the first scan:
 
 ```powershell
@@ -259,6 +284,7 @@ For a first scan by UNC path:
 
 ```powershell
 $ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
+$ownershipEnrichmentPath = 'C:\ShareSurfer\inputs\ownership-enrichment.csv'
 $discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
 
 $scanParams = @{
@@ -276,6 +302,10 @@ if (Test-Path -LiteralPath $ownerMappingPath) {
   $scanParams.OwnerMappingPath = $ownerMappingPath
 }
 
+if (Test-Path -LiteralPath $ownershipEnrichmentPath) {
+  $scanParams.OwnershipEnrichmentPath = $ownershipEnrichmentPath
+}
+
 if (Test-Path -LiteralPath $discountedPrincipalPath) {
   $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
 }
@@ -287,6 +317,7 @@ For a first scan by SMB computer and share name:
 
 ```powershell
 $ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
+$ownershipEnrichmentPath = 'C:\ShareSurfer\inputs\ownership-enrichment.csv'
 $discountedPrincipalPath = 'C:\ShareSurfer\inputs\discounted-principals.csv'
 
 $scanParams = @{
@@ -306,6 +337,10 @@ if (Test-Path -LiteralPath $ownerMappingPath) {
   $scanParams.OwnerMappingPath = $ownerMappingPath
 }
 
+if (Test-Path -LiteralPath $ownershipEnrichmentPath) {
+  $scanParams.OwnershipEnrichmentPath = $ownershipEnrichmentPath
+}
+
 if (Test-Path -LiteralPath $discountedPrincipalPath) {
   $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath
 }
@@ -321,7 +356,7 @@ Use `-ManagerIdentityFormat MailTo` unless you have a reason to export another f
 
 The collector prints timestamped status lines while it runs. That is expected and helps first-time operators tell the scan is still active during recursive folder enumeration, ACL reads, identity enrichment, and CSV export. When the scan finishes, the `ShareSurfer Summary` lines show counts for shares, items, findings, conflicts, collection errors, and partial shares. They also show the output path and the next `Test-ShareSurferExport` command to run. If the summary mentions collection errors or partial shares, open `collection_errors.csv` and the Diagnostics view before asking an owner to approve the result. Add `-Quiet` when a scheduled or scripted run should suppress console progress.
 
-Do not pass `-OwnerMappingPath` or `-DiscountedPrincipalPath` unless the CSV file exists. The splatted examples above check first, which avoids stopping the scan because an optional input file was not created yet.
+Do not pass `-OwnerMappingPath`, `-OwnershipEnrichmentPath`, or `-DiscountedPrincipalPath` unless the CSV file exists. The splatted examples above check first, which avoids stopping the scan because an optional input file was not created yet.
 
 If the target cannot accept WinRM/CIM, ShareSurfer continues best-effort when it can still inspect the path. The scan will mark share-level permission proof as partial or unavailable in the exports instead of treating that alone as a hard stop.
 

@@ -209,6 +209,35 @@ On Windows, release users do not need Node, npm, Vite, a preview server, or inte
 
 `Invoke-ShareSurferScan` prints timestamped phase updates while it runs so operators can see collection, owner mapping, identity enrichment, export, and completion progress. At the end, look for the `ShareSurfer Summary` lines. They show the scan counts, output path, any partial-data or collection-gap warning, and the next `Test-ShareSurferExport` command. Add `-Quiet` only for automation where console progress is not wanted.
 
+Before the scan, decide whether HR, employee, OBS, OID, project, or owner CSVs should enrich the review. If a CSV has `EmployeeId` or `EmployeeNumber`, ShareSurfer can use those values to match AD accounts, fill available account/mail/title/office/manager fields, and carry the selected OBS attribute into the scan. Use `-ObsAttribute` for the AD attribute that holds OBS/OID data in your environment. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
+
+For a reusable pre-scan AD/OBS enrichment file:
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+$inputRoot = 'C:\ShareSurfer\inputs'
+$ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+$ownershipDefinitionPath = Join-Path $inputRoot 'ownership-import.definition.json'
+$ownershipRerunPath = Join-Path $inputRoot 'ownership-enrichment-rerun.ps1'
+
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
+
+Join-ShareSurferOwnershipSources `
+  -Interactive `
+  -BrowseForCsv `
+  -SourceFolder $inputRoot `
+  -OutputPath $ownershipEnrichmentPath `
+  -DefinitionPath $ownershipDefinitionPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -ForbiddenOu @('OU=Service Accounts,DC=contoso,DC=com', 'OU=Admins,DC=contoso,DC=com') `
+  -ReusableCommandPath $ownershipRerunPath `
+  -Force
+```
+
+The text picker lets you choose one or more CSVs on a locked-down console. The saved definition JSON and rerun script let a later operator rebuild the same enrichment file without repeating the interview. Pass the result to the scan with `-OwnershipEnrichmentPath`; the scan exports it as `ownership_enrichment.csv` for the report and standalone dashboard.
+
 ```powershell
 $releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
@@ -346,13 +375,29 @@ $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
 $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+$ownershipSourcePath = Join-Path $inputRoot 'hr-obs.csv'
 $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
+$ownershipDefinitionPath = Join-Path $inputRoot 'ownership-import.definition.json'
+$ownershipRerunPath = Join-Path $inputRoot 'ownership-enrichment-rerun.ps1'
 
 New-Item -ItemType Directory -Force -Path (Split-Path -Path $exportPath) | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path -Path $handoffPath) | Out-Null
 New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
 
+Get-ChildItem -Path "$shareSurferRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
 Import-Module "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+if (Test-Path -LiteralPath $ownershipSourcePath) {
+  Join-ShareSurferOwnershipSources `
+    -Path $ownershipSourcePath `
+    -OutputPath $ownershipEnrichmentPath `
+    -DefinitionPath $ownershipDefinitionPath `
+    -ObsAttribute 'extensionAttribute10' `
+    -AdLookupMode Auto `
+    -ForbiddenOu @('OU=Service Accounts,DC=contoso,DC=com', 'OU=Admins,DC=contoso,DC=com') `
+    -ReusableCommandPath $ownershipRerunPath `
+    -Force
+}
 
 $scanParams = @{
   TargetPath = '\\files01\Finance'
@@ -388,7 +433,9 @@ Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
-If you do not have owner mappings or discounted principals yet, leave those CSV files absent. The splatted command above only passes them when the files exist. Move the handoff zip file and SHA256 hash through your approved transfer process, then open `report.html` or `standalone-dashboard\index.html` on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
+The `Unblock-File` line is repeated here on purpose. Locked-down Windows hosts commonly preserve downloaded-file blocks after a ZIP is copied in; recursively unblocking the extracted ShareSurfer PowerShell files avoids one-file-at-a-time prompts and import failures.
+
+If you do not have owner mappings, AD/OBS ownership enrichment, or discounted principals yet, leave those CSV files absent. The splatted command above only passes them when the files exist. The optional `Join-ShareSurferOwnershipSources` block is for CSVs that contain useful employee, OBS, owner, project, or business-unit facts before scanning. It uses employee ID or employee number values to query AD when allowed, skips matches under forbidden OUs, and writes reusable definition/rerun files for the next import. Move the handoff zip file and SHA256 hash through your approved transfer process, then open `report.html` or `standalone-dashboard\index.html` on the dashboard host. Do not send raw CSVs outside trusted handling; use `New-ShareSurferSupportBundle` for support cases.
 
 If WinRM/CIM is blocked or the target is a non-Windows SMB service, ShareSurfer continues best-effort and records the missing share-level permission proof as partial-data evidence in `collection_errors.csv`, `findings.csv`, and `scan_events.csv`.
 
