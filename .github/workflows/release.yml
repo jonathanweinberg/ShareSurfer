@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Optional release version. Defaults to module version when omitted.
+        description: Optional release version. Must match release-metadata.json when supplied.
         required: false
         type: string
   push:
@@ -43,30 +43,56 @@ jobs:
         run: pwsh -NoLogo -NoProfile -File tests/Invoke-ShareSurferTests.ps1
 
       - name: Resolve package version
-        id: version
+        id: release_metadata
         shell: pwsh
         run: |
+          $metadata = Get-Content -LiteralPath .\release-metadata.json -Raw | ConvertFrom-Json
+          $version = [string]$metadata.packageVersion
+          $tag = [string]$metadata.currentPrereleaseTag
+          $packageName = [string]$metadata.packageName
+          $zipFileName = [string]$metadata.zipAssetName
+          $releaseUrl = [string]$metadata.releaseUrl
+          $minimumDependencyAgeDays = [int]$metadata.minimumDependencyAgeDays
+          $metadataTag = "v$version"
+          $metadataPackageName = "ShareSurfer-$version"
+          $metadataZipFileName = "$metadataPackageName.zip"
+          if ($tag -ne $metadataTag) {
+            throw "release-metadata.json mismatch: currentPrereleaseTag must be $metadataTag."
+          }
+          if ($packageName -ne $metadataPackageName) {
+            throw "release-metadata.json mismatch: packageName must be $metadataPackageName."
+          }
+          if ($zipFileName -ne $metadataZipFileName) {
+            throw "release-metadata.json mismatch: zipAssetName must be $metadataZipFileName."
+          }
           $inputVersion = '${{ github.event.inputs.version }}'
           if (-not [string]::IsNullOrWhiteSpace($inputVersion)) {
-            $version = $inputVersion
+            $normalizedInput = $inputVersion.Trim()
+            if ($normalizedInput.StartsWith('v')) {
+              $normalizedInput = $normalizedInput.Substring(1)
+            }
+            if ($normalizedInput -ne $version) {
+              throw "Manual version '$inputVersion' does not match release-metadata.json version '$version'."
+            }
           }
-          elseif ($env:GITHUB_REF_TYPE -eq 'tag') {
-            $version = $env:GITHUB_REF_NAME.TrimStart('v')
-          }
-          else {
-            $manifest = Test-ModuleManifest -Path .\src\ShareSurfer\ShareSurfer.psd1
-            $version = [string]$manifest.Version
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne $tag) {
+            throw "Tag '$env:GITHUB_REF_NAME' does not match release-metadata.json tag '$tag'."
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "package_name=$packageName" >> $env:GITHUB_OUTPUT
+          "zip_file_name=$zipFileName" >> $env:GITHUB_OUTPUT
+          "release_url=$releaseUrl" >> $env:GITHUB_OUTPUT
+          "minimum_dependency_age_days=$minimumDependencyAgeDays" >> $env:GITHUB_OUTPUT
 
       - name: Build unsigned release package
         shell: pwsh
         run: >
           pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferRelease.ps1
-          -Version '${{ steps.version.outputs.version }}'
+          -Version '${{ steps.release_metadata.outputs.version }}'
           -OutputRoot artifacts
           -SkipNpmInstall
-          -MinimumDependencyAgeDays 7
+          -MinimumDependencyAgeDays '${{ steps.release_metadata.outputs.minimum_dependency_age_days }}'
           -Force
           -PassThru
           | ConvertTo-Json -Depth 6
@@ -74,11 +100,11 @@ jobs:
       - name: Upload unsigned release package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShareSurfer-${{ steps.version.outputs.version }}-unsigned
+          name: ${{ steps.release_metadata.outputs.package_name }}-unsigned
           path: |
-            artifacts/ShareSurfer-${{ steps.version.outputs.version }}
-            artifacts/ShareSurfer-${{ steps.version.outputs.version }}.zip
-            artifacts/ShareSurfer-${{ steps.version.outputs.version }}.zip.sha256
+            artifacts/${{ steps.release_metadata.outputs.package_name }}
+            artifacts/${{ steps.release_metadata.outputs.zip_file_name }}
+            artifacts/${{ steps.release_metadata.outputs.zip_file_name }}.sha256
 
       - name: Publish GitHub release for tags
         if: startsWith(github.ref, 'refs/tags/')
@@ -86,19 +112,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = '${{ steps.version.outputs.version }}'
-          $zip = "artifacts/ShareSurfer-$version.zip"
-          $hash = "artifacts/ShareSurfer-$version.zip.sha256"
+          $version = '${{ steps.release_metadata.outputs.version }}'
+          $tag = '${{ steps.release_metadata.outputs.tag }}'
+          $packageName = '${{ steps.release_metadata.outputs.package_name }}'
+          $zipFileName = '${{ steps.release_metadata.outputs.zip_file_name }}'
+          $zip = "artifacts/$zipFileName"
+          $hash = "artifacts/$zipFileName.sha256"
+          $notes = "artifacts/$packageName/RELEASE.md"
           $args = @(
             'release',
             'create',
-            $env:GITHUB_REF_NAME,
+            $tag,
             $zip,
             $hash,
             '--title',
-            "ShareSurfer $env:GITHUB_REF_NAME",
-            '--notes',
-            'Unsigned pre-1.0 release package. The standalone dashboard assets are prebuilt template assets under interface/standalone-dashboard/dist; package a validated export for real review. NPM dependency versions are checked against a 7-day minimum age policy before release packaging.'
+            "ShareSurfer $tag",
+            '--notes-file',
+            $notes
           )
           if ($version -match '-') {
             $args += '--prerelease'

@@ -2655,8 +2655,118 @@ $tests = @(
         }
     },
     @{
+        Name = 'Release metadata defines the current prerelease package expectations'
+        Body = {
+            $releaseMetadataPath = Join-Path $repoRoot 'release-metadata.json'
+            Assert-True (Test-Path -LiteralPath $releaseMetadataPath -PathType Leaf) 'Repository should keep release expectations in one metadata file.'
+
+            $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
+            $expectedTag = 'v{0}' -f $releaseMetadata.packageVersion
+            $expectedPackageName = 'ShareSurfer-{0}' -f $releaseMetadata.packageVersion
+            $expectedZipAssetName = '{0}.zip' -f $expectedPackageName
+            $expectedReleaseUrl = 'https://github.com/jonathanweinberg/ShareSurfer/releases/tag/{0}' -f $expectedTag
+            $expectedMinimumDependencyAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
+            Assert-True ([string]$releaseMetadata.packageVersion -match '^0\.1\.0-pre\.\d+$') 'Release metadata should record a prerelease package version.'
+            Assert-Equal $releaseMetadata.currentPrereleaseTag $expectedTag 'Release metadata should derive the current prerelease tag from the package version.'
+            Assert-Equal $releaseMetadata.packageName $expectedPackageName 'Release metadata should derive the package directory name from the package version.'
+            Assert-Equal $releaseMetadata.zipAssetName $expectedZipAssetName 'Release metadata should derive the zip asset name from the package version.'
+            Assert-Equal $releaseMetadata.releaseUrl $expectedReleaseUrl 'Release metadata should derive the release URL from the current prerelease tag.'
+            Assert-True ($expectedMinimumDependencyAgeDays -gt 0) 'Release metadata should record a positive release dependency age policy.'
+            Assert-True (@($releaseMetadata.docsReferencePaths) -contains 'README.md') 'Release metadata should name README as a public release reference.'
+            Assert-True (@($releaseMetadata.docsReferencePaths) -contains 'docs/first-run-guide.md') 'Release metadata should name the first-run guide as a public release reference.'
+            Assert-True (@($releaseMetadata.internalPackageExcludePaths) -contains 'docs/reviews/*') 'Release metadata should exclude tracked internal review docs from packages.'
+            Assert-True (@($releaseMetadata.internalPackageExcludePaths) -contains 'docs/superpowers/*') 'Release metadata should exclude tracked planning docs from packages.'
+
+            foreach ($relativeDocPath in @($releaseMetadata.docsReferencePaths)) {
+                $docPath = Join-Path $repoRoot ([string]$relativeDocPath)
+                Assert-True (Test-Path -LiteralPath $docPath -PathType Leaf) ('Release metadata docs reference should exist: {0}' -f $relativeDocPath)
+                $docText = Get-Content -LiteralPath $docPath -Raw
+                Assert-True ($docText -like ('*{0}*' -f $releaseMetadata.currentPrereleaseTag) -or $docText -like ('*{0}*' -f $releaseMetadata.zipAssetName) -or $docText -like ('*{0}*' -f $releaseMetadata.packageName)) ('Public release doc should reference current metadata values: {0}' -f $relativeDocPath)
+                $staleReleaseStrings = @([regex]::Matches($docText, 'v0\.1\.0-pre\.\d+|ShareSurfer-0\.1\.0-pre\.\d+\.zip|ShareSurfer-0\.1\.0-pre\.\d+') | ForEach-Object { $_.Value } | Where-Object {
+                    $_ -ne [string]$releaseMetadata.currentPrereleaseTag -and
+                    $_ -ne [string]$releaseMetadata.zipAssetName -and
+                    $_ -ne [string]$releaseMetadata.packageName
+                } | Sort-Object -Unique)
+                Assert-Equal $staleReleaseStrings.Count 0 ('Public release doc should not contain stale prerelease strings: {0}' -f $relativeDocPath)
+            }
+        }
+    },
+    @{
+        Name = 'New-ShareSurferRelease rejects a manual version that differs from release metadata'
+        Body = {
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRelease-' + [guid]::NewGuid().ToString('N'))
+            $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDependencyAge-' + [guid]::NewGuid().ToString('N') + '.json')
+            New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
+                isValid = $true
+                skipped = $false
+                minimumAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
+                dependencyCount = 0
+                violationCount = 0
+                unknownCount = 0
+                dependencies = @()
+            } | ConvertTo-Json -Depth 8) -Encoding UTF8
+
+            $failedClosed = $false
+            try {
+                & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -DependencyAgeReportPath $dependencyAgeReportPath -Force -PassThru | Out-Null
+            }
+            catch {
+                $failedClosed = ($_.Exception.Message -like '*does not match release metadata*')
+            }
+
+            Assert-True $failedClosed 'Release packaging should fail closed when a manual version mismatches release metadata.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $releaseOutput 'ShareSurfer-0.1.0.zip') -PathType Leaf)) 'Release packaging should not create a mismatched zip.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferRelease rejects invalid dependency age reports before creating a package'
+        Body = {
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReleaseAgeFailure-' + [guid]::NewGuid().ToString('N'))
+            $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDependencyAgeFailure-' + [guid]::NewGuid().ToString('N') + '.json')
+            New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
+                isValid = $false
+                skipped = $false
+                minimumAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
+                dependencyCount = 1
+                violationCount = 1
+                unknownCount = 0
+                violations = @(@{
+                    name = 'example-too-new'
+                    version = '1.0.0'
+                    status = 'TooNew'
+                    ageDays = 0
+                })
+                unknown = @()
+                dependencies = @()
+            } | ConvertTo-Json -Depth 8) -Encoding UTF8
+
+            $failedClosed = $false
+            try {
+                & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version $releaseMetadata.packageVersion -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -DependencyAgeReportPath $dependencyAgeReportPath -Force -PassThru | Out-Null
+            }
+            catch {
+                $failedClosed = ($_.Exception.Message -like '*NPM dependency age policy failed*')
+            }
+
+            Assert-True $failedClosed 'Release packaging should fail closed when dependency age validation fails.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $releaseOutput 'dependency-age-report.failed.json') -PathType Leaf) 'Release packaging should preserve the failed dependency age report for diagnosis.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $releaseOutput $releaseMetadata.packageName) -PathType Container)) 'Release packaging should not create a package directory after dependency age failure.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $releaseOutput $releaseMetadata.zipAssetName) -PathType Leaf)) 'Release packaging should not create a zip after dependency age failure.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferRelease creates an unsigned pre-1.0 package with prebuilt dashboard assets'
         Body = {
+            $releaseMetadataPath = Join-Path $repoRoot 'release-metadata.json'
+            $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
             $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
             $releaseOutput = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRelease-' + [guid]::NewGuid().ToString('N'))
             $dependencyAgeReportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDependencyAge-' + [guid]::NewGuid().ToString('N') + '.json')
@@ -2668,7 +2778,7 @@ $tests = @(
             Set-Content -LiteralPath $dependencyAgeReportPath -Value (@{
                 isValid = $true
                 skipped = $false
-                minimumAgeDays = 7
+                minimumAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
                 dependencyCount = 1
                 violationCount = 0
                 unknownCount = 0
@@ -2680,43 +2790,60 @@ $tests = @(
                 })
             } | ConvertTo-Json -Depth 8) -Encoding UTF8
 
-            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version '0.1.0-test' -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -DependencyAgeReportPath $dependencyAgeReportPath -Force -PassThru
+            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferRelease.ps1') -Version $releaseMetadata.packageVersion -OutputRoot $releaseOutput -DashboardBuildPath $buildPath -SkipDashboardBuild -DependencyAgeReportPath $dependencyAgeReportPath -Force -PassThru
 
             Assert-True $result.IsValid 'Release package should report a valid package.'
+            Assert-Equal $result.Version $releaseMetadata.packageVersion 'Release result should use the metadata package version.'
             Assert-Equal $result.SigningStatus 'UnsignedPre1.0' 'Release package should record unsigned pre-1.0 status.'
             Assert-True $result.IncludesPrebuiltStandaloneDashboard 'Release package should include built dashboard assets.'
-            Assert-Equal $result.MinimumDependencyAgeDays 7 'Release result should record the npm dependency age policy.'
+            Assert-Equal $result.MinimumDependencyAgeDays ([int]$releaseMetadata.minimumDependencyAgeDays) 'Release result should record the metadata npm dependency age policy.'
             Assert-True (Test-Path -LiteralPath $result.DependencyAgeReportPath -PathType Leaf) 'Release package should include the dependency age report.'
             Assert-True (Test-Path -LiteralPath $result.PackageRoot -PathType Container) 'Release package root should exist.'
             Assert-True (Test-Path -LiteralPath $result.ZipPath -PathType Leaf) 'Release zip should exist.'
             Assert-True (Test-Path -LiteralPath $result.ZipHashPath -PathType Leaf) 'Release zip SHA256 file should exist.'
+            Assert-Equal (Split-Path -Leaf $result.ZipPath) $releaseMetadata.zipAssetName 'Release zip should use the metadata asset name.'
             Assert-True (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'interface/standalone-dashboard/dist/index.html') -PathType Leaf) 'Release package should include the prebuilt dashboard entry point.'
             Assert-True (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -PathType Leaf) 'Release package should include the standalone dashboard packager.'
             Assert-True (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'scripts/New-ShareSurferRelease.ps1') -PathType Leaf) 'Release package should include the release packager.'
             Assert-True (-not (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'docs/lab-evidence') -PathType Container)) 'Release package should not include bulky lab evidence snapshots.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'docs/reviews') -PathType Container)) 'Release package should not include internal quality-review docs.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $result.PackageRoot 'docs/superpowers') -PathType Container)) 'Release package should not include internal planning docs.'
 
             $manifest = Get-Content -LiteralPath $result.ManifestPath -Raw | ConvertFrom-Json
             $releaseNotes = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'RELEASE.md') -Raw
             $hashes = Get-Content -LiteralPath $result.HashPath -Raw
             $zipHash = Get-Content -LiteralPath $result.ZipHashPath -Raw
             $releaseDashboardData = Get-Content -LiteralPath (Join-Path $result.PackageRoot 'interface/standalone-dashboard/dist/sharesurfer-data.js') -Raw
+            $zipInspectPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReleaseZipInspect-' + [guid]::NewGuid().ToString('N'))
+            Expand-Archive -LiteralPath $result.ZipPath -DestinationPath $zipInspectPath -Force
+            $zipEntries = @(Get-ChildItem -LiteralPath $zipInspectPath -File -Recurse | ForEach-Object {
+                $_.FullName.Substring($zipInspectPath.Length + 1).Replace('\', '/')
+            })
 
+            Assert-Equal $manifest.packageName $releaseMetadata.packageName 'Release manifest should record the metadata package name.'
+            Assert-Equal $manifest.version $releaseMetadata.packageVersion 'Release manifest should record the metadata package version.'
+            Assert-Equal $manifest.currentPrereleaseTag $releaseMetadata.currentPrereleaseTag 'Release manifest should record the metadata prerelease tag.'
+            Assert-Equal $manifest.releaseUrl $releaseMetadata.releaseUrl 'Release manifest should record the metadata release URL.'
             Assert-True (-not [bool]$manifest.signed) 'Release manifest should state that the package is unsigned.'
             Assert-Equal $manifest.signingStatus 'UnsignedPre1.0' 'Release manifest should keep the unsigned pre-1.0 marker.'
             Assert-True ([bool]$manifest.includesPrebuiltStandaloneDashboard) 'Release manifest should state that prebuilt dashboard assets are included.'
             Assert-Equal $manifest.dashboardAssetKind 'Template' 'Release manifest should state that bundled dashboard assets are templates, not scan data.'
             Assert-True ([bool]$manifest.dashboardRequiresExportPackaging) 'Release manifest should say release dashboard assets need export packaging before real review.'
-            Assert-Equal $manifest.minimumDependencyAgeDays 7 'Release manifest should record the minimum npm dependency age.'
+            Assert-Equal $manifest.minimumDependencyAgeDays ([int]$releaseMetadata.minimumDependencyAgeDays) 'Release manifest should record the metadata minimum npm dependency age.'
             Assert-Equal $manifest.dependencyAgeReport 'dependency-age-report.json' 'Release manifest should point to the dependency age report.'
             Assert-True (-not [bool]$manifest.dependencyAgeCheckSkipped) 'Release manifest should show that the dependency age check was not skipped.'
             Assert-Equal $manifest.dashboardEntryPoint 'interface/standalone-dashboard/dist/index.html' 'Release manifest should name the dashboard entry point.'
             Assert-True ($releaseDashboardData -like '*"snapshotKind":"template"*') 'Release dashboard data placeholder should identify template assets.'
-            Assert-True ($releaseNotes -like '*at least 7 days old*') 'Release notes should describe the npm dependency age policy.'
+            Assert-True ($releaseNotes -like ('*at least {0} days old*' -f [int]$releaseMetadata.minimumDependencyAgeDays)) 'Release notes should describe the metadata npm dependency age policy.'
             Assert-True ($releaseNotes -like '*template dashboard assets*') 'Release notes should call bundled dashboard assets templates.'
             Assert-True ($releaseNotes -like '*No npm, Vite, development server, or internet access*') 'Release notes should explain offline dashboard use after unpacking.'
             Assert-True ($hashes -like '*interface/standalone-dashboard/dist/index.html*') 'Release package hash file should include the prebuilt dashboard entry point.'
             Assert-True ($hashes -like '*dependency-age-report.json*') 'Release package hash file should include the dependency age report.'
-            Assert-True ($zipHash -like '*ShareSurfer-0.1.0-test.zip*') 'Release zip hash should name the release archive.'
+            Assert-True ($zipHash -like ('*{0}*' -f $releaseMetadata.zipAssetName)) 'Release zip hash should name the release archive.'
+            Assert-True (@($zipEntries | Where-Object { $_ -like '*/interface/standalone-dashboard/dist/index.html' }).Count -gt 0) 'Release zip should include the prebuilt dashboard entry point.'
+            Assert-True (@($zipEntries | Where-Object { $_ -like '*/interface/standalone-dashboard/dist/assets/index-demo.js' }).Count -gt 0) 'Release zip should include prebuilt dashboard assets.'
+            Assert-True (@($zipEntries | Where-Object { $_ -like '*/docs/reviews/*' }).Count -eq 0) 'Release zip should exclude internal quality-review docs.'
+            Assert-True (@($zipEntries | Where-Object { $_ -like '*/docs/superpowers/*' }).Count -eq 0) 'Release zip should exclude internal planning docs.'
         }
     },
     @{
@@ -4439,6 +4566,9 @@ $tests = @(
             $pesterWrapperText = Get-Content -LiteralPath $pesterWrapper -Raw
             Assert-True ($pesterWrapperText -like '*Describe*ShareSurfer*') 'Pester wrapper should expose a ShareSurfer Describe block.'
             Assert-True ($pesterWrapperText -like '*Invoke-ShareSurferTests.ps1*') 'Pester wrapper should run the fast dependency-free test suite.'
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $currentReleaseTag = [string]$releaseMetadata.currentPrereleaseTag
+            $currentReleaseZip = [string]$releaseMetadata.zipAssetName
             $readmeText = Get-Content -LiteralPath $readme -Raw
             Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
@@ -4473,8 +4603,8 @@ $tests = @(
             Assert-True ($readmeText -like '*docs/nonpermissive-collection-dashboard-workflow.md*') 'README should link the nonpermissive collection workflow.'
             Assert-True ($readmeText -like '*docs/visuals/dataset-transfer-dashboard-workflow.svg*') 'README should show the dataset transfer dashboard visual.'
             Assert-True ($readmeText -like '*Quick Start in a Nonpermissive Environment*') 'README should include nonpermissive quickstart setup instructions.'
-            Assert-True ($readmeText -like '*v0.1.0-pre.15*') 'README should reference the current pre-release quickstart package.'
-            Assert-True ($readmeText -like '*ShareSurfer-0.1.0-pre.15.zip*') 'README should name the current pre-release zip asset.'
+            Assert-True ($readmeText -like ('*{0}*' -f $currentReleaseTag)) 'README should reference the current pre-release quickstart package.'
+            Assert-True ($readmeText -like ('*{0}*' -f $currentReleaseZip)) 'README should name the current pre-release zip asset.'
             Assert-True ($readmeText -like '*Unblock-File*') 'README should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($readmeText -like '*without npm, Vite, a development server, or internet access*') 'README should explain release dashboard use without npm or a server.'
             Assert-True ($readmeText -like '*template/onboarding screen*') 'README should explain release dashboard template behavior before export packaging.'
@@ -4483,6 +4613,7 @@ $tests = @(
             Assert-True ($readmeText -like '*Get-FileHash -Algorithm SHA256*') 'README nonpermissive quickstart should show how to hash the handoff package.'
             Assert-True ($readmeText -like '*approved transfer process*') 'README nonpermissive quickstart should explain the approved transfer process.'
             Assert-True ($readmeText -like '*Pre-1.0 Release Packaging*') 'README should document the unsigned pre-1.0 package path.'
+            Assert-True ($readmeText -like '*release-metadata.json*') 'README should document the release metadata source.'
             Assert-True ($readmeText -like '*New-ShareSurferRelease.ps1*') 'README should document the release packager script.'
             Assert-True ($readmeText -like '*UnsignedPre1.0*') 'README should name the release manifest unsigned status.'
             Assert-True ($readmeText -like '*interface/standalone-dashboard/dist*') 'README should explain where prebuilt dashboard assets are packaged.'
@@ -4559,7 +4690,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*choose an attribute that exists on both users and groups*') 'First-run guide should explain OBS attribute schema fallback.'
             Assert-True ($firstRunText -like '*Move the Dataset to a Dashboard Host*') 'First-run guide should explain the two-host dashboard workflow.'
             Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.svg*') 'First-run guide should show the nonpermissive collector workflow visual.'
-            Assert-True ($firstRunText -like '*v0.1.0-pre.15 release package*') 'First-run guide should reference the current pre-release dashboard package.'
+            Assert-True ($firstRunText -like ('*{0} release package*' -f $currentReleaseTag)) 'First-run guide should reference the current pre-release dashboard package.'
             Assert-True ($firstRunText -like '*Unblock-File*') 'First-run guide should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
             Assert-True ($firstRunText -like '*first-run troubleshooting guide*') 'First-run guide should link the troubleshooting guide.'
@@ -4585,7 +4716,7 @@ $tests = @(
             Assert-True ($nonpermissiveText -like '*Get-FileHash*') 'Nonpermissive workflow should explain hash generation.'
             Assert-True ($nonpermissiveText -like '*approved transfer process*') 'Nonpermissive workflow should require approved transfer handling.'
             Assert-True ($nonpermissiveText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Nonpermissive workflow should show dashboard packaging on the review host.'
-            Assert-True ($nonpermissiveText -like '*ShareSurfer-0.1.0-pre.15.zip*') 'Nonpermissive workflow should name the current pre-release zip asset.'
+            Assert-True ($nonpermissiveText -like ('*{0}*' -f $currentReleaseZip)) 'Nonpermissive workflow should name the current pre-release zip asset.'
             Assert-True ($nonpermissiveText -like '*Unblock-File*') 'Nonpermissive workflow should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($nonpermissiveText -like '*no npm or Vite is required*') 'Nonpermissive workflow should make release dashboard packaging no-npm.'
             Assert-True ($nonpermissiveText -like '*visuals/nonpermissive-collector-workflow.svg*') 'Nonpermissive workflow should reference the collector visual.'
