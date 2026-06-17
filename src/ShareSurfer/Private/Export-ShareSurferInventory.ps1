@@ -178,6 +178,7 @@ function Export-ShareSurferInventory {
             IncludeFiles = [bool]$IncludeFiles
         }
     )
+    $evidenceConfidence = @(Get-ShareSurferEvidenceConfidenceRows -Shares $shares -Items $items -CollectionErrors @($collectionErrors) -RequestedProvider $RequestedSmbCollectionProvider -EffectiveProvider $EffectiveSmbCollectionProvider)
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportCompleted' -Source 'Export' -Message ('Export completed at {0}' -f $OutputPath) -Detail ('Findings={0}; Conflicts={1}' -f $findings.Count, $conflicts.Count)))
 
     $data = @{
@@ -197,6 +198,7 @@ function Export-ShareSurferInventory {
         'owner_review_packets.csv' = $ownerReviewPackets
         'conflicts.csv' = $conflicts
         'findings.csv' = $findings
+        'evidence_confidence.csv' = $evidenceConfidence
         'collection_errors.csv' = @($collectionErrors)
         'scan_events.csv' = @($scanEvents)
         'scan_manifest.csv' = $manifest

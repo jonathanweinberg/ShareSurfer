@@ -152,8 +152,9 @@ At this point the export folder is the dataset. Keep it together.
 Collector handoff checklist:
 
 - `Test-ShareSurferExport` returned `IsValid=True`, or the validation failure is documented before transfer.
-- `scan_manifest.csv`, `shares.csv`, `items.csv`, `share_permissions.csv`, `acl_entries.csv`, `findings.csv`, `conflicts.csv`, `collection_errors.csv`, and `scan_events.csv` are present.
+- `scan_manifest.csv`, `evidence_confidence.csv`, `shares.csv`, `items.csv`, `share_permissions.csv`, `acl_entries.csv`, `findings.csv`, `conflicts.csv`, `collection_errors.csv`, and `scan_events.csv` are present.
 - `report.html` exists in the export folder.
+- `evidence_confidence.csv` has no unresolved stop gates for the intended review scope, or the gap is documented before transfer.
 - `shares.csv` partial rows and `collection_errors.csv` critical rows have been reviewed by the operator.
 - `owner_review_packets.csv` and `owner_risk_pivots.csv` are present when owner mapping was supplied.
 - Optional `open_file_*.csv` files are present when open-file activity was collected.

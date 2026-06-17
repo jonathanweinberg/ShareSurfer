@@ -18,7 +18,7 @@ Empty fields should be handled carefully. A blank `Owner`, OBS value, manager, t
 | --- | --- | --- |
 | Did the scan run with the settings I expected? | `scan_manifest.csv` | `scan_events.csv`, `collection_errors.csv` |
 | Which shares and paths were collected? | `shares.csv` | `items.csv` |
-| Was the scan complete enough to review? | `shares.csv` partial fields | `collection_errors.csv`, `findings.csv`, Diagnostics in the report |
+| Was the scan complete enough to review? | `evidence_confidence.csv` | `shares.csv` partial fields, `collection_errors.csv`, `findings.csv`, Diagnostics in the report |
 | Who should review this data? | `owner_review_packets.csv` | `owner_risk_pivots.csv`, `owner_mappings.csv`, `related_data_areas.csv` |
 | Which HR/OBS/project rows were used to enrich the scan? | `ownership_enrichment.csv` | `identities.csv`, `owner_mappings.csv`, standalone dashboard Raw Evidence |
 | Which groups grant access? | `permissioned_groups.csv` | `share_permissions.csv`, `acl_entries.csv`, `group_edges.csv`, `identities.csv` |
@@ -44,6 +44,8 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 
 `ownership_enrichment.csv` is optional. ShareSurfer writes it when the scan is run with `Invoke-ShareSurferScan -OwnershipEnrichmentPath`. Older exports and scans without pre-scan ownership enrichment remain valid when this file is absent.
 
+`evidence_confidence.csv` is written by current scans. Older exports created before evidence confidence existed remain valid when this file is absent; the dashboard falls back to the older share and collection-error signals, but current scans should include the exported confidence rows.
+
 | File | Grain | Purpose |
 | --- | --- | --- |
 | `shares.csv` | One row per share | Defines collected SMB shares and partial-data status. |
@@ -62,6 +64,7 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 | `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
 | `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
+| `evidence_confidence.csv` | One scan row plus one row per share | Summarizes evidence completeness, score/label, provider fallback, stop/review gates, and recommended action. This is not permission approval. |
 | `collection_errors.csv` | One row per collection error | Preserves scanner error evidence for support, reruns, and partial-data review without forcing operators to infer errors from findings. |
 | `scan_events.csv` | One row per scan event | Records collection, export, warning, and error events. |
 | `scan_manifest.csv` | One row per scan | Records scan settings, versions, and collection health. |
@@ -251,6 +254,12 @@ Expected columns: `ErrorId`, `ShareId`, `ItemId`, `FullPath`, `ErrorType`, `Seve
 
 Use this file when a scan has partial data, failed folder enumeration, ACL read failures, unresolved target paths, or best-effort SMB/Samba gaps. For folder enumeration failures, `FullPath` should identify the skipped child path when PowerShell exposes it, with the scanned target root used as a fallback. `SharePermissionCollectionUnavailable` means ShareSurfer could enumerate a target path but could not prove the share-level access gate through `Get-SmbShareAccess`. `ErrorType` is preserved as a troubleshooting category, while paths, messages, and details are redacted in support bundles.
 
+### `evidence_confidence.csv`
+
+Expected columns: `ConfidenceId`, `Scope`, `ScopeId`, `ScopeName`, `ConfidenceLabel`, `ConfidenceScore`, `StopGate`, `ReviewGate`, `SignalCount`, `Signals`, `PartialShareCount`, `CollectionErrorCount`, `HighSeverityErrorCount`, `TotalShares`, `TotalItems`, `RequestedProvider`, `EffectiveProvider`, `ProviderFallback`, `RecommendedAction`, `Detail`.
+
+Use this file before owner signoff. It is an evidence-completeness summary, not an approval, risk acceptance, or permission decision. V1 writes one `Scope=Scan` row and one `Scope=Share` row per collected share. `ConfidenceScore` and `ConfidenceLabel` are intentionally thin and explainable: partial shares, collection errors, high-severity collection errors, zero-share exports, and provider fallback lower confidence. `SignalCount` and `Signals` list the counted inputs. `RequestedProvider`, `EffectiveProvider`, and `ProviderFallback` explain whether the requested SMB collection route matched the effective route. `StopGate` should be resolved, rerun, or explicitly documented before relying on the scan for signoff. `ReviewGate` identifies partial data or fallback conditions that may still be acceptable after operator review. `RecommendedAction` and `Detail` give reader-facing next steps.
+
 ### `scan_events.csv`
 
 Expected columns: `EventId`, `Timestamp`, `Level`, `EventType`, `Source`, `ShareId`, `ItemId`, `Message`, `Detail`.
@@ -305,6 +314,8 @@ Expected columns: `AssessmentId`, `CheckId`, `TargetId`, `Target`, `TargetType`,
 
 Use this file as the detailed evidence behind the target summary. `Requirement=Required` is reserved for core collection routes such as SMB TCP 445. `Recommended` and `Optional` rows explain routes that improve collection completeness but may have fallbacks. `EnvironmentProfile` groups the row into operator-friendly contexts such as core SMB collection, default Windows CIM collection, native SMB/RPC fallback signal, or directory identity enrichment. `OperatorGuidance` and `RemediationHint` are intended for ticket notes and rerun planning.
 
+Failed required SMB checks are stop gates before relying on collection evidence. Failed or warning WinRM/CIM checks usually explain fallback or partial metadata risk, not automatic scan failure. Passing SMB or SMB/RPC reachability only proves the route answered from the collector; it does not prove ShareSurfer can read share security descriptors, owner values, ACLs, or DACL security descriptor details.
+
 ## Relationship Map
 
 - `shares.ShareId` joins to `items.ShareId`, `share_permissions.ShareId`, `acl_entries.ShareId`, `conflicts.ShareId`, and `findings.ShareId`.
@@ -317,6 +328,7 @@ Use this file as the detailed evidence behind the target summary. `Requirement=R
 - `owner_risk_pivots` joins owner mappings to collected items, shares, access identities, group expansion, findings, and conflicts for owner/business-unit review queues.
 - `related_data_areas` builds on owner risk pivots to provide migration discovery rows that are easy to export, filter, and discuss outside the HTML report.
 - `owner_review_packets` builds on owner risk pivots and related data areas to produce business-owner review packets with plain next steps.
+- `evidence_confidence` summarizes scan/share completeness from partial shares, collection errors, requested/effective provider fields, fallback, and review gates.
 - `open_file_summary` and `open_file_samples` can be compared to `shares`, `items`, and owner mapping outputs by share name, folder path, and share-relative path when planning hot-folder migration windows.
 - `port_protocol_targets.Target` and `port_protocol_checks.Target` compare to share computer names and UNC roots when explaining why a scan used fallback routes or recorded partial share-level metadata.
 

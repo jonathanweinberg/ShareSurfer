@@ -532,6 +532,7 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByText("COLLECTOR01")).toBeInTheDocument();
     expect(screen.getByText(/ss-collector/)).toBeInTheDocument();
     expect(screen.getByText("Failed WinRM/CIM checks do not automatically block collection", { exact: false })).toBeInTheDocument();
+    expect(screen.getAllByText("SMB reachability does not prove ACL or security descriptor readability", { exact: false }).length).toBeGreaterThan(0);
 
     const targetsTable = screen.getByRole("table", { name: /Ports and protocols targets/i });
     expect(within(targetsTable).getByText("\\\\files01\\Finance")).toBeInTheDocument();

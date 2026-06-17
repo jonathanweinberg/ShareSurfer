@@ -39,6 +39,7 @@ ShareSurfer is read-only. These terms describe evidence and review signals, not 
 | --- | --- | --- |
 | Partial data | ShareSurfer completed the scan but could not prove every requested detail. Review the missing evidence before approval. | `shares.csv`, `collection_errors.csv`, dashboard Diagnostics. |
 | Collection error | A recorded collection problem, such as access denied, unavailable share metadata, unreadable ACLs, or path enumeration failure. | `collection_errors.csv`, `scan_events.csv`, dashboard Diagnostics. |
+| Evidence confidence | A scan-completeness signal based on visible counts and gates, such as partial shares, collection errors, provider fallback, and recommended action. It is not permission approval. | `evidence_confidence.csv`, dashboard Scan Confidence. |
 | Critical scan information block | A collection problem serious enough that the report should call attention to it before business approval. | Findings tab, diagnostics views. |
 | Access denied | The collector account could not read a path or security descriptor. The scan continues where it can. | `collection_errors.csv`, `findings.csv`. |
 | WinRM/CIM gap | Remote Windows management could not prove SMB share metadata or share permissions. ShareSurfer can continue best-effort and may use native SMB/RPC when requested. | `collection_errors.csv`, `scan_events.csv`, troubleshooting docs. |
@@ -64,6 +65,6 @@ ShareSurfer is read-only. These terms describe evidence and review signals, not 
 
 - If a term says **finding**, treat it as something to review.
 - If a term says **conflict**, compare the share gate and file/folder permissions.
-- If a term says **partial** or **collection error**, decide whether the missing evidence affects approval.
+- If a term says **partial**, **collection error**, or **evidence confidence**, decide whether the missing evidence affects approval.
 - If a term says **owner**, ask whether it means business owner or NTFS owner before acting.
 - If a term says **discounted**, remember it is still visible evidence. It is not ignored, approved, or remediated.

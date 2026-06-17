@@ -15,6 +15,7 @@ export const datasetKeys = [
   "owner_review_packets",
   "conflicts",
   "findings",
+  "evidence_confidence",
   "collection_errors",
   "scan_events",
   "scan_manifest",
@@ -33,6 +34,7 @@ export const optionalDatasetKeys = [
   "open_file_summary",
   "open_file_errors",
   "ownership_enrichment",
+  "evidence_confidence",
   "port_protocol_manifest",
   "port_protocol_targets",
   "port_protocol_checks"
@@ -59,6 +61,7 @@ export const datasetLabels: Record<DatasetKey, string> = {
   owner_review_packets: "Review packets",
   conflicts: "Access conflicts",
   findings: "Findings",
+  evidence_confidence: "Evidence confidence",
   collection_errors: "Collection errors",
   scan_events: "Scan events",
   scan_manifest: "Scan manifest",
@@ -328,6 +331,28 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "PolicyValue",
     "Message"
   ],
+  evidence_confidence: [
+    "ConfidenceId",
+    "Scope",
+    "ScopeId",
+    "ScopeName",
+    "ConfidenceLabel",
+    "ConfidenceScore",
+    "StopGate",
+    "ReviewGate",
+    "SignalCount",
+    "Signals",
+    "PartialShareCount",
+    "CollectionErrorCount",
+    "HighSeverityErrorCount",
+    "TotalShares",
+    "TotalItems",
+    "RequestedProvider",
+    "EffectiveProvider",
+    "ProviderFallback",
+    "RecommendedAction",
+    "Detail"
+  ],
   collection_errors: ["ErrorId", "ShareId", "ItemId", "FullPath", "ErrorType", "Severity", "Source", "Message", "Detail"],
   scan_events: ["EventId", "Timestamp", "Level", "EventType", "Source", "ShareId", "ItemId", "Message", "Detail"],
   scan_manifest: [
@@ -519,7 +544,7 @@ export const tooltipRegistry = {
   rawEvidence:
     "The original CSV-shaped evidence. Use it to prove or troubleshoot a dashboard summary.",
   scanConfidence:
-    "A quick health signal that combines partial shares, collection errors, missing files, and group expansion gaps.",
+    "A quick evidence-completeness signal exported by ShareSurfer when available. It helps decide whether evidence is ready for review; it is not permission approval.",
   longPath:
     "The path exceeded ShareSurfer's operational migration threshold. This is separate from Azure Files hard limits.",
   deepExplicit:

@@ -910,7 +910,7 @@ function New-ShareSurferRedactionAudit {
                     continue
                 }
                 $value = [string]$property.Value
-                if (-not (Test-ShareSurferRedactionAuditValue -Value $value -ColumnName $column -RowType $rowType)) {
+                if (-not (Test-ShareSurferRedactionAuditValue -Value $value -ColumnName $column -RowType $rowType -FileName $fileName)) {
                     continue
                 }
 
@@ -1155,10 +1155,33 @@ function Test-ShareSurferRedactionAuditValue {
     param(
         [string] $Value,
         [string] $ColumnName = '',
-        [string] $RowType = ''
+        [string] $RowType = '',
+        [string] $FileName = ''
     )
 
     if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+
+    $evidenceConfidenceSafeColumns = @(
+        'Scope',
+        'ConfidenceLabel',
+        'ConfidenceScore',
+        'StopGate',
+        'ReviewGate',
+        'SignalCount',
+        'Signals',
+        'PartialShareCount',
+        'CollectionErrorCount',
+        'HighSeverityErrorCount',
+        'TotalShares',
+        'TotalItems',
+        'RequestedProvider',
+        'EffectiveProvider',
+        'ProviderFallback',
+        'RecommendedAction'
+    )
+    if ($FileName -eq 'evidence_confidence.csv' -and $evidenceConfidenceSafeColumns -contains $ColumnName) {
         return $false
     }
 
@@ -1268,7 +1291,7 @@ function Test-ShareSurferRedactionAuditValue {
     if ($Value -match '^[0-9]+$') {
         return $false
     }
-    if (@('True', 'False', 'Allow', 'Deny', 'Read', 'Modify', 'Full') -contains $Value) {
+    if (@('True', 'False', 'Allow', 'Deny', 'Read', 'Modify', 'Full', 'Scan', 'Share', 'scan', 'Good', 'Review', 'Partial') -contains $Value) {
         return $false
     }
 

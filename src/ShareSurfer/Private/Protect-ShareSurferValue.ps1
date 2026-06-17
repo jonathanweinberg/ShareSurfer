@@ -23,6 +23,34 @@ function Protect-ShareSurferValue {
         return ''
     }
 
+    $evidenceConfidencePreserveColumns = @(
+        'Scope',
+        'ConfidenceLabel',
+        'ConfidenceScore',
+        'StopGate',
+        'ReviewGate',
+        'SignalCount',
+        'Signals',
+        'PartialShareCount',
+        'CollectionErrorCount',
+        'HighSeverityErrorCount',
+        'TotalShares',
+        'TotalItems',
+        'RequestedProvider',
+        'EffectiveProvider',
+        'ProviderFallback',
+        'RecommendedAction'
+    )
+    $evidenceConfidenceSensitiveColumns = @(
+        'ScopeId',
+        'ScopeName',
+        'Detail'
+    )
+
+    if ($FileName -eq 'evidence_confidence.csv' -and $evidenceConfidencePreserveColumns -contains $ColumnName) {
+        return $text
+    }
+
     $alwaysSensitiveColumns = @(
         'Identity',
         'Group',
@@ -158,6 +186,10 @@ function Protect-ShareSurferValue {
             return $text
         }
         return '[redacted]'
+    }
+
+    if ($FileName -eq 'evidence_confidence.csv' -and $evidenceConfidenceSensitiveColumns -contains $ColumnName) {
+        return Get-ShareSurferStableToken -Value $text -Salt $RedactionSalt
     }
 
     if ($preserveColumns -contains $ColumnName) {

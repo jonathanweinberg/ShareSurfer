@@ -34,6 +34,7 @@ import {
   type IssueSummary,
   type MigrationCluster,
   type NormalizedSnapshot,
+  type ProtocolReadinessGate,
   type ReviewQueueRow,
   type ScanSummary
 } from "./data/deriveDashboard";
@@ -171,6 +172,7 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   related_data_areas: ["RelatedDataArea", "Owner", "BusinessUnit", "RiskLevel", "MigrationReadiness", "RelatedBecause", "SuggestedNextAction"],
   conflicts: ["Severity", "ConflictType", "ShareId", "Identity", "Message"],
   findings: ["Severity", "FindingType", "ShareId", "Identity", "FullPath", "Message"],
+  evidence_confidence: ["Scope", "ScopeName", "ConfidenceLabel", "ConfidenceScore", "StopGate", "ReviewGate", "Signals", "RequestedProvider", "EffectiveProvider", "ProviderFallback", "RecommendedAction"],
   collection_errors: ["ErrorType", "ShareId", "FullPath", "Message"],
   scan_events: ["Timestamp", "Level", "EventType", "Message"],
   scan_manifest: ["GeneratedAt", "ExportVersion", "SourceMode", "CollectionProvider", "RequestedSmbCollectionProvider", "EffectiveSmbCollectionProvider", "GroupExpansionMaxDepth", "AdLookupMode", "IncludeFiles"],
@@ -1390,6 +1392,8 @@ function OverviewView({
           <strong>{summary.scanConfidence}%</strong>
           <span>{summary.confidenceLabel}</span>
         </div>
+        <p className="panel-copy">{summary.confidenceSignals}</p>
+        <p className="panel-copy">{summary.confidenceRecommendedAction}</p>
         <ul className="insight-list">
           {quickInsights.map((insight) => (
             <li key={insight}>{insight}</li>
@@ -2099,6 +2103,9 @@ function IdentityView({ dashboard }: { dashboard: DashboardModel }) {
 }
 
 function DiagnosticsView({ snapshot, dashboard }: { snapshot: NormalizedSnapshot; dashboard: DashboardModel }) {
+  const confidenceRows = datasetRows(dashboard, "evidence_confidence");
+  const readinessGateRows = portProtocolGateRows(dashboard.protocolReadinessGates);
+
   return (
     <div className="view-grid">
       <section className="panel wide-scroll-pane">
@@ -2124,7 +2131,43 @@ function DiagnosticsView({ snapshot, dashboard }: { snapshot: NormalizedSnapshot
             <dt>Schema Warnings</dt>
             <dd>{formatNumber(snapshot.schemaWarnings.length)}</dd>
           </div>
+          <div>
+            <dt>Evidence Confidence</dt>
+            <dd>{dashboard.scanSummary.scanConfidence}% {dashboard.scanSummary.confidenceLabel}</dd>
+          </div>
+          <div>
+            <dt>Provider Fallback</dt>
+            <dd>{dashboard.scanSummary.confidenceProviderFallback ? "Yes" : "No"}</dd>
+          </div>
         </dl>
+        <p className="panel-copy">{dashboard.scanSummary.confidenceSignals}</p>
+        <p className="panel-copy">{dashboard.scanSummary.confidenceRecommendedAction}</p>
+      </section>
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.scanConfidence}>Evidence Confidence Rows</SectionTitle>
+        <VirtualTable
+          rows={confidenceRows}
+          columns={["Scope", "ScopeName", "ConfidenceLabel", "ConfidenceScore", "StopGate", "ReviewGate", "Signals", "RecommendedAction"]}
+          selectableColumns={expectedColumns.evidence_confidence}
+          pageSize={10}
+          title="Evidence confidence rows"
+          enableFieldFilters
+          enableExport
+          exportFileName="sharesurfer-evidence-confidence-shown.csv"
+        />
+      </section>
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Protocol Readiness Gates</SectionTitle>
+        <VirtualTable
+          rows={readinessGateRows}
+          columns={["GateType", "Protocol", "Target", "Status", "Severity", "Message", "RecommendedAction"]}
+          selectableColumns={["GateType", "Scope", "Target", "Protocol", "Status", "Severity", "Message", "CollectionImpact", "RecommendedAction"]}
+          pageSize={10}
+          title="Protocol readiness gates"
+          enableFieldFilters
+          enableExport
+          exportFileName="sharesurfer-protocol-readiness-gates-shown.csv"
+        />
       </section>
       <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.collectionError}>Collection Errors</SectionTitle>
@@ -2275,11 +2318,26 @@ function summarizePortProtocolGuidance(rows: DataRow[]): DataRow[] {
   return Array.from(grouped.values()).map((entry) => entry.row);
 }
 
+function portProtocolGateRows(gates: ProtocolReadinessGate[]): DataRow[] {
+  return gates.map((gate) => ({
+    GateType: gate.gateType,
+    Scope: gate.scope,
+    Target: gate.target,
+    Protocol: gate.protocol,
+    Status: gate.status,
+    Severity: gate.severity,
+    Message: gate.message,
+    CollectionImpact: gate.collectionImpact,
+    RecommendedAction: gate.recommendedAction
+  }));
+}
+
 function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardModel; query: string; filters: FilterState }) {
   const manifestRows = datasetRows(dashboard, "port_protocol_manifest");
   const targetRows = filterPortProtocolRows(datasetRows(dashboard, "port_protocol_targets"), filters, query);
   const checkRows = filterPortProtocolRows(datasetRows(dashboard, "port_protocol_checks"), filters, query);
   const guidanceRows = summarizePortProtocolGuidance(checkRows);
+  const readinessGateRows = portProtocolGateRows(dashboard.protocolReadinessGates).filter((row) => filterPortProtocolRows([row], filters, query).length > 0);
   const manifest = manifestRows[0] ?? {};
   const blockedTargets = targetRows.filter((row) => row.TargetStatus === "Blocked").length;
   const reviewTargets = targetRows.filter((row) => row.TargetStatus === "Review").length;
@@ -2294,6 +2352,7 @@ function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardM
         <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Ports & Protocols</SectionTitle>
         <p className="panel-copy">
           This view shows read-only reachability checks for the protocols ShareSurfer may use. Failed WinRM/CIM checks do not automatically block collection, but they explain why share-level metadata may require fallback or show as partial.
+          Successful SMB or SMB/RPC reachability means the route answered; SMB reachability does not prove ACL or security descriptor readability.
         </p>
         {hasAssessment ? (
           <dl className="stat-grid">
@@ -2340,6 +2399,30 @@ function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardM
         <KpiCard label="Warning Checks" value={formatNumber(warningChecks)} tone={warningChecks > 0 ? "warning" : "good"} detail="Fallback may be needed" tooltip={tooltipRegistry.portsProtocols} icon={<Activity />} />
         <KpiCard label="Skipped Checks" value={formatNumber(skippedChecks)} tone={skippedChecks > 0 ? "warning" : "neutral"} detail="Dry-run evidence" tooltip={tooltipRegistry.portsProtocols} icon={<ClipboardCheck />} />
       </div>
+
+      <section className="panel wide-scroll-pane">
+        <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Readiness Gates</SectionTitle>
+        <p className="panel-copy">
+          Stop gates should be resolved before relying on collection evidence. Review gates explain fallback or partial metadata risk. Info rows keep reachability separate from ACL proof.
+        </p>
+        {readinessGateRows.length > 0 ? (
+          <VirtualTable
+            rows={readinessGateRows}
+            columns={["GateType", "Protocol", "Target", "Status", "Severity", "Message", "CollectionImpact", "RecommendedAction"]}
+            selectableColumns={["GateType", "Scope", "Target", "Protocol", "Status", "Severity", "Message", "CollectionImpact", "RecommendedAction"]}
+            pageSize={10}
+            title="Ports and protocols readiness gates"
+            enableFieldFilters
+            enableExport
+            exportFileName="sharesurfer-port-protocol-readiness-gates-shown.csv"
+          />
+        ) : (
+          <div className="info-banner">
+            <strong>No port/protocol readiness gates in the current filter</strong>
+            <span>Passing optional checks are still visible in the detailed evidence table below.</span>
+          </div>
+        )}
+      </section>
 
       <section className="panel wide-scroll-pane">
         <SectionTitle tooltip={tooltipRegistry.portsProtocols}>Target Assessment</SectionTitle>

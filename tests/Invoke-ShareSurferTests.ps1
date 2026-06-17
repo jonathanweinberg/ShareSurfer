@@ -1135,6 +1135,7 @@ $tests = @(
                 'owner_review_packets.csv',
                 'conflicts.csv',
                 'findings.csv',
+                'evidence_confidence.csv',
                 'collection_errors.csv',
                 'scan_events.csv',
                 'scan_manifest.csv'
@@ -1216,6 +1217,25 @@ $tests = @(
             $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
             Assert-True ($events.EventType -contains 'ScanStarted') 'Scan events should record scan start.'
             Assert-True ($events.EventType -contains 'ExportCompleted') 'Scan events should record export completion.'
+
+            $confidenceRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'evidence_confidence.csv'))
+            Assert-Equal $confidenceRows.Count 2 'Evidence confidence export should include one scan-level row plus one row per share.'
+            Assert-Equal $confidenceRows[0].Scope 'Scan' 'Evidence confidence should identify its review scope.'
+            Assert-Equal $confidenceRows[1].Scope 'Share' 'Evidence confidence should include share-level confidence rows.'
+            Assert-Equal $confidenceRows[1].ScopeId 'share-finance' 'Share confidence rows should preserve the share identifier.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'ConfidenceScore') 'Evidence confidence should include a visible score.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'ConfidenceLabel') 'Evidence confidence should include a visible label.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'SignalCount') 'Evidence confidence should count explainable signals.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'Signals') 'Evidence confidence should include explainable signals.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'TotalShares') 'Evidence confidence should include total share count.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'TotalItems') 'Evidence confidence should include total item count.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'RequestedProvider') 'Evidence confidence should include requested provider state.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'EffectiveProvider') 'Evidence confidence should include effective provider state.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'ProviderFallback') 'Evidence confidence should include provider fallback state.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'StopGate') 'Evidence confidence should include stop gates.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'ReviewGate') 'Evidence confidence should include review gates.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'RecommendedAction') 'Evidence confidence should include a recommended action.'
+            Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'Detail') 'Evidence confidence should include readable detail.'
         }
     },
     @{
@@ -1359,6 +1379,7 @@ $tests = @(
             $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
             $findings = Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv')
             $collectionErrors = Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv')
+            $confidenceRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'evidence_confidence.csv'))
 
             Assert-Equal $shares[0].PartialData 'True' 'Share rows should be partial when collection errors were recorded for the share.'
             Assert-True ($shares[0].PartialReason -like '*AclReadError=1*') 'Partial reason should summarize ACL read errors.'
@@ -1368,6 +1389,12 @@ $tests = @(
             Assert-True ($collectionErrors.ErrorType -contains 'EnumerationError') 'Collection error export should preserve enumeration error rows.'
             Assert-True ($collectionErrors[0].PSObject.Properties.Name -contains 'ErrorId') 'Collection error export should include stable row IDs.'
             Assert-True ($findings.FindingType -contains 'PartialSharePermissionData') 'Findings should include a partial-share row for business review.'
+            Assert-Equal $confidenceRows[0].PartialShareCount '1' 'Evidence confidence should count partial shares.'
+            Assert-Equal $confidenceRows[0].CollectionErrorCount '2' 'Evidence confidence should count collection errors.'
+            Assert-True ($confidenceRows[0].ConfidenceLabel -eq 'Review' -or $confidenceRows[0].ConfidenceLabel -eq 'Partial') 'Evidence confidence should lower the label when scan evidence is incomplete.'
+            Assert-True ($confidenceRows[0].ConfidenceLabel -ne 'Good') 'Evidence confidence should not report Good when review or stop gates are present.'
+            Assert-True ($confidenceRows[0].Signals -like '*partial share*' -and $confidenceRows[0].Signals -like '*collection error*') 'Evidence confidence signals should explain the incomplete evidence.'
+            Assert-True ($confidenceRows[0].ReviewGate -like '*partial*' -or $confidenceRows[0].StopGate -like '*partial*') 'Evidence confidence should expose incomplete collection as a gate before owner signoff.'
         }
     },
     @{
@@ -2325,8 +2352,19 @@ $tests = @(
             $validResult = Test-ShareSurferExport -ExportPath $outputPath
             $aclResult = @($validResult.FileResults | Where-Object { $_.FileName -eq 'acl_entries.csv' })[0]
             $manifestResult = @($validResult.FileResults | Where-Object { $_.FileName -eq 'scan_manifest.csv' })[0]
+            $confidenceResult = @($validResult.FileResults | Where-Object { $_.FileName -eq 'evidence_confidence.csv' })[0]
             Assert-True ([int]$aclResult.RowCount -gt 0) 'Export validation should report row counts for populated CSVs.'
             Assert-Equal ([int]$manifestResult.RowCount) 1 'Export validation should report the single scan manifest row.'
+            Assert-Equal ([int]$confidenceResult.RowCount) 2 'Export validation should report the scan and share evidence confidence rows.'
+
+            Remove-Item -LiteralPath (Join-Path $outputPath 'evidence_confidence.csv') -Force
+            $legacyResult = Test-ShareSurferExport -ExportPath $outputPath
+            $legacyConfidenceResult = @($legacyResult.FileResults | Where-Object { $_.FileName -eq 'evidence_confidence.csv' })[0]
+            Assert-True $legacyResult.IsValid 'Legacy exports should remain valid when additive evidence confidence rows are absent.'
+            Assert-True ($legacyResult.MissingFiles -notcontains 'evidence_confidence.csv') 'Evidence confidence should not be a missing-file failure for older exports.'
+            Assert-True ([bool]$legacyConfidenceResult.Optional) 'Evidence confidence should be marked optional when absent for legacy exports.'
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
 
             $aclPath = Join-Path $outputPath 'acl_entries.csv'
             $brokenRows = Import-Csv -LiteralPath $aclPath | Select-Object ItemId, ShareId, FullPath, Rights, AccessMask, AccessControlType, IsInherited, InheritanceFlags, PropagationFlags, Depth
@@ -3897,6 +3935,7 @@ $tests = @(
             $redactedOwnerRiskPivots = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_risk_pivots.csv') -Raw
             $redactedRelatedDataAreas = Get-Content -LiteralPath (Join-Path $bundlePath 'related_data_areas.csv') -Raw
             $redactedOwnerReviewPackets = Get-Content -LiteralPath (Join-Path $bundlePath 'owner_review_packets.csv') -Raw
+            $redactedEvidenceConfidence = Get-Content -LiteralPath (Join-Path $bundlePath 'evidence_confidence.csv') -Raw
             Assert-True ($redactedIdentities -notlike '*E1001*') 'Employee IDs must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*1001*') 'Employee numbers must be anonymized.'
             Assert-True ($redactedIdentities -notlike '*finance.editors@example.test*') 'Identity mail values must be anonymized.'
@@ -3915,6 +3954,9 @@ $tests = @(
             Assert-True ($redactedOwnerReviewPackets -notlike '*Finance*') 'Owner review packets must anonymize owner and business-unit labels.'
             Assert-True ($redactedOwnerReviewPackets -like '*WhyReview*') 'Owner review packets should preserve guidance headers.'
             Assert-True ($redactedOwnerReviewPackets -like '*SuggestedNextAction*') 'Owner review packets should preserve next-action guidance.'
+            Assert-True ($redactedEvidenceConfidence -notlike '*Finance*') 'Evidence confidence support bundle rows must anonymize share scope names.'
+            Assert-True ($redactedEvidenceConfidence -like '*ConfidenceLabel*' -and $redactedEvidenceConfidence -like '*Review*') 'Evidence confidence support bundle rows should preserve confidence labels.'
+            Assert-True ($redactedEvidenceConfidence -like '*Partial data or collection errors*') 'Evidence confidence support bundle rows should preserve reader-facing review guidance.'
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
@@ -3976,6 +4018,7 @@ $tests = @(
             Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'CollectionProvider' }).Count -eq 0) 'Collection provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
             Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'RequestedSmbCollectionProvider' }).Count -eq 0) 'Requested SMB provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
             Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'scan_manifest.csv' -and $_.ColumnName -eq 'EffectiveSmbCollectionProvider' }).Count -eq 0) 'Effective SMB provider should be treated as a safe diagnostic enum, not a redaction leak candidate.'
+            Assert-True (@($redactionAudit | Where-Object { $_.SourceFile -eq 'evidence_confidence.csv' -and $_.ColumnName -eq 'ConfidenceId' }).Count -gt 0) 'Evidence confidence IDs should be audited rather than treated as safe literals.'
             Assert-True ([int]$bundleDiagnostics.Inventory.RelatedDataAreaCount -gt 0) 'Support bundle diagnostics should summarize related data area counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.OwnerReviewPacketCount -gt 0) 'Support bundle diagnostics should summarize owner review packet counts.'
             Assert-True ([int]$bundleDiagnostics.Inventory.PermissionedGroupCount -gt 0) 'Support bundle diagnostics should summarize permissioned group counts.'
@@ -4004,6 +4047,7 @@ $tests = @(
             Assert-True ($bundleFiles.FileName -contains 'owner_review_packets.csv') 'Support bundle file diagnostics should include owner review packets.'
             Assert-True ($bundleFiles.FileName -contains 'permissioned_groups.csv') 'Support bundle file diagnostics should include permissioned groups.'
             Assert-True ($bundleFiles.FileName -contains 'collection_errors.csv') 'Support bundle file diagnostics should include redacted collection errors.'
+            Assert-True ($bundleFiles.FileName -contains 'evidence_confidence.csv') 'Support bundle file diagnostics should include evidence confidence.'
             Assert-True ($bundleFiles.FileName -contains 'scan_events.jsonl') 'Support bundle file diagnostics should include the redacted JSONL event log.'
             Assert-True ($bundleFiles.FileName -contains 'report.html') 'Support bundle file diagnostics should include the redacted report.'
             Assert-True ($bundleFiles.FileName -contains 'support_bundle_summary.json') 'Support bundle file diagnostics should include the redacted JSON summary.'

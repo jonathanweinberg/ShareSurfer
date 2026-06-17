@@ -237,6 +237,8 @@ Start-Process "$exportPath\standalone-dashboard\index.html"
 
 Release users do not need Node, npm, Vite, a development server, or internet access to package and open the standalone dashboard from a validated export folder.
 
+Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confidence panel. The score and label summarize evidence completeness only. Stop gates, partial data, collection errors, and provider fallback should be resolved, rerun, supplemented, or explicitly documented before approval.
+
 ## Recipe 7: Locked-Down Collector Handoff
 
 Use this when collection happens on a restricted host but review happens on a dashboard host.
@@ -296,7 +298,7 @@ Invoke-ShareSurferPortProtocolAssessment `
   -OutputPath $exportPath
 ```
 
-This writes `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv`. Package the standalone dashboard after these files are present to see the **Ports & Protocols** view below Raw Evidence. The output includes plain guidance fields such as `ReadinessSummary`, `CollectionImpact`, `OperatorGuidance`, and `RemediationHint`, which are useful for firewall tickets, server-team handoffs, and deciding whether to rerun with `-SmbCollectionProvider NativeSmbRpc`.
+This writes `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv`. Package the standalone dashboard after these files are present to see the **Ports & Protocols** view below Raw Evidence. The output includes plain guidance fields such as `ReadinessSummary`, `CollectionImpact`, `OperatorGuidance`, and `RemediationHint`, which are useful for firewall tickets, server-team handoffs, and deciding whether to rerun with `-SmbCollectionProvider NativeSmbRpc`. Failed required SMB checks are stop gates. Failed or warning WinRM/CIM checks explain fallback or partial metadata risk. Passing SMB/RPC reachability does not prove ACL or security descriptor readability.
 
 If you are only rehearsing the workflow and are not allowed to open network sockets, add `-SkipNetworkTests`; the CSVs will show skipped checks instead of pass/fail reachability.
 
