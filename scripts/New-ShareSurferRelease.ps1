@@ -10,7 +10,7 @@ param(
 
     [switch] $SkipNpmInstall,
 
-    [int] $MinimumDependencyAgeDays = 7,
+    [int] $MinimumDependencyAgeDays = -1,
 
     [string] $DependencyAgeReportPath = '',
 
@@ -56,11 +56,84 @@ function Invoke-ShareSurferReleaseCommand {
     }
 }
 
-function Get-ShareSurferReleaseVersion {
-    param([string] $ManifestPath)
+function Get-ShareSurferReleaseMetadataPath {
+    param([string] $RepoRoot)
 
-    $manifest = Test-ModuleManifest -Path $ManifestPath
-    [string]$manifest.Version
+    Join-Path $RepoRoot 'release-metadata.json'
+}
+
+function Get-ShareSurferReleaseMetadata {
+    param([string] $RepoRoot)
+
+    $metadataPath = Get-ShareSurferReleaseMetadataPath -RepoRoot $RepoRoot
+    if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf)) {
+        throw ('Release metadata file not found: {0}' -f $metadataPath)
+    }
+
+    $metadata = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
+    $requiredFields = @(
+        'currentPrereleaseTag',
+        'packageVersion',
+        'packageName',
+        'zipAssetName',
+        'releaseUrl',
+        'minimumDependencyAgeDays',
+        'releaseNotesSummary',
+        'docsReferencePaths',
+        'internalPackageExcludePaths'
+    )
+    foreach ($field in $requiredFields) {
+        if ($null -eq $metadata.PSObject.Properties[$field] -or [string]::IsNullOrWhiteSpace([string]$metadata.$field)) {
+            throw ('Release metadata is missing required field {0}: {1}' -f $field, $metadataPath)
+        }
+    }
+
+    $expectedTag = 'v{0}' -f [string]$metadata.packageVersion
+    $expectedPackageName = 'ShareSurfer-{0}' -f [string]$metadata.packageVersion
+    $expectedZipFileName = '{0}.zip' -f $expectedPackageName
+    if ([string]$metadata.currentPrereleaseTag -ne $expectedTag) {
+        throw ('Release metadata tag/version mismatch. Expected {0}; found {1}.' -f $expectedTag, [string]$metadata.currentPrereleaseTag)
+    }
+    if ([string]$metadata.packageName -ne $expectedPackageName) {
+        throw ('Release metadata package/version mismatch. Expected {0}; found {1}.' -f $expectedPackageName, [string]$metadata.packageName)
+    }
+    if ([string]$metadata.zipAssetName -ne $expectedZipFileName) {
+        throw ('Release metadata zip/version mismatch. Expected {0}; found {1}.' -f $expectedZipFileName, [string]$metadata.zipAssetName)
+    }
+    if ([int]$metadata.minimumDependencyAgeDays -lt 0) {
+        throw ('Release metadata minimumDependencyAgeDays must be zero or greater: {0}' -f $metadataPath)
+    }
+
+    $metadata | Add-Member -MemberType NoteProperty -Name MetadataPath -Value $metadataPath -Force
+    $metadata
+}
+
+function ConvertTo-ShareSurferReleaseVersion {
+    param([string] $Value)
+
+    $normalized = ([string]$Value).Trim()
+    if ($normalized.StartsWith('v')) {
+        $normalized = $normalized.Substring(1)
+    }
+
+    $normalized
+}
+
+function Assert-ShareSurferReleaseVersionMatchesMetadata {
+    param(
+        [string] $RequestedVersion,
+        [object] $ReleaseMetadata
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RequestedVersion)) {
+        return
+    }
+
+    $normalizedRequested = ConvertTo-ShareSurferReleaseVersion -Value $RequestedVersion
+    $metadataVersion = [string]$ReleaseMetadata.packageVersion
+    if ($normalizedRequested -ne $metadataVersion) {
+        throw ('Release version "{0}" does not match release metadata version "{1}" in {2}. Update release-metadata.json first, or pass the metadata version.' -f $RequestedVersion, $metadataVersion, [string]$ReleaseMetadata.MetadataPath)
+    }
 }
 
 function Copy-ShareSurferReleaseFile {
@@ -94,13 +167,13 @@ function Get-ShareSurferReleaseSourceFiles {
     param([string] $RepoRoot)
 
     $trackedFiles = @()
-    $gitOutput = & git -C $RepoRoot ls-files -- README.md LICENSE src scripts docs 2>$null
+    $gitOutput = & git -C $RepoRoot ls-files -- README.md LICENSE release-metadata.json src scripts docs 2>$null
     if ($LASTEXITCODE -eq 0) {
         $trackedFiles = @($gitOutput)
     }
 
     if ($trackedFiles.Count -eq 0) {
-        $roots = @('README.md', 'LICENSE', 'src', 'scripts', 'docs')
+        $roots = @('README.md', 'LICENSE', 'release-metadata.json', 'src', 'scripts', 'docs')
         foreach ($root in $roots) {
             $path = Join-Path $RepoRoot $root
             if (Test-Path -LiteralPath $path -PathType Leaf) {
@@ -120,16 +193,34 @@ function Get-ShareSurferReleaseSourceFiles {
         $trackedFiles += $releaseScript
     }
 
+    $releaseMetadata = 'release-metadata.json'
+    if ($trackedFiles -notcontains $releaseMetadata -and (Test-Path -LiteralPath (Join-Path $RepoRoot $releaseMetadata) -PathType Leaf)) {
+        $trackedFiles += $releaseMetadata
+    }
+
     $trackedFiles
 }
 
 function Test-ShareSurferReleaseExcludedPath {
-    param([string] $RelativePath)
+    param(
+        [string] $RelativePath,
+        [string[]] $MetadataExcludePatterns = @()
+    )
 
     $normalizedPath = $RelativePath.Replace('\', '/')
-    $normalizedPath -like 'docs/lab-evidence/*' -or
-        $normalizedPath -like 'docs/.generated/*' -or
-        $normalizedPath -like 'interface/standalone-dashboard/node_modules/*'
+    $excludePatterns = @(
+        'docs/lab-evidence/*',
+        'docs/.generated/*',
+        'interface/standalone-dashboard/node_modules/*'
+    ) + @($MetadataExcludePatterns)
+
+    foreach ($pattern in $excludePatterns) {
+        if ($normalizedPath -like $pattern) {
+            return $true
+        }
+    }
+
+    $false
 }
 
 function Copy-ShareSurferDashboardBuild {
@@ -168,6 +259,30 @@ function Set-ShareSurferDashboardTemplateSnapshot {
     Set-Content -LiteralPath $dataScriptPath -Value $snapshotScript -Encoding UTF8
 }
 
+function Get-ShareSurferFileSha256 {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $hashBytes = $sha256.ComputeHash($stream)
+            ([System.BitConverter]::ToString($hashBytes) -replace '-', '')
+        }
+        finally {
+            if ($sha256 -is [System.IDisposable]) {
+                $sha256.Dispose()
+            }
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function New-ShareSurferReleaseHashFile {
     param(
         [Parameter(Mandatory = $true)]
@@ -184,11 +299,30 @@ function New-ShareSurferReleaseHashFile {
         }
 
         $relativePath = $file.FullName.Substring($rootPath.Length + 1).Replace('\', '/')
-        $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $file.FullName
-        '{0}  {1}' -f $hash.Hash, $relativePath
+        $hash = Get-ShareSurferFileSha256 -Path $file.FullName
+        '{0}  {1}' -f $hash, $relativePath
     }
 
     Set-Content -LiteralPath $OutputPath -Value $hashRows -Encoding UTF8
+}
+
+function New-ShareSurferReleaseZip {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $PackageRoot,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ZipPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+    $resolvedPackageRoot = (Resolve-Path -LiteralPath $PackageRoot).Path
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $resolvedPackageRoot,
+        $ZipPath,
+        [System.IO.Compression.CompressionLevel]::Optimal,
+        $true
+    )
 }
 
 function Get-ShareSurferPackageLockDependencies {
@@ -346,8 +480,8 @@ function Get-ShareSurferDependencyAgeReport {
         }
 
         $report = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
-        if ($null -eq $report.PSObject.Properties['isValid'] -or -not [bool]$report.isValid) {
-            throw ('Dependency age report is not valid: {0}' -f $ReportPath)
+        if ($null -eq $report.PSObject.Properties['isValid']) {
+            throw ('Dependency age report does not include isValid: {0}' -f $ReportPath)
         }
 
         return $report
@@ -358,9 +492,12 @@ function Get-ShareSurferDependencyAgeReport {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$moduleManifestPath = Join-Path (Join-Path $repoRoot 'src') (Join-Path 'ShareSurfer' 'ShareSurfer.psd1')
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = Get-ShareSurferReleaseVersion -ManifestPath $moduleManifestPath
+$releaseMetadata = Get-ShareSurferReleaseMetadata -RepoRoot $repoRoot
+Assert-ShareSurferReleaseVersionMatchesMetadata -RequestedVersion $Version -ReleaseMetadata $releaseMetadata
+$Version = [string]$releaseMetadata.packageVersion
+
+if ($MinimumDependencyAgeDays -lt 0) {
+    $MinimumDependencyAgeDays = [int]$releaseMetadata.minimumDependencyAgeDays
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
@@ -405,9 +542,9 @@ if ($null -eq $dependencyAgeReport.PSObject.Properties['isValid'] -or -not [bool
     throw ('NPM dependency age policy failed. Wrote {0}. Too new: {1}. Unknown: {2}.' -f $failedReportPath, (($violationNames -join ', ') -replace '^$', 'none'), (($unknownNames -join ', ') -replace '^$', 'none'))
 }
 
-$packageName = 'ShareSurfer-{0}' -f $Version
+$packageName = [string]$releaseMetadata.packageName
 $packageRoot = Join-Path $OutputRoot $packageName
-$zipPath = Join-Path $OutputRoot ('{0}.zip' -f $packageName)
+$zipPath = Join-Path $OutputRoot ([string]$releaseMetadata.zipAssetName)
 $zipHashPath = '{0}.sha256' -f $zipPath
 
 foreach ($path in @($packageRoot, $zipPath, $zipHashPath)) {
@@ -423,7 +560,7 @@ foreach ($path in @($packageRoot, $zipPath, $zipHashPath)) {
 New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 $sourceFiles = @(Get-ShareSurferReleaseSourceFiles -RepoRoot $repoRoot | Sort-Object -Unique)
 foreach ($relativePath in $sourceFiles) {
-    if (-not (Test-ShareSurferReleaseExcludedPath -RelativePath $relativePath)) {
+    if (-not (Test-ShareSurferReleaseExcludedPath -RelativePath $relativePath -MetadataExcludePatterns @($releaseMetadata.internalPackageExcludePaths))) {
         Copy-ShareSurferReleaseFile -RepoRoot $repoRoot -PackageRoot $packageRoot -RelativePath $relativePath
     }
 }
@@ -444,6 +581,9 @@ $dashboardPackagePath = 'interface/standalone-dashboard/dist'
 $manifest = [ordered]@{
     packageName = $packageName
     version = $Version
+    currentPrereleaseTag = [string]$releaseMetadata.currentPrereleaseTag
+    releaseUrl = [string]$releaseMetadata.releaseUrl
+    releaseMetadata = 'release-metadata.json'
     generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
     sourceCommit = $gitCommit
     signingStatus = 'UnsignedPre1.0'
@@ -460,7 +600,7 @@ $manifest = [ordered]@{
     dependencyAgeViolationCount = if ($null -ne $dependencyAgeReport.PSObject.Properties['violationCount']) { [int]$dependencyAgeReport.violationCount } else { 0 }
     dependencyAgeUnknownCount = if ($null -ne $dependencyAgeReport.PSObject.Properties['unknownCount']) { [int]$dependencyAgeReport.unknownCount } else { 0 }
     moduleManifest = 'src/ShareSurfer/ShareSurfer.psd1'
-    packageNotes = 'Unsigned pre-1.0 package. Dashboard assets are prebuilt template assets so release users do not need npm, Vite, a server, or internet access to package a standalone dashboard from an export. Use New-ShareSurferStandaloneDashboard.ps1 to create a real export dataset.'
+    packageNotes = [string]$releaseMetadata.releaseNotesSummary
 }
 
 $manifestPath = Join-Path $packageRoot 'release-manifest.json'
@@ -470,6 +610,8 @@ $releaseNotes = @(
     '# ShareSurfer Release Package',
     '',
     ('Version: {0}' -f $Version),
+    ('Release: {0}' -f [string]$releaseMetadata.currentPrereleaseTag),
+    ('Release URL: {0}' -f [string]$releaseMetadata.releaseUrl),
     '',
     'This is an unsigned pre-1.0 package.',
     '',
@@ -494,9 +636,9 @@ Set-Content -LiteralPath (Join-Path $packageRoot 'RELEASE.md') -Value $releaseNo
 $hashPath = Join-Path $packageRoot 'SHA256SUMS.txt'
 New-ShareSurferReleaseHashFile -PackageRoot $packageRoot -OutputPath $hashPath
 
-Compress-Archive -Path $packageRoot -DestinationPath $zipPath -Force
-$zipHash = Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath
-Set-Content -LiteralPath $zipHashPath -Value ('{0}  {1}' -f $zipHash.Hash, (Split-Path -Leaf $zipPath)) -Encoding UTF8
+New-ShareSurferReleaseZip -PackageRoot $packageRoot -ZipPath $zipPath
+$zipHash = Get-ShareSurferFileSha256 -Path $zipPath
+Set-Content -LiteralPath $zipHashPath -Value ('{0}  {1}' -f $zipHash, (Split-Path -Leaf $zipPath)) -Encoding UTF8
 
 $result = [pscustomobject]@{
     IsValid = (
