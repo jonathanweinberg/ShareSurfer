@@ -69,6 +69,8 @@ Use this path for the first real operator run:
 
 If this is your first time using ShareSurfer, open the [First-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby for copy/paste commands.
 
+If you want a guided console starting point before you scan, run `Start-ShareSurferOperatorAssistant`. It does not collect data or change permissions. It writes `operator-assistant.plan.json` and `operator-assistant-rerun.ps1` with requested command previews plus an authoritative rerun script for scan, validation, and standalone dashboard packaging. Optional CSV paths are only used by the rerun script when the files exist.
+
 ## Pause Before Owner Signoff
 
 Stop or explicitly document the gap before owner review when any of these are true:
@@ -85,6 +87,7 @@ Stop or explicitly document the gap before owner review when any of these are tr
 
 | Workflow | Commands and scripts | Use when |
 | --- | --- | --- |
+| Guided first-run planning | `Start-ShareSurferOperatorAssistant` | You want ShareSurfer to create a reusable first-run plan and rerun script before you scan. |
 | Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` | You need deterministic Windows/AD test data or enterprise lab validation. |
 | Scan collection | `Invoke-ShareSurferScan` | You need share permissions, NTFS ACLs, ownership, inheritance, identities, groups, findings, conflicts, and migration signals. |
 | Optional readiness assessments | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment` | You need hot-folder activity evidence or collector route readiness evidence beside the scan. |
@@ -99,7 +102,7 @@ ShareSurfer is useful when access data is too complex for business owners to rev
 
 | Use case | Start here | Output to review |
 | --- | --- | --- |
-| First business-owner review | Scan one known share with owner mapping | `owner_review_packets.csv`, `owner_risk_pivots.csv`, and `report.html` |
+| First business-owner review | Generate an assistant plan, then scan one known share with owner mapping | `operator-assistant.plan.json`, `owner_review_packets.csv`, `owner_risk_pivots.csv`, and `report.html` |
 | Flexible ownership import and enrichment | Normalize HR, employee, OBS, OID, project, or owner CSVs with unexpected headers, then enrich the merged rows before scanning | `hr-obs.mapping.json`, `normalized-ownership.csv`, `ownership-enrichment-rerun.ps1`, `owner-mapping-draft.csv`, and exported `ownership_enrichment.csv` |
 | Migration discovery | Scan related shares with file/folder evidence and owner mappings | `related_data_areas.csv`, long-path findings, inheritance breaks, and share-vs-NTFS conflicts |
 | Hot folder activity review | Add an open-file assessment after the scan | `open_file_summary.csv`, `open_file_samples.csv`, and dashboard Raw Evidence Tables |

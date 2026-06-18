@@ -12,10 +12,11 @@ For a first useful scan:
 2. Use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
-5. If HR, employee, OBS, project, or owner CSVs exist, normalize them and build `ownership-enrichment.csv` before scanning.
-6. Run the collector, validate the export, and build `report.html`.
-7. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
-8. Check the stop gates before sending anything to a business owner.
+5. Optional: run `Start-ShareSurferOperatorAssistant` to generate a reusable first-run plan and rerun script.
+6. If HR, employee, OBS, project, or owner CSVs exist, normalize them and build `ownership-enrichment.csv` before scanning.
+7. Run the collector, validate the export, and build `report.html`.
+8. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
+9. Check the stop gates before sending anything to a business owner.
 
 Stop gates are conditions that make the scan unsafe to treat as complete owner-review evidence. They include unresolved partial data, collection errors, wrong or missing OBS attributes, template dashboard confusion, protocol readiness blockers, and missing owner/business-unit mapping when owner review is expected.
 
@@ -130,6 +131,27 @@ Confirm the commands are available:
 ```powershell
 Get-Command -Module ShareSurfer
 ```
+
+Optional: generate a guided operator plan before scanning. This does not collect data or change permissions. It writes a JSON plan and a rerun script so you can review the requested scan preview plus the authoritative validation and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist.
+
+```powershell
+$inputRoot = 'C:\ShareSurfer\inputs'
+$exportPath = 'C:\ShareSurfer\exports\scan-001'
+
+New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
+
+Start-ShareSurferOperatorAssistant `
+  -ReleaseRoot $releaseRoot `
+  -InputRoot $inputRoot `
+  -ExportPath $exportPath `
+  -TargetPath '\\files01\Finance' `
+  -ObsAttribute 'extensionAttribute10' `
+  -PlanPath (Join-Path $inputRoot 'operator-assistant.plan.json') `
+  -ReusableCommandPath (Join-Path $inputRoot 'operator-assistant-rerun.ps1') `
+  -Force
+```
+
+Review `operator-assistant-rerun.ps1` before running it. The script only passes optional owner mapping, ownership enrichment, and discounted-principal paths when those files exist.
 
 ## Step 2: Choose Scan Targets
 

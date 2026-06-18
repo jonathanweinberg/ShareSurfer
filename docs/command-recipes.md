@@ -13,17 +13,19 @@ If `v0.1.0-pre.18` is not visible yet on the [ShareSurfer Releases page](https:/
 ## Start Here
 
 1. Unpack and unblock the release.
-2. Create optional input CSVs only when you have the data.
-3. Run one scan shape: quick UNC path, Windows SMB computer/share, or NativeSmbRpc fallback.
-4. Validate the export and build `report.html`.
-5. Package the standalone dashboard from the validated export folder when reviewers need the richer local dashboard.
-6. Check stop gates before owner signoff.
+2. Optional: generate an operator assistant plan and rerun script before scanning.
+3. Create optional input CSVs only when you have the data.
+4. Run one scan shape: quick UNC path, Windows SMB computer/share, or NativeSmbRpc fallback.
+5. Validate the export and build `report.html`.
+6. Package the standalone dashboard from the validated export folder when reviewers need the richer local dashboard.
+7. Check stop gates before owner signoff.
 
 ## Command Inventory by Workflow
 
 | Workflow | Copy/paste recipe | Commands and scripts |
 | --- | --- | --- |
 | Release setup | Recipe 1 | `Expand-Archive`, `Unblock-File`, `Import-Module` |
+| Guided first-run planning | Recipe 1A | `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | README Lab Fixture section | `New-ShareSurferLabFixture` |
 | Optional owner/admin inputs | Recipe 2 | `owner-mapping.csv`, `discounted-principals.csv` |
 | Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
@@ -66,6 +68,32 @@ Get-Command -Module ShareSurfer
 The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting the release ZIP.
 
 Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\ShareSurfer-0.1.0-pre.18`.
+
+## Recipe 1A: Generate a Guided Operator Plan
+
+Use this when you want ShareSurfer to write the first-run plan and rerun script before you collect data. The assistant does not scan shares or change permissions. It writes `operator-assistant.plan.json` and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. Optional CSV paths are only used by the rerun script when those files exist.
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+$inputRoot = 'C:\ShareSurfer\inputs'
+$exportPath = 'C:\ShareSurfer\exports\finance-001'
+
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
+
+Start-ShareSurferOperatorAssistant `
+  -ReleaseRoot $releaseRoot `
+  -InputRoot $inputRoot `
+  -ExportPath $exportPath `
+  -TargetPath '\\files01\Finance' `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -PlanPath (Join-Path $inputRoot 'operator-assistant.plan.json') `
+  -ReusableCommandPath (Join-Path $inputRoot 'operator-assistant-rerun.ps1') `
+  -Force
+```
+
+Open `operator-assistant-rerun.ps1` and review it before running. The script imports the module, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, and packages the standalone dashboard from the validated export folder.
 
 ## Recipe 2: Create Optional Input CSVs
 

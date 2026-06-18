@@ -2575,6 +2575,113 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurferOperatorAssistant writes a reusable first-run plan and command script'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $command = Get-Command -Name Start-ShareSurferOperatorAssistant -Module ShareSurfer -ErrorAction Stop
+            Assert-Equal $command.Name 'Start-ShareSurferOperatorAssistant' 'Operator assistant should be exported by the module.'
+
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOperatorAssistant-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'exports\finance-001'
+            $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $planPath = Join-Path $inputRoot 'operator-assistant.plan.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            $releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+            $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+            $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+            $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
+
+            $summary = Start-ShareSurferOperatorAssistant `
+                -ReleaseRoot $releaseRoot `
+                -InputRoot $inputRoot `
+                -ExportPath $exportPath `
+                -StandaloneDashboardPath $dashboardPath `
+                -TargetPath '\\files01\Finance' `
+                -ObsAttribute 'info' `
+                -AdLookupMode DirectoryOnly `
+                -ManagerIdentityFormat MailTo `
+                -OwnerMappingPath $ownerMappingPath `
+                -OwnershipEnrichmentPath $ownershipEnrichmentPath `
+                -DiscountedPrincipalPath $discountedPrincipalPath `
+                -PlanPath $planPath `
+                -ReusableCommandPath $rerunPath `
+                -IncludeFiles `
+                -Force
+
+            $plan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
+            $scriptText = Get-Content -LiteralPath $rerunPath -Raw
+
+            Assert-Equal $summary.PlanPath $planPath 'Assistant summary should report the plan path.'
+            Assert-Equal $summary.ReusableCommandPath $rerunPath 'Assistant summary should report the reusable command path.'
+            Assert-Equal $plan.version 1 'Assistant plan should have a stable version.'
+            Assert-Equal $plan.releaseRoot $releaseRoot 'Assistant plan should preserve release root.'
+            Assert-Equal $plan.exportPath $exportPath 'Assistant plan should preserve export path.'
+            Assert-Equal $plan.obsAttribute 'info' 'Assistant plan should preserve OBS attribute.'
+            Assert-Equal $plan.adLookupMode 'DirectoryOnly' 'Assistant plan should preserve AD lookup mode.'
+            Assert-Equal $plan.optionalInputs.ownerMappingPath $ownerMappingPath 'Assistant plan should preserve owner mapping path.'
+            Assert-True ([string]$plan.commands.scan -like '*Invoke-ShareSurferScan*') 'Assistant plan should include a scan command preview.'
+            Assert-True ([string]$plan.commands.scan -like '*-OwnershipEnrichmentPath*') 'Scan command preview should show ownership enrichment when provided.'
+            Assert-True ([string]$plan.commands.validate -like '*Test-ShareSurferExport*') 'Assistant plan should include export validation command preview.'
+            Assert-True ([string]$plan.commands.packageStandaloneDashboard -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Assistant plan should include standalone dashboard packaging command preview.'
+            Assert-True ([string]$plan.commands.optionalInputBehavior -like '*rerun script is authoritative*') 'Assistant plan should explain that optional CSV path handling is conditional in the rerun script.'
+            Assert-True (@($plan.stopGates | Where-Object { [string]$_ -like '*evidence_confidence.csv*' }).Count -eq 1) 'Assistant plan should include evidence confidence stop gate guidance.'
+            Assert-True ($scriptText -like '*Import-Module $modulePath -Force*') 'Reusable script should import the module.'
+            Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Reusable script should run the scan through a splatted command.'
+            Assert-True ($scriptText -like '*$validation = Test-ShareSurferExport -ExportPath $exportPath*') 'Reusable script should validate the export.'
+            Assert-True ($scriptText -like '*ShareSurfer export validation failed*') 'Reusable script should stop when export validation fails.'
+            Assert-True ($scriptText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Reusable script should package the standalone dashboard.'
+            Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownerMappingPath*') 'Reusable script should only pass optional owner mapping when the file exists.'
+            Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownershipEnrichmentPath*') 'Reusable script should only pass optional ownership enrichment when the file exists.'
+            Assert-True ($scriptText -like '*Test-Path -LiteralPath $discountedPrincipalPath*') 'Reusable script should only pass optional discounted principals when the file exists.'
+
+            $threw = $false
+            try {
+                Start-ShareSurferOperatorAssistant -ReleaseRoot $releaseRoot -InputRoot $inputRoot -TargetPath '\\files01\Finance' -PlanPath $planPath -ReusableCommandPath $rerunPath | Out-Null
+            }
+            catch {
+                $threw = $true
+            }
+            Assert-True $threw 'Assistant should not overwrite existing plan or rerun script without -Force.'
+
+            $samePathThrew = $false
+            try {
+                $sameOutputPath = Join-Path $inputRoot 'same-output.ps1'
+                Start-ShareSurferOperatorAssistant -ReleaseRoot $releaseRoot -InputRoot $inputRoot -TargetPath '\\files01\Finance' -PlanPath $sameOutputPath -ReusableCommandPath $sameOutputPath -Force | Out-Null
+            }
+            catch {
+                $samePathThrew = ($_.Exception.Message -like '*must be different files*')
+            }
+            Assert-True $samePathThrew 'Assistant should reject identical plan and rerun paths before writing.'
+
+            $invalidExportPath = Join-Path $root 'invalid-export'
+            New-Item -ItemType Directory -Force -Path $invalidExportPath | Out-Null
+            Set-Content -LiteralPath (Join-Path $invalidExportPath 'shares.csv') -Value 'NotAValidHeader' -Encoding UTF8
+            $validationGuardScriptPath = Join-Path $root 'operator-assistant-validation-guard.ps1'
+            $packageSentinelPath = Join-Path $root 'dashboard-package-attempted.txt'
+            $invalidExportPathLiteral = "'" + ($invalidExportPath -replace "'", "''") + "'"
+            $packageSentinelPathLiteral = "'" + ($packageSentinelPath -replace "'", "''") + "'"
+            $moduleManifestLiteral = "'" + ($moduleManifest -replace "'", "''") + "'"
+            $validationGuardScript = $scriptText `
+                -replace '\$exportPath = .+', ('$exportPath = {0}' -f $invalidExportPathLiteral) `
+                -replace '\$modulePath = Join-Path \$releaseRoot .+', ('$modulePath = {0}' -f $moduleManifestLiteral) `
+                -replace '\$standaloneDashboardScript = Join-Path \$releaseRoot .+', '$standaloneDashboardScript = ''unused-by-validation-guard-test''' `
+                -replace [regex]::Escape('Invoke-ShareSurferScan @scanParams'), '# Scan intentionally skipped by validation guard regression test.' `
+                -replace [regex]::Escape('& $standaloneDashboardScript -ExportPath $exportPath -OutputPath $standaloneDashboardPath -Force'), ('Set-Content -LiteralPath {0} -Value ''packaged'' -Encoding UTF8' -f $packageSentinelPathLiteral)
+            Set-Content -LiteralPath $validationGuardScriptPath -Value $validationGuardScript -Encoding UTF8
+
+            $validationThrew = $false
+            try {
+                & $validationGuardScriptPath
+            }
+            catch {
+                $validationThrew = ($_.Exception.Message -like '*ShareSurfer export validation failed*')
+            }
+            Assert-True $validationThrew 'Reusable script should throw before dashboard packaging when export validation fails.'
+            Assert-True (-not (Test-Path -LiteralPath $packageSentinelPath)) 'Reusable script should not package a dashboard from an invalid export.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferOwnerMappingDraft creates admin-review rows for unmapped shares'
         Body = {
             Import-Module $moduleManifest -Force
@@ -5171,6 +5278,8 @@ $tests = @(
             $commandRecipeText = Get-Content -LiteralPath $commandRecipes -Raw
             Assert-True ($commandRecipeText -like '*ShareSurfer Command Recipes*') 'Command recipes should have a clear title.'
             Assert-True ($commandRecipeText -like '*Command Inventory by Workflow*') 'Command recipes should include a workflow-grouped command inventory.'
+            Assert-True ($commandRecipeText -like '*Start-ShareSurferOperatorAssistant*') 'Command recipes should include the guided operator assistant.'
+            Assert-True ($commandRecipeText -like '*operator-assistant.plan.json*' -and $commandRecipeText -like '*operator-assistant-rerun.ps1*') 'Command recipes should show operator assistant plan and rerun outputs.'
             Assert-True ($commandRecipeText -like '*Join-ShareSurferOwnershipSources*') 'Command recipes should include multi-source ownership join guidance.'
             Assert-True ($commandRecipeText -like '*ownership-import.definition.json*') 'Command recipes should show reusable ownership import definition output.'
             Assert-True ($commandRecipeText -like '*-ForbiddenOu*') 'Command recipes should show forbidden OU handling for AD ownership enrichment.'
@@ -5274,6 +5383,8 @@ $tests = @(
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
             Assert-True ($readmeText -like '*Start Here*') 'README should include a short operator start-here path.'
+            Assert-True ($readmeText -like '*Start-ShareSurferOperatorAssistant*') 'README should include the guided operator assistant command.'
+            Assert-True ($readmeText -like '*operator-assistant.plan.json*' -and $readmeText -like '*operator-assistant-rerun.ps1*') 'README should explain operator assistant plan and rerun outputs.'
             Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
             Assert-True ($readmeText -like '*Command Inventory by Workflow*') 'README should group public commands by workflow.'
             Assert-True ($readmeText -like '*Test-ShareSurferOwnershipSource*' -and $readmeText -like '*New-ShareSurferReviewDecisionDraft*') 'README command inventory should include ownership and review decision commands.'
@@ -5378,6 +5489,8 @@ $tests = @(
             $firstRunTroubleshootingText = Get-Content -LiteralPath $firstRunTroubleshooting -Raw
             $businessReviewHandoffText = Get-Content -LiteralPath $businessReviewHandoff -Raw
             Assert-True ($firstRunText -like '*Start Here*') 'First-run guide should include a short start-here section.'
+            Assert-True ($firstRunText -like '*Start-ShareSurferOperatorAssistant*') 'First-run guide should include the guided operator assistant.'
+            Assert-True ($firstRunText -like '*operator-assistant.plan.json*' -and $firstRunText -like '*operator-assistant-rerun.ps1*') 'First-run guide should explain operator assistant outputs.'
             Assert-True ($firstRunText -like '*Stop gates are conditions*') 'First-run guide should explain stop gates before the longer walkthrough.'
             Assert-True ($firstRunText -like '*latest published prerelease*') 'First-run guide should explain what to do if the checkpoint tag is not published yet.'
             Assert-True ($firstRunText -like '*first-time*') 'First-run guide should explicitly address first-time operators.'
