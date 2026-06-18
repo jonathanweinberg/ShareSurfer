@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/make-standalone.mjs",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=1",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
