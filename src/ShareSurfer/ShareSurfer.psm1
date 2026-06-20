@@ -11,6 +11,7 @@ Export-ModuleMember -Function @(
     'ConvertTo-ShareSurferReport',
     'Import-ShareSurferReviewDecisions',
     'Import-ShareSurferOwnershipSource',
+    'Invoke-ShareSurferFileShareConnectivityAssessment',
     'Invoke-ShareSurferOpenFileAssessment',
     'Invoke-ShareSurferPortProtocolAssessment',
     'Invoke-ShareSurferScan',

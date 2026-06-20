@@ -33,7 +33,7 @@ If `v0.1.0-pre.18` is not visible yet on the [ShareSurfer Releases page](https:/
 | Validation and dashboards | Recipe 6 | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `New-ShareSurferStandaloneDashboard.ps1` |
 | Review decisions | Recipe 7 | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
 | Locked-down handoff | Recipe 8 | `Compress-Archive`, `Get-FileHash` |
-| Optional assessments | Recipes 9-10 | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment` |
+| Optional assessments | Recipes 9-10A | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment` |
 | Support and rerun | Recipes 11-12 | `New-ShareSurferSupportBundle`, rerun scan commands |
 
 ## Stop Gates Before Owner Signoff
@@ -464,6 +464,24 @@ Invoke-ShareSurferPortProtocolAssessment `
 This writes `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv`. Package the standalone dashboard after these files are present to see the **Ports & Protocols** view below Raw Evidence. The output includes plain guidance fields such as `ReadinessSummary`, `CollectionImpact`, `OperatorGuidance`, and `RemediationHint`, which are useful for firewall tickets, server-team handoffs, and deciding whether to rerun with `-SmbCollectionProvider NativeSmbRpc`. Failed required SMB checks are stop gates. Failed or warning WinRM/CIM checks explain fallback or partial metadata risk. Passing SMB/RPC reachability does not prove ACL or security descriptor readability.
 
 If you are only rehearsing the workflow and are not allowed to open network sockets, add `-SkipNetworkTests`; the CSVs will show skipped checks instead of pass/fail reachability.
+
+## Recipe 10A: File-Share Connectivity Capability Assessment
+
+Use this when a file server works in Computer Management, but WinRM/CIM is blocked or ShareSurfer cannot prove share permissions, owner/DACL descriptors, open files, or connection visibility. This command is read-only and produces raw diagnostics plus a separate redacted package.
+
+```powershell
+$diagnosticPath = 'C:\ShareSurfer\diagnostics\finance-connectivity-001'
+
+Invoke-ShareSurferFileShareConnectivityAssessment `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath $diagnosticPath `
+  -IncludeOpenFiles `
+  -IncludeSessions
+```
+
+This writes `fileshare_connectivity_manifest.csv`, `fileshare_connectivity_targets.csv`, `fileshare_connectivity_checks.csv`, `fileshare_connectivity_summary.json`, and `fileshare_connectivity_events.jsonl`. It also writes a `redacted` folder with redacted copies and `fileshare_connectivity_llm_summary.md`.
+
+Use the raw files only inside trusted handling. Share the redacted folder for support or deeper diagnostic review. A passing SMB TCP 445 check means a socket opened; it does not prove `New-CimSession`, `Get-SmbShareAccess`, `NetShareGetInfo`, share security descriptor parsing, `GetNamedSecurityInfoW`, open-file enumeration, or session enumeration.
 
 ## Recipe 11: Redacted Support Bundle
 

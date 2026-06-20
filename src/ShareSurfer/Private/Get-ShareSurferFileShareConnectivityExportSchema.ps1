@@ -1,0 +1,58 @@
+function Get-ShareSurferFileShareConnectivityExportSchema {
+    [ordered]@{
+        'fileshare_connectivity_manifest.csv' = @(
+            'AssessmentId',
+            'GeneratedAt',
+            'ExportVersion',
+            'PackageKind',
+            'CollectorComputerName',
+            'CollectorFqdn',
+            'CollectorUser',
+            'UserDomain',
+            'IsWindows',
+            'IsElevated',
+            'PowerShellVersion',
+            'PSEdition',
+            'TargetCount',
+            'CheckCount',
+            'PassedCount',
+            'WarningCount',
+            'FailedCount',
+            'SkippedCount',
+            'RedactedOutputPath'
+        )
+        'fileshare_connectivity_targets.csv' = @(
+            'AssessmentId',
+            'TargetId',
+            'Target',
+            'InputType',
+            'ComputerName',
+            'ShareName',
+            'UNCPath',
+            'TargetStatus',
+            'CapabilitySummary',
+            'RecommendedScanProvider',
+            'SuggestedNextAction'
+        )
+        'fileshare_connectivity_checks.csv' = @(
+            'AssessmentId',
+            'CheckId',
+            'TargetId',
+            'Target',
+            'InputType',
+            'ComputerName',
+            'ShareName',
+            'Layer',
+            'Capability',
+            'Provider',
+            'Attempted',
+            'Status',
+            'Severity',
+            'EvidenceType',
+            'RawResultCode',
+            'Message',
+            'Detail',
+            'RecommendedAction'
+        )
+    }
+}

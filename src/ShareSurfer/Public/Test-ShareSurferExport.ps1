@@ -19,7 +19,8 @@ function Test-ShareSurferExport {
     $requiredOptionalFiles = New-Object System.Collections.ArrayList
     $optionalPackages = @(
         (Get-ShareSurferOpenFileExportSchema),
-        (Get-ShareSurferPortProtocolExportSchema)
+        (Get-ShareSurferPortProtocolExportSchema),
+        (Get-ShareSurferFileShareConnectivityExportSchema)
     )
     foreach ($packageSchema in $optionalPackages) {
         $packageFiles = @($packageSchema.Keys)

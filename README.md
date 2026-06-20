@@ -57,7 +57,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Partial data or collection errors | `evidence_confidence.csv`, `shares.csv`, `collection_errors.csv`, dashboard Diagnostics | The export may be structurally valid but incomplete. |
 | Wrong or missing OBS attribute | `scan_manifest.csv`, `identities.csv`, `org_chains.csv` | Reviewer routing may be blank or wrong. |
 | Template dashboard confusion | `interface\standalone-dashboard\dist\index.html` versus `$exportPath\standalone-dashboard\index.html` | Release dashboard assets are templates; real review requires a packaged export. |
-| Evidence confidence or protocol readiness blockers | `evidence_confidence.csv`, `port_protocol_targets.csv`, `port_protocol_checks.csv` | Network reachability does not prove ShareSurfer could read security descriptors or ACL evidence. |
+| Evidence confidence or protocol readiness blockers | `evidence_confidence.csv`, `port_protocol_targets.csv`, `port_protocol_checks.csv`, `fileshare_connectivity_checks.csv` | Network reachability does not prove ShareSurfer could read security descriptors or ACL evidence. |
 | Missing owner or business-unit mapping | `owner_mappings.csv`, `owner_review_packets.csv`, `owner_risk_pivots.csv` | Evidence may be collected, but the business reviewer may not know why they own it. |
 
 ## Command Inventory by Workflow
@@ -67,7 +67,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Guided first run | `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` |
 | Scan collection | `Invoke-ShareSurferScan` |
-| Optional readiness assessments | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment` |
+| Optional readiness assessments | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment` |
 | Ownership import and mapping | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
 | Review decisions | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
 | Validation and reports | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `scripts\New-ShareSurferStandaloneDashboard.ps1` |
@@ -82,6 +82,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Migration discovery | Scan related shares with file/folder evidence and owner mappings | `related_data_areas.csv`, long-path findings, inheritance breaks, conflicts |
 | Hot folder activity review | Add open-file assessment | `open_file_summary.csv`, `open_file_samples.csv` |
 | Port and protocol readiness | Add port/protocol assessment | `port_protocol_targets.csv`, `port_protocol_checks.csv` |
+| File-share collection capability troubleshooting | Add file-share connectivity assessment | `fileshare_connectivity_targets.csv`, `fileshare_connectivity_checks.csv`, redacted LLM-ready summary |
 | Evidence confidence review | Validate completeness before approval | `evidence_confidence.csv`, `collection_errors.csv` |
 | Nonpermissive collector workflow | Collect on a locked-down host, then transfer the export | Validated CSV folder, `report.html`, standalone dashboard |
 | Broad admin or HelpDesk access cleanup | Provide discounted principals | Visible access evidence that does not inflate migration relatedness |

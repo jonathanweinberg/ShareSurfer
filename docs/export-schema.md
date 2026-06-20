@@ -39,7 +39,7 @@ Empty fields should be handled carefully. A blank `Owner`, OBS value, manager, t
 
 Extra columns are reported for review but do not fail validation. Missing V1 columns fail validation.
 
-Optional assessment packages stay additive: baseline scan exports validate when optional assessment files are absent. When any open-file or port/protocol assessment CSV is present, `Test-ShareSurferExport` validates that package's CSV headers too and reports missing files or missing columns for that package.
+Optional assessment packages stay additive: baseline scan exports validate when optional assessment files are absent. When any open-file, port/protocol, or file-share connectivity assessment CSV is present, `Test-ShareSurferExport` validates that package's CSV headers too and reports missing files or missing columns for that package.
 
 ## Files
 
@@ -96,6 +96,18 @@ Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with t
 | `port_protocol_manifest.csv` | One row per ports/protocols assessment | Records the collector host, user context, PowerShell version, module availability, target count, and pass/warning/failure/skipped totals. |
 | `port_protocol_targets.csv` | One row per assessed target | Summarizes each file server/share or directory endpoint with target status, readiness summary, collection impact, and suggested next action. |
 | `port_protocol_checks.csv` | One row per protocol check | Captures SMB, WinRM/CIM, native SMB/RPC-related, RPC, and optional directory protocol reachability evidence with operator guidance and remediation hints. |
+
+## Optional File-Share Connectivity Assessment Package
+
+`Invoke-ShareSurferFileShareConnectivityAssessment` can add collection-capability evidence to the same export folder, or it can be run into a standalone troubleshooting folder before a scan. These files are optional. Use them when WinRM/CIM is blocked, MMC can still show share information, or a server passes SMB/RPC port checks but ShareSurfer cannot prove share permissions, owner/DACL security descriptors, open-file visibility, or session visibility.
+
+The command also writes `fileshare_connectivity_summary.json`, `fileshare_connectivity_events.jsonl`, and a `redacted\` folder containing redacted copies plus `fileshare_connectivity_llm_summary.md`. `Test-ShareSurferExport` validates the CSV headers when the CSV package is present. JSON, JSONL, and redacted-summary checks are command-specific diagnostics, not baseline scan export requirements.
+
+| File | Grain | Purpose |
+| --- | --- | --- |
+| `fileshare_connectivity_manifest.csv` | One row per connectivity assessment | Records collector context, target count, check totals, and redacted output path. |
+| `fileshare_connectivity_targets.csv` | One row per assessed file share target | Summarizes target status, capability summary, recommended scan provider, and next action. |
+| `fileshare_connectivity_checks.csv` | One row per capability proof | Captures target parsing, DNS, SMB TCP 445, WinRM/CIM, RPC, native share metadata, share descriptor parse, filesystem owner/DACL descriptor read, open-file enumeration, and optional session enumeration results. |
 
 ## Column Reference
 
