@@ -45,6 +45,17 @@ namespace ShareSurfer
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct SESSION_INFO_10
+        {
+            [MarshalAs(UnmanagedType.LPWStr)]
+            public string sesi10_cname;
+            [MarshalAs(UnmanagedType.LPWStr)]
+            public string sesi10_username;
+            public UInt32 sesi10_time;
+            public UInt32 sesi10_idle_time;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct SHARE_INFO_502
         {
             [MarshalAs(UnmanagedType.LPWStr)]
@@ -80,6 +91,18 @@ namespace ShareSurfer
         public static extern Int32 NetFileEnum(
             string servername,
             string basepath,
+            string username,
+            Int32 level,
+            out IntPtr bufptr,
+            UInt32 prefmaxlen,
+            out UInt32 entriesread,
+            out UInt32 totalentries,
+            ref UInt32 resume_handle);
+
+        [DllImport("Netapi32.dll", CharSet = CharSet.Unicode)]
+        public static extern Int32 NetSessionEnum(
+            string servername,
+            string UncClientName,
             string username,
             Int32 level,
             out IntPtr bufptr,

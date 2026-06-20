@@ -408,6 +408,18 @@ Invoke-ShareSurferPortProtocolAssessment `
 
 This adds `port_protocol_manifest.csv`, `port_protocol_targets.csv`, and `port_protocol_checks.csv` beside the normal scan exports. The standalone dashboard shows them in **Ports & Protocols** below Raw Evidence. Use this when you need a plain-language explanation of which collector routes are reachable, what a failure means, and what to ask the firewall, server, or directory team to check. A failed WinRM/CIM row is usually a completeness/fallback warning; a failed required SMB TCP 445 row usually means the target is not scan-ready from that collector. A passed SMB/RPC row is still only a network signal; review `collection_errors.csv` for `NativeShareSecurityDescriptorUnavailable`, `NativeShareSecurityDescriptorParseFailed`, `NativeSecurityDescriptorReadFailed`, or `NativeSecurityDescriptorParseFailed` before treating native security evidence as complete.
 
+Deeper file-share capability check:
+
+```powershell
+Invoke-ShareSurferFileShareConnectivityAssessment `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath "$exportPath\connectivity-diagnostics" `
+  -IncludeOpenFiles `
+  -IncludeSessions
+```
+
+Use this when WinRM/CIM is unavailable, the server still appears manageable through Computer Management, or SMB/RPC ports are reachable but share permission or security descriptor evidence is missing. It tests more than ports: `New-CimSession`, `Get-SmbShare`, `Get-SmbShareAccess`, native `NetShareGetInfo`, share security descriptor parsing, filesystem owner/DACL reads through Win32 security APIs, open-file enumeration, and optional session enumeration. It writes raw diagnostics plus a `redacted` folder with `fileshare_connectivity_llm_summary.md` for safe support handoff. Share only the redacted folder unless your process allows raw host, share, path, account, and exception evidence to leave trusted handling.
+
 ## Step 5: Validate the Export
 
 Run validation after every scan:

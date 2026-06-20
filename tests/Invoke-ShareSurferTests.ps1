@@ -3040,6 +3040,209 @@ $tests = @(
         }
     },
     @{
+        Name = 'Test-ShareSurferExport validates optional file-share connectivity assessment package when present'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOptionalConnectivity-' + [guid]::NewGuid().ToString('N'))
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+
+            $baselineResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True $baselineResult.IsValid 'Baseline export validation should pass without optional file-share connectivity files.'
+            Assert-Equal (@($baselineResult.FileResults | Where-Object { $_.FileName -like 'fileshare_connectivity_*.csv' }).Count) 0 'Baseline validation should not require absent file-share connectivity assessment files.'
+
+            Invoke-ShareSurferFileShareConnectivityAssessment -TargetPath '\\files01\Finance' -OutputPath $outputPath -SkipNetworkTests -SkipCimChecks -SkipNativeChecks -Quiet -Force | Out-Null
+
+            $withPackageResult = Test-ShareSurferExport -ExportPath $outputPath
+            $connectivityResults = @($withPackageResult.FileResults | Where-Object { $_.FileName -like 'fileshare_connectivity_*.csv' })
+            Assert-True $withPackageResult.IsValid 'Export validation should pass when a complete optional file-share connectivity package is present.'
+            Assert-Equal $connectivityResults.Count 3 'Export validation should inspect all file-share connectivity assessment CSVs when any are present.'
+            Assert-True (@($connectivityResults | Where-Object { -not $_.Optional }).Count -eq 0) 'File-share connectivity package file results should be marked optional.'
+
+            $checksPath = Join-Path $outputPath 'fileshare_connectivity_checks.csv'
+            $brokenChecks = Import-Csv -LiteralPath $checksPath | Select-Object AssessmentId, CheckId, TargetId, Target, InputType, ComputerName, ShareName, Layer, Capability, Provider, Attempted, Status, Severity, EvidenceType, RawResultCode, Message, Detail
+            $brokenChecks | Export-Csv -LiteralPath $checksPath -NoTypeInformation -Encoding UTF8
+
+            $brokenResult = Test-ShareSurferExport -ExportPath $outputPath
+            Assert-True (-not $brokenResult.IsValid) 'Export validation should fail when a present optional file-share connectivity package is missing a required column.'
+            Assert-True ($brokenResult.SchemaErrors -contains 'fileshare_connectivity_checks.csv is missing column RecommendedAction.') 'Optional file-share connectivity schema errors should keep readable file and column names.'
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferFileShareConnectivityAssessment writes raw and redacted capability evidence'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferConnectivity-' + [guid]::NewGuid().ToString('N'))
+            $descriptorBytes = [byte[]]@(1, 2, 3, 4)
+
+            $global:ShareSurferFileShareConnectivityProvider = {
+                param(
+                    [string] $Action,
+                    $Context
+                )
+
+                if ($Action -eq 'NameResolution') {
+                    return [pscustomobject]@{
+                        Status = 'Pass'
+                        Severity = 'Info'
+                        EvidenceType = 'NameResolved'
+                        RawResultCode = ''
+                        Message = 'Resolved files01.'
+                        Detail = 'files01 resolved for testing.'
+                        RecommendedAction = 'Continue to collection checks.'
+                    }
+                }
+
+                if ($Action -eq 'TcpPort') {
+                    return [pscustomobject]@{
+                        Status = 'Pass'
+                        Severity = 'Info'
+                        EvidenceType = ([string]$Context.Capability + 'Reachable')
+                        RawResultCode = ''
+                        Message = ('TCP check passed for files01 port {0}.' -f $Context.Port)
+                        Detail = 'TCP reachability is not descriptor proof.'
+                        RecommendedAction = 'Continue to collection proof.'
+                    }
+                }
+
+                $null
+            }
+
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = 'C:\Shares\Finance'
+                    Description = 'Finance share'
+                    Source = 'MockSmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                    Level = 502
+                    SecurityDescriptorBytes = $descriptorBytes
+                }
+            }
+
+            $global:ShareSurferNativeSecurityInfoProvider = {
+                param(
+                    [string] $Path,
+                    [string] $ShareId,
+                    [string] $ItemId,
+                    [string] $FullPath,
+                    [int] $Depth
+                )
+
+                [pscustomobject]@{
+                    Owner = 'CONTOSO\Admin.Owner'
+                    InheritanceEnabled = $true
+                    InheritanceBrokenAt = ''
+                    AclEntries = @(
+                        [pscustomobject]@{
+                            ItemId = $ItemId
+                            ShareId = $ShareId
+                            FullPath = $FullPath
+                            Identity = 'CONTOSO\Admin.Owner'
+                            Rights = 'FullControl'
+                            AccessMask = '0x001F01FF'
+                            AccessControlType = 'Allow'
+                            IsInherited = $false
+                            InheritanceFlags = 'None'
+                            PropagationFlags = 'None'
+                            Depth = $Depth
+                        }
+                    )
+                    Source = 'MockNativeSecurity'
+                }
+            }
+
+            $global:ShareSurferOpenFileProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string[]] $ShareName,
+                    [string] $AssessmentId,
+                    [string] $SampleId,
+                    [string] $SampleTimestamp,
+                    [string] $Provider
+                )
+
+                [pscustomobject]@{
+                    AssessmentId = $AssessmentId
+                    SampleId = $SampleId
+                    SampleTimestamp = $SampleTimestamp
+                    ComputerName = $ComputerName
+                    ShareName = 'Finance'
+                    Provider = $Provider
+                    FileId = '1001'
+                    SessionId = '2001'
+                    ClientComputerName = 'WKSTN-001'
+                    ClientUserName = 'CONTOSO\Ava.Accounting'
+                    Path = 'C:\Shares\Finance\AP\invoice.xlsx'
+                    FolderPath = 'C:\Shares\Finance\AP'
+                    ShareRelativePath = 'AP\invoice.xlsx'
+                    ShareRelativeFolder = 'AP'
+                    Permissions = 'Read'
+                    Locks = 1
+                    Source = 'MockOpenFileProvider'
+                    CollectionStatus = 'Open'
+                    ErrorMessage = ''
+                }
+            }
+
+            $global:ShareSurferNativeSessionProvider = {
+                param(
+                    [string] $ComputerName,
+                    [int] $MaxRows
+                )
+
+                [pscustomobject]@{
+                    ComputerName = $ComputerName
+                    ClientComputerName = 'WKSTN-001'
+                    ClientUserName = 'CONTOSO\Ava.Accounting'
+                    ConnectedSeconds = 120
+                    IdleSeconds = 10
+                    Source = 'MockSessionProvider'
+                }
+            }
+
+            try {
+                $result = Invoke-ShareSurferFileShareConnectivityAssessment -TargetPath '\\files01\Finance' -OutputPath $outputPath -SkipCimChecks -IncludeOpenFiles -IncludeSessions -Quiet -PassThru
+                $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_manifest.csv'))
+                $targets = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_targets.csv'))
+                $checks = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_checks.csv'))
+                $summary = Get-Content -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_summary.json') -Raw | ConvertFrom-Json
+                $redactedChecksText = Get-Content -LiteralPath (Join-Path $outputPath 'redacted/fileshare_connectivity_checks.csv') -Raw
+                $redactedSummaryText = Get-Content -LiteralPath (Join-Path $outputPath 'redacted/fileshare_connectivity_llm_summary.md') -Raw
+
+                Assert-True $result.IsValid 'Connectivity assessment should produce a complete raw and redacted diagnostic package.'
+                Assert-Equal $manifest[0].PackageKind 'FileShareConnectivityAssessment' 'Connectivity manifest should identify the package kind.'
+                Assert-Equal $targets[0].RecommendedScanProvider 'NeedsReview' 'Native metadata with descriptor parse failure should require review even when SMB is reachable.'
+                Assert-True ($checks.Capability -contains 'NativeShareDescriptorParsed') 'Connectivity checks should include share descriptor parse proof.'
+                Assert-True ($checks.Capability -contains 'FileSystemSecurityDescriptorRead') 'Connectivity checks should include filesystem owner/DACL proof.'
+                Assert-True ($checks.Capability -contains 'OpenFileEnumeration') 'Connectivity checks should include open-file capability when requested.'
+                Assert-True ($checks.Capability -contains 'SessionEnumeration') 'Connectivity checks should include session capability when requested.'
+                Assert-True (@($checks | Where-Object { $_.Capability -eq 'SmbTcp445' -and $_.Status -eq 'Pass' }).Count -eq 1) 'Connectivity checks should prove SMB TCP without treating it as descriptor proof.'
+                Assert-True (@($checks | Where-Object { $_.Capability -eq 'NativeShareDescriptorParsed' -and $_.EvidenceType -eq 'NativeShareSecurityDescriptorParseFailed' }).Count -eq 1) 'Connectivity checks should classify native share descriptor parse failures separately from SMB reachability.'
+                Assert-True (@($checks | Where-Object { $_.Capability -eq 'FileSystemSecurityDescriptorRead' -and $_.Status -eq 'Pass' }).Count -eq 1) 'Connectivity checks should prove filesystem owner/DACL reads independently from share descriptor parsing.'
+                Assert-Equal $summary.PackageKind 'FileShareConnectivityAssessment' 'Connectivity summary JSON should parse and identify the package kind.'
+                Assert-True ($redactedSummaryText -like '*Why TCP Is Not Enough*') 'LLM-ready summary should explain why transport reachability is not collection proof.'
+                Assert-True ($redactedSummaryText -like '*Safe to share*' -or $redactedSummaryText -like '*safe to share*') 'LLM-ready summary should state safe-sharing intent.'
+                Assert-True ($redactedChecksText -notlike '*files01*') 'Redacted checks should not preserve the raw host name.'
+                Assert-True ($redactedChecksText -notlike '*Finance*') 'Redacted checks should not preserve the raw share name.'
+                Assert-True ($redactedChecksText -notlike '*CONTOSO*') 'Redacted checks should not preserve raw account names.'
+                Assert-True ($redactedSummaryText -notlike '*files01*') 'Redacted LLM summary should not preserve the raw host name.'
+                Assert-True ($redactedSummaryText -notlike '*Finance*') 'Redacted LLM summary should not preserve the raw share name.'
+            }
+            finally {
+                Remove-Variable -Name ShareSurferFileShareConnectivityProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferNativeSecurityInfoProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferNativeSessionProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferOpenFileAssessment writes samples and hot-folder summaries'
         Body = {
             Import-Module $moduleManifest -Force
@@ -5291,6 +5494,8 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*SMB Scan When WinRM or CIM Is Blocked*') 'Command recipes should include NativeSmbRpc fallback guidance.'
             Assert-True ($commandRecipeText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Command recipes should include standalone dashboard packaging.'
             Assert-True ($commandRecipeText -like '*Invoke-ShareSurferOpenFileAssessment*') 'Command recipes should include open-file assessment.'
+            Assert-True ($commandRecipeText -like '*Invoke-ShareSurferFileShareConnectivityAssessment*') 'Command recipes should include file-share connectivity assessment.'
+            Assert-True ($commandRecipeText -like '*fileshare_connectivity_llm_summary.md*') 'Command recipes should explain the redacted file-share connectivity summary.'
             Assert-True ($commandRecipeText -like '*New-ShareSurferSupportBundle*') 'Command recipes should include redacted support bundle creation.'
             Assert-True ($commandRecipeText -like '*Get-FileHash -Algorithm SHA256*') 'Command recipes should include SHA256 handoff verification.'
             Assert-True ($commandRecipeText -like '*Normalize HR, Employee, OBS, or Owner CSVs*') 'Command recipes should include ownership import guidance.'
@@ -5388,6 +5593,8 @@ $tests = @(
             Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
             Assert-True ($readmeText -like '*Command Inventory by Workflow*') 'README should group public commands by workflow.'
             Assert-True ($readmeText -like '*Test-ShareSurferOwnershipSource*' -and $readmeText -like '*New-ShareSurferReviewDecisionDraft*') 'README command inventory should include ownership and review decision commands.'
+            Assert-True ($readmeText -like '*Invoke-ShareSurferFileShareConnectivityAssessment*') 'README command inventory should include file-share connectivity assessment.'
+            Assert-True ($readmeText -like '*fileshare_connectivity_checks.csv*') 'README should mention file-share connectivity output evidence.'
             Assert-True ($readmeText -like '*Evidence confidence or protocol readiness blockers*') 'README stop gates should mention evidence confidence and protocol readiness blockers.'
             Assert-True ($readmeText -like '*Missing owner or business-unit mapping*') 'README stop gates should mention missing owner or business-unit mapping.'
             Assert-True ($readmeText -like '*latest published prerelease*') 'README should explain what to do if the checkpoint tag is not published yet.'
@@ -5527,6 +5734,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*Unblock-File*') 'First-run guide should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
             Assert-True ($firstRunText -like '*first-run troubleshooting guide*') 'First-run guide should link the troubleshooting guide.'
+            Assert-True ($firstRunText -like '*Invoke-ShareSurferFileShareConnectivityAssessment*') 'First-run guide should include file-share connectivity diagnostics.'
+            Assert-True ($firstRunText -like '*fileshare_connectivity_llm_summary.md*') 'First-run guide should mention the redacted file-share connectivity summary.'
             Assert-True ($firstRunTroubleshootingText -like '*Start Here*') 'Troubleshooting guide should include a start-here triage section.'
             Assert-True ($firstRunTroubleshootingText -like '*WinRM or CIM cannot connect*') 'Troubleshooting guide should cover WinRM/CIM collection gaps.'
             Assert-True ($firstRunTroubleshootingText -like '*Owner mapping file was not found*') 'Troubleshooting guide should cover missing owner mapping inputs.'
