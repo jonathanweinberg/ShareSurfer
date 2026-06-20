@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.18",
-  "packageVersion": "0.1.0-pre.18",
-  "packageName": "ShareSurfer-0.1.0-pre.18",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.18.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.18",
+  "currentPrereleaseTag": "v0.1.0-pre.19",
+  "packageVersion": "0.1.0-pre.19",
+  "packageName": "ShareSurfer-0.1.0-pre.19",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.19.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.19",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with operator Start Here guidance, workflow command inventory, owner and migration review decision import, migration discovery quality harness coverage, evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with file-share connectivity capability diagnostics, raw and redacted connectivity outputs, LLM-ready redacted diagnostic summaries, operator Start Here guidance, workflow command inventory, owner and migration review decision import, migration discovery quality harness coverage, evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
