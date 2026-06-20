@@ -8,7 +8,7 @@ ShareSurfer is read-only. It collects evidence, validates the export set, and pr
 
 For a first operator run:
 
-1. Extract the current release ZIP to `C:\ShareSurfer\` and use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.18\` as the release root. If `v0.1.0-pre.18` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in the example paths.
+1. Extract the current release ZIP to `C:\ShareSurfer\` and use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.19\` as the release root. If `v0.1.0-pre.19` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in the example paths.
 2. Recursively unblock the extracted `.ps1`, `.psm1`, and `.psd1` files before importing the module.
 3. Scan one known share first, not a whole file server.
 4. Validate the export with `Test-ShareSurferExport`.
@@ -44,7 +44,7 @@ Use this flow when you want one business owner or business unit to understand a 
 Fast starter command:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -88,7 +88,7 @@ Use this flow when the collector host is locked down, has no internet access, ca
 Collector-side handoff command:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 
@@ -109,7 +109,7 @@ Get-FileHash -Algorithm SHA256 -Path $handoffPath
 Dashboard-host command:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.18'
+$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
 $exportPath = 'C:\ShareSurfer\received\scan-001'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
