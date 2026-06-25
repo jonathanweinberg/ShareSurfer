@@ -25,7 +25,7 @@ If this is your first time using ShareSurfer, start with the [First-run guide](f
 | First production scan | [Scan Workflow](#scan-workflow), then `Test-ShareSurferExport`, report generation, and [First-run troubleshooting](first-run-troubleshooting.md) if anything looks partial. | Lab creation and enterprise validation. |
 | Locked-down collector with separate review workstation | [Nonpermissive Collector to Dashboard Host](#nonpermissive-collector-to-dashboard-host). | Dashboard development tooling. |
 | Business-owner review | `owner_review_packets.csv`, `owner_risk_pivots.csv`, `related_data_areas.csv`, and the report What Needs Review First queue. | Raw evidence tables until an operator needs detail. |
-| Enterprise lab proof | [Lab Setup](#lab-setup), [Windows lab readiness checklist](windows-lab-readiness-checklist.md), then acceptance validation. | Production shares. |
+| Enterprise lab proof | [Lab Setup](#lab-setup), [Windows lab readiness checklist](windows-lab-readiness-checklist.md), [PowerShell testing and lab verification](powershell-testing-lab-verification.md), then acceptance validation. | Production shares. |
 | Support case | Validate the raw export first, then create and inspect a redacted support bundle. | Sending raw CSVs outside trusted handling. |
 
 Production-only operators can skip the lab setup section until they need to validate a new build, demo environment, or enterprise-scale proof run.
@@ -75,7 +75,7 @@ The enterprise profile must additionally prove:
 - Owner/business-unit mappings and generated owner-risk pivot rows.
 - Estimated generated lab data under the default 2 GiB file-data budget. The 8 GiB ceiling is reserved for explicit stress runs.
 
-See [Scaled lab generator spec](scaled-lab-generator-spec.md) for the enterprise defaults, count formulas, disk-budget math, and plan/live acceptance criteria. Before running the live enterprise validation, use the [Windows lab readiness checklist](windows-lab-readiness-checklist.md) to confirm host prerequisites, permissions, disk budget, preflight gates, and expected evidence artifacts.
+See [Scaled lab generator spec](scaled-lab-generator-spec.md) for the enterprise defaults, count formulas, disk-budget math, and plan/live acceptance criteria. Before running the live enterprise validation, use the [Windows lab readiness checklist](windows-lab-readiness-checklist.md) to confirm host prerequisites, permissions, disk budget, preflight gates, and expected evidence artifacts. Use [PowerShell testing and lab verification](powershell-testing-lab-verification.md) to keep local PowerShell Core checks, Windows PowerShell 5.1 CI, archived proof refreshes, plan-only generation, preflight, and fresh live validation clearly separated.
 
 For a repeatable Windows Server validation run, use the script from the repository root:
 

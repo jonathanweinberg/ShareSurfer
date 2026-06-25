@@ -4,6 +4,8 @@ Use this checklist before the live ShareSurfer enterprise validation run. It is 
 
 The goal is simple: prove ShareSurfer can create the lab, scan it, export the evidence, and generate the dashboard without relying on plan-only counts. A redacted support bundle can still be generated for troubleshooting, but the richer enterprise lab-run bundle is optional for phase-1 proof.
 
+For the broader evidence map, including local PowerShell Core smoke checks, GitHub Windows PowerShell 5.1 CI, archived enterprise proof refreshes, plan-only generation, preflight, and fresh live validation, see [PowerShell testing and lab verification](powershell-testing-lab-verification.md).
+
 ## Before You Start
 
 Use a disposable Windows Server lab host joined to the test Active Directory domain. Do not run the enterprise lab fixture on a production file server.
