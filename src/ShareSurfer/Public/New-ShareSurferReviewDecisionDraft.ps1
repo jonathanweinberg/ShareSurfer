@@ -11,6 +11,8 @@ function New-ShareSurferReviewDecisionDraft {
 
         [string] $ReusableCommandPath = '',
 
+        [switch] $NoCreateMissingFolders,
+
         [switch] $Force
     )
 
@@ -22,9 +24,7 @@ function New-ShareSurferReviewDecisionDraft {
         $OutputPath = $ExportPath
     }
 
-    if (-not (Test-Path -LiteralPath $OutputPath)) {
-        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
-    }
+    Ensure-ShareSurferLocalDirectory -Path $OutputPath -Purpose 'review decision output' -NoCreateMissingFolders:$NoCreateMissingFolders | Out-Null
 
     $schema = Get-ShareSurferExportSchema
     $ownerDecisionPath = Join-Path $OutputPath 'owner_review_decisions.csv'
@@ -61,7 +61,7 @@ function New-ShareSurferReviewDecisionDraft {
     }
 
     $reusableCommands = New-ShareSurferReviewDecisionReusableCommands -ExportPath $ExportPath -OutputPath $OutputPath -DecisionScope $DecisionScope
-    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
+    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands -NoCreateMissingFolders:$NoCreateMissingFolders
 
     [pscustomobject]@{
         ExportPath = $ExportPath

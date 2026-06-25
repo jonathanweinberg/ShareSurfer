@@ -102,6 +102,12 @@ Invoke-ShareSurferScan `
 
 Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
+
+$handoffFolder = Split-Path -Parent $handoffPath
+if (-not (Test-Path -LiteralPath $handoffFolder)) {
+  Write-Host "Creating missing local handoff folder: $handoffFolder"
+  New-Item -ItemType Directory -Force -Path $handoffFolder | Out-Null
+}
 Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```

@@ -170,11 +170,17 @@ if (Test-Path -LiteralPath $discountedPrincipalPath) { $scanParams.DiscountedPri
 
 Invoke-ShareSurferScan @scanParams
 Test-ShareSurferExport -ExportPath $exportPath
+
+$handoffFolder = Split-Path -Parent $handoffPath
+if (-not (Test-Path -LiteralPath $handoffFolder)) {
+  Write-Host "Creating missing local handoff folder: $handoffFolder"
+  New-Item -ItemType Directory -Force -Path $handoffFolder | Out-Null
+}
 Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
-The `Unblock-File` line is repeated here on purpose. It avoids one-file-at-a-time prompts after ZIP transfer. Move the handoff ZIP and hash by your approved transfer process, then package or open the dashboard on the review host.
+The `Unblock-File` line is repeated here on purpose. It avoids one-file-at-a-time prompts after ZIP transfer. ShareSurfer commands create missing local output folders by default and can opt out with `-NoCreateMissingFolders`; the handoff ZIP uses native PowerShell, so the snippet creates that local folder explicitly before `Compress-Archive`. Move the handoff ZIP and hash by your approved transfer process, then package or open the dashboard on the review host.
 
 ## SMB/RPC Fallback Notes
 

@@ -1440,6 +1440,35 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan creates missing local output folders with opt-out'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferFolderPreflight-' + [guid]::NewGuid().ToString('N'))
+            $outputPath = Join-Path $root 'exports\finance-001'
+            $optOutPath = Join-Path $root 'exports\blocked-001'
+
+            $captured = @(& {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+            } 6>&1)
+            $capturedText = ($captured | ForEach-Object { [string]$_ }) -join "`n"
+
+            Assert-True (Test-Path -LiteralPath $outputPath -PathType Container) 'Scan should create the missing local export folder.'
+            Assert-True ($capturedText -like '*Creating missing local scan export folder*') 'Scan should tell the operator which missing local output folder is being created.'
+            Assert-True ($capturedText -like '*-NoCreateMissingFolders*') 'Folder creation message should explain the opt-out switch.'
+
+            $threw = $false
+            try {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $optOutPath -SkipIdentityEnrichment -NoCreateMissingFolders | Out-Null
+            }
+            catch {
+                $threw = ($_.Exception.Message -like '*automatic folder creation was disabled*' -and $_.Exception.Message -like ('*{0}*' -f $optOutPath))
+            }
+
+            Assert-True $threw 'Scan should fail with a clear message when missing-folder creation is disabled.'
+            Assert-True (-not (Test-Path -LiteralPath $optOutPath)) 'Opt-out scan should not create the missing local export folder.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan prints operator completion summary unless quiet'
         Body = {
             Import-Module $moduleManifest -Force
@@ -5851,6 +5880,8 @@ $tests = @(
             Assert-True ($publicText -like '*OwnerMetadataUnavailable*') 'Operator documentation should document owner metadata unavailable findings.'
             Assert-True ($publicText -like '*share gate*') 'Operator documentation should explain the share gate access model.'
             Assert-True ($publicText -like '*Raw Evidence Tables*') 'Operator documentation should mention the report raw evidence view.'
+            Assert-True ($publicText -like '*-NoCreateMissingFolders*') 'Operator documentation should explain the missing local output folder opt-out.'
+            Assert-True ($publicText -like '*Creating missing local handoff folder*') 'Operator documentation should show explicit handoff folder creation before native zip commands.'
             $oldLabToolPattern = 'pr' + 'lctl'
             $internalVisualPattern = '(?i)' + 'image' + '-gen2'
             Assert-True ($publicText -notmatch $oldLabToolPattern) 'Public docs should not mention old internal test-environment tooling.'

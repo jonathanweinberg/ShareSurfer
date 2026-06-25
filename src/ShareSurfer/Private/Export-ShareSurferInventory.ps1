@@ -23,12 +23,11 @@ function Export-ShareSurferInventory {
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
+        [switch] $NoCreateMissingFolders,
         [switch] $Quiet
     )
 
-    if (-not (Test-Path -LiteralPath $OutputPath)) {
-        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
-    }
+    Ensure-ShareSurferLocalDirectory -Path $OutputPath -Purpose 'scan export' -NoCreateMissingFolders:$NoCreateMissingFolders -Quiet:$Quiet | Out-Null
 
     $schema = Get-ShareSurferExportSchema
     $shares = @(ConvertTo-ShareSurferArray $Inventory.Shares)

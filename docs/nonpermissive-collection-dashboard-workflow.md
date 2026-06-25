@@ -194,7 +194,10 @@ Create a zip package and hash:
 
 ```powershell
 $packageRoot = 'C:\ShareSurfer\packages'
-New-Item -ItemType Directory -Path $packageRoot -Force
+if (-not (Test-Path -LiteralPath $packageRoot)) {
+  Write-Host "Creating missing local handoff package folder: $packageRoot"
+  New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+}
 
 $zipPath = Join-Path $packageRoot "$scanId.zip"
 if (Test-Path -LiteralPath $zipPath) {

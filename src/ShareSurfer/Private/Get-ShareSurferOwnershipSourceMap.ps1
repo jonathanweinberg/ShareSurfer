@@ -556,17 +556,18 @@ function Write-ShareSurferReusableCommandFile {
         [string] $Path = '',
 
         [Parameter(Mandatory = $true)]
-        [string] $CommandText
+        [string] $CommandText,
+
+        [switch] $NoCreateMissingFolders,
+
+        [switch] $Quiet
     )
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
         return ''
     }
 
-    $parent = Split-Path -Parent $Path
-    if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
-        New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    }
+    Ensure-ShareSurferLocalFileParentDirectory -Path $Path -Purpose 'reusable command output' -NoCreateMissingFolders:$NoCreateMissingFolders -Quiet:$Quiet | Out-Null
 
     Set-Content -LiteralPath $Path -Value $CommandText -Encoding UTF8
     $Path
