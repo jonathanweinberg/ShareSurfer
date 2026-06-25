@@ -641,7 +641,10 @@ Package the validated export folder:
 ```powershell
 $scanId = 'scan-2026-06-04-finance'
 $packageRoot = 'C:\ShareSurfer\packages'
-New-Item -ItemType Directory -Path $packageRoot -Force
+if (-not (Test-Path -LiteralPath $packageRoot)) {
+  Write-Host "Creating missing local handoff package folder: $packageRoot"
+  New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+}
 
 $zipPath = Join-Path $packageRoot "$scanId.zip"
 Compress-Archive -LiteralPath (Join-Path $exportPath '*') -DestinationPath $zipPath -Force

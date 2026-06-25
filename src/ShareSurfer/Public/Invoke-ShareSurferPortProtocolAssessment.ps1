@@ -519,6 +519,8 @@ function Invoke-ShareSurferPortProtocolAssessment {
 
         [switch] $Force,
 
+        [switch] $NoCreateMissingFolders,
+
         [switch] $PassThru
     )
 
@@ -533,7 +535,7 @@ function Invoke-ShareSurferPortProtocolAssessment {
         }
     }
     else {
-        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+        Ensure-ShareSurferLocalDirectory -Path $OutputPath -Purpose 'port/protocol assessment output' -NoCreateMissingFolders:$NoCreateMissingFolders | Out-Null
     }
 
     $schema = Get-ShareSurferPortProtocolExportSchema

@@ -22,6 +22,8 @@ function Invoke-ShareSurferOpenFileAssessment {
 
         [switch] $Force,
 
+        [switch] $NoCreateMissingFolders,
+
         [switch] $Quiet,
 
         [switch] $PassThru
@@ -40,7 +42,7 @@ function Invoke-ShareSurferOpenFileAssessment {
         }
     }
     else {
-        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+        Ensure-ShareSurferLocalDirectory -Path $OutputPath -Purpose 'open-file assessment output' -NoCreateMissingFolders:$NoCreateMissingFolders -Quiet:$Quiet | Out-Null
     }
 
     $schema = Get-ShareSurferOpenFileExportSchema

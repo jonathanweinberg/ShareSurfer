@@ -10,11 +10,39 @@ param(
 
     [switch] $Force,
 
+    [switch] $NoCreateMissingFolders,
+
     [switch] $PassThru
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+function Ensure-ShareSurferStandaloneLocalDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [string] $Purpose = 'local output',
+
+        [switch] $NoCreateMissingFolders
+    )
+
+    if (Test-Path -LiteralPath $Path -PathType Container) {
+        return
+    }
+
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
+        throw ('Expected a directory for {0}, but a file already exists: {1}' -f $Purpose, $Path)
+    }
+
+    if ($NoCreateMissingFolders) {
+        throw ('Required {0} folder does not exist and automatic folder creation was disabled: {1}' -f $Purpose, $Path)
+    }
+
+    Write-Host ('ShareSurfer Folders: Creating missing local {0} folder: {1}. Use -NoCreateMissingFolders to opt out and fail instead.' -f $Purpose, $Path)
+    New-Item -ItemType Directory -Path $Path -Force | Out-Null
+}
 
 function New-ShareSurferStandaloneSchema {
     [ordered]@{
@@ -166,7 +194,7 @@ if (Test-Path -LiteralPath $OutputPath) {
     Remove-Item -LiteralPath $OutputPath -Recurse -Force
 }
 
-New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+Ensure-ShareSurferStandaloneLocalDirectory -Path $OutputPath -Purpose 'standalone dashboard output' -NoCreateMissingFolders:$NoCreateMissingFolders
 foreach ($child in @(Get-ChildItem -LiteralPath $DashboardBuildPath -Force)) {
     Copy-Item -LiteralPath $child.FullName -Destination $OutputPath -Recurse -Force
 }

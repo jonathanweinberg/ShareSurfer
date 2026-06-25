@@ -613,6 +613,8 @@ function Invoke-ShareSurferFileShareConnectivityAssessment {
 
         [switch] $Force,
 
+        [switch] $NoCreateMissingFolders,
+
         [switch] $Quiet,
 
         [switch] $PassThru
@@ -622,7 +624,7 @@ function Invoke-ShareSurferFileShareConnectivityAssessment {
         throw "Output path already exists: $OutputPath. Use -Force to overwrite assessment files."
     }
 
-    New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+    Ensure-ShareSurferLocalDirectory -Path $OutputPath -Purpose 'file-share connectivity assessment output' -NoCreateMissingFolders:$NoCreateMissingFolders -Quiet:$Quiet | Out-Null
     $assessmentId = [guid]::NewGuid().ToString('N')
     $generatedAt = (Get-Date).ToUniversalTime().ToString('o')
     Write-ShareSurferStatus -Phase 'Assess' -Message ('Starting file-share connectivity assessment {0}.' -f $assessmentId) -Quiet:$Quiet

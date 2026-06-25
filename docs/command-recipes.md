@@ -413,10 +413,16 @@ $handoffPath = 'C:\ShareSurfer\handoff\finance-001.zip'
 Test-ShareSurferExport -ExportPath $exportPath
 ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\report.html"
 
-New-Item -ItemType Directory -Force -Path (Split-Path -Path $handoffPath) | Out-Null
+$handoffFolder = Split-Path -Parent $handoffPath
+if (-not (Test-Path -LiteralPath $handoffFolder)) {
+  Write-Host "Creating missing local handoff folder: $handoffFolder"
+  New-Item -ItemType Directory -Force -Path $handoffFolder | Out-Null
+}
 Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
+
+ShareSurfer commands such as `Invoke-ShareSurferScan`, `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, and `New-ShareSurferReviewDecisionDraft` create missing local output folders by default and announce the folder path. Use `-NoCreateMissingFolders` when you want the command to fail instead. Native PowerShell commands such as `Compress-Archive` do not know ShareSurfer's folder policy, so handoff snippets create their destination folders explicitly.
 
 On the dashboard host, verify the received hash before review:
 

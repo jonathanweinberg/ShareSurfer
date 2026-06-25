@@ -35,6 +35,8 @@ function Start-ShareSurferOperatorAssistant {
 
         [switch] $Interactive,
 
+        [switch] $NoCreateMissingFolders,
+
         [switch] $Force
     )
 
@@ -161,13 +163,10 @@ function Start-ShareSurferOperatorAssistant {
         )
     }
 
-    $planParent = Split-Path -Parent $PlanPath
-    if (-not [string]::IsNullOrWhiteSpace($planParent) -and -not (Test-Path -LiteralPath $planParent)) {
-        New-Item -ItemType Directory -Path $planParent -Force | Out-Null
-    }
+    Ensure-ShareSurferLocalFileParentDirectory -Path $PlanPath -Purpose 'operator assistant plan' -NoCreateMissingFolders:$NoCreateMissingFolders | Out-Null
 
     Set-Content -LiteralPath $PlanPath -Value ($plan | ConvertTo-Json -Depth 8) -Encoding UTF8
-    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText ([string]$commands.Script)
+    $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText ([string]$commands.Script) -NoCreateMissingFolders:$NoCreateMissingFolders
 
     [pscustomobject]@{
         PlanPath = $PlanPath
