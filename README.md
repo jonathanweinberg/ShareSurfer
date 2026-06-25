@@ -238,7 +238,7 @@ Enterprise validation should use the scaled profile and live evidence gate:
 New-ShareSurferLabFixture -OutputPlanOnly -RootPath 'C:\ShareSurferEnterpriseLab' -Scale Enterprise -EnterpriseUserCount 2500 -EnterpriseShareCount 250 -EnterpriseFilesPerShare 8
 ```
 
-For live validation, see [operator workflow](docs/operator-workflow.md), [scaled lab generator spec](docs/scaled-lab-generator-spec.md), and [Windows lab readiness checklist](docs/windows-lab-readiness-checklist.md).
+For live validation, see [operator workflow](docs/operator-workflow.md), [scaled lab generator spec](docs/scaled-lab-generator-spec.md), [Windows lab readiness checklist](docs/windows-lab-readiness-checklist.md), and [PowerShell testing and lab verification](docs/powershell-testing-lab-verification.md).
 
 ## Azure Files Path Policy
 
@@ -253,6 +253,7 @@ Microsoft documents 255-character path components and 2,048-character full paths
 - [Business review handoff](docs/business-review-handoff.md)
 - [Nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md)
 - [Operator workflow](docs/operator-workflow.md)
+- [PowerShell testing and lab verification](docs/powershell-testing-lab-verification.md)
 - [Management overview](docs/management-overview.md) and [offline slide](docs/management-overview.html)
 - [Visual field guide](docs/visual-field-guide.md)
 - [Workflow guide](docs/workflow-guides.md)

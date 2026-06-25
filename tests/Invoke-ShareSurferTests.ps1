@@ -5435,6 +5435,7 @@ $tests = @(
             $managementSlide = Join-Path $repoRoot 'docs/management-overview.html'
             $acceptanceAudit = Join-Path $repoRoot 'docs/v1-phase1-acceptance-audit.md'
             $labReadinessChecklist = Join-Path $repoRoot 'docs/windows-lab-readiness-checklist.md'
+            $powershellLabVerification = Join-Path $repoRoot 'docs/powershell-testing-lab-verification.md'
             $labEvidenceOverview = Join-Path $repoRoot 'docs/lab-evidence/README.md'
             $enterpriseEvidenceReadme = Join-Path $repoRoot 'docs/lab-evidence/windows-ad-enterprise-20260605-101639/README.md'
             $nonpermissiveWorkflow = Join-Path $repoRoot 'docs/nonpermissive-collection-dashboard-workflow.md'
@@ -5683,6 +5684,7 @@ $tests = @(
             Assert-True ($readmeText -like '*docs/webview2-dashboard-viewer.md*') 'README should link the WebView2 dashboard viewer concept.'
             Assert-True ($readmeText -like '*docs/first-run-troubleshooting.md*') 'README should link the first-run troubleshooting guide.'
             Assert-True ($readmeText -like '*docs/business-review-handoff.md*') 'README should link the business review handoff guide.'
+            Assert-True ($readmeText -like '*docs/powershell-testing-lab-verification.md*') 'README should link PowerShell testing and lab verification guidance.'
 
             Assert-True (Test-Path -LiteralPath $webView2ViewerDoc) 'Documentation should include the WebView2 dashboard viewer concept.'
             $webView2Text = Get-Content -LiteralPath $webView2ViewerDoc -Raw
@@ -5822,6 +5824,19 @@ $tests = @(
 
             Assert-True (Test-Path -LiteralPath $labReadinessChecklist) 'Documentation should include a Windows lab readiness checklist.'
             $labReadinessText = Get-Content -LiteralPath $labReadinessChecklist -Raw
+            Assert-True (Test-Path -LiteralPath $powershellLabVerification) 'Documentation should include PowerShell testing and lab verification guidance.'
+            $powershellLabVerificationText = Get-Content -LiteralPath $powershellLabVerification -Raw
+            Assert-True ($powershellLabVerificationText -like '*PowerShell Testing And Lab Verification*') 'PowerShell lab verification guide should have a clear title.'
+            Assert-True ($powershellLabVerificationText -like '*Local PowerShell Core smoke*') 'PowerShell lab verification guide should distinguish local PowerShell Core smoke checks.'
+            Assert-True ($powershellLabVerificationText -like '*Windows PowerShell 5.1 CI smoke*') 'PowerShell lab verification guide should distinguish Windows PowerShell 5.1 CI checks.'
+            Assert-True ($powershellLabVerificationText -like '*Archived enterprise proof refresh*') 'PowerShell lab verification guide should explain archived enterprise proof refreshes.'
+            Assert-True ($powershellLabVerificationText -like '*Fresh live enterprise validation*') 'PowerShell lab verification guide should explain fresh live enterprise validation.'
+            Assert-True ($powershellLabVerificationText -like '*Test-ShareSurferArchivedEnterpriseProof.ps1*') 'PowerShell lab verification guide should include the archived proof verifier command.'
+            Assert-True ($powershellLabVerificationText -like '*Test-ShareSurferWindowsPowerShell51.ps1*') 'PowerShell lab verification guide should include the Windows PowerShell 5.1 smoke command.'
+            Assert-True ($powershellLabVerificationText -like '*Invoke-ShareSurferLabValidation.ps1*') 'PowerShell lab verification guide should include lab validation commands.'
+            Assert-True ($powershellLabVerificationText.Contains('Do not describe it as Windows PowerShell 5.1 proof unless it ran under')) 'PowerShell lab verification guide should prevent overclaiming local pwsh evidence.'
+            Assert-True ($powershellLabVerificationText.Contains('`powershell.exe` on Windows')) 'PowerShell lab verification guide should name the Windows PowerShell host requirement.'
+            Assert-True ($labReadinessText -like '*powershell-testing-lab-verification.md*') 'Lab readiness checklist should link PowerShell testing and lab verification guidance.'
             Assert-True ($labReadinessText -like '*Run Preflight First*') 'Lab readiness checklist should tell operators to run preflight first.'
             Assert-True ($labReadinessText -like '*-PreflightOnly*') 'Lab readiness checklist should include the preflight-only command.'
             Assert-True ($labReadinessText -like '*-CreateLab*') 'Lab readiness checklist should run preflight in lab-creation mode.'
@@ -5841,6 +5856,7 @@ $tests = @(
             Assert-True ($operatorWorkflowText -like '*generated lab user password pattern fits the default domain password policy*') 'Operator workflow should explain the lab password policy preflight check.'
             Assert-True ($operatorWorkflowText -like '*Choose Your Operator Path*') 'Operator workflow should include a path selector for production, nonpermissive, business review, lab proof, and support use.'
             Assert-True ($operatorWorkflowText -like '*first-run-troubleshooting.md*') 'Operator workflow should link first-run troubleshooting.'
+            Assert-True ($operatorWorkflowText -like '*powershell-testing-lab-verification.md*') 'Operator workflow should link PowerShell testing and lab verification guidance.'
             Assert-True (Test-Path -LiteralPath $labEvidenceOverview) 'Documentation should include a shared lab-evidence overview.'
             $labEvidenceText = Get-Content -LiteralPath $labEvidenceOverview -Raw
             Assert-True ($labEvidenceText -like '*synthetic/project-lab evidence*') 'Lab evidence overview should explain the snapshot provenance.'
@@ -5876,6 +5892,7 @@ $tests = @(
                 Get-Content -LiteralPath $managementOverview -Raw
                 Get-Content -LiteralPath $managementSlide -Raw
                 Get-Content -LiteralPath $labReadinessChecklist -Raw
+                Get-Content -LiteralPath $powershellLabVerification -Raw
                 Get-Content -LiteralPath $labEvidenceOverview -Raw
                 Get-Content -LiteralPath $nonpermissiveWorkflow -Raw
                 Get-Content -LiteralPath (Join-Path $repoRoot 'docs/operator-workflow.md') -Raw
