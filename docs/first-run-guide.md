@@ -8,8 +8,8 @@ If report or command terms are unfamiliar, keep the [glossary](glossary.md) open
 
 For a first useful scan:
 
-1. Extract the current `v0.1.0-pre.19` release ZIP to `C:\ShareSurfer\`. If that checkpoint tag is not visible on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) yet, use the latest published prerelease and substitute that version in the paths below.
-2. Use `C:\ShareSurfer\ShareSurfer-0.1.0-pre.19\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
+1. Extract the current `v0.1.0-pre.19` release ZIP to `C:\`. If that checkpoint tag is not visible on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) yet, use the latest published prerelease and substitute that version in the paths below.
+2. Use `C:\ShareSurfer-0.1.0-pre.19\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
 5. Optional: run `Start-ShareSurferOperatorAssistant` to generate a reusable first-run plan and rerun script.
@@ -92,19 +92,19 @@ $PSVersionTable.PSVersion
 
 The major version should be `5`.
 
-If you are using the `v0.1.0-pre.19` release ZIP, extract it to `C:\ShareSurfer\`. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below. The extracted release root should be:
+If you are using the `v0.1.0-pre.19` release ZIP, extract it to `C:\`. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below. The extracted release root should be:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.19\
+C:\ShareSurfer-0.1.0-pre.19\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.19`, change the destination to `C:\ShareSurfer` so you do not end up with a doubled nested folder. From PowerShell:
+If Windows Explorer suggests extracting to `C:\ShareSurfer-0.1.0-pre.19`, change the destination to `C:\` so you do not end up with a doubled nested folder. From PowerShell:
 
 ```powershell
-$releaseZip = 'C:\ShareSurfer\downloads\ShareSurfer-0.1.0-pre.19.zip'
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
+$releaseZip = 'C:\Downloads\ShareSurfer-0.1.0-pre.19.zip'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.19'
 
-Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\ShareSurfer' -Force
+Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\' -Force
 Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
 Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
 Test-Path "$releaseRoot\interface\standalone-dashboard\dist\index.html"
@@ -670,7 +670,7 @@ The legacy `report.html` remains the safest default report because it is generat
 If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.19'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `

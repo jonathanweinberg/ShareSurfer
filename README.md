@@ -32,11 +32,11 @@ For the fuller explanation, use the [visual field guide](docs/visual-field-guide
 For the first real run:
 
 1. Download `ShareSurfer-0.1.0-pre.19.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.19). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
-2. Extract to `C:\ShareSurfer\` so the release root is `C:\ShareSurfer\ShareSurfer-0.1.0-pre.19\`.
+2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.19\`.
 3. Recursively unblock extracted PowerShell files:
 
    ```powershell
-   $releaseRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
+   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.19'
    Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
    ```
 
@@ -133,7 +133,7 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 Use this compact pattern when the release folder has been copied to a locked-down Windows collector host:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
+$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.19'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'

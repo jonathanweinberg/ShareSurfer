@@ -24,13 +24,13 @@ ShareSurfer does not change permissions. It reads evidence, writes normalized CS
 
 The collector host does not need npm, Vite, Playwright, internet access, or a local web server. Starting with `v0.1.0-pre.19`, release users also do not need Node, npm, Vite, a development server, or internet access on the dashboard host to package and open the standalone dashboard. Download `ShareSurfer-0.1.0-pre.19.zip` and `ShareSurfer-0.1.0-pre.19.zip.sha256` from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) on an approved connected workstation, verify or record the hash, and move the release package by your approved process. If the checkpoint tag is not visible yet, use the latest published prerelease until `v0.1.0-pre.19` appears.
 
-When the release ZIP is extracted to `C:\ShareSurfer\`, the ShareSurfer folder is:
+When the release ZIP is extracted to `C:\`, the ShareSurfer folder is:
 
 ```text
-C:\ShareSurfer\ShareSurfer-0.1.0-pre.19\
+C:\ShareSurfer-0.1.0-pre.19\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer\ShareSurfer-0.1.0-pre.19`, change the destination to `C:\ShareSurfer` to avoid a doubled nested folder. The dashboard host can use the same release folder path, or another local path such as `D:\Tools\ShareSurfer-0.1.0-pre.19`.
+If Windows Explorer suggests extracting to `C:\ShareSurfer-0.1.0-pre.19`, change the destination to `C:\` to avoid a doubled nested folder. The dashboard host can use the same release folder path, or another local path such as `D:\Tools\ShareSurfer-0.1.0-pre.19`.
 
 During collection, `Invoke-ShareSurferScan` prints timestamped phase updates so the operator can tell the scan is still active. Use `-Quiet` only for scheduled automation. If WinRM/CIM is unavailable, ShareSurfer records the gap as partial share-permission evidence and continues with file/folder evidence where possible. If SMB/RPC is reachable but native security descriptor reads fail, the scan is still partial: review `NativeShareSecurityDescriptorUnavailable`, `NativeShareSecurityDescriptorParseFailed`, `NativeSecurityDescriptorReadFailed`, and `NativeSecurityDescriptorParseFailed` rows before asking owners to approve the result.
 
@@ -40,7 +40,7 @@ Create a dated export path:
 
 ```powershell
 $scanId = 'scan-2026-06-08-finance'
-$shareSurferRoot = 'C:\ShareSurfer\ShareSurfer-0.1.0-pre.19'
+$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.19'
 $exportPath = "C:\ShareSurfer\exports\$scanId"
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
