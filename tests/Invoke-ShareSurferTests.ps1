@@ -2616,7 +2616,8 @@ $tests = @(
             $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
             $planPath = Join-Path $inputRoot 'operator-assistant.plan.json'
             $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
-            $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.19'
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
             $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
             $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
             $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
@@ -5613,6 +5614,8 @@ $tests = @(
             $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
             $currentReleaseTag = [string]$releaseMetadata.currentPrereleaseTag
             $currentReleaseZip = [string]$releaseMetadata.zipAssetName
+            $currentReleaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
+            $oldNestedReleaseRoot = 'C:\ShareSurfer\{0}' -f [string]$releaseMetadata.packageName
             $readmeText = Get-Content -LiteralPath $readme -Raw
             Assert-True ($readmeText -like '*Invoke-ShareSurferPester.ps1*') 'README should document the optional Pester wrapper.'
             Assert-True ($readmeText -like '*windows-lab-readiness-checklist.md*') 'README should link the Windows lab readiness checklist.'
@@ -5664,8 +5667,7 @@ $tests = @(
             Assert-True ($readmeText -like '*Quick Start in a Nonpermissive Environment*') 'README should include nonpermissive quickstart setup instructions.'
             Assert-True ($readmeText -like ('*{0}*' -f $currentReleaseTag)) 'README should reference the current pre-release quickstart package.'
             Assert-True ($readmeText -like ('*{0}*' -f $currentReleaseZip)) 'README should name the current pre-release zip asset.'
-            Assert-True ($readmeText -like '*C:\ShareSurfer-0.1.0-pre.19*') 'README should show the simplified version-root release path.'
-            $oldNestedReleaseRoot = 'C:\ShareSurfer\' + 'ShareSurfer-0.1.0-pre.19'
+            Assert-True ($readmeText -like ('*{0}*' -f $currentReleaseRoot)) 'README should show the simplified version-root release path.'
             Assert-True ($readmeText -notlike ('*{0}*' -f $oldNestedReleaseRoot)) 'README should not show the older nested release root path.'
             Assert-True ($readmeText -like '*Unblock-File*') 'README should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($readmeText -like '*without npm, Vite, a development server, or internet access*') 'README should explain release dashboard use without npm or a server.'
@@ -5765,7 +5767,7 @@ $tests = @(
             Assert-True ($firstRunText -like '*Move the Dataset to a Dashboard Host*') 'First-run guide should explain the two-host dashboard workflow.'
             Assert-True ($firstRunText -like '*visuals/nonpermissive-collector-workflow.svg*') 'First-run guide should show the nonpermissive collector workflow visual.'
             Assert-True ($firstRunText -like ('*{0} release package*' -f $currentReleaseTag)) 'First-run guide should reference the current pre-release dashboard package.'
-            Assert-True ($firstRunText -like '*C:\ShareSurfer-0.1.0-pre.19*') 'First-run guide should show the simplified version-root release path.'
+            Assert-True ($firstRunText -like ('*{0}*' -f $currentReleaseRoot)) 'First-run guide should show the simplified version-root release path.'
             Assert-True ($firstRunText -notlike ('*{0}*' -f $oldNestedReleaseRoot)) 'First-run guide should not show the older nested release root path.'
             Assert-True ($firstRunText -like '*Unblock-File*') 'First-run guide should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
@@ -5795,7 +5797,7 @@ $tests = @(
             Assert-True ($nonpermissiveText -like '*approved transfer process*') 'Nonpermissive workflow should require approved transfer handling.'
             Assert-True ($nonpermissiveText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Nonpermissive workflow should show dashboard packaging on the review host.'
             Assert-True ($nonpermissiveText -like ('*{0}*' -f $currentReleaseZip)) 'Nonpermissive workflow should name the current pre-release zip asset.'
-            Assert-True ($nonpermissiveText -like '*C:\ShareSurfer-0.1.0-pre.19*') 'Nonpermissive workflow should show the simplified version-root release path.'
+            Assert-True ($nonpermissiveText -like ('*{0}*' -f $currentReleaseRoot)) 'Nonpermissive workflow should show the simplified version-root release path.'
             Assert-True ($nonpermissiveText -notlike ('*{0}*' -f $oldNestedReleaseRoot)) 'Nonpermissive workflow should not show the older nested release root path.'
             Assert-True ($nonpermissiveText -like '*Unblock-File*') 'Nonpermissive workflow should show how to recursively unblock extracted PowerShell files.'
             Assert-True ($nonpermissiveText -like '*ownership-enrichment.csv*') 'Nonpermissive workflow should show pre-scan ownership enrichment output.'
@@ -5906,7 +5908,7 @@ $tests = @(
             Assert-True ($publicText -like '*Raw Evidence Tables*') 'Operator documentation should mention the report raw evidence view.'
             Assert-True ($publicText -like '*-NoCreateMissingFolders*') 'Operator documentation should explain the missing local output folder opt-out.'
             Assert-True ($publicText -like '*Creating missing local handoff folder*') 'Operator documentation should show explicit handoff folder creation before native zip commands.'
-            Assert-True ($publicText -like '*C:\ShareSurfer-0.1.0-pre.19*') 'Operator documentation should include the simplified version-root release path.'
+            Assert-True ($publicText -like ('*{0}*' -f $currentReleaseRoot)) 'Operator documentation should include the simplified version-root release path.'
             Assert-True ($publicText -notlike ('*{0}*' -f $oldNestedReleaseRoot)) 'Operator documentation should not include the older nested release root path.'
             $oldLabToolPattern = 'pr' + 'lctl'
             $internalVisualPattern = '(?i)' + 'image' + '-gen2'
