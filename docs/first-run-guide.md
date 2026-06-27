@@ -12,7 +12,7 @@ For a first useful scan:
 2. Use `C:\ShareSurfer-0.1.0-pre.20\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
-5. Optional: run `Start-ShareSurferOperatorAssistant` to generate a reusable first-run plan and rerun script.
+5. Recommended: run `Start-ShareSurfer.ps1` or `Start-ShareSurferStartup` to generate a reusable first-run JSON config, plan, and rerun script.
 6. If HR, employee, OBS, project, or owner CSVs exist, normalize them and build `ownership-enrichment.csv` before scanning.
 7. Run the collector, validate the export, and build `report.html`.
 8. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
@@ -132,7 +132,15 @@ Confirm the commands are available:
 Get-Command -Module ShareSurfer
 ```
 
-Optional: generate a guided operator plan before scanning. This does not collect data or change permissions. It writes a JSON plan and a rerun script so you can review the requested scan preview plus the authoritative validation and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist.
+Recommended: generate a guided startup plan before scanning. This does not collect data or change permissions. It recursively unblocks local ShareSurfer PowerShell files, asks the first-run questions when run interactively, writes a reusable startup JSON config, then writes a JSON plan and a rerun script so you can review the requested scan preview plus the authoritative validation and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist.
+
+The easiest release-root launcher is:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\Start-ShareSurfer.ps1" -Force
+```
+
+If you already know the answers and want a copy/paste command:
 
 ```powershell
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -140,18 +148,28 @@ $exportPath = 'C:\ShareSurfer\exports\scan-001'
 
 New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
 
-Start-ShareSurferOperatorAssistant `
+Start-ShareSurferStartup `
+  -EnvironmentMode Permissive `
   -ReleaseRoot $releaseRoot `
   -InputRoot $inputRoot `
   -ExportPath $exportPath `
   -TargetPath '\\files01\Finance' `
   -ObsAttribute 'extensionAttribute10' `
+  -SaveConfigPath (Join-Path $inputRoot 'sharesurfer-startup.config.json') `
   -PlanPath (Join-Path $inputRoot 'operator-assistant.plan.json') `
   -ReusableCommandPath (Join-Path $inputRoot 'operator-assistant-rerun.ps1') `
   -Force
 ```
 
-Review `operator-assistant-rerun.ps1` before running it. The script only passes optional owner mapping, ownership enrichment, and discounted-principal paths when those files exist.
+Under the hood, the startup flow delegates to `Start-ShareSurferOperatorAssistant` to create the scan plan and rerun script. Review `sharesurfer-startup.config.json` and `operator-assistant-rerun.ps1` before running the rerun script. The startup config can regenerate the same pattern later:
+
+```powershell
+Start-ShareSurferStartup `
+  -ConfigPath (Join-Path $inputRoot 'sharesurfer-startup.config.json') `
+  -Force
+```
+
+The rerun script only passes optional owner mapping, ownership enrichment, and discounted-principal paths when those files exist.
 
 ## Step 2: Choose Scan Targets
 

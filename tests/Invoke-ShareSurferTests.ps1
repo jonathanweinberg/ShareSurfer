@@ -2712,6 +2712,100 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurferStartup writes and replays startup config'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $command = Get-Command -Name Start-ShareSurferStartup -Module ShareSurfer -ErrorAction Stop
+            Assert-Equal $command.Name 'Start-ShareSurferStartup' 'Startup command should be exported by the module.'
+
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStartup-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'exports\finance-001'
+            $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            $planPath = Join-Path $inputRoot 'operator-assistant.plan.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            $handoffPath = Join-Path $root 'handoff\finance-001.zip'
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
+            $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+            $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+            $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
+
+            $summary = Start-ShareSurferStartup `
+                -EnvironmentMode Nonpermissive `
+                -ReleaseRoot $releaseRoot `
+                -InputRoot $inputRoot `
+                -ExportPath $exportPath `
+                -StandaloneDashboardPath $dashboardPath `
+                -TargetPath '\\files01\Finance' `
+                -ObsAttribute 'info' `
+                -AdLookupMode DirectoryOnly `
+                -ManagerIdentityFormat MailTo `
+                -OwnerMappingPath $ownerMappingPath `
+                -OwnershipEnrichmentPath $ownershipEnrichmentPath `
+                -DiscountedPrincipalPath $discountedPrincipalPath `
+                -HandoffPath $handoffPath `
+                -SaveConfigPath $configPath `
+                -PlanPath $planPath `
+                -ReusableCommandPath $rerunPath `
+                -IncludeFiles `
+                -SkipUnblock `
+                -Force
+
+            $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+            $operatorPlan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
+            $scriptText = Get-Content -LiteralPath $rerunPath -Raw
+
+            Assert-Equal $summary.StartupConfigPath $configPath 'Startup summary should report config path.'
+            Assert-Equal $summary.EnvironmentMode 'Nonpermissive' 'Startup summary should preserve selected environment mode.'
+            Assert-Equal $summary.UnblockStatus 'Skipped' 'Startup summary should report skipped unblock when requested.'
+            Assert-Equal $summary.OperatorPlanPath $planPath 'Startup summary should report operator plan path.'
+            Assert-Equal $summary.OperatorReusableCommandPath $rerunPath 'Startup summary should report operator rerun path.'
+            Assert-Equal $config.version 1 'Startup config should have a stable version.'
+            Assert-Equal $config.environmentMode 'Nonpermissive' 'Startup config should preserve environment mode.'
+            Assert-Equal $config.releaseRoot $releaseRoot 'Startup config should preserve release root.'
+            Assert-Equal $config.obsAttribute 'info' 'Startup config should preserve OBS attribute.'
+            Assert-Equal $config.optionalInputs.ownerMappingPath $ownerMappingPath 'Startup config should preserve owner mapping path.'
+            Assert-Equal $config.optionalInputs.ownershipEnrichmentPath $ownershipEnrichmentPath 'Startup config should preserve ownership enrichment path.'
+            Assert-Equal $config.optionalInputs.discountedPrincipalPath $discountedPrincipalPath 'Startup config should preserve discounted principals path.'
+            Assert-Equal $config.nonpermissive.handoffPath $handoffPath 'Startup config should preserve nonpermissive handoff path.'
+            Assert-Equal $config.generatedFiles.operatorPlanPath $planPath 'Startup config should record generated operator plan path.'
+            Assert-Equal $config.generatedFiles.operatorReusableCommandPath $rerunPath 'Startup config should record generated rerun path.'
+            Assert-True ([string]$config.commands.startupReplay -like '*Start-ShareSurferStartup*') 'Startup config should include a replay command.'
+            Assert-True ([string]$config.commands.startupScriptReplay -like '*Start-ShareSurfer.ps1*') 'Startup config should include release-root script replay command.'
+            Assert-True (@($config.stopGates | Where-Object { [string]$_ -like '*ObsAttribute*' }).Count -eq 1) 'Startup config should include OBS stop gate guidance.'
+            Assert-Equal $operatorPlan.obsAttribute 'info' 'Startup should delegate selected OBS attribute into operator assistant plan.'
+            Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Startup-generated operator rerun script should run the scan.'
+            Assert-True ($scriptText -like '*Test-ShareSurferExport -ExportPath $exportPath*') 'Startup-generated operator rerun script should validate the export.'
+
+            $replaySummary = Start-ShareSurferStartup -ConfigPath $configPath -Force
+            Assert-Equal $replaySummary.EnvironmentMode 'Nonpermissive' 'Replay should load environment mode from startup config.'
+            Assert-Equal $replaySummary.ExportPath $exportPath 'Replay should load export path from startup config.'
+            Assert-Equal $replaySummary.TargetPath[0] '\\files01\Finance' 'Replay should load target path from startup config.'
+            Assert-Equal $replaySummary.SkipUnblock $true 'Replay should preserve skipped unblock setting from startup config.'
+            Assert-Equal $replaySummary.HandoffPath $handoffPath 'Replay should load nonpermissive handoff path from startup config.'
+
+            $overwriteThrew = $false
+            try {
+                Start-ShareSurferStartup `
+                    -EnvironmentMode Permissive `
+                    -ReleaseRoot $releaseRoot `
+                    -InputRoot $inputRoot `
+                    -ExportPath $exportPath `
+                    -TargetPath '\\files01\Finance' `
+                    -SaveConfigPath $configPath `
+                    -PlanPath $planPath `
+                    -ReusableCommandPath $rerunPath `
+                    -SkipUnblock | Out-Null
+            }
+            catch {
+                $overwriteThrew = ($_.Exception.Message -like '*startup config already exists*')
+            }
+            Assert-True $overwriteThrew 'Startup command should not overwrite a different existing startup config without -Force.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferOwnerMappingDraft creates admin-review rows for unmapped shares'
         Body = {
             Import-Module $moduleManifest -Force
@@ -5513,6 +5607,8 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*ShareSurfer Command Recipes*') 'Command recipes should have a clear title.'
             Assert-True ($commandRecipeText -like '*Command Inventory by Workflow*') 'Command recipes should include a workflow-grouped command inventory.'
             Assert-True ($commandRecipeText -like '*Start-ShareSurferOperatorAssistant*') 'Command recipes should include the guided operator assistant.'
+            Assert-True ($commandRecipeText -like '*Start-ShareSurferStartup*') 'Command recipes should include the guided startup command.'
+            Assert-True ($commandRecipeText -like '*Start-ShareSurfer.ps1*') 'Command recipes should include the release-root startup launcher.'
             Assert-True ($commandRecipeText -like '*operator-assistant.plan.json*' -and $commandRecipeText -like '*operator-assistant-rerun.ps1*') 'Command recipes should show operator assistant plan and rerun outputs.'
             Assert-True ($commandRecipeText -like '*Join-ShareSurferOwnershipSources*') 'Command recipes should include multi-source ownership join guidance.'
             Assert-True ($commandRecipeText -like '*ownership-import.definition.json*') 'Command recipes should show reusable ownership import definition output.'
@@ -5622,6 +5718,8 @@ $tests = @(
             Assert-True ($readmeText -like '*v1-phase1-acceptance-audit.md*') 'README should link the V1 phase-1 acceptance audit.'
             Assert-True ($readmeText -like '*Start Here*') 'README should include a short operator start-here path.'
             Assert-True ($readmeText -like '*Start-ShareSurferOperatorAssistant*') 'README should include the guided operator assistant command.'
+            Assert-True ($readmeText -like '*Start-ShareSurferStartup*') 'README should include the guided startup command.'
+            Assert-True ($readmeText -like '*Start-ShareSurfer.ps1*') 'README should include the release-root startup launcher.'
             Assert-True ($readmeText -like '*operator-assistant.plan.json*' -and $readmeText -like '*operator-assistant-rerun.ps1*') 'README should explain operator assistant plan and rerun outputs.'
             Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
             Assert-True ($readmeText -like '*Command Inventory by Workflow*') 'README should group public commands by workflow.'
@@ -5733,6 +5831,8 @@ $tests = @(
             $businessReviewHandoffText = Get-Content -LiteralPath $businessReviewHandoff -Raw
             Assert-True ($firstRunText -like '*Start Here*') 'First-run guide should include a short start-here section.'
             Assert-True ($firstRunText -like '*Start-ShareSurferOperatorAssistant*') 'First-run guide should include the guided operator assistant.'
+            Assert-True ($firstRunText -like '*Start-ShareSurferStartup*') 'First-run guide should include the guided startup command.'
+            Assert-True ($firstRunText -like '*Start-ShareSurfer.ps1*') 'First-run guide should include the release-root startup launcher.'
             Assert-True ($firstRunText -like '*operator-assistant.plan.json*' -and $firstRunText -like '*operator-assistant-rerun.ps1*') 'First-run guide should explain operator assistant outputs.'
             Assert-True ($firstRunText -like '*Stop gates are conditions*') 'First-run guide should explain stop gates before the longer walkthrough.'
             Assert-True ($firstRunText -like '*latest published prerelease*') 'First-run guide should explain what to do if the checkpoint tag is not published yet.'

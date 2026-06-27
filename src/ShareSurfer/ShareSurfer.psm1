@@ -22,6 +22,7 @@ Export-ModuleMember -Function @(
     'New-ShareSurferLabFixture',
     'New-ShareSurferSupportBundle',
     'Start-ShareSurferOperatorAssistant',
+    'Start-ShareSurferStartup',
     'Test-ShareSurferExport',
     'Test-ShareSurferOwnershipSource'
 )
