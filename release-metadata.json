@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.20",
-  "packageVersion": "0.1.0-pre.20",
-  "packageName": "ShareSurfer-0.1.0-pre.20",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.20.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.20",
+  "currentPrereleaseTag": "v0.1.0-pre.21",
+  "packageVersion": "0.1.0-pre.21",
+  "packageName": "ShareSurfer-0.1.0-pre.21",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.21.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.21",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with version-root quickstart paths, PowerShell verification-lane documentation, file-share connectivity capability diagnostics, raw and redacted connectivity outputs, LLM-ready redacted diagnostic summaries, operator Start Here guidance, workflow command inventory, owner and migration review decision import, migration discovery quality harness coverage, evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the guided Start-ShareSurfer.ps1 launcher, Start-ShareSurferStartup JSON save/replay workflow, permissive and nonpermissive startup planning, recursive PowerShell unblock handling, version-root quickstart paths, PowerShell verification-lane documentation, file-share connectivity capability diagnostics, raw and redacted connectivity outputs, LLM-ready redacted diagnostic summaries, operator Start Here guidance, workflow command inventory, owner and migration review decision import, migration discovery quality harness coverage, evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
