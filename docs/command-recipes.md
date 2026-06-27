@@ -25,7 +25,7 @@ If `v0.1.0-pre.20` is not visible yet on the [ShareSurfer Releases page](https:/
 | Workflow | Copy/paste recipe | Commands and scripts |
 | --- | --- | --- |
 | Release setup | Recipe 1 | `Expand-Archive`, `Unblock-File`, `Import-Module` |
-| Guided first-run planning | Recipe 1A | `Start-ShareSurferOperatorAssistant` |
+| Guided first-run planning | Recipe 1A | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | README Lab Fixture section | `New-ShareSurferLabFixture` |
 | Optional owner/admin inputs | Recipe 2 | `owner-mapping.csv`, `discounted-principals.csv` |
 | Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
@@ -69,9 +69,21 @@ The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfe
 
 Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer-0.1.0-pre.20\ShareSurfer-0.1.0-pre.20`.
 
-## Recipe 1A: Generate a Guided Operator Plan
+## Recipe 1A: Generate a Guided Startup Plan
 
-Use this when you want ShareSurfer to write the first-run plan and rerun script before you collect data. The assistant does not scan shares or change permissions. It writes `operator-assistant.plan.json` and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. Optional CSV paths are only used by the rerun script when those files exist.
+Use this when you want ShareSurfer to ask the first-run questions, unblock local PowerShell files, save the startup choices as JSON, and write the operator plan and rerun script before you collect data. The startup script does not scan shares or change permissions. It writes `sharesurfer-startup.config.json`, `operator-assistant.plan.json`, and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. Optional CSV paths are only used by the rerun script when those files exist.
+
+The easiest release-root launcher is:
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$inputRoot = 'C:\ShareSurfer\inputs'
+$exportPath = 'C:\ShareSurfer\exports\finance-001'
+
+& "$releaseRoot\Start-ShareSurfer.ps1" -Force
+```
+
+If you already know the answers and want to generate the same files without prompts, import the module and call the startup command directly:
 
 ```powershell
 $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
@@ -81,15 +93,25 @@ $exportPath = 'C:\ShareSurfer\exports\finance-001'
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
 New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
 
-Start-ShareSurferOperatorAssistant `
+Start-ShareSurferStartup `
+  -EnvironmentMode Permissive `
   -ReleaseRoot $releaseRoot `
   -InputRoot $inputRoot `
   -ExportPath $exportPath `
   -TargetPath '\\files01\Finance' `
   -ObsAttribute 'extensionAttribute10' `
   -AdLookupMode Auto `
+  -SaveConfigPath (Join-Path $inputRoot 'sharesurfer-startup.config.json') `
   -PlanPath (Join-Path $inputRoot 'operator-assistant.plan.json') `
   -ReusableCommandPath (Join-Path $inputRoot 'operator-assistant-rerun.ps1') `
+  -Force
+```
+
+To replay the same startup pattern later:
+
+```powershell
+Start-ShareSurferStartup `
+  -ConfigPath (Join-Path $inputRoot 'sharesurfer-startup.config.json') `
   -Force
 ```
 

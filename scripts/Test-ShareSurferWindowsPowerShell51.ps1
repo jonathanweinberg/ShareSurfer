@@ -52,6 +52,7 @@ $requiredCommands = @(
     'New-ShareSurferReviewDecisionDraft',
     'New-ShareSurferSupportBundle',
     'Start-ShareSurferOperatorAssistant',
+    'Start-ShareSurferStartup',
     'Test-ShareSurferExport'
 )
 foreach ($commandName in $requiredCommands) {

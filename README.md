@@ -40,13 +40,21 @@ For the first real run:
    Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
    ```
 
-4. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked.
-5. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
-6. Run `Invoke-ShareSurferScan`, then always run `Test-ShareSurferExport`.
-7. Open `report.html`, or package a real export with `scripts\New-ShareSurferStandaloneDashboard.ps1`.
-8. Review the stop gates before owner signoff or migration planning.
+4. For the guided startup path, run the release-root launcher:
 
-New operators should start with the [first-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby. For a guided console starting point, run `Start-ShareSurferOperatorAssistant`; it writes `operator-assistant.plan.json` and `operator-assistant-rerun.ps1` without collecting data or changing permissions.
+   ```powershell
+   powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\Start-ShareSurfer.ps1" -Force
+   ```
+
+   It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`.
+
+5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked.
+6. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
+7. Run the generated rerun script or `Invoke-ShareSurferScan`, then always run `Test-ShareSurferExport`.
+8. Open `report.html`, or package a real export with `scripts\New-ShareSurferStandaloneDashboard.ps1`.
+9. Review the stop gates before owner signoff or migration planning.
+
+New operators should start with the [first-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby. For a guided console starting point, run `Start-ShareSurfer.ps1` from the release root or `Start-ShareSurferStartup` after importing the module. The startup flow writes a reusable JSON config and delegates to `Start-ShareSurferOperatorAssistant`; it does not collect data or change permissions until you review and run the generated rerun script.
 
 ## Pause Before Owner Signoff
 
@@ -64,7 +72,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 
 | Workflow | Commands and scripts |
 | --- | --- |
-| Guided first run | `Start-ShareSurferOperatorAssistant` |
+| Guided first run | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` |
 | Scan collection | `Invoke-ShareSurferScan` |
 | Optional readiness assessments | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment` |
