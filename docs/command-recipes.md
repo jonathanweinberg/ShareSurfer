@@ -5,10 +5,10 @@ This page collects the most common first-run commands in one place. Use it when 
 The examples assume the current quickstart release is unpacked here:
 
 ```text
-C:\ShareSurfer-0.1.0-pre.20\
+C:\ShareSurfer-0.1.0-pre.21\
 ```
 
-If `v0.1.0-pre.20` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in every `ShareSurfer-0.1.0-pre.20` path and ZIP name below. The commands also assume Windows PowerShell 5.1 unless a command explicitly says otherwise.
+If `v0.1.0-pre.21` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in every `ShareSurfer-0.1.0-pre.21` path and ZIP name below. The commands also assume Windows PowerShell 5.1 unless a command explicitly says otherwise.
 
 ## Start Here
 
@@ -49,11 +49,11 @@ If `v0.1.0-pre.20` is not visible yet on the [ShareSurfer Releases page](https:/
 
 ## Recipe 1: Unpack and Import the Release
 
-Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.20.zip` from the GitHub release on an approved connected workstation. If that checkpoint ZIP is not published yet, download the latest published prerelease ZIP and update `$releaseZip` and `$releaseRoot` to match it.
+Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.21.zip` from the GitHub release on an approved connected workstation. If that checkpoint ZIP is not published yet, download the latest published prerelease ZIP and update `$releaseZip` and `$releaseRoot` to match it.
 
 ```powershell
-$releaseZip = 'C:\Downloads\ShareSurfer-0.1.0-pre.20.zip'
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseZip = 'C:\Downloads\ShareSurfer-0.1.0-pre.21.zip'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\' -Force
 Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
@@ -67,7 +67,7 @@ Get-Command -Module ShareSurfer
 
 The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting the release ZIP.
 
-Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer-0.1.0-pre.20\ShareSurfer-0.1.0-pre.20`.
+Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer-0.1.0-pre.21\ShareSurfer-0.1.0-pre.21`.
 
 ## Recipe 1A: Generate a Guided Startup Plan
 
@@ -76,7 +76,7 @@ Use this when you want ShareSurfer to ask the first-run questions, unblock local
 The easiest release-root launcher is:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $inputRoot = 'C:\ShareSurfer\inputs'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
@@ -86,7 +86,7 @@ $exportPath = 'C:\ShareSurfer\exports\finance-001'
 If you already know the answers and want to generate the same files without prompts, import the module and call the startup command directly:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $inputRoot = 'C:\ShareSurfer\inputs'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
@@ -162,7 +162,7 @@ If you do not have either file yet, leave it absent. The scan recipes below only
 Use this when another team gives you a CSV with useful owner or OBS data but the headers do not match ShareSurfer's expected owner mapping format.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
@@ -201,7 +201,7 @@ If you need ShareSurfer to ask you about each header in the console, add `-Inter
 To gather AD data from an HR or OBS file before scanning, create an enrichment CSV. ShareSurfer uses employee ID or employee number values from the source CSV to look up matching AD accounts when `-AdLookupMode Auto` or `ActiveDirectory` can read the directory. It fills available account, mail, title, office, manager, and OBS fields, then writes a local CSV that travels with the scan evidence.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $inputRoot = 'C:\ShareSurfer\inputs'
 $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
 $ownershipDefinitionPath = Join-Path $inputRoot 'ownership-import.definition.json'
@@ -257,7 +257,7 @@ For more detail, see the [admin ownership import guide](admin-ownership-import.m
 Use this when you already know the share path and want a first reviewable export.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $ownerMappingPath = 'C:\ShareSurfer\inputs\owner-mapping.csv'
 $ownershipEnrichmentPath = 'C:\ShareSurfer\inputs\ownership-enrichment.csv'
@@ -298,7 +298,7 @@ Use this recipe first if you are new to the tool. It can still record partial-da
 Use this when you know the Windows file server and share name and want ShareSurfer to collect share metadata.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -320,7 +320,7 @@ Use `-IncludeFiles` only when file-level rows matter for the review. Large share
 Use this when a Windows SMB target is reachable but default remote CIM or SMB cmdlets cannot prove share metadata cleanly.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $exportPath = 'C:\ShareSurfer\exports\finance-native-001'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -343,7 +343,7 @@ Invoke-ShareSurferScan `
 Run this after the collector finishes.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 Test-ShareSurferExport -ExportPath $exportPath
@@ -370,7 +370,7 @@ Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confi
 Use this after a scan has produced `owner_review_packets.csv` and `related_data_areas.csv`. The draft files are plain CSVs that can be edited in Excel, reviewed in a meeting, and imported back into the export folder before rebuilding the report or standalone dashboard.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.20'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 $exportPath = 'C:\ShareSurfer\exports\finance-001'
 $decisionPath = 'C:\ShareSurfer\reviews\finance-001'
 $decisionRerunPath = Join-Path $decisionPath 'review-decisions-rerun.ps1'
