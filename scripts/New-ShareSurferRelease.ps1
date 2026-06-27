@@ -167,13 +167,13 @@ function Get-ShareSurferReleaseSourceFiles {
     param([string] $RepoRoot)
 
     $trackedFiles = @()
-    $gitOutput = & git -C $RepoRoot ls-files -- README.md LICENSE release-metadata.json src scripts docs 2>$null
+    $gitOutput = & git -C $RepoRoot ls-files -- README.md LICENSE release-metadata.json Start-ShareSurfer.ps1 src scripts docs 2>$null
     if ($LASTEXITCODE -eq 0) {
         $trackedFiles = @($gitOutput)
     }
 
     if ($trackedFiles.Count -eq 0) {
-        $roots = @('README.md', 'LICENSE', 'release-metadata.json', 'src', 'scripts', 'docs')
+        $roots = @('README.md', 'LICENSE', 'release-metadata.json', 'Start-ShareSurfer.ps1', 'src', 'scripts', 'docs')
         foreach ($root in $roots) {
             $path = Join-Path $RepoRoot $root
             if (Test-Path -LiteralPath $path -PathType Leaf) {
