@@ -138,6 +138,8 @@ Get-Command -Module ShareSurfer
 
 Recommended: generate a guided startup plan before scanning. This does not collect data or change permissions. It recursively unblocks local ShareSurfer PowerShell files, asks the first-run questions when run interactively, writes a reusable startup JSON config, then writes a JSON plan and a rerun script so you can review the requested scan preview plus the authoritative validation and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist.
 
+After the interactive questions, ShareSurfer shows the generated file paths, offers to display the startup JSON, scan plan, and rerun script, and then asks whether to run the generated scan/validate/dashboard script now. The run prompt defaults to `No` so you can stop and review first.
+
 The easiest release-root launcher is:
 
 ```powershell

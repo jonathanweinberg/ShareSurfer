@@ -50,7 +50,7 @@ For the first real run:
    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\Start-ShareSurfer.ps1" -Force
    ```
 
-   It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`.
+   It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then offers to show those generated files and asks whether to run the generated scan/validate/dashboard script now. The run prompt defaults to No.
 
 5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked.
 6. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.

@@ -77,6 +77,8 @@ Both `Test-Path` commands should return `True`. If either returns `False`, check
 
 Use this when you want ShareSurfer to ask the first-run questions, unblock local PowerShell files, save the startup choices as JSON, and write the operator plan and rerun script before you collect data. The startup script does not scan shares or change permissions. It writes `sharesurfer-startup.config.json`, `operator-assistant.plan.json`, and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. Optional CSV paths are only used by the rerun script when those files exist.
 
+When run interactively, the startup script offers to show the generated JSON/plan/rerun files and then asks whether to run the generated scan/validate/dashboard script now. The run prompt defaults to `No`.
+
 The easiest release-root launcher is:
 
 ```powershell

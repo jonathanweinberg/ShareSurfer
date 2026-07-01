@@ -236,6 +236,17 @@ function Start-ShareSurferStartup {
     Ensure-ShareSurferLocalFileParentDirectory -Path $SaveConfigPath -Purpose 'startup config' -NoCreateMissingFolders:$NoCreateMissingFolders | Out-Null
     Set-Content -LiteralPath $SaveConfigPath -Value ($startupConfig | ConvertTo-Json -Depth 8) -Encoding UTF8
 
+    $postStartupSummary = [pscustomobject]@{
+        ReviewShown = $false
+        RerunLaunched = $false
+    }
+    if ($Interactive) {
+        $postStartupSummary = Invoke-ShareSurferStartupPostPlanHandoff `
+            -StartupConfigPath $SaveConfigPath `
+            -OperatorPlanPath $assistantSummary.PlanPath `
+            -ReusableCommandPath $assistantSummary.ReusableCommandPath
+    }
+
     [pscustomobject]@{
         StartupConfigPath = $SaveConfigPath
         EnvironmentMode = $EnvironmentMode
@@ -256,6 +267,8 @@ function Start-ShareSurferStartup {
         UnblockZoneIdentifierRemovedCount = $unblockSummary.ZoneIdentifierRemovedCount
         OperatorPlanPath = $assistantSummary.PlanPath
         OperatorReusableCommandPath = $assistantSummary.ReusableCommandPath
+        PostStartupReviewShown = [bool]$postStartupSummary.ReviewShown
+        PostStartupRerunLaunched = [bool]$postStartupSummary.RerunLaunched
         StartupReplayCommand = $startupReplayCommand
         StartupScriptReplayCommand = $scriptReplayCommand
         StopGates = @($startupConfig.stopGates)
@@ -265,6 +278,58 @@ function Start-ShareSurferStartup {
             'Validate the export before packaging or sharing the dashboard.',
             'Reuse the startup JSON config to regenerate the same startup pattern later.'
         )
+    }
+}
+
+function Invoke-ShareSurferStartupPostPlanHandoff {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $StartupConfigPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $OperatorPlanPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ReusableCommandPath
+    )
+
+    Write-Host ''
+    Write-Host 'ShareSurfer startup files are ready:'
+    Write-Host ('  Startup config: {0}' -f $StartupConfigPath)
+    Write-Host ('  Operator plan:  {0}' -f $OperatorPlanPath)
+    Write-Host ('  Rerun script:    {0}' -f $ReusableCommandPath)
+
+    $reviewShown = $false
+    $showGeneratedFiles = Read-ShareSurferStartupBoolean -Prompt 'Show generated startup JSON, scan plan, and rerun script now?' -Value $true
+    if ($showGeneratedFiles) {
+        foreach ($reviewFile in @(
+            [pscustomobject]@{ Label = 'Startup JSON config'; Path = $StartupConfigPath },
+            [pscustomobject]@{ Label = 'Operator scan plan'; Path = $OperatorPlanPath },
+            [pscustomobject]@{ Label = 'Operator rerun script'; Path = $ReusableCommandPath }
+        )) {
+            Write-Host ''
+            Write-Host ('--- {0}: {1} ---' -f $reviewFile.Label, $reviewFile.Path)
+            if (Test-Path -LiteralPath $reviewFile.Path -PathType Leaf) {
+                Get-Content -LiteralPath $reviewFile.Path | ForEach-Object { Write-Host $_ }
+                $reviewShown = $true
+            }
+            else {
+                Write-Warning ('Generated file was not found for review: {0}' -f $reviewFile.Path)
+            }
+        }
+    }
+
+    Write-Host ''
+    Write-Host 'The rerun script runs collection, validates the export, and packages the standalone dashboard from the validated export folder.'
+    $runNow = Read-ShareSurferStartupBoolean -Prompt 'Run the generated scan/validate/dashboard script now?' -Value $false
+    if ($runNow) {
+        Write-Host ('Running generated ShareSurfer script: {0}' -f $ReusableCommandPath)
+        & $ReusableCommandPath
+    }
+
+    [pscustomobject]@{
+        ReviewShown = $reviewShown
+        RerunLaunched = [bool]$runNow
     }
 }
 
