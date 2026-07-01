@@ -253,6 +253,7 @@ function Start-ShareSurferStartup {
         HandoffPath = $HandoffPath
         UnblockStatus = $unblockSummary.Status
         UnblockFileCount = $unblockSummary.FileCount
+        UnblockZoneIdentifierRemovedCount = $unblockSummary.ZoneIdentifierRemovedCount
         OperatorPlanPath = $assistantSummary.PlanPath
         OperatorReusableCommandPath = $assistantSummary.ReusableCommandPath
         StartupReplayCommand = $startupReplayCommand
@@ -279,6 +280,7 @@ function Invoke-ShareSurferStartupUnblock {
         return [pscustomobject]@{
             Status = 'Skipped'
             FileCount = 0
+            ZoneIdentifierRemovedCount = 0
             ErrorCount = 0
         }
     }
@@ -288,6 +290,7 @@ function Invoke-ShareSurferStartupUnblock {
         return [pscustomobject]@{
             Status = 'Unavailable'
             FileCount = 0
+            ZoneIdentifierRemovedCount = 0
             ErrorCount = 0
         }
     }
@@ -296,11 +299,19 @@ function Invoke-ShareSurferStartupUnblock {
         throw "ShareSurfer release root was not found for recursive unblock: $ReleaseRoot"
     }
 
-    $files = @(Get-ChildItem -Path (Join-Path $ReleaseRoot '*') -Recurse -File -Include '*.ps1', '*.psm1', '*.psd1' -ErrorAction SilentlyContinue)
+    $files = @(Get-ChildItem -LiteralPath $ReleaseRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+        @('.ps1', '.psm1', '.psd1') -contains $_.Extension
+    })
     $processed = 0
+    $streamRemoved = 0
     $errors = 0
     foreach ($file in $files) {
         try {
+            $streamStatus = Remove-ShareSurferStartupZoneIdentifierStream -LiteralPath $file.FullName
+            if ($streamStatus -eq 'Removed') {
+                $streamRemoved++
+            }
+
             Unblock-File -LiteralPath $file.FullName -ErrorAction Stop
             $processed++
         }
@@ -313,7 +324,37 @@ function Invoke-ShareSurferStartupUnblock {
     [pscustomobject]@{
         Status = if ($errors -gt 0) { 'CompletedWithWarnings' } else { 'Completed' }
         FileCount = $processed
+        ZoneIdentifierRemovedCount = $streamRemoved
         ErrorCount = $errors
+    }
+}
+
+function Remove-ShareSurferStartupZoneIdentifierStream {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $LiteralPath
+    )
+
+    try {
+        $zoneStream = Get-Item -LiteralPath $LiteralPath -Stream Zone.Identifier -ErrorAction SilentlyContinue
+    }
+    catch [System.Management.Automation.ParameterBindingException] {
+        return 'Unsupported'
+    }
+    catch {
+        return 'Unavailable'
+    }
+
+    if ($null -eq $zoneStream) {
+        return 'Absent'
+    }
+
+    try {
+        Remove-Item -LiteralPath $LiteralPath -Stream Zone.Identifier -ErrorAction Stop
+        return 'Removed'
+    }
+    catch {
+        return 'Failed'
     }
 }
 

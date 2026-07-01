@@ -25,13 +25,61 @@ function Invoke-ShareSurferLauncherUnblock {
     }
 
     Write-Host ('Checking ShareSurfer PowerShell files under {0} for downloaded-file blocks.' -f $Root)
-    Get-ChildItem -Path (Join-Path $Root '*') -Recurse -File -Include '*.ps1', '*.psm1', '*.psd1' -ErrorAction SilentlyContinue | ForEach-Object {
+    $files = @(Get-ChildItem -LiteralPath $Root -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+        @('.ps1', '.psm1', '.psd1') -contains $_.Extension
+    })
+
+    $processed = 0
+    $streamRemoved = 0
+    $errors = 0
+    foreach ($file in $files) {
         try {
-            Unblock-File -LiteralPath $_.FullName -ErrorAction Stop
+            $streamStatus = Remove-ShareSurferLauncherZoneIdentifierStream -LiteralPath $file.FullName
+            if ($streamStatus -eq 'Removed') {
+                $streamRemoved++
+            }
+
+            Unblock-File -LiteralPath $file.FullName -ErrorAction Stop
+            $processed++
         }
         catch {
-            Write-Warning ('Unable to unblock {0}: {1}' -f $_.FullName, $_.Exception.Message)
+            $errors++
+            Write-Warning ('Unable to unblock {0}: {1}' -f $file.FullName, $_.Exception.Message)
         }
+    }
+
+    Write-Host ('Checked {0} ShareSurfer PowerShell file(s); explicitly cleared {1} downloaded-file marker(s).' -f $processed, $streamRemoved)
+    if ($errors -gt 0) {
+        Write-Warning ('{0} ShareSurfer PowerShell file(s) could not be unblocked before module import.' -f $errors)
+    }
+}
+
+function Remove-ShareSurferLauncherZoneIdentifierStream {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $LiteralPath
+    )
+
+    try {
+        $zoneStream = Get-Item -LiteralPath $LiteralPath -Stream Zone.Identifier -ErrorAction SilentlyContinue
+    }
+    catch [System.Management.Automation.ParameterBindingException] {
+        return 'Unsupported'
+    }
+    catch {
+        return 'Unavailable'
+    }
+
+    if ($null -eq $zoneStream) {
+        return 'Absent'
+    }
+
+    try {
+        Remove-Item -LiteralPath $LiteralPath -Stream Zone.Identifier -ErrorAction Stop
+        return 'Removed'
+    }
+    catch {
+        return 'Failed'
     }
 }
 
