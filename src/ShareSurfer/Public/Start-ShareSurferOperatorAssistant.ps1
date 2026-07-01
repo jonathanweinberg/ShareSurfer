@@ -166,6 +166,7 @@ function Start-ShareSurferOperatorAssistant {
         commands = [ordered]@{
             importModule = [string]$commands.ImportModule
             sharePermissionDiagnostics = [string]$commands.SharePermissionDiagnostics
+            portProtocolAssessment = [string]$commands.PortProtocolAssessment
             scan = [string]$commands.Scan
             validate = [string]$commands.Validate
             packageStandaloneDashboard = [string]$commands.PackageStandaloneDashboard
@@ -482,6 +483,8 @@ function New-ShareSurferOperatorAssistantCommandSet {
         $lines.Add('Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force')
         $lines.Add('')
     }
+    $lines.Add('Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force')
+    $lines.Add('')
     $lines.Add('$scanParams = @{')
     $lines.Add('  TargetPath = $targetPaths')
     $lines.Add('  OutputPath = $exportPath')
@@ -548,10 +551,12 @@ function New-ShareSurferOperatorAssistantCommandSet {
     if ($IncludeSharePermissionDiagnostics) {
         $diagnosticPreview = 'Invoke-ShareSurferSharePermissionDiagnostic -TargetPath {0} -OutputPath {1} -Force' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $TargetPath), (ConvertTo-ShareSurferPowerShellLiteral -Value (Join-Path $ExportPath 'share-permission-diagnostics'))
     }
+    $portProtocolPreview = 'Invoke-ShareSurferPortProtocolAssessment -TargetPath {0} -OutputPath {1} -Force' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $TargetPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath)
 
     [pscustomobject]@{
         ImportModule = ('Import-Module {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $modulePathPreview))
         SharePermissionDiagnostics = $diagnosticPreview
+        PortProtocolAssessment = $portProtocolPreview
         Scan = ($scanPreviewParts -join ' ')
         Validate = ('Test-ShareSurferExport -ExportPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath))
         PackageStandaloneDashboard = ('& {0} -ExportPath {1} -OutputPath {2} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $dashboardScriptPreview), (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $StandaloneDashboardPath))
