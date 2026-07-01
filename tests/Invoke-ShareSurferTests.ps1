@@ -3408,6 +3408,93 @@ $tests = @(
         }
     },
     @{
+        Name = 'Share-permission diagnostics use UNC descriptor fallback when returned share path is not collector-local'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSanDescriptorFallback-' + [guid]::NewGuid().ToString('N'))
+            $global:ShareSurferTestDescriptorAttemptPaths = New-Object System.Collections.ArrayList
+
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = 'C:\Public\GEO LOCATION\TestLocation'
+                    Description = 'SAN returned server-local path'
+                    Source = 'MockSmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                    Level = 502
+                    SecurityDescriptorBytes = @()
+                }
+            }
+
+            $global:ShareSurferNativeSecurityInfoProvider = {
+                param(
+                    [string] $Path,
+                    [string] $ShareId,
+                    [string] $ItemId,
+                    [string] $FullPath,
+                    [int] $Depth
+                )
+
+                [void]$global:ShareSurferTestDescriptorAttemptPaths.Add($Path)
+                if ($Path -like 'C:\Public*') {
+                    throw 'NativeSecurityDescriptorReadFailed: GetNamedSecurityInfoW failed for \\?\C:\Public\GEO LOCATION\TestLocation with Win32 result 3 (The system cannot find the path specified).'
+                }
+
+                [pscustomobject]@{
+                    Owner = 'CONTOSO\Data.Owner'
+                    InheritanceEnabled = $true
+                    InheritanceBrokenAt = ''
+                    AclEntries = @(
+                        [pscustomobject]@{
+                            ItemId = $ItemId
+                            ShareId = $ShareId
+                            FullPath = $FullPath
+                            Identity = 'CONTOSO\Data.Owner'
+                            Rights = 'ReadAndExecute'
+                            AccessMask = '0x001200A9'
+                            AccessControlType = 'Allow'
+                            IsInherited = $false
+                            InheritanceFlags = 'None'
+                            PropagationFlags = 'None'
+                            Depth = $Depth
+                        }
+                    )
+                    Source = 'MockNativeSecurity'
+                }
+            }
+
+            try {
+                $result = Invoke-ShareSurferFileShareConnectivityAssessment -TargetPath '\\testsystem\TestLocation' -OutputPath $outputPath -SkipNetworkTests -SkipCimChecks -Quiet -PassThru
+                $checks = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_checks.csv'))
+                $diagnostics = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permission_diagnostics.csv'))
+
+                $pathSelection = @($checks | Where-Object { $_.Capability -eq 'FileSystemSecurityDescriptorPathSelection' })[0]
+                $descriptorRead = @($checks | Where-Object { $_.Capability -eq 'FileSystemSecurityDescriptorRead' })[0]
+
+                Assert-True $result.IsValid 'SAN descriptor fallback diagnostic package should be valid.'
+                Assert-Equal $global:ShareSurferTestDescriptorAttemptPaths.Count 1 'Descriptor read should skip the remote server-local C:\ path when it is not collector-local.'
+                Assert-Equal ([string]$global:ShareSurferTestDescriptorAttemptPaths[0]) '\\testsystem\TestLocation' 'Descriptor read should attempt the target UNC path.'
+                Assert-Equal $pathSelection.EvidenceType 'ReturnedSharePathNotCollectorLocal' 'Path selection should explain that the returned share path is not collector-local.'
+                Assert-True ($pathSelection.Detail -like '*ReturnedShareLocalPath=C:\Public\GEO LOCATION\TestLocation*') 'Path selection detail should preserve the returned share-local path in raw diagnostics.'
+                Assert-True ($pathSelection.Detail -like '*TargetUNCPath=\\testsystem\TestLocation*') 'Path selection detail should preserve the UNC fallback path.'
+                Assert-Equal $descriptorRead.Status 'Pass' 'UNC fallback should make filesystem descriptor proof pass when the UNC descriptor read succeeds.'
+                Assert-True ($descriptorRead.Detail -like '*AttemptPathKind=TargetUNCPath*') 'Descriptor proof should identify the selected UNC attempt path kind.'
+                Assert-True ($descriptorRead.Detail -like '*DescriptorReadPath=\\testsystem\TestLocation*') 'Descriptor proof should identify the selected UNC descriptor path.'
+                Assert-True (@($diagnostics | Where-Object { $_.EvidenceType -eq 'ReturnedSharePathNotCollectorLocal' -and $_.WhyItMatters -like '*server-local paths*collector*' }).Count -eq 1) 'Share-permission diagnostics should explain the server-local path signal.'
+            }
+            finally {
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferNativeSecurityInfoProvider -Scope Global -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferTestDescriptorAttemptPaths -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferSharePermissionDiagnostic writes focused share-permission logs and console pointers'
         Body = {
             Import-Module $moduleManifest -Force
