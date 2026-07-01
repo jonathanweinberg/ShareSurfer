@@ -31,12 +31,12 @@ For the fuller explanation, use the [visual field guide](docs/visual-field-guide
 
 For the first real run:
 
-1. Download `ShareSurfer-0.1.0-pre.24.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.24). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
-2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.24\`.
+1. Download `ShareSurfer-0.1.0-pre.25.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.25). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
+2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.25\`.
 3. Recursively unblock extracted PowerShell files:
 
    ```powershell
-   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.24'
+   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.25'
    Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
      Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
      Unblock-File
@@ -52,7 +52,7 @@ For the first real run:
 
    It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, asks whether to run intensive share-permission diagnostics before the scan, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then offers to show those generated files and asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to No.
 
-5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked.
+5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked. The startup diagnostic path automatically checks whether a server-returned local path such as `C:\Public\Share` really exists on the collector; when it does not, ShareSurfer attempts the target UNC path instead and records that decision in `share-permission-diagnostics\share_permission_diagnostics.md` and `.csv`.
 6. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
 7. Run the generated rerun script or `Invoke-ShareSurferScan`, then always run `Test-ShareSurferExport`.
 8. Open `report.html`, or package a real export with `scripts\New-ShareSurferStandaloneDashboard.ps1`.
@@ -146,7 +146,7 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 Use this compact pattern when the release folder has been copied to a locked-down Windows collector host:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.24'
+$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.25'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -205,7 +205,7 @@ When WinRM/CIM is blocked, scan explicit SMB shares with the native provider:
 Invoke-ShareSurferScan -ComputerName 'files01' -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $exportPath
 ```
 
-`NativeSmbRpc` uses Windows SMB/RPC and Win32 security APIs instead of `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl`. It is still permission-dependent. If SMB/RPC ports pass but ShareSurfer reports unavailable or unparseable security descriptors, treat the scan as reachable but incomplete until permissions or SMB server behavior are reviewed.
+`NativeSmbRpc` uses Windows SMB/RPC and Win32 security APIs instead of `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl`. It is still permission-dependent. If SMB/RPC ports pass but ShareSurfer reports unavailable or unparseable security descriptors, treat the scan as reachable but incomplete until permissions or SMB server behavior are reviewed. For older SAN or appliance shares that return a server-local path such as `C:\Public\Share`, ShareSurfer diagnostics now verify whether that path is collector-local and fall back to the target UNC path when needed.
 
 ## Standalone Dashboard
 
@@ -227,7 +227,7 @@ Current screenshots are under [docs/visuals/dashboard-screenshots/2026-06-09-cur
 
 ## Pre-1.0 Release Packaging
 
-The first packages are unsigned but fully built. `v0.1.0-pre.24` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
+The first packages are unsigned but fully built. `v0.1.0-pre.25` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
 
 Release identity lives in [release-metadata.json](release-metadata.json). Update that file first when preparing a prerelease; packaging fails closed when the manual version or tag does not match.
 

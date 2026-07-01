@@ -241,6 +241,66 @@ function Get-ShareSurferFileShareConnectivitySuggestedAction {
     'Resolve blocked transport, authentication, permissions, or descriptor-read failures before scan acceptance.'
 }
 
+function Test-ShareSurferFileShareConnectivityCollectorPath {
+    param(
+        [string] $Path = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    try {
+        return [bool](Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $Path) -ErrorAction SilentlyContinue)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Add-ShareSurferFileShareConnectivityDescriptorCandidate {
+    param(
+        [System.Collections.ArrayList] $Candidates,
+
+        [hashtable] $SeenPaths,
+
+        [string] $Path = '',
+        [string] $PathKind = '',
+        [string] $Reason = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return
+    }
+
+    $key = ([string]$Path).ToLowerInvariant()
+    if ($SeenPaths.ContainsKey($key)) {
+        return
+    }
+
+    $SeenPaths[$key] = $true
+    [void]$Candidates.Add([pscustomobject]@{
+        Path = [string]$Path
+        PathKind = [string]$PathKind
+        Reason = [string]$Reason
+    })
+}
+
+function Get-ShareSurferFileShareConnectivityDescriptorEvidenceType {
+    param(
+        [string] $Message = ''
+    )
+
+    if ($Message -like 'NativeSecurityDescriptorUnavailable:*') {
+        return 'NativeSecurityDescriptorUnavailable'
+    }
+    if ($Message -like 'NativeSecurityDescriptorParseFailed:*') {
+        return 'NativeSecurityDescriptorParseFailed'
+    }
+
+    'NativeSecurityDescriptorReadFailed'
+}
+
 function New-ShareSurferFileShareConnectivityEventRows {
     param(
         [string] $AssessmentId,
@@ -606,6 +666,7 @@ function Get-ShareSurferSharePermissionDiagnosticAttemptedMethod {
         'NativeShareMetadata' { return 'Read share metadata with native NetShareGetInfo.' }
         'NativeShareDescriptorReturned' { return 'Request SHARE_INFO_502 share security descriptor bytes from NetShareGetInfo.' }
         'NativeShareDescriptorParsed' { return 'Parse returned share security descriptor bytes into share permission ACE rows.' }
+        'FileSystemSecurityDescriptorPathSelection' { return 'Choose a usable descriptor-read path from returned share metadata and the target UNC path.' }
         'FileSystemSecurityDescriptorRead' { return 'Read owner and DACL evidence from the share root with GetNamedSecurityInfoW.' }
         default { return ('Run {0} through {1}.' -f [string]$Check.Capability, [string]$Check.Provider) }
     }
@@ -626,6 +687,7 @@ function Get-ShareSurferSharePermissionDiagnosticWhyItMatters {
         'NativeShareMetadata' { return 'Native SMB/RPC fallback needs NetShareGetInfo to return the share before share security descriptor checks can continue.' }
         'NativeShareDescriptorReturned' { return 'Native share-permission proof depends on the server returning the share security descriptor, not just confirming the share exists.' }
         'NativeShareDescriptorParsed' { return 'Returned descriptor bytes are only useful if ShareSurfer can parse them into ACE rows.' }
+        'FileSystemSecurityDescriptorPathSelection' { return 'Some SANs and remote servers return server-local paths that do not exist on the collector; ShareSurfer must use the UNC path when needed.' }
         'FileSystemSecurityDescriptorRead' { return 'ShareSurfer also needs file/folder owner and DACL evidence; this can fail even when share metadata succeeds.' }
         default { return 'This capability affects whether ShareSurfer can trust the share-permission evidence for this target.' }
     }
@@ -649,6 +711,7 @@ function New-ShareSurferSharePermissionDiagnosticRows {
         'NativeShareMetadata',
         'NativeShareDescriptorReturned',
         'NativeShareDescriptorParsed',
+        'FileSystemSecurityDescriptorPathSelection',
         'FileSystemSecurityDescriptorRead'
     )
 
@@ -1078,29 +1141,83 @@ function Invoke-ShareSurferFileShareConnectivityAssessment {
                     }
                 }
 
-                if ([string]::IsNullOrWhiteSpace([string]$shareInfo.Path)) {
+                $returnedSharePath = [string]$shareInfo.Path
+                $targetUncPath = [string]$target.UNCPath
+                $descriptorCandidates = New-Object System.Collections.ArrayList
+                $descriptorSeenPaths = @{}
+                $returnedPathExistsOnCollector = $false
+
+                if (-not [string]::IsNullOrWhiteSpace($returnedSharePath)) {
+                    $returnedPathExistsOnCollector = Test-ShareSurferFileShareConnectivityCollectorPath -Path $returnedSharePath
+                    if ($returnedPathExistsOnCollector) {
+                        Add-ShareSurferFileShareConnectivityDescriptorCandidate -Candidates $descriptorCandidates -SeenPaths $descriptorSeenPaths -Path $returnedSharePath -PathKind 'ReturnedShareLocalPath' -Reason 'NetShareGetInfo returned a share path that exists on the collector.'
+                    }
+                }
+
+                if (-not [string]::IsNullOrWhiteSpace($targetUncPath)) {
+                    $reason = 'Target UNC path is available for remote descriptor reads.'
+                    if (-not [string]::IsNullOrWhiteSpace($returnedSharePath) -and -not $returnedPathExistsOnCollector) {
+                        $reason = 'NetShareGetInfo returned a server-local path that is not present on the collector, so ShareSurfer will read the target UNC path instead.'
+                    }
+                    Add-ShareSurferFileShareConnectivityDescriptorCandidate -Candidates $descriptorCandidates -SeenPaths $descriptorSeenPaths -Path $targetUncPath -PathKind 'TargetUNCPath' -Reason $reason
+                }
+
+                if ($descriptorCandidates.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($returnedSharePath)) {
+                    Add-ShareSurferFileShareConnectivityDescriptorCandidate -Candidates $descriptorCandidates -SeenPaths $descriptorSeenPaths -Path $returnedSharePath -PathKind 'ReturnedShareLocalPath' -Reason 'No target UNC path was available, so ShareSurfer attempted the returned share path as the only descriptor-read candidate.'
+                }
+
+                if ($descriptorCandidates.Count -gt 0) {
+                    $pathSelectionEvidence = 'DescriptorReadPathSelected'
+                    $pathSelectionMessage = 'ShareSurfer selected descriptor-read path candidate(s).'
+                    if (-not [string]::IsNullOrWhiteSpace($returnedSharePath) -and -not $returnedPathExistsOnCollector -and -not [string]::IsNullOrWhiteSpace($targetUncPath)) {
+                        $pathSelectionEvidence = 'ReturnedSharePathNotCollectorLocal'
+                        $pathSelectionMessage = 'Returned share-local path is not present on the collector; UNC descriptor fallback will be used.'
+                    }
+                    elseif ([string]::IsNullOrWhiteSpace($returnedSharePath) -and -not [string]::IsNullOrWhiteSpace($targetUncPath)) {
+                        $pathSelectionEvidence = 'TargetUncDescriptorPathSelected'
+                        $pathSelectionMessage = 'Share metadata did not include a returned path; UNC descriptor read will be used.'
+                    }
+
+                    $candidateSummary = @($descriptorCandidates | ForEach-Object { '{0}={1}' -f [string]$_.PathKind, [string]$_.Path }) -join '; '
+                    $checkIndex++
+                    [void]$checks.Add((New-ShareSurferFileShareConnectivityCheck -AssessmentId $assessmentId -Index $checkIndex -Target $target -Layer 'Descriptor' -Capability 'FileSystemSecurityDescriptorPathSelection' -Provider 'ShareSurfer' -Status 'Pass' -Severity 'Info' -EvidenceType $pathSelectionEvidence -Message $pathSelectionMessage -Detail ('ReturnedShareLocalPath={0}; ReturnedPathExistsOnCollector={1}; TargetUNCPath={2}; Candidates={3}' -f $returnedSharePath, [string]$returnedPathExistsOnCollector, $targetUncPath, $candidateSummary) -RecommendedAction 'Review this row when Win32 result 3 appears; remote server-local paths are expected to be unreadable from the collector unless the collector is the file server.'))
+                }
+
+                if ($descriptorCandidates.Count -eq 0) {
                     $checkIndex++
                     [void]$checks.Add((New-ShareSurferFileShareConnectivityCheck -AssessmentId $assessmentId -Index $checkIndex -Target $target -Layer 'Descriptor' -Capability 'FileSystemSecurityDescriptorRead' -Provider 'NativeWin32Security' -Attempted 'False' -Status 'Skipped' -Severity 'Review' -EvidenceType 'SharePathUnavailable' -Message 'Filesystem owner/DACL proof was skipped because the share local path was not returned.' -Detail 'A share path is required for GetNamedSecurityInfoW owner/DACL proof.' -RecommendedAction 'Use a target path scan or troubleshoot native share path metadata.'))
                 }
                 else {
-                    try {
-                        Write-ShareSurferStatus -Phase 'Descriptor' -Message ('Reading owner/DACL descriptor for {0}.' -f $target.TargetId) -Quiet:$Quiet
-                        $securityInfo = Get-ShareSurferNativeSecurityInfo -Path ([string]$shareInfo.Path) -ShareId ([string]$target.TargetId) -ItemId ([string]$target.TargetId) -FullPath ([string]$target.UNCPath) -Depth 0
-                        $aclCount = @($securityInfo.AclEntries).Count
-                        $checkIndex++
-                        [void]$checks.Add((New-ShareSurferFileShareConnectivityCheck -AssessmentId $assessmentId -Index $checkIndex -Target $target -Layer 'Descriptor' -Capability 'FileSystemSecurityDescriptorRead' -Provider 'NativeWin32Security' -Status 'Pass' -Severity 'Info' -EvidenceType 'NativeSecurityDescriptorRead' -Message 'GetNamedSecurityInfoW returned readable owner/DACL evidence.' -Detail ('Owner {0}; ACL row count {1}; inheritance enabled {2}.' -f [string]$securityInfo.Owner, $aclCount, [string]$securityInfo.InheritanceEnabled) -RecommendedAction 'Native filesystem owner/DACL evidence is usable for this share root.'))
+                    $securityInfo = $null
+                    $descriptorAttemptFailures = New-Object System.Collections.ArrayList
+                    $selectedDescriptorCandidate = $null
+                    foreach ($candidate in @($descriptorCandidates)) {
+                        try {
+                            Write-ShareSurferStatus -Phase 'Descriptor' -Message ('Reading owner/DACL descriptor for {0} using {1}.' -f $target.TargetId, [string]$candidate.PathKind) -Quiet:$Quiet
+                            $securityInfo = Get-ShareSurferNativeSecurityInfo -Path ([string]$candidate.Path) -ShareId ([string]$target.TargetId) -ItemId ([string]$target.TargetId) -FullPath ([string]$target.UNCPath) -Depth 0
+                            $selectedDescriptorCandidate = $candidate
+                            break
+                        }
+                        catch {
+                            [void]$descriptorAttemptFailures.Add(('{0} {1} failed: {2}' -f [string]$candidate.PathKind, [string]$candidate.Path, [string]$_.Exception.Message))
+                        }
                     }
-                    catch {
-                        $evidenceType = 'NativeSecurityDescriptorReadFailed'
-                        $message = [string]$_.Exception.Message
-                        if ($message -like 'NativeSecurityDescriptorUnavailable:*') {
-                            $evidenceType = 'NativeSecurityDescriptorUnavailable'
-                        }
-                        elseif ($message -like 'NativeSecurityDescriptorParseFailed:*') {
-                            $evidenceType = 'NativeSecurityDescriptorParseFailed'
+
+                    if ($null -ne $securityInfo) {
+                        $aclCount = @($securityInfo.AclEntries).Count
+                        $ownerPresent = (-not [string]::IsNullOrWhiteSpace([string]$securityInfo.Owner))
+                        $fallbackNote = ''
+                        if ($descriptorAttemptFailures.Count -gt 0) {
+                            $fallbackNote = ' Earlier descriptor candidate failure(s): {0}' -f (@($descriptorAttemptFailures) -join ' | ')
                         }
                         $checkIndex++
-                        [void]$checks.Add((New-ShareSurferFileShareConnectivityCheck -AssessmentId $assessmentId -Index $checkIndex -Target $target -Layer 'Descriptor' -Capability 'FileSystemSecurityDescriptorRead' -Provider 'NativeWin32Security' -Status 'Fail' -Severity 'High' -EvidenceType $evidenceType -Message 'GetNamedSecurityInfoW could not return usable owner/DACL evidence.' -Detail $message -RecommendedAction 'SMB/RPC metadata may work while filesystem owner/DACL reads fail. Review path access, privileges, long-path behavior, and native descriptor parsing details.'))
+                        [void]$checks.Add((New-ShareSurferFileShareConnectivityCheck -AssessmentId $assessmentId -Index $checkIndex -Target $target -Layer 'Descriptor' -Capability 'FileSystemSecurityDescriptorRead' -Provider 'NativeWin32Security' -Status 'Pass' -Severity 'Info' -EvidenceType 'NativeSecurityDescriptorRead' -Message 'GetNamedSecurityInfoW returned readable owner/DACL evidence.' -Detail ('AttemptPathKind={0}; DescriptorReadPath={1}; ReturnedShareLocalPath={2}; OwnerPresent={3}; ACL row count {4}; inheritance enabled {5}.{6}' -f [string]$selectedDescriptorCandidate.PathKind, [string]$selectedDescriptorCandidate.Path, $returnedSharePath, [string]$ownerPresent, $aclCount, [string]$securityInfo.InheritanceEnabled, $fallbackNote) -RecommendedAction 'Native filesystem owner/DACL evidence is usable for this share root. If UNC fallback was used, keep scanning by UNC for this target.'))
+                    }
+                    else {
+                        $failureDetail = @($descriptorAttemptFailures) -join ' | '
+                        $evidenceType = Get-ShareSurferFileShareConnectivityDescriptorEvidenceType -Message $failureDetail
+                        $checkIndex++
+                        [void]$checks.Add((New-ShareSurferFileShareConnectivityCheck -AssessmentId $assessmentId -Index $checkIndex -Target $target -Layer 'Descriptor' -Capability 'FileSystemSecurityDescriptorRead' -Provider 'NativeWin32Security' -Status 'Fail' -Severity 'High' -EvidenceType $evidenceType -Message 'GetNamedSecurityInfoW could not return usable owner/DACL evidence from any descriptor-read candidate.' -Detail ('ReturnedShareLocalPath={0}; ReturnedPathExistsOnCollector={1}; TargetUNCPath={2}; AttemptFailures={3}' -f $returnedSharePath, [string]$returnedPathExistsOnCollector, $targetUncPath, $failureDetail) -RecommendedAction 'SMB/RPC metadata may work while filesystem owner/DACL reads fail. ShareSurfer tried viable collector-local and UNC descriptor paths; review path access, privileges, SAN/SMB security descriptor behavior, long-path handling, and native descriptor parsing details.'))
                     }
                 }
             }
