@@ -313,7 +313,7 @@ Expand-Archive -LiteralPath 'D:\Intake\scan-2026-06-04-finance.zip' -Destination
 Start-Process (Join-Path $reviewRoot 'report.html')
 ```
 
-If you are using the `v0.1.0-pre.22` release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, the standalone dashboard assets are already built. Package the transferred export for a richer static review experience:
+If you are using the `v0.1.0-pre.23` release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, the standalone dashboard assets are already built. Package the transferred export for a richer static review experience:
 
 ```powershell
 powershell.exe -NoLogo -NoProfile -File .\scripts\New-ShareSurferStandaloneDashboard.ps1 `
