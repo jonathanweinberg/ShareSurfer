@@ -3886,7 +3886,7 @@ $tests = @(
             Assert-True ($releaseNotes -like '*template dashboard assets*') 'Release notes should call bundled dashboard assets templates.'
             Assert-True ($releaseNotes -like '*No npm, Vite, development server, or internet access*') 'Release notes should explain offline dashboard use after unpacking.'
             Assert-True ($releaseNotes -like '*## Highlights*' -and $releaseNotes -like '*Zone.Identifier*') 'Release notes should include operator-facing highlights for startup unblock behavior.'
-            Assert-True ($releaseNotes -like '*## Operator Impact*' -and $releaseNotes -like '*fewer one-file-at-a-time PowerShell approval prompts*') 'Release notes should explain operator impact for first-run approval prompts.'
+            Assert-True ($releaseNotes -like '*## Operator Impact*' -and $releaseNotes -like '*generated evidence files*' -and $releaseNotes -like '*explicit operator choice*') 'Release notes should explain the startup review and launch handoff.'
             Assert-True ($hashes -like '*interface/standalone-dashboard/dist/index.html*') 'Release package hash file should include the prebuilt dashboard entry point.'
             Assert-True ($hashes -like '*dependency-age-report.json*') 'Release package hash file should include the dependency age report.'
             Assert-True ($zipHash -like ('*{0}*' -f $releaseMetadata.zipAssetName)) 'Release zip hash should name the release archive.'
