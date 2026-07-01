@@ -7,12 +7,13 @@ function Export-ShareSurferJsonLines {
     )
 
     $normalizedRows = @(ConvertTo-ShareSurferArray $Rows)
-    $lines = foreach ($row in $normalizedRows) {
+    $lines = @(foreach ($row in $normalizedRows) {
         $row | ConvertTo-Json -Depth 8 -Compress
-    }
+    })
 
     if ($lines.Count -eq 0) {
-        Set-Content -LiteralPath $Path -Value '' -Encoding UTF8
+        $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
+        [System.IO.File]::WriteAllText($Path, '', $utf8NoBom)
         return
     }
 

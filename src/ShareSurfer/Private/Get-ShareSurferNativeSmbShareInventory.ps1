@@ -17,6 +17,7 @@ function Get-ShareSurferNativeSmbShareInventory {
     $sharePermissions = New-Object System.Collections.ArrayList
     $scanErrors = New-Object System.Collections.ArrayList
     $scanEvents = New-Object System.Collections.ArrayList
+    $targetIsRemote = Test-ShareSurferRemoteComputerName -ComputerName $ComputerName
 
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'CollectionProviderSelected' -Source 'NativeSmbRpc' -Message ('Using native SMB/RPC provider for {0} explicit share target(s) on {1}.' -f @($ShareName).Count, $ComputerName) -Detail 'Win32 NetShareGetInfo and GetNamedSecurityInfoW'))
 
@@ -26,6 +27,7 @@ function Get-ShareSurferNativeSmbShareInventory {
         $localPath = ''
         $description = ''
         $scanPath = $uncPath
+        $pathSelection = 'TargetUNC'
         $metadataResolved = $false
 
         Write-ShareSurferStatus -Phase 'Collect' -Message ('Resolving SMB share {0} with native SMB/RPC.' -f $uncPath) -Quiet:$Quiet
@@ -35,14 +37,22 @@ function Get-ShareSurferNativeSmbShareInventory {
                 $metadataResolved = $true
                 $localPath = [string]$rpcShare.Path
                 $description = [string]$rpcShare.Description
-                if ($localPath -ne '' -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
+                if ($localPath -ne '' -and -not $targetIsRemote -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
                     $scanPath = $localPath
+                    $pathSelection = 'ReturnedLocalPathUsedForLocalTarget'
+                }
+                elseif ($localPath -ne '' -and $targetIsRemote) {
+                    $pathSelection = 'ReturnedLocalPathIgnoredForRemoteTarget'
+                }
+                elseif ($localPath -ne '') {
+                    $pathSelection = 'ReturnedLocalPathUnavailableOnCollector'
                 }
 
-                [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source 'NativeSmbRpc' -ShareId $shareId -Message ('Resolved share target {0} through native SMB/RPC.' -f $uncPath) -Detail $scanPath))
+                $pathSelectionDetail = 'SelectedPath={0}; ReturnedLocalPath={1}; TargetIsRemote={2}; PathSelection={3}' -f $scanPath, $localPath, $targetIsRemote, $pathSelection
+                [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source 'NativeSmbRpc' -ShareId $shareId -Message ('Resolved share target {0} through native SMB/RPC.' -f $uncPath) -Detail $pathSelectionDetail))
 
                 $descriptorBytes = @()
-                if ($null -ne $rpcShare.PSObject.Properties['SecurityDescriptorBytes']) {
+                if ($null -ne $rpcShare.PSObject.Properties['SecurityDescriptorBytes'] -and $null -ne $rpcShare.SecurityDescriptorBytes) {
                     $descriptorBytes = @($rpcShare.SecurityDescriptorBytes)
                 }
 
@@ -179,18 +189,8 @@ function Get-ShareSurferNativeSmbShareInventory {
         if (@($sharePermissions | Where-Object { [string]$_.ShareId -eq $shareId }).Count -eq 0) {
             $shareRow = @($shares | Where-Object { [string]$_.ShareId -eq $shareId } | Select-Object -First 1)
             if ($shareRow.Count -gt 0) {
-                $shareRow[0].PartialData = $true
-                $existingReason = ''
-                if ($null -ne $shareRow[0].PSObject.Properties['PartialReason']) {
-                    $existingReason = [string]$shareRow[0].PartialReason
-                }
                 $nativeReason = 'Share-level permissions were not collected through NativeSmbRpc.'
-                if ([string]::IsNullOrWhiteSpace($existingReason)) {
-                    $shareRow[0].PartialReason = $nativeReason
-                }
-                elseif ($existingReason -notlike ('*{0}*' -f $nativeReason)) {
-                    $shareRow[0].PartialReason = '{0}; {1}' -f $existingReason.TrimEnd('.', ';', ' '), $nativeReason
-                }
+                Add-ShareSurferPartialReason -ShareRow $shareRow[0] -Reason $nativeReason
             }
         }
 

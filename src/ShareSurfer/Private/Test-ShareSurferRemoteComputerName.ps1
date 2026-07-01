@@ -7,7 +7,7 @@ function Test-ShareSurferRemoteComputerName {
         return $false
     }
 
-    $normalized = $ComputerName.Trim()
+    $normalized = $ComputerName.Trim().TrimEnd('.')
     $localNames = @(
         [System.Environment]::MachineName,
         $env:COMPUTERNAME,
@@ -16,8 +16,36 @@ function Test-ShareSurferRemoteComputerName {
         '::1'
     ) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
 
-    foreach ($localName in $localNames) {
-        if ($normalized.Equals([string]$localName, [System.StringComparison]::OrdinalIgnoreCase)) {
+    try {
+        $dnsHostName = [System.Net.Dns]::GetHostName()
+        if (-not [string]::IsNullOrWhiteSpace($dnsHostName)) {
+            $localNames += $dnsHostName
+        }
+
+        $hostEntry = [System.Net.Dns]::GetHostEntry($dnsHostName)
+        if ($null -ne $hostEntry) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$hostEntry.HostName)) {
+                $localNames += [string]$hostEntry.HostName
+            }
+            foreach ($alias in @($hostEntry.Aliases)) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$alias)) {
+                    $localNames += [string]$alias
+                }
+            }
+            foreach ($address in @($hostEntry.AddressList)) {
+                if ($null -ne $address) {
+                    $localNames += [string]$address.IPAddressToString
+                }
+            }
+        }
+    }
+    catch {
+        # DNS enumeration is a best-effort local alias hint. Basic local names above remain authoritative.
+    }
+
+    foreach ($localName in @($localNames | Select-Object -Unique)) {
+        $candidate = ([string]$localName).Trim().TrimEnd('.')
+        if ($normalized.Equals($candidate, [System.StringComparison]::OrdinalIgnoreCase)) {
             return $false
         }
     }

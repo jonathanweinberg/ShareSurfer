@@ -10,8 +10,9 @@ function Export-ShareSurferCsv {
     )
 
     $normalizedRows = @(ConvertTo-ShareSurferArray $Rows)
+    $utf8Bom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $true
     if ($normalizedRows.Count -eq 0) {
-        Set-Content -LiteralPath $Path -Value (($Columns | ForEach-Object { '"' + ($_ -replace '"', '""') + '"' }) -join ',') -Encoding UTF8
+        [System.IO.File]::WriteAllLines($Path, @((($Columns | ForEach-Object { '"' + ($_ -replace '"', '""') + '"' }) -join ',')), $utf8Bom)
         return
     }
 
@@ -19,5 +20,6 @@ function Export-ShareSurferCsv {
         New-ShareSurferRecord -Columns $Columns -InputObject $row
     }
 
-    $exportRows | Export-Csv -LiteralPath $Path -NoTypeInformation -Encoding UTF8
+    $csvLines = @($exportRows | ConvertTo-Csv -NoTypeInformation)
+    [System.IO.File]::WriteAllLines($Path, [string[]]$csvLines, $utf8Bom)
 }

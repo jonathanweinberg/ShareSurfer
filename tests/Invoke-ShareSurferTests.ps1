@@ -1761,6 +1761,32 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan preserves thrown Get-SmbShareAccess failures'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferShareAccessThrow-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $targetPath 'readme.txt') -Value 'share access throw evidence' -Encoding UTF8
+            function global:Get-SmbShareAccess {
+                throw 'mock Get-SmbShareAccess access denied'
+            }
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -TargetPath $targetPath -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 1) 'Generic share-permission unavailable evidence should still be exported.'
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'GetSmbShareAccessError' -and $_.Message -like '*mock Get-SmbShareAccess access denied*' }).Count -eq 1) 'The original Get-SmbShareAccess exception should be preserved as a specific collection error.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'GetSmbShareAccessError' -and $_.Message -like '*mock Get-SmbShareAccess access denied*' }).Count -eq 1) 'The original Get-SmbShareAccess exception should be preserved as a scan event.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Scanner diagnostics preserve specific enumeration error targets when available'
         Body = {
             Import-Module $moduleManifest -Force
@@ -1805,9 +1831,13 @@ $tests = @(
             Assert-True ($localScannerText -like '*Source = ''Get-ChildItem''*') 'Local scanner should identify Get-ChildItem as the source for enumeration error rows.'
             Assert-True ($localScannerText -like '*EventType ''EnumerationError''*') 'Local scanner should record enumeration errors as scan events for diagnostics.'
             Assert-True ($localScannerText -like '*ConvertTo-ShareSurferFilesystemPath -Path $target*') 'Local scanner should resolve target roots through extended-length filesystem paths.'
-            Assert-True ($localScannerText.Contains('ConvertTo-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)')) 'Local scanner should enumerate children through extended-length filesystem paths.'
+            Assert-True ($localScannerText.Contains('ConvertTo-ShareSurferFilesystemPath -Path ([string]$directoryItem.FullName)')) 'Local scanner should enumerate children through extended-length filesystem paths.'
             Assert-True ($localScannerText.Contains('ConvertTo-ShareSurferFilesystemPath -Path ([string]$scanItem.FullName)')) 'Local scanner should read ACLs through extended-length filesystem paths.'
             Assert-True ($localScannerText -like '*ConvertFrom-ShareSurferFilesystemPath*') 'Local scanner should convert internal filesystem paths back to display paths for exported rows.'
+            Assert-True ($localScannerText.Contains('System.Collections.Generic.Queue[object]')) 'Local scanner should use queue-based traversal instead of repeated array growth for large trees.'
+            Assert-True ($localScannerText -notmatch 'Get-ChildItem[\s\S]*-Recurse') 'Local scanner should avoid recursive Get-ChildItem traversal that can cross reparse points unexpectedly.'
+            Assert-True ($localScannerText -notmatch '\$scanItems\s*\+=') 'Local scanner should avoid quadratic scan item accumulation.'
+            Assert-True ($localScannerText -like '*ReparsePointSkipped*') 'Local scanner should record skipped reparse-point directories as scan events.'
             Assert-True ($smbScannerText -like '*Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath)*') 'SMB scanner should test local share paths through extended-length filesystem paths.'
         }
     },
@@ -2885,6 +2915,50 @@ $tests = @(
         }
     },
     @{
+        Name = 'Optional input prompts only treat SKIP as skip'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOptionalPrompt-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            $expectedOwnerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+            Set-Content -LiteralPath $expectedOwnerMappingPath -Value 'Pattern,Owner,BusinessUnit,Source,Confidence,Notes' -Encoding UTF8
+
+            $script:shareSurferOptionalPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferOptionalPromptAnswers.Enqueue('no')
+            $script:shareSurferOptionalPromptAnswers.Enqueue('SKIP')
+            $script:shareSurferOptionalPromptAnswers.Enqueue('')
+            function global:Read-Host {
+                param([string] $Prompt)
+                $script:shareSurferOptionalPromptAnswers.Dequeue()
+            }
+
+            try {
+                $answerNo = & $module {
+                    param($InputRoot)
+                    Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv'
+                } $inputRoot
+                $answerSkip = & $module {
+                    param($InputRoot)
+                    Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv'
+                } $inputRoot
+                $answerEnter = & $module {
+                    param($InputRoot)
+                    Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv'
+                } $inputRoot
+
+                Assert-Equal $answerNo 'no' 'Typing no should be preserved as operator input instead of silently skipping a found optional file.'
+                Assert-Equal $answerSkip '' 'Typing SKIP should explicitly skip a found optional file.'
+                Assert-Equal $answerEnter $expectedOwnerMappingPath 'Pressing Enter should use a found conventional optional file.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferOptionalPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Start-ShareSurferStartup run-now handoff ignores generated script pipeline output'
         Body = {
             Import-Module $moduleManifest -Force
@@ -3509,6 +3583,25 @@ $tests = @(
                 Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
                 Remove-Variable -Name ShareSurferNativeSessionProvider -Scope Global -ErrorAction SilentlyContinue
             }
+        }
+    },
+    @{
+        Name = 'File-share connectivity redaction handles casing drift and fallback raw details'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+
+            $redactedText = & $module {
+                $tokenMap = New-Object -TypeName System.Collections.Hashtable -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
+                $tokenMap['\\files01\Finance'] = 'UNC_TOKEN'
+                Protect-ShareSurferFileShareConnectivityText -Value 'Failed for \\FILES01\FINANCE as CONTOSO\User and ava.owner@example.test from C:\Shares\Finance.' -TokenMap $tokenMap
+            }
+
+            Assert-True ($redactedText -like '*UNC_TOKEN*') 'Connectivity redaction should replace known sensitive values regardless of casing.'
+            Assert-True ($redactedText -notmatch '(?i)files01|finance|contoso|ava\.owner@example\.test|C:\\Shares') 'Connectivity redaction should scrub residual host, share, identity, email, and path details.'
+            Assert-True ($redactedText -like '*IDENTITY_REDACTED*') 'Connectivity redaction should scrub residual Windows identity strings.'
+            Assert-True ($redactedText -like '*USER_REDACTED*') 'Connectivity redaction should scrub residual email strings.'
+            Assert-True ($redactedText -like '*PATH_REDACTED*') 'Connectivity redaction should scrub residual drive paths.'
         }
     },
     @{
@@ -4585,6 +4678,7 @@ $tests = @(
                 Assert-True ($permissions.Identity -contains 'CONTOSO\ShareModeReaders') 'SMB share scans should collect share-level permissions.'
                 Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 0) 'SMB share scans should clear stale share-permission collection errors after share-level permissions are proven.'
                 Assert-True ($events.EventType -contains 'ShareTargetResolved') 'SMB share scans should log share target resolution.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Detail -like '*PathSelection=ReturnedLocalPathUsedForLocalTarget*' }).Count -eq 1) 'Local SMB share scans should record that the returned local path was intentionally used.'
             }
             finally {
                 Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
@@ -4660,9 +4754,10 @@ $tests = @(
                 Assert-Equal $script:removeCimSessionCount 1 'Remote SMB scans should dispose the created CIM session.'
                 Assert-True $script:getSmbShareSawSession 'Remote SMB share lookup should use the CIM session.'
                 Assert-True $script:getSmbShareAccessSawSession 'Remote SMB permission lookup should reuse the CIM session.'
-                Assert-Equal $shares[0].PartialData 'False' 'Remote SMB share data should not be partial when share-level permissions were collected.'
+                Assert-Equal $shares[0].PartialData 'True' 'Remote SMB share data should remain partial when the server-local share path cannot be enumerated from the collector.'
                 Assert-True ($permissions.Identity -contains 'CONTOSO\RemoteShareReaders') 'Remote SMB scans should collect share-level permissions through the CIM session.'
                 Assert-True ($events.EventType -contains 'RemoteCimSessionCreated') 'Remote SMB scans should log CIM session creation.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Detail -like '*SelectedPath=\\remote-files01\Finance*' -and $_.Detail -like '*PathSelection=ReturnedLocalPathIgnoredForRemoteTarget*' }).Count -eq 1) 'Remote SMB scans should keep the UNC path instead of adopting a coincident collector-local path.'
             }
             finally {
                 Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
@@ -4753,10 +4848,11 @@ $tests = @(
                 Assert-Equal $shares[0].Description 'Mocked SMB RPC metadata' 'SMB RPC fallback should populate share description metadata.'
                 Assert-Equal $shares[0].PartialData 'True' 'Share should remain partial when share-level permissions are still unproven.'
                 Assert-True ([string]$shares[0].PartialReason -like '*Share-level permissions were not collected*') 'Fallback metadata should not hide missing share-level permissions.'
-                Assert-True ($items.FullPath -contains (Join-Path $shareRoot 'rpc-file.txt')) 'SMB RPC fallback should allow enumeration from the resolved path when it is locally reachable.'
+                Assert-Equal @($items).Count 0 'Remote SMB RPC fallback should not enumerate a collector-local path returned by remote metadata.'
                 Assert-Equal @($permissions).Count 0 'SMB RPC fallback should not fabricate share-level permissions.'
                 Assert-True ($events.EventType -contains 'SmbRpcShareInfoResolved') 'SMB RPC metadata fallback should be logged as scan evidence.'
                 Assert-True (($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Source -eq 'SmbRpcNetShareGetInfo' }).Count -ge 1) 'Share target resolution should record the RPC fallback source.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Detail -like '*SelectedPath=\\remote-files04\Finance*' -and $_.Detail -like '*PathSelection=ReturnedLocalPathIgnoredForRemoteTarget*' }).Count -eq 1) 'Remote SMB RPC fallback should keep the target UNC path when metadata returns a server-local path.'
                 Assert-Equal $manifest[0].RequestedSmbCollectionProvider 'Auto' 'Scan manifest should preserve the operator-requested SMB collection provider.'
                 Assert-Equal $manifest[0].EffectiveSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should expose the effective provider used after SMB RPC fallback.'
             }
@@ -4817,11 +4913,13 @@ $tests = @(
                 $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
                 $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv'))
 
-                Assert-Equal $shares[0].PartialData 'False' 'SMB share scans should not remain partial when NativeSmbRpc proves share-level permissions after CIM failure.'
-                Assert-Equal $shares[0].PartialReason '' 'SMB share scans should clear missing share-permission reasons when NativeSmbRpc fallback succeeds.'
+                Assert-Equal $shares[0].PartialData 'True' 'Remote SMB share scans should remain partial when the UNC path cannot be enumerated, even if NativeSmbRpc proves share-level permissions.'
+                Assert-True ([string]$shares[0].PartialReason -like '*Unable to enumerate share path*') 'Remote SMB share scans should keep the enumeration partial reason separate from share-permission proof.'
+                Assert-True ([string]$shares[0].PartialReason -notlike '*Share-level permissions were not collected*') 'NativeSmbRpc permission proof should clear missing share-permission partial reasons.'
                 Assert-True ($permissions.Identity -contains 'CONTOSO\RpcFallbackReaders') 'SMB share scans should export NativeSmbRpc fallback share permission rows.'
                 Assert-True ($permissions.Source -contains 'NativeSmbRpc') 'SMB RPC fallback permission rows should preserve NativeSmbRpc provenance.'
                 Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 0) 'SMB RPC fallback should avoid the generic missing share-permission error when it succeeds.'
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'ShareEnumerationError' }).Count -eq 1) 'Remote SMB RPC fallback should preserve the remaining UNC enumeration gap as a separate collection error.'
                 Assert-True (($events | Where-Object { $_.EventType -eq 'SharePermissionsCollected' -and $_.Source -eq 'NativeSmbRpc' }).Count -ge 1) 'SMB RPC permission fallback success should be logged.'
                 Assert-Equal $manifest[0].EffectiveSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should expose NativeSmbRpc as an effective provider after permission fallback.'
             }
@@ -4848,8 +4946,14 @@ $tests = @(
             $shareRead = & $module {
                 ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind Share -AccessMask 0x00120089
             }
+            $shareUnknown = & $module {
+                ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind Share -AccessMask 0
+            }
             $fileRead = & $module {
                 ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind FileSystem -AccessMask 0x00120089
+            }
+            $fileGenericRead = & $module {
+                ConvertTo-ShareSurferNativeRightsEvidence -PermissionKind FileSystem -AccessMask 0x80000000
             }
 
             Assert-Equal $shareFull.Rights 'Full' 'Share full-control masks should normalize to readable Full rights.'
@@ -4858,8 +4962,69 @@ $tests = @(
             Assert-Equal $shareChange.AccessMask '0x00120116' 'Share change evidence should preserve the raw access mask.'
             Assert-Equal $shareRead.Rights 'Read' 'Share read masks should not be promoted to Change because of shared standard rights bits.'
             Assert-Equal $shareRead.AccessMask '0x00120089' 'Share read evidence should preserve the raw access mask.'
+            Assert-Equal $shareUnknown.Rights 'Unknown' 'Unknown share rights masks should not default to Read.'
+            Assert-Equal $shareUnknown.AccessMask '0x00000000' 'Unknown share rights evidence should still preserve the raw access mask.'
             Assert-True ([string]$fileRead.Rights -like '*Read*') 'Filesystem read masks should normalize to readable filesystem rights text.'
             Assert-Equal $fileRead.AccessMask '0x00120089' 'Filesystem rights evidence should preserve the raw access mask.'
+            Assert-Equal $fileGenericRead.Rights 'GenericRead' 'Filesystem generic rights masks should normalize to readable generic rights instead of signed enum values.'
+            Assert-Equal $fileGenericRead.AccessMask '0x80000000' 'Filesystem generic rights evidence should preserve the raw access mask.'
+        }
+    },
+    @{
+        Name = 'Native descriptor and export edge cases remain explicit and deterministic'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExportEdges-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
+            $jsonlPath = Join-Path $outputPath 'empty.jsonl'
+            $csvPath = Join-Path $outputPath 'empty.csv'
+
+            $nativeEvidence = & $module {
+                $rpcShare = [pscustomobject]@{
+                    ShareName = 'Finance'
+                    Path = 'C:\Shares\Finance'
+                    Source = 'Fixture'
+                    SecurityDescriptorBytes = $null
+                }
+                Get-ShareSurferNativeSharePermissionEvidence -ShareId 'share-null' -ComputerName 'files01' -ShareName 'Finance' -RpcShare $rpcShare
+            }
+            & $module {
+                param($JsonlPath, $CsvPath)
+                Export-ShareSurferJsonLines -Path $JsonlPath -Rows @()
+                Export-ShareSurferCsv -Path $CsvPath -Columns @('A', 'B') -Rows @()
+            } $jsonlPath $csvPath
+
+            $jsonBytes = [System.IO.File]::ReadAllBytes($jsonlPath)
+            $csvBytes = [System.IO.File]::ReadAllBytes($csvPath)
+            $csvText = Get-Content -LiteralPath $csvPath -Raw
+
+            Assert-Equal $nativeEvidence.Available $false 'Null native share security descriptor bytes should be treated as unavailable evidence.'
+            Assert-Equal $nativeEvidence.ErrorType 'NativeShareSecurityDescriptorUnavailable' 'Null native share security descriptor bytes should keep an explicit error type.'
+            Assert-Equal $jsonBytes.Length 0 'Empty JSONL exports should be truly empty, not a blank-line row.'
+            Assert-True ($csvBytes.Length -ge 3) 'Empty CSV exports should contain a UTF-8 BOM plus header.'
+            Assert-Equal $csvBytes[0] 239 'CSV export should write UTF-8 BOM byte 1.'
+            Assert-Equal $csvBytes[1] 187 'CSV export should write UTF-8 BOM byte 2.'
+            Assert-Equal $csvBytes[2] 191 'CSV export should write UTF-8 BOM byte 3.'
+            Assert-True ($csvText -like '*"A","B"*') 'Empty CSV exports should still write the normalized header.'
+        }
+    },
+    @{
+        Name = 'Stable-token redaction is case-insensitive and fail-closed for short unknown values'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+
+            $tokens = & $module {
+                [pscustomobject]@{
+                    UpperIdentity = Get-ShareSurferStableToken -Value 'CONTOSO\FinanceEditors' -Salt 'case-test'
+                    LowerIdentity = Get-ShareSurferStableToken -Value 'contoso\financeeditors' -Salt 'case-test'
+                    ShortUnknown = Protect-ShareSurferValue -Value 'svcacct' -ColumnName 'Notes' -RedactionMode StableToken -RedactionSalt 'case-test'
+                }
+            }
+
+            Assert-Equal $tokens.UpperIdentity $tokens.LowerIdentity 'Stable tokens should be case-insensitive so casing drift cannot bypass support-bundle redaction.'
+            Assert-True ([string]$tokens.ShortUnknown -like 'ID-*') 'Short unknown free-text values should be tokenized instead of leaked as presumed-safe literals.'
         }
     },
     @{
@@ -4985,7 +5150,7 @@ $tests = @(
 
             try {
                 $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeRpcExport-' + [guid]::NewGuid().ToString('N'))
-                Invoke-ShareSurferScan -ComputerName 'remote-files05' -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                Invoke-ShareSurferScan -ComputerName ([System.Environment]::MachineName) -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
                 $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
                 $items = @(Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv'))
                 $permissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
@@ -5053,8 +5218,9 @@ $tests = @(
             }
 
             try {
+                $nativeComputerName = [System.Environment]::MachineName
                 $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeDescriptorFailureExport-' + [guid]::NewGuid().ToString('N'))
-                Invoke-ShareSurferScan -ComputerName 'remote-files06' -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                Invoke-ShareSurferScan -ComputerName $nativeComputerName -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
                 $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
                 $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
                 $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))

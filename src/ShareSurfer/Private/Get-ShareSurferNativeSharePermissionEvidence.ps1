@@ -21,6 +21,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
         if ($null -eq $RpcShare) {
             return [pscustomobject]@{
                 Success = $false
+                Available = $false
                 Rows = @()
                 Source = 'NativeSmbRpc'
                 ErrorType = 'NativeShareSecurityDescriptorUnavailable'
@@ -32,7 +33,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
         }
 
         $descriptorBytes = @()
-        if ($null -ne $RpcShare.PSObject.Properties['SecurityDescriptorBytes']) {
+        if ($null -ne $RpcShare.PSObject.Properties['SecurityDescriptorBytes'] -and $null -ne $RpcShare.SecurityDescriptorBytes) {
             $descriptorBytes = @($RpcShare.SecurityDescriptorBytes)
         }
 
@@ -41,6 +42,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
                 $rows = @(ConvertTo-ShareSurferSharePermissionRowsFromSecurityDescriptor -ShareId $ShareId -SecurityDescriptorBytes ([byte[]]$descriptorBytes))
                 return [pscustomobject]@{
                     Success = ($rows.Count -gt 0)
+                    Available = ($rows.Count -gt 0)
                     Rows = @($rows)
                     Source = 'NativeSmbRpc'
                     ErrorType = if ($rows.Count -gt 0) { '' } else { 'NativeShareSecurityDescriptorEmpty' }
@@ -53,6 +55,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
             catch {
                 return [pscustomobject]@{
                     Success = $false
+                    Available = $false
                     Rows = @()
                     Source = 'NativeSmbRpc'
                     ErrorType = 'NativeShareSecurityDescriptorParseFailed'
@@ -77,6 +80,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
             $rowArray = @(ConvertTo-ShareSurferArray $rows)
             return [pscustomobject]@{
                 Success = ($rowArray.Count -gt 0)
+                Available = ($rowArray.Count -gt 0)
                 Rows = @($rowArray)
                 Source = 'NativeSmbRpc'
                 ErrorType = if ($rowArray.Count -gt 0) { '' } else { 'NativeShareSecurityDescriptorEmpty' }
@@ -89,6 +93,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
 
         [pscustomobject]@{
             Success = $false
+            Available = $false
             Rows = @()
             Source = 'NativeSmbRpc'
             ErrorType = 'NativeShareSecurityDescriptorUnavailable'
@@ -101,6 +106,7 @@ function Get-ShareSurferNativeSharePermissionEvidence {
     catch {
         [pscustomobject]@{
             Success = $false
+            Available = $false
             Rows = @()
             Source = 'NativeSmbRpc'
             ErrorType = 'SmbRpcShareLookupError'

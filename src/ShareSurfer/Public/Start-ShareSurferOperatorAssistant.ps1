@@ -323,7 +323,7 @@ function Read-ShareSurferOptionalInputPath {
     }
 
     $answer = Read-ShareSurferAssistantText -Prompt $promptText -Value $defaultValue -AllowBlank
-    if ($answer -match '^(?i:skip|none|no)$') {
+    if ($answer -match '^(?i:skip)$') {
         return ''
     }
 

@@ -74,6 +74,7 @@ function ConvertTo-ShareSurferShareRights {
     $genericRead = 0x80000000
     $fileAllAccess = 0x001F01FF
     $fileWriteSpecific = 0x00000116
+    $fileReadSpecific = 0x00000089
     $delete = 0x00010000
     $writeDac = 0x00040000
     $writeOwner = 0x00080000
@@ -86,11 +87,11 @@ function ConvertTo-ShareSurferShareRights {
         return 'Change'
     }
 
-    if (($AccessMask -band $genericRead) -ne 0) {
+    if ((($AccessMask -band $genericRead) -ne 0) -or (($AccessMask -band $fileReadSpecific) -eq $fileReadSpecific)) {
         return 'Read'
     }
 
-    'Read'
+    'Unknown'
 }
 
 function ConvertTo-ShareSurferFileSystemRights {
@@ -98,11 +99,32 @@ function ConvertTo-ShareSurferFileSystemRights {
         [long] $AccessMask
     )
 
+    $genericRights = New-Object System.Collections.ArrayList
+    if (($AccessMask -band 0x10000000) -ne 0) {
+        [void]$genericRights.Add('GenericAll')
+    }
+    if (($AccessMask -band 0x80000000) -ne 0) {
+        [void]$genericRights.Add('GenericRead')
+    }
+    if (($AccessMask -band 0x40000000) -ne 0) {
+        [void]$genericRights.Add('GenericWrite')
+    }
+    if (($AccessMask -band 0x20000000) -ne 0) {
+        [void]$genericRights.Add('GenericExecute')
+    }
+    if ($genericRights.Count -gt 0) {
+        return (@($genericRights) -join ',')
+    }
+
     try {
-        return [string]([System.Security.AccessControl.FileSystemRights]([int]$AccessMask))
+        $normalizedMask = [uint32]($AccessMask -band 0xFFFFFFFFL)
+        if ($normalizedMask -gt [uint32][int]::MaxValue) {
+            return ('0x{0:X8}' -f $normalizedMask)
+        }
+        return [string]([System.Security.AccessControl.FileSystemRights]([int]$normalizedMask))
     }
     catch {
-        return ('0x{0:X8}' -f $AccessMask)
+        return (ConvertTo-ShareSurferAccessMaskText -AccessMask $AccessMask)
     }
 }
 
