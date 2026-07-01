@@ -195,6 +195,8 @@ Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
+The startup wizard and operator assistant use the same convention as this snippet: they look in `$inputRoot` for `owner-mapping.csv`, `ownership-enrichment.csv`, and `discounted-principals.csv`. Found files become the default and are saved into `sharesurfer-startup.config.json`; missing files are shown as not found and skipped cleanly. Type a custom path only when the CSV lives somewhere else.
+
 The `Unblock-File` line is repeated here on purpose. It avoids one-file-at-a-time prompts after ZIP transfer. If the launcher is run before this manual unblock, Windows may still ask once for `Start-ShareSurfer.ps1` before ShareSurfer can clear the rest of the folder. ShareSurfer commands create missing local output folders by default and can opt out with `-NoCreateMissingFolders`; the handoff ZIP uses native PowerShell, so the snippet creates that local folder explicitly before `Compress-Archive`. Move the handoff ZIP and hash by your approved transfer process, then package or open the dashboard on the review host.
 
 ## SMB/RPC Fallback Notes
@@ -205,7 +207,7 @@ When WinRM/CIM is blocked, scan explicit SMB shares with the native provider:
 Invoke-ShareSurferScan -ComputerName 'files01' -ShareName 'Finance' -SmbCollectionProvider NativeSmbRpc -OutputPath $exportPath
 ```
 
-`NativeSmbRpc` uses Windows SMB/RPC and Win32 security APIs instead of `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl`. It is still permission-dependent. If SMB/RPC ports pass but ShareSurfer reports unavailable or unparseable security descriptors, treat the scan as reachable but incomplete until permissions or SMB server behavior are reviewed. For older SAN or appliance shares that return a server-local path such as `C:\Public\Share`, ShareSurfer diagnostics now verify whether that path is collector-local and fall back to the target UNC path when needed.
+`NativeSmbRpc` uses Windows SMB/RPC and Win32 security APIs instead of `Get-SmbShare`, `Get-SmbShareAccess`, or `Get-Acl`. It is still permission-dependent. If SMB/RPC ports pass but ShareSurfer reports unavailable or unparseable security descriptors, treat the scan as reachable but incomplete until permissions or SMB server behavior are reviewed. For older SAN or appliance shares that return a server-local path such as `C:\Public\Share`, ShareSurfer diagnostics now verify whether that path is collector-local and fall back to the target UNC path when needed. Target-path scans such as `\\files01\Finance` also try native SMB/RPC share-permission evidence when `Get-SmbShareAccess` cannot return rows.
 
 ## Standalone Dashboard
 

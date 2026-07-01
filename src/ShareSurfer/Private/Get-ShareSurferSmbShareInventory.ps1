@@ -81,6 +81,7 @@ function Get-ShareSurferSmbShareInventory {
             $description = ''
             $scanPath = $uncPath
             $source = 'BestEffort'
+            $rpcShare = $null
 
             if ($null -ne $getSmbShare) {
                 $previousErrorActionPreference = $ErrorActionPreference
@@ -121,7 +122,7 @@ function Get-ShareSurferSmbShareInventory {
             if ($source -eq 'BestEffort') {
                 try {
                     Write-ShareSurferStatus -Phase 'Collect' -Message ('Attempting SMB/RPC share metadata fallback for {0}.' -f $uncPath) -Quiet:$Quiet
-                    $rpcShare = Get-ShareSurferSmbRpcShareInfo -ComputerName $ComputerName -ShareName $name
+                    $rpcShare = Get-ShareSurferSmbRpcShareInfo -ComputerName $ComputerName -ShareName $name -PreferSecurityDescriptor
                     if ($null -ne $rpcShare) {
                         $localPath = [string]$rpcShare.Path
                         $description = [string]$rpcShare.Description
@@ -158,7 +159,7 @@ function Get-ShareSurferSmbShareInventory {
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating {0}.' -f $scanPath) -Quiet:$Quiet
 
             try {
-                $inventory = Get-ShareSurferLocalInventory -TargetPath @($scanPath) -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+                $inventory = Get-ShareSurferLocalInventory -TargetPath @($scanPath) -IncludeFiles:$IncludeFiles -Quiet:$Quiet -SkipSharePermissionCollection
                 foreach ($row in @(ConvertTo-ShareSurferArray $inventory.Shares)) {
                     $row.ShareId = $shareId
                     $row.Source = $source
@@ -209,6 +210,28 @@ function Get-ShareSurferSmbShareInventory {
             }
 
             $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $name -ComputerName $ComputerName -CimSession $cimSession -SkipRemoteCimSessionCreation:($remoteCimSessionAttempted -and -not $remoteCimSessionAvailable))
+            if ($permissionRows.Count -eq 0) {
+                Write-ShareSurferStatus -Phase 'Collect' -Message ('Get-SmbShareAccess did not return share permissions for {0}; trying native SMB/RPC descriptor fallback.' -f $uncPath) -Quiet:$Quiet
+                $nativeEvidence = Get-ShareSurferNativeSharePermissionEvidence -ShareId $shareId -ComputerName $ComputerName -ShareName $name -RpcShare $rpcShare
+                if ([bool]$nativeEvidence.Success) {
+                    $permissionRows = @($nativeEvidence.Rows)
+                    [void]$effectiveProviders.Add('NativeSmbRpc')
+                    [void]$scanEvents.Add((New-ShareSurferEvent -EventType $nativeEvidence.EventType -Source 'NativeSmbRpc' -ShareId $shareId -Message $nativeEvidence.Message -Detail $nativeEvidence.Detail))
+                }
+                else {
+                    $nativeEventLevel = if ([string]$nativeEvidence.Severity -eq 'Info') { 'Info' } else { 'Warning' }
+                    [void]$scanErrors.Add([pscustomobject]@{
+                        ShareId = $shareId
+                        FullPath = $uncPath
+                        ErrorType = $nativeEvidence.ErrorType
+                        Severity = $nativeEvidence.Severity
+                        Source = $nativeEvidence.Source
+                        Message = $nativeEvidence.Message
+                        Detail = $nativeEvidence.Detail
+                    })
+                    [void]$scanEvents.Add((New-ShareSurferEvent -Level $nativeEventLevel -EventType $nativeEvidence.EventType -Source $nativeEvidence.Source -ShareId $shareId -Message $nativeEvidence.Message -Detail $nativeEvidence.Detail))
+                }
+            }
             foreach ($permission in $permissionRows) {
                 [void]$sharePermissions.Add($permission)
             }
@@ -235,7 +258,7 @@ function Get-ShareSurferSmbShareInventory {
                 $shareRow = @($shares | Where-Object { $_.ShareId -eq $shareId } | Select-Object -First 1)
                 if ($shareRow.Count -gt 0) {
                     $shareRow[0].PartialData = $true
-                    $shareRow[0].PartialReason = 'Share-level permissions were not collected through Get-SmbShareAccess.'
+                    $shareRow[0].PartialReason = 'Share-level permissions were not collected through Get-SmbShareAccess or NativeSmbRpc.'
                 }
                 Write-ShareSurferStatus -Phase 'Collect' -Message ('Share-level permissions were unavailable for {0}; continuing with partial share-permission evidence.' -f $uncPath) -Quiet:$Quiet
             }

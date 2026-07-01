@@ -35,6 +35,8 @@ function Start-ShareSurferOperatorAssistant {
 
         [switch] $SkipIdentityEnrichment,
 
+        [switch] $DisableOptionalInputDiscovery,
+
         [switch] $Interactive,
 
         [switch] $NoCreateMissingFolders,
@@ -62,10 +64,16 @@ function Start-ShareSurferOperatorAssistant {
         $ObsAttribute = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute
         $AdLookupMode = Read-ShareSurferAssistantText -Prompt 'AD lookup mode' -Value $AdLookupMode
         $ManagerIdentityFormat = Read-ShareSurferAssistantText -Prompt 'Manager identity format' -Value $ManagerIdentityFormat
-        $OwnerMappingPath = Read-ShareSurferAssistantText -Prompt 'Owner mapping CSV path (blank if absent)' -Value $OwnerMappingPath -AllowBlank
-        $OwnershipEnrichmentPath = Read-ShareSurferAssistantText -Prompt 'Ownership enrichment CSV path (blank if absent)' -Value $OwnershipEnrichmentPath -AllowBlank
-        $DiscountedPrincipalPath = Read-ShareSurferAssistantText -Prompt 'Discounted principals CSV path (blank if absent)' -Value $DiscountedPrincipalPath -AllowBlank
+        Write-ShareSurferOptionalInputDiscoverySummary -InputRoot $InputRoot
+        $OwnerMappingPath = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
+        $OwnershipEnrichmentPath = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
+        $DiscountedPrincipalPath = Read-ShareSurferOptionalInputPath -Prompt 'Discounted principals CSV path' -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
         $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics)
+    }
+    elseif (-not $DisableOptionalInputDiscovery) {
+        $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
+        $OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
+        $DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
     }
 
     if ($TargetPath.Count -eq 0 -or @($TargetPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0) {
@@ -94,6 +102,12 @@ function Start-ShareSurferOperatorAssistant {
     if ([string]::IsNullOrWhiteSpace($ReusableCommandPath)) {
         $ReusableCommandPath = Join-Path $InputRoot 'operator-assistant-rerun.ps1'
     }
+
+    $optionalInputDiscovery = New-ShareSurferOptionalInputDiscoveryReport `
+        -InputRoot $InputRoot `
+        -OwnerMappingPath $OwnerMappingPath `
+        -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -DiscountedPrincipalPath $DiscountedPrincipalPath
 
     $normalizedPlanPath = ConvertTo-ShareSurferAssistantComparablePath -Path $PlanPath
     $normalizedReusableCommandPath = ConvertTo-ShareSurferAssistantComparablePath -Path $ReusableCommandPath
@@ -144,6 +158,7 @@ function Start-ShareSurferOperatorAssistant {
             ownershipEnrichmentPath = $OwnershipEnrichmentPath
             discountedPrincipalPath = $DiscountedPrincipalPath
         }
+        optionalInputDiscovery = $optionalInputDiscovery
         generatedFiles = [ordered]@{
             planPath = $PlanPath
             reusableCommandPath = $ReusableCommandPath
@@ -190,6 +205,7 @@ function Start-ShareSurferOperatorAssistant {
         IncludeFiles = [bool]$IncludeFiles
         IncludeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         SkipIdentityEnrichment = [bool]$SkipIdentityEnrichment
+        OptionalInputDiscovery = $optionalInputDiscovery
         SharePermissionDiagnosticPath = $sharePermissionDiagnosticPath
         Commands = $plan.commands
         StopGates = $plan.stopGates
@@ -223,6 +239,183 @@ function Read-ShareSurferAssistantText {
     }
 
     $answer
+}
+
+function Get-ShareSurferOptionalInputExpectedPath {
+    param(
+        [string] $InputRoot = '',
+        [string] $FileName = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($InputRoot) -or [string]::IsNullOrWhiteSpace($FileName)) {
+        return ''
+    }
+
+    Join-Path $InputRoot $FileName
+}
+
+function Test-ShareSurferOptionalInputFile {
+    param(
+        [string] $Path = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return $false
+    }
+
+    try {
+        return [bool](Test-Path -LiteralPath $Path -PathType Leaf -ErrorAction SilentlyContinue)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Resolve-ShareSurferOptionalInputPath {
+    param(
+        [string] $InputRoot = '',
+        [string] $FileName = '',
+        [string] $Value = ''
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        return $Value
+    }
+
+    $expectedPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName $FileName
+    if (Test-ShareSurferOptionalInputFile -Path $expectedPath) {
+        return $expectedPath
+    }
+
+    ''
+}
+
+function Read-ShareSurferOptionalInputPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Prompt,
+
+        [string] $InputRoot = '',
+
+        [string] $FileName = '',
+
+        [string] $Value = ''
+    )
+
+    $expectedPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName $FileName
+    $defaultValue = $Value
+    if ([string]::IsNullOrWhiteSpace($defaultValue) -and (Test-ShareSurferOptionalInputFile -Path $expectedPath)) {
+        $defaultValue = $expectedPath
+    }
+
+    if ([string]::IsNullOrWhiteSpace($defaultValue)) {
+        $promptText = '{0} (not found in inputs; Enter skips, or type a custom path)' -f $Prompt
+    }
+    elseif ([string]::Equals($defaultValue, $expectedPath, [System.StringComparison]::OrdinalIgnoreCase) -and (Test-ShareSurferOptionalInputFile -Path $expectedPath)) {
+        $promptText = '{0} (found in inputs; Enter uses, type SKIP to ignore)' -f $Prompt
+    }
+    elseif (Test-ShareSurferOptionalInputFile -Path $defaultValue) {
+        $promptText = '{0} (path exists; Enter keeps, type SKIP to ignore)' -f $Prompt
+    }
+    else {
+        $promptText = '{0} (path not found; Enter keeps, type SKIP to ignore)' -f $Prompt
+    }
+
+    $answer = Read-ShareSurferAssistantText -Prompt $promptText -Value $defaultValue -AllowBlank
+    if ($answer -match '^(?i:skip|none|no)$') {
+        return ''
+    }
+
+    $answer
+}
+
+function Get-ShareSurferOptionalInputStatus {
+    param(
+        [string] $InputRoot = '',
+        [string] $FileName = '',
+        [string] $SelectedPath = ''
+    )
+
+    $expectedPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName $FileName
+    $expectedExists = Test-ShareSurferOptionalInputFile -Path $expectedPath
+    $selectedExists = Test-ShareSurferOptionalInputFile -Path $SelectedPath
+
+    if ([string]::IsNullOrWhiteSpace($SelectedPath)) {
+        if ($expectedExists) {
+            return 'SkippedFoundInput'
+        }
+
+        return 'NotFoundSkipped'
+    }
+
+    if ([string]::Equals($SelectedPath, $expectedPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($selectedExists) {
+            return 'FoundInInputRoot'
+        }
+
+        return 'ExpectedPathMissing'
+    }
+
+    if ($selectedExists) {
+        return 'CustomPathFound'
+    }
+
+    'CustomPathMissing'
+}
+
+function New-ShareSurferOptionalInputDiscoveryEntry {
+    param(
+        [string] $InputRoot = '',
+        [string] $FileName = '',
+        [string] $SelectedPath = ''
+    )
+
+    $expectedPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName $FileName
+    [ordered]@{
+        fileName = $FileName
+        expectedPath = $expectedPath
+        selectedPath = $SelectedPath
+        expectedPathExists = [bool](Test-ShareSurferOptionalInputFile -Path $expectedPath)
+        selectedPathExists = [bool](Test-ShareSurferOptionalInputFile -Path $SelectedPath)
+        status = Get-ShareSurferOptionalInputStatus -InputRoot $InputRoot -FileName $FileName -SelectedPath $SelectedPath
+    }
+}
+
+function New-ShareSurferOptionalInputDiscoveryReport {
+    param(
+        [string] $InputRoot = '',
+        [string] $OwnerMappingPath = '',
+        [string] $OwnershipEnrichmentPath = '',
+        [string] $DiscountedPrincipalPath = ''
+    )
+
+    [ordered]@{
+        inputRoot = $InputRoot
+        ownerMapping = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'owner-mapping.csv' -SelectedPath $OwnerMappingPath
+        ownershipEnrichment = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -SelectedPath $OwnershipEnrichmentPath
+        discountedPrincipals = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'discounted-principals.csv' -SelectedPath $DiscountedPrincipalPath
+    }
+}
+
+function Write-ShareSurferOptionalInputDiscoverySummary {
+    param(
+        [string] $InputRoot = ''
+    )
+
+    $optionalInputs = @(
+        [pscustomobject]@{ Label = 'Owner mapping'; FileName = 'owner-mapping.csv' },
+        [pscustomobject]@{ Label = 'Ownership enrichment'; FileName = 'ownership-enrichment.csv' },
+        [pscustomobject]@{ Label = 'Discounted principals'; FileName = 'discounted-principals.csv' }
+    )
+
+    Write-Host ''
+    Write-Host ('Optional input discovery under {0}:' -f $InputRoot)
+    foreach ($optionalInput in $optionalInputs) {
+        $expectedPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName $optionalInput.FileName
+        $status = if (Test-ShareSurferOptionalInputFile -Path $expectedPath) { 'found' } else { 'not found' }
+        Write-Host ('  {0}: {1} ({2})' -f $optionalInput.Label, $status, $expectedPath)
+    }
+    Write-Host 'Press Enter to use found defaults, type SKIP to ignore a found file, or type a custom path.'
 }
 
 function New-ShareSurferOperatorAssistantCommandSet {
