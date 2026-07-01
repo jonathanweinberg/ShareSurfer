@@ -57,6 +57,7 @@ function Start-ShareSurferStartup {
     foreach ($key in $PSBoundParameters.Keys) {
         $boundParameters[$key] = $true
     }
+    $configOptionalInputsLoaded = $false
 
     if (-not [string]::IsNullOrWhiteSpace($ConfigPath)) {
         if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
@@ -78,6 +79,7 @@ function Start-ShareSurferStartup {
         if ($null -ne $definition.PSObject.Properties['skipIdentityEnrichment'] -and -not $boundParameters.ContainsKey('SkipIdentityEnrichment')) { $SkipIdentityEnrichment = [bool]$definition.skipIdentityEnrichment }
         if ($null -ne $definition.PSObject.Properties['skipUnblock'] -and -not $boundParameters.ContainsKey('SkipUnblock')) { $SkipUnblock = [bool]$definition.skipUnblock }
         if ($null -ne $definition.PSObject.Properties['optionalInputs']) {
+            $configOptionalInputsLoaded = $true
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownerMappingPath'] -and -not $boundParameters.ContainsKey('OwnerMappingPath')) { $OwnerMappingPath = [string]$definition.optionalInputs.ownerMappingPath }
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipEnrichmentPath'] -and -not $boundParameters.ContainsKey('OwnershipEnrichmentPath')) { $OwnershipEnrichmentPath = [string]$definition.optionalInputs.ownershipEnrichmentPath }
             if ($null -ne $definition.optionalInputs.PSObject.Properties['discountedPrincipalPath'] -and -not $boundParameters.ContainsKey('DiscountedPrincipalPath')) { $DiscountedPrincipalPath = [string]$definition.optionalInputs.discountedPrincipalPath }
@@ -138,9 +140,10 @@ function Start-ShareSurferStartup {
         $ObsAttribute = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute
         $AdLookupMode = Read-ShareSurferStartupChoice -Prompt 'AD lookup mode' -Value $AdLookupMode -Choices @('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')
         $ManagerIdentityFormat = Read-ShareSurferStartupChoice -Prompt 'Manager identity format' -Value $ManagerIdentityFormat -Choices @('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')
-        $OwnerMappingPath = Read-ShareSurferAssistantText -Prompt 'Owner mapping CSV path (blank if absent)' -Value $OwnerMappingPath -AllowBlank
-        $OwnershipEnrichmentPath = Read-ShareSurferAssistantText -Prompt 'Ownership enrichment CSV path (blank if absent)' -Value $OwnershipEnrichmentPath -AllowBlank
-        $DiscountedPrincipalPath = Read-ShareSurferAssistantText -Prompt 'Discounted principals CSV path (blank if absent)' -Value $DiscountedPrincipalPath -AllowBlank
+        Write-ShareSurferOptionalInputDiscoverySummary -InputRoot $InputRoot
+        $OwnerMappingPath = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
+        $OwnershipEnrichmentPath = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
+        $DiscountedPrincipalPath = Read-ShareSurferOptionalInputPath -Prompt 'Discounted principals CSV path' -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
         if ($EnvironmentMode -eq 'Nonpermissive') {
             if ([string]::IsNullOrWhiteSpace($HandoffPath)) {
                 $HandoffPath = Join-Path (Join-Path (Split-Path -Parent $InputRoot) 'handoff') 'scan-001.zip'
@@ -152,6 +155,17 @@ function Start-ShareSurferStartup {
         $SkipIdentityEnrichment = Read-ShareSurferStartupBoolean -Prompt 'Skip identity enrichment?' -Value ([bool]$SkipIdentityEnrichment)
         $SkipUnblock = Read-ShareSurferStartupBoolean -Prompt 'Skip recursive PowerShell file unblock?' -Value ([bool]$SkipUnblock)
         $SaveConfigPath = Read-ShareSurferAssistantText -Prompt 'Save startup JSON config path' -Value $SaveConfigPath
+    }
+    elseif (-not $configOptionalInputsLoaded) {
+        if (-not $boundParameters.ContainsKey('OwnerMappingPath')) {
+            $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
+        }
+        if (-not $boundParameters.ContainsKey('OwnershipEnrichmentPath')) {
+            $OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
+        }
+        if (-not $boundParameters.ContainsKey('DiscountedPrincipalPath')) {
+            $DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
+        }
     }
 
     if (@('Permissive', 'Nonpermissive') -notcontains $EnvironmentMode) {
@@ -190,8 +204,15 @@ function Start-ShareSurferStartup {
         -IncludeFiles:$IncludeFiles `
         -IncludeSharePermissionDiagnostics $IncludeSharePermissionDiagnostics `
         -SkipIdentityEnrichment:$SkipIdentityEnrichment `
+        -DisableOptionalInputDiscovery:$configOptionalInputsLoaded `
         -NoCreateMissingFolders:$NoCreateMissingFolders `
         -Force:$Force
+
+    $optionalInputDiscovery = New-ShareSurferOptionalInputDiscoveryReport `
+        -InputRoot $InputRoot `
+        -OwnerMappingPath $OwnerMappingPath `
+        -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -DiscountedPrincipalPath $DiscountedPrincipalPath
 
     $startupReplayCommand = 'Start-ShareSurferStartup -ConfigPath {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $SaveConfigPath)
     $scriptReplayCommand = '& {0} -ConfigPath {1} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value (Join-ShareSurferAssistantPathText -Root $ReleaseRoot -Child 'Start-ShareSurfer.ps1')), (ConvertTo-ShareSurferPowerShellLiteral -Value $SaveConfigPath)
@@ -217,6 +238,7 @@ function Start-ShareSurferStartup {
             ownershipEnrichmentPath = $OwnershipEnrichmentPath
             discountedPrincipalPath = $DiscountedPrincipalPath
         }
+        optionalInputDiscovery = $optionalInputDiscovery
         nonpermissive = [ordered]@{
             handoffPath = $HandoffPath
             note = 'Use this when the collector host must package the validated export for approved transfer to a dashboard/review host.'
@@ -275,6 +297,7 @@ function Start-ShareSurferStartup {
         UnblockZoneIdentifierRemovedCount = $unblockSummary.ZoneIdentifierRemovedCount
         OperatorPlanPath = $assistantSummary.PlanPath
         OperatorReusableCommandPath = $assistantSummary.ReusableCommandPath
+        OptionalInputDiscovery = $optionalInputDiscovery
         PostStartupReviewShown = [bool]$postStartupSummary.ReviewShown
         PostStartupRerunLaunched = [bool]$postStartupSummary.RerunLaunched
         StartupReplayCommand = $startupReplayCommand

@@ -175,7 +175,7 @@ Start-ShareSurferStartup `
   -Force
 ```
 
-The rerun script runs `Invoke-ShareSurferSharePermissionDiagnostic` before the scan by default and writes the proof/failure package under `$exportPath\share-permission-diagnostics`. Open `share_permission_diagnostics.md` there when share-level permissions are missing, unexpected, or marked partial. The diagnostic path now records the server-returned share path, checks whether that path is actually local to the collector, and falls back to the target UNC path when a SAN or appliance returns a remote `C:\...` path that the collector cannot see. The rerun script only passes optional owner mapping, ownership enrichment, and discounted-principal paths when those files exist.
+The rerun script runs `Invoke-ShareSurferSharePermissionDiagnostic` before the scan by default and writes the proof/failure package under `$exportPath\share-permission-diagnostics`. Open `share_permission_diagnostics.md` there when share-level permissions are missing, unexpected, or marked partial. The diagnostic path now records the server-returned share path, checks whether that path is actually local to the collector, and falls back to the target UNC path when a SAN or appliance returns a remote `C:\...` path that the collector cannot see. The collector also tries native SMB/RPC share-permission evidence for UNC target-path scans when `Get-SmbShareAccess` cannot return rows. The startup flow looks for `owner-mapping.csv`, `ownership-enrichment.csv`, and `discounted-principals.csv` under `$inputRoot`, saves found or skipped choices into JSON, and the rerun script only passes optional paths when those files exist.
 
 ## Step 2: Choose Scan Targets
 

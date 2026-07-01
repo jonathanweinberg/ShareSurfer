@@ -2826,6 +2826,59 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurferStartup discovers conventional optional input CSVs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStartupDiscovery-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'exports\finance-001'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            $planPath = Join-Path $inputRoot 'operator-assistant.plan.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
+            $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
+            $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+            $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
+
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            Set-Content -LiteralPath $ownerMappingPath -Value 'Pattern,Owner,BusinessUnit,Source,Confidence,Notes' -Encoding UTF8
+            Set-Content -LiteralPath $discountedPrincipalPath -Value 'Principal,Reason,Scope,Notes' -Encoding UTF8
+
+            $summary = Start-ShareSurferStartup `
+                -EnvironmentMode Permissive `
+                -ReleaseRoot $releaseRoot `
+                -InputRoot $inputRoot `
+                -ExportPath $exportPath `
+                -TargetPath '\\files01\Finance' `
+                -SaveConfigPath $configPath `
+                -PlanPath $planPath `
+                -ReusableCommandPath $rerunPath `
+                -SkipUnblock `
+                -Force
+
+            $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+            $operatorPlan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
+            $scriptText = Get-Content -LiteralPath $rerunPath -Raw
+
+            Assert-Equal $summary.OptionalInputDiscovery.ownerMapping.status 'FoundInInputRoot' 'Startup summary should mark owner mapping as discovered from inputs.'
+            Assert-Equal $summary.OptionalInputDiscovery.ownershipEnrichment.status 'NotFoundSkipped' 'Startup summary should mark missing ownership enrichment as skipped.'
+            Assert-Equal $summary.OptionalInputDiscovery.discountedPrincipals.status 'FoundInInputRoot' 'Startup summary should mark discounted principals as discovered from inputs.'
+            Assert-Equal $config.optionalInputs.ownerMappingPath $ownerMappingPath 'Startup config should auto-use conventional owner mapping path when present.'
+            Assert-Equal $config.optionalInputs.ownershipEnrichmentPath '' 'Startup config should leave missing conventional ownership enrichment blank.'
+            Assert-Equal $config.optionalInputs.discountedPrincipalPath $discountedPrincipalPath 'Startup config should auto-use conventional discounted principals path when present.'
+            Assert-Equal $config.optionalInputDiscovery.ownerMapping.status 'FoundInInputRoot' 'Startup config should include durable optional input discovery detail.'
+            Assert-Equal $operatorPlan.optionalInputs.ownerMappingPath $ownerMappingPath 'Operator plan should receive discovered owner mapping path.'
+            Assert-True ($scriptText -like ('*{0}*' -f [string]$ownerMappingPath)) 'Reusable script should include the discovered owner mapping path.'
+
+            Set-Content -LiteralPath $ownershipEnrichmentPath -Value 'EmployeeId,ObsPath,Source' -Encoding UTF8
+            $replaySummary = Start-ShareSurferStartup -ConfigPath $configPath -Force
+            $replayedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+            Assert-Equal $replaySummary.OptionalInputDiscovery.ownershipEnrichment.status 'SkippedFoundInput' 'Config replay should preserve a previously blank optional input even if a conventional file is added later.'
+            Assert-Equal $replayedConfig.optionalInputs.ownershipEnrichmentPath '' 'Config replay should not silently add a new optional input that was absent from the saved config.'
+        }
+    },
+    @{
         Name = 'New-ShareSurferOwnerMappingDraft creates admin-review rows for unmapped shares'
         Body = {
             Import-Module $moduleManifest -Force
@@ -4344,6 +4397,93 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan uses native share-permission fallback during UNC target path scans'
+        Body = {
+            Import-Module $moduleManifest -Force
+
+            function global:Get-Item {
+                param(
+                    [string] $LiteralPath
+                )
+                [pscustomobject]@{
+                    FullName = $LiteralPath
+                    Name = 'Finance'
+                    PSIsContainer = $true
+                }
+            }
+
+            function global:Get-ChildItem {
+                param(
+                    [string] $LiteralPath,
+                    [switch] $Recurse,
+                    [switch] $Force
+                )
+                @()
+            }
+
+            function global:Get-Acl {
+                param(
+                    [string] $LiteralPath
+                )
+                [pscustomobject]@{
+                    Owner = 'CONTOSO\DataOwner'
+                    AreAccessRulesProtected = $false
+                    Access = @()
+                }
+            }
+
+            function global:Get-SmbShareAccess {
+                @()
+            }
+
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = 'C:\SanPresentedPath\Finance'
+                    Description = 'Mocked SAN share metadata'
+                    Source = 'SmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                    SharePermissions = @(
+                        [pscustomobject]@{
+                            Identity = 'CONTOSO\NativeShareReaders'
+                            Rights = 'Read'
+                            AccessMask = '0x00120089'
+                            AccessControlType = 'Allow'
+                            Source = 'NativeSmbRpc'
+                        }
+                    )
+                }
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeTargetExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -TargetPath '\\remote-files07\Finance' -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $permissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal $shares[0].Source 'NativeSmbRpc' 'UNC target path scans should record native fallback as the share-permission evidence source.'
+                Assert-Equal $shares[0].PartialData 'False' 'UNC target path scans should not remain partial when NativeSmbRpc proves share-level permissions.'
+                Assert-True ($permissions.Identity -contains 'CONTOSO\NativeShareReaders') 'UNC target path scans should export NativeSmbRpc share permission rows.'
+                Assert-True ($permissions.Source -contains 'NativeSmbRpc') 'Native fallback rows should preserve NativeSmbRpc provenance.'
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 0) 'Native fallback should suppress the generic missing share-permission warning when it succeeds.'
+                Assert-True (($events | Where-Object { $_.EventType -eq 'SharePermissionsCollected' -and $_.Source -eq 'NativeSmbRpc' }).Count -ge 1) 'Native fallback success should be logged as scan evidence.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-Item -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ChildItem -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-Acl -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan scans mocked SMB share targets by ComputerName and ShareName'
         Body = {
             Import-Module $moduleManifest -Force
@@ -4568,6 +4708,71 @@ $tests = @(
                 Assert-True (($events | Where-Object { $_.EventType -eq 'ShareTargetResolved' -and $_.Source -eq 'SmbRpcNetShareGetInfo' }).Count -ge 1) 'Share target resolution should record the RPC fallback source.'
                 Assert-Equal $manifest[0].RequestedSmbCollectionProvider 'Auto' 'Scan manifest should preserve the operator-requested SMB collection provider.'
                 Assert-Equal $manifest[0].EffectiveSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should expose the effective provider used after SMB RPC fallback.'
+            }
+            finally {
+                Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan uses SMB RPC share-permission fallback when CIM permissions fail'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRpcPermissionFallback-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $shareRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $shareRoot 'rpc-permission-file.txt') -Value 'rpc permission fallback share mode'
+
+            function global:New-CimSession {
+                throw 'mock CIM session failure'
+            }
+            function global:Get-SmbShare {
+                throw 'Get-SmbShare should not be called without a remote CIM session.'
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called without a remote CIM session.'
+            }
+            $global:ShareSurferSmbRpcShareInfoProvider = {
+                param(
+                    [string] $ComputerName,
+                    [string] $ShareName
+                )
+                [pscustomobject]@{
+                    ShareName = $ShareName
+                    Path = $shareRoot
+                    Description = 'Mocked SMB RPC metadata and permissions'
+                    Source = 'SmbRpcNetShareGetInfo'
+                    ResultCode = 0
+                    SharePermissions = @(
+                        [pscustomobject]@{
+                            Identity = 'CONTOSO\RpcFallbackReaders'
+                            Rights = 'Read'
+                            AccessMask = '0x00120089'
+                            AccessControlType = 'Allow'
+                            Source = 'NativeSmbRpc'
+                        }
+                    )
+                }
+            }
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferRpcPermissionFallbackExport-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -ComputerName 'remote-files08' -ShareName 'Finance' -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment | Out-Null
+                $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+                $permissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+                $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv'))
+
+                Assert-Equal $shares[0].PartialData 'False' 'SMB share scans should not remain partial when NativeSmbRpc proves share-level permissions after CIM failure.'
+                Assert-Equal $shares[0].PartialReason '' 'SMB share scans should clear missing share-permission reasons when NativeSmbRpc fallback succeeds.'
+                Assert-True ($permissions.Identity -contains 'CONTOSO\RpcFallbackReaders') 'SMB share scans should export NativeSmbRpc fallback share permission rows.'
+                Assert-True ($permissions.Source -contains 'NativeSmbRpc') 'SMB RPC fallback permission rows should preserve NativeSmbRpc provenance.'
+                Assert-True (@($collectionErrors | Where-Object { $_.ErrorType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 0) 'SMB RPC fallback should avoid the generic missing share-permission error when it succeeds.'
+                Assert-True (($events | Where-Object { $_.EventType -eq 'SharePermissionsCollected' -and $_.Source -eq 'NativeSmbRpc' }).Count -ge 1) 'SMB RPC permission fallback success should be logged.'
+                Assert-Equal $manifest[0].EffectiveSmbCollectionProvider 'NativeSmbRpc' 'Scan manifest should expose NativeSmbRpc as an effective provider after permission fallback.'
             }
             finally {
                 Remove-Item -Path function:\New-CimSession -ErrorAction SilentlyContinue

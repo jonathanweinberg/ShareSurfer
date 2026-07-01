@@ -57,15 +57,49 @@ function Get-ShareSurferLocalInventory {
         $shareInfo = Get-ShareSurferTargetShareInfo -TargetPath $target -TargetItem $targetItem
         [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'TargetPathResolved' -Source 'TargetPath' -ShareId $shareId -Message ('Resolved target path {0}' -f $target) -Detail $targetDisplayPath))
         $permissionRows = @()
+        $sharePermissionSource = ''
+        $nativeSharePermissionAttempted = $false
         if (-not $SkipSharePermissionCollection) {
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Collecting share-level permission evidence for {0}.' -f $targetDisplayPath) -Quiet:$Quiet
             $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
+            if ($permissionRows.Count -gt 0) {
+                $sharePermissionSource = 'Get-SmbShareAccess'
+            }
+            elseif ([string]$shareInfo.UNCPath -match '^\\\\' -and -not [string]::IsNullOrWhiteSpace([string]$shareInfo.ComputerName) -and -not [string]::IsNullOrWhiteSpace([string]$shareInfo.ShareName)) {
+                $nativeSharePermissionAttempted = $true
+                Write-ShareSurferStatus -Phase 'Collect' -Message ('Get-SmbShareAccess did not return share permissions for {0}; trying native SMB/RPC descriptor fallback.' -f $shareInfo.UNCPath) -Quiet:$Quiet
+                $nativeEvidence = Get-ShareSurferNativeSharePermissionEvidence -ShareId $shareId -ComputerName $shareInfo.ComputerName -ShareName $shareInfo.ShareName
+                if ([bool]$nativeEvidence.Success) {
+                    $permissionRows = @($nativeEvidence.Rows)
+                    $sharePermissionSource = 'NativeSmbRpc'
+                    [void]$scanEvents.Add((New-ShareSurferEvent -EventType $nativeEvidence.EventType -Source 'NativeSmbRpc' -ShareId $shareId -Message $nativeEvidence.Message -Detail $nativeEvidence.Detail))
+                    Write-ShareSurferStatus -Phase 'Collect' -Message ('Collected {0} share-level permission row(s) for {1} through native SMB/RPC fallback.' -f $permissionRows.Count, $shareInfo.UNCPath) -Quiet:$Quiet
+                }
+                else {
+                    $nativeEventLevel = if ([string]$nativeEvidence.Severity -eq 'Info') { 'Info' } else { 'Warning' }
+                    [void]$scanErrors.Add([pscustomobject]@{
+                        ShareId = $shareId
+                        FullPath = $shareInfo.UNCPath
+                        ErrorType = $nativeEvidence.ErrorType
+                        Severity = $nativeEvidence.Severity
+                        Source = $nativeEvidence.Source
+                        Message = $nativeEvidence.Message
+                        Detail = $nativeEvidence.Detail
+                    })
+                    [void]$scanEvents.Add((New-ShareSurferEvent -Level $nativeEventLevel -EventType $nativeEvidence.EventType -Source $nativeEvidence.Source -ShareId $shareId -Message $nativeEvidence.Message -Detail $nativeEvidence.Detail))
+                }
+            }
             foreach ($permissionRow in $permissionRows) {
                 [void]$sharePermissions.Add($permissionRow)
             }
         }
         if (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0) {
-            $permissionMessage = 'Share-level permissions were not collected through Get-SmbShareAccess.'
+            $permissionMessage = if ($nativeSharePermissionAttempted) {
+                'Share-level permissions were not collected through Get-SmbShareAccess or NativeSmbRpc.'
+            }
+            else {
+                'Share-level permissions were not collected through Get-SmbShareAccess.'
+            }
             [void]$scanErrors.Add([pscustomobject]@{
                 ShareId = $shareId
                 FullPath = $targetDisplayPath
@@ -81,14 +115,14 @@ function Get-ShareSurferLocalInventory {
 
         [void]$shares.Add([pscustomobject]@{
             ShareId = $shareId
-            Source = if ($SkipSharePermissionCollection) { 'TargetPath' } elseif ($permissionRows.Count -gt 0) { 'Get-SmbShareAccess' } else { 'BestEffort' }
+            Source = if ($SkipSharePermissionCollection) { 'TargetPath' } elseif ($permissionRows.Count -gt 0) { $sharePermissionSource } else { 'BestEffort' }
             ComputerName = $shareInfo.ComputerName
             ShareName = $shareInfo.ShareName
             UNCPath = $shareInfo.UNCPath
             LocalPath = $targetDisplayPath
             Description = 'Best-effort target path scan'
             PartialData = (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0)
-            PartialReason = if (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0) { 'Share-level permissions were not collected through Get-SmbShareAccess.' } else { '' }
+            PartialReason = if (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0) { $permissionMessage } else { '' }
         })
 
         $scanItems = @($targetItem)
