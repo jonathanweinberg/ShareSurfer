@@ -37,8 +37,12 @@ For the first real run:
 
    ```powershell
    $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
-   Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
+   Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
+     Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
+     Unblock-File
    ```
+
+   This is the cleanest no-prompt path. If you skip this and run `.\Start-ShareSurfer.ps1` directly, Windows may still show one prompt for the launcher because the launcher cannot unblock itself before it starts. After you choose **Run once**, the launcher attempts the same recursive unblock before importing the module.
 
 4. For the guided startup path, run the release-root launcher:
 
@@ -150,7 +154,9 @@ $ownershipSourcePath = Join-Path $inputRoot 'hr-obs.csv'
 $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
 $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
-Get-ChildItem -Path "$shareSurferRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
+Get-ChildItem -LiteralPath $shareSurferRoot -Recurse -File |
+  Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
+  Unblock-File
 Import-Module "$shareSurferRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
 
 if (Test-Path -LiteralPath $ownershipSourcePath) {
@@ -188,7 +194,7 @@ Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
-The `Unblock-File` line is repeated here on purpose. It avoids one-file-at-a-time prompts after ZIP transfer. ShareSurfer commands create missing local output folders by default and can opt out with `-NoCreateMissingFolders`; the handoff ZIP uses native PowerShell, so the snippet creates that local folder explicitly before `Compress-Archive`. Move the handoff ZIP and hash by your approved transfer process, then package or open the dashboard on the review host.
+The `Unblock-File` line is repeated here on purpose. It avoids one-file-at-a-time prompts after ZIP transfer. If the launcher is run before this manual unblock, Windows may still ask once for `Start-ShareSurfer.ps1` before ShareSurfer can clear the rest of the folder. ShareSurfer commands create missing local output folders by default and can opt out with `-NoCreateMissingFolders`; the handoff ZIP uses native PowerShell, so the snippet creates that local folder explicitly before `Compress-Archive`. Move the handoff ZIP and hash by your approved transfer process, then package or open the dashboard on the review host.
 
 ## SMB/RPC Fallback Notes
 

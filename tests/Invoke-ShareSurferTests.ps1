@@ -2760,6 +2760,7 @@ $tests = @(
             Assert-Equal $summary.StartupConfigPath $configPath 'Startup summary should report config path.'
             Assert-Equal $summary.EnvironmentMode 'Nonpermissive' 'Startup summary should preserve selected environment mode.'
             Assert-Equal $summary.UnblockStatus 'Skipped' 'Startup summary should report skipped unblock when requested.'
+            Assert-Equal $summary.UnblockZoneIdentifierRemovedCount 0 'Skipped startup unblock should report zero cleared downloaded-file markers.'
             Assert-Equal $summary.OperatorPlanPath $planPath 'Startup summary should report operator plan path.'
             Assert-Equal $summary.OperatorReusableCommandPath $rerunPath 'Startup summary should report operator rerun path.'
             Assert-Equal $config.version 1 'Startup config should have a stable version.'
@@ -2784,6 +2785,7 @@ $tests = @(
             Assert-Equal $replaySummary.ExportPath $exportPath 'Replay should load export path from startup config.'
             Assert-Equal $replaySummary.TargetPath[0] '\\files01\Finance' 'Replay should load target path from startup config.'
             Assert-Equal $replaySummary.SkipUnblock $true 'Replay should preserve skipped unblock setting from startup config.'
+            Assert-Equal $replaySummary.UnblockZoneIdentifierRemovedCount 0 'Replay with skipped unblock should report zero cleared downloaded-file markers.'
             Assert-Equal $replaySummary.HandoffPath $handoffPath 'Replay should load nonpermissive handoff path from startup config.'
 
             $overwriteThrew = $false
@@ -5611,6 +5613,8 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Start-ShareSurferOperatorAssistant*') 'Command recipes should include the guided operator assistant.'
             Assert-True ($commandRecipeText -like '*Start-ShareSurferStartup*') 'Command recipes should include the guided startup command.'
             Assert-True ($commandRecipeText -like '*Start-ShareSurfer.ps1*') 'Command recipes should include the release-root startup launcher.'
+            Assert-True ($commandRecipeText -like '*Get-ChildItem -LiteralPath $releaseRoot -Recurse -File*') 'Command recipes should use the literal-path recursive unblock pattern.'
+            Assert-True ($commandRecipeText -like '*Run once*' -and $commandRecipeText -like '*launcher itself*') 'Command recipes should explain the one launcher prompt boundary.'
             Assert-True ($commandRecipeText -like '*operator-assistant.plan.json*' -and $commandRecipeText -like '*operator-assistant-rerun.ps1*') 'Command recipes should show operator assistant plan and rerun outputs.'
             Assert-True ($commandRecipeText -like '*Join-ShareSurferOwnershipSources*') 'Command recipes should include multi-source ownership join guidance.'
             Assert-True ($commandRecipeText -like '*ownership-import.definition.json*') 'Command recipes should show reusable ownership import definition output.'
@@ -5709,6 +5713,10 @@ $tests = @(
             $pesterWrapperText = Get-Content -LiteralPath $pesterWrapper -Raw
             Assert-True ($pesterWrapperText -like '*Describe*ShareSurfer*') 'Pester wrapper should expose a ShareSurfer Describe block.'
             Assert-True ($pesterWrapperText -like '*Invoke-ShareSurferTests.ps1*') 'Pester wrapper should run the fast dependency-free test suite.'
+            $startupLauncherText = Get-Content -LiteralPath (Join-Path $repoRoot 'Start-ShareSurfer.ps1') -Raw
+            Assert-True ($startupLauncherText -like '*Remove-ShareSurferLauncherZoneIdentifierStream*') 'Release-root launcher should explicitly clear Zone.Identifier markers before module import.'
+            Assert-True ($startupLauncherText -like '*Get-ChildItem -LiteralPath $Root -Recurse -File*') 'Release-root launcher should use literal recursive file enumeration for unblock.'
+            Assert-True ($startupLauncherText -like '*explicitly cleared*downloaded-file marker*') 'Release-root launcher should report downloaded-file marker cleanup.'
             $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
             $currentReleaseTag = [string]$releaseMetadata.currentPrereleaseTag
             $currentReleaseZip = [string]$releaseMetadata.zipAssetName
@@ -5770,11 +5778,14 @@ $tests = @(
             Assert-True ($readmeText -like ('*{0}*' -f $currentReleaseRoot)) 'README should show the simplified version-root release path.'
             Assert-True ($readmeText -notlike ('*{0}*' -f $oldNestedReleaseRoot)) 'README should not show the older nested release root path.'
             Assert-True ($readmeText -like '*Unblock-File*') 'README should show how to recursively unblock extracted PowerShell files.'
+            Assert-True ($readmeText -like '*Get-ChildItem -LiteralPath $releaseRoot -Recurse -File*') 'README should use the literal-path recursive unblock pattern.'
+            Assert-True ($readmeText -like '*one prompt for the launcher*' -and $readmeText -like '*cannot unblock itself before it starts*') 'README should explain why the launcher can still receive one Windows prompt.'
             Assert-True ($readmeText -like '*without npm, Vite, a development server, or internet access*') 'README should explain release dashboard use without npm or a server.'
             Assert-True ($readmeText -like '*template/onboarding screen*') 'README should explain release dashboard template behavior before export packaging.'
             Assert-True ($readmeText -like '*$shareSurferRoot*') 'README nonpermissive quickstart should show where the copied ShareSurfer folder is staged.'
             Assert-True ($readmeText -like '*$ownershipSourcePath*') 'README nonpermissive quickstart should show a candidate HR/OBS ownership source path.'
             Assert-True ($readmeText -like '*The*Unblock-File*line is repeated here on purpose*') 'README nonpermissive quickstart should explicitly repeat and explain the unblock step.'
+            Assert-True ($readmeText -like '*Windows may still ask once for*Start-ShareSurfer.ps1*') 'README nonpermissive quickstart should explain the launcher first-prompt case.'
             Assert-True ($readmeText -like '*Compress-Archive*') 'README nonpermissive quickstart should show how to package the validated export folder.'
             Assert-True ($readmeText -like '*Get-FileHash -Algorithm SHA256*') 'README nonpermissive quickstart should show how to hash the handoff package.'
             Assert-True ($readmeText -like '*approved transfer process*') 'README nonpermissive quickstart should explain the approved transfer process.'
@@ -5872,6 +5883,8 @@ $tests = @(
             Assert-True ($firstRunText -like ('*{0}*' -f $currentReleaseRoot)) 'First-run guide should show the simplified version-root release path.'
             Assert-True ($firstRunText -notlike ('*{0}*' -f $oldNestedReleaseRoot)) 'First-run guide should not show the older nested release root path.'
             Assert-True ($firstRunText -like '*Unblock-File*') 'First-run guide should show how to recursively unblock extracted PowerShell files.'
+            Assert-True ($firstRunText -like '*Get-ChildItem -LiteralPath $releaseRoot -Recurse -File*') 'First-run guide should use the literal-path recursive unblock pattern.'
+            Assert-True ($firstRunText -like '*Run once*' -and $firstRunText -like '*cannot unblock the launcher before Windows starts it*') 'First-run guide should explain the one launcher prompt boundary.'
             Assert-True ($firstRunText -like '*do not need Node, npm, Vite, a development server, or internet access*') 'First-run guide should explain release dashboard packaging without npm tooling.'
             Assert-True ($firstRunText -like '*first-run troubleshooting guide*') 'First-run guide should link the troubleshooting guide.'
             Assert-True ($firstRunText -like '*Invoke-ShareSurferFileShareConnectivityAssessment*') 'First-run guide should include file-share connectivity diagnostics.'

@@ -105,12 +105,16 @@ $releaseZip = 'C:\Downloads\ShareSurfer-0.1.0-pre.21.zip'
 $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.21'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\' -Force
-Get-ChildItem -Path "$releaseRoot\*" -Recurse -File -Include *.ps1,*.psm1,*.psd1 | Unblock-File
+Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
+  Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
+  Unblock-File
 Test-Path "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1"
 Test-Path "$releaseRoot\interface\standalone-dashboard\dist\index.html"
 ```
 
 The `Unblock-File` line clears the Windows downloaded-file block from ShareSurfer PowerShell files. It is safe to run again after re-extracting the release ZIP.
+
+Run that manual unblock before the launcher when you want no security prompt wall. If you run `.\Start-ShareSurfer.ps1` before unblocking, Windows may still ask once for the launcher itself because ShareSurfer cannot unblock the launcher before Windows starts it. After you choose **Run once**, the launcher clears the remaining ShareSurfer PowerShell files before module import.
 
 The two `Test-Path` commands should return `True`. The first proves the PowerShell module is present. The second proves the standalone dashboard template assets are already built in the release package.
 
