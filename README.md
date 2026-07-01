@@ -31,12 +31,12 @@ For the fuller explanation, use the [visual field guide](docs/visual-field-guide
 
 For the first real run:
 
-1. Download `ShareSurfer-0.1.0-pre.23.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.23). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
-2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.23\`.
+1. Download `ShareSurfer-0.1.0-pre.24.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.24). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
+2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.24\`.
 3. Recursively unblock extracted PowerShell files:
 
    ```powershell
-   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.23'
+   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.24'
    Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
      Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
      Unblock-File
@@ -50,7 +50,7 @@ For the first real run:
    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\Start-ShareSurfer.ps1" -Force
    ```
 
-   It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then offers to show those generated files and asks whether to run the generated scan/validate/dashboard script now. The run prompt defaults to No.
+   It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, asks whether to run intensive share-permission diagnostics before the scan, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then offers to show those generated files and asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to No.
 
 5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked.
 6. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
@@ -66,6 +66,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 
 | Stop gate | Where to look | Meaning |
 | --- | --- | --- |
+| Missing or suspicious share-level permissions | `share-permission-diagnostics\share_permission_diagnostics.md`, `share_permission_diagnostics.csv`, `collection_errors.csv` | The share may be reachable, but ShareSurfer may not have proven share-level permissions or parsed security descriptor evidence. |
 | Partial data or collection errors | `evidence_confidence.csv`, `shares.csv`, `collection_errors.csv`, dashboard Diagnostics | The export may be structurally valid but incomplete. |
 | Wrong or missing OBS attribute | `scan_manifest.csv`, `identities.csv`, `org_chains.csv` | Reviewer routing may be blank or wrong. |
 | Template dashboard confusion | `interface\standalone-dashboard\dist\index.html` versus `$exportPath\standalone-dashboard\index.html` | Release dashboard assets are templates; real review requires a packaged export. |
@@ -145,7 +146,7 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 Use this compact pattern when the release folder has been copied to a locked-down Windows collector host:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.23'
+$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.24'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -226,7 +227,7 @@ Current screenshots are under [docs/visuals/dashboard-screenshots/2026-06-09-cur
 
 ## Pre-1.0 Release Packaging
 
-The first packages are unsigned but fully built. `v0.1.0-pre.23` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
+The first packages are unsigned but fully built. `v0.1.0-pre.24` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
 
 Release identity lives in [release-metadata.json](release-metadata.json). Update that file first when preparing a prerelease; packaging fails closed when the manual version or tag does not match.
 

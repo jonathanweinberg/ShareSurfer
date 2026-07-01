@@ -2649,14 +2649,21 @@ $tests = @(
             Assert-Equal $plan.exportPath $exportPath 'Assistant plan should preserve export path.'
             Assert-Equal $plan.obsAttribute 'info' 'Assistant plan should preserve OBS attribute.'
             Assert-Equal $plan.adLookupMode 'DirectoryOnly' 'Assistant plan should preserve AD lookup mode.'
+            Assert-Equal $plan.includeSharePermissionDiagnostics $true 'Assistant plan should enable share-permission diagnostics by default.'
             Assert-Equal $plan.optionalInputs.ownerMappingPath $ownerMappingPath 'Assistant plan should preserve owner mapping path.'
+            Assert-True ([string]$plan.commands.sharePermissionDiagnostics -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Assistant plan should include a share-permission diagnostic command preview.'
+            Assert-True ([string]$plan.commands.sharePermissionDiagnostics -like '*share-permission-diagnostics*') 'Diagnostic command preview should show the diagnostic output folder.'
             Assert-True ([string]$plan.commands.scan -like '*Invoke-ShareSurferScan*') 'Assistant plan should include a scan command preview.'
             Assert-True ([string]$plan.commands.scan -like '*-OwnershipEnrichmentPath*') 'Scan command preview should show ownership enrichment when provided.'
             Assert-True ([string]$plan.commands.validate -like '*Test-ShareSurferExport*') 'Assistant plan should include export validation command preview.'
             Assert-True ([string]$plan.commands.packageStandaloneDashboard -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Assistant plan should include standalone dashboard packaging command preview.'
             Assert-True ([string]$plan.commands.optionalInputBehavior -like '*rerun script is authoritative*') 'Assistant plan should explain that optional CSV path handling is conditional in the rerun script.'
             Assert-True (@($plan.stopGates | Where-Object { [string]$_ -like '*evidence_confidence.csv*' }).Count -eq 1) 'Assistant plan should include evidence confidence stop gate guidance.'
+            Assert-True (@($plan.stopGates | Where-Object { [string]$_ -like '*share-permission-diagnostics*' }).Count -eq 1) 'Assistant plan should include share-permission diagnostic stop gate guidance.'
             Assert-True ($scriptText -like '*Import-Module $modulePath -Force*') 'Reusable script should import the module.'
+            Assert-True ($scriptText -like '*$sharePermissionDiagnosticPath = Join-Path $exportPath*share-permission-diagnostics*') 'Reusable script should define the share-permission diagnostic output path.'
+            Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force*') 'Reusable script should run intensive share-permission diagnostics before scanning.'
+            Assert-True ($scriptText.IndexOf('Invoke-ShareSurferSharePermissionDiagnostic') -lt $scriptText.IndexOf('Invoke-ShareSurferScan @scanParams')) 'Reusable script should run share-permission diagnostics before the scan.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Reusable script should run the scan through a splatted command.'
             Assert-True ($scriptText -like '*$validation = Test-ShareSurferExport -ExportPath $exportPath*') 'Reusable script should validate the export.'
             Assert-True ($scriptText -like '*ShareSurfer export validation failed*') 'Reusable script should stop when export validation fails.'
@@ -2696,6 +2703,7 @@ $tests = @(
                 -replace '\$exportPath = .+', ('$exportPath = {0}' -f $invalidExportPathLiteral) `
                 -replace '\$modulePath = Join-Path \$releaseRoot .+', ('$modulePath = {0}' -f $moduleManifestLiteral) `
                 -replace '\$standaloneDashboardScript = Join-Path \$releaseRoot .+', '$standaloneDashboardScript = ''unused-by-validation-guard-test''' `
+                -replace [regex]::Escape('Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force'), '# Diagnostics intentionally skipped by validation guard regression test.' `
                 -replace [regex]::Escape('Invoke-ShareSurferScan @scanParams'), '# Scan intentionally skipped by validation guard regression test.' `
                 -replace [regex]::Escape('& $standaloneDashboardScript -ExportPath $exportPath -OutputPath $standaloneDashboardPath -Force'), ('Set-Content -LiteralPath {0} -Value ''packaged'' -Encoding UTF8' -f $packageSentinelPathLiteral)
             Set-Content -LiteralPath $validationGuardScriptPath -Value $validationGuardScript -Encoding UTF8
@@ -2769,6 +2777,7 @@ $tests = @(
             Assert-Equal $config.environmentMode 'Nonpermissive' 'Startup config should preserve environment mode.'
             Assert-Equal $config.releaseRoot $releaseRoot 'Startup config should preserve release root.'
             Assert-Equal $config.obsAttribute 'info' 'Startup config should preserve OBS attribute.'
+            Assert-Equal $config.includeSharePermissionDiagnostics $true 'Startup config should preserve the share-permission diagnostic choice.'
             Assert-Equal $config.optionalInputs.ownerMappingPath $ownerMappingPath 'Startup config should preserve owner mapping path.'
             Assert-Equal $config.optionalInputs.ownershipEnrichmentPath $ownershipEnrichmentPath 'Startup config should preserve ownership enrichment path.'
             Assert-Equal $config.optionalInputs.discountedPrincipalPath $discountedPrincipalPath 'Startup config should preserve discounted principals path.'
@@ -2778,7 +2787,11 @@ $tests = @(
             Assert-True ([string]$config.commands.startupReplay -like '*Start-ShareSurferStartup*') 'Startup config should include a replay command.'
             Assert-True ([string]$config.commands.startupScriptReplay -like '*Start-ShareSurfer.ps1*') 'Startup config should include release-root script replay command.'
             Assert-True (@($config.stopGates | Where-Object { [string]$_ -like '*ObsAttribute*' }).Count -eq 1) 'Startup config should include OBS stop gate guidance.'
+            Assert-True (@($config.stopGates | Where-Object { [string]$_ -like '*share-permission-diagnostics*' }).Count -eq 1) 'Startup config should include share-permission diagnostic stop gate guidance.'
             Assert-Equal $operatorPlan.obsAttribute 'info' 'Startup should delegate selected OBS attribute into operator assistant plan.'
+            Assert-Equal $operatorPlan.includeSharePermissionDiagnostics $true 'Startup should delegate share-permission diagnostic choice into operator assistant plan.'
+            Assert-Equal $summary.IncludeSharePermissionDiagnostics $true 'Startup summary should report share-permission diagnostic choice.'
+            Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Startup-generated operator rerun script should run share-permission diagnostics by default.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Startup-generated operator rerun script should run the scan.'
             Assert-True ($scriptText -like '*Test-ShareSurferExport -ExportPath $exportPath*') 'Startup-generated operator rerun script should validate the export.'
 
@@ -2786,6 +2799,7 @@ $tests = @(
             Assert-Equal $replaySummary.EnvironmentMode 'Nonpermissive' 'Replay should load environment mode from startup config.'
             Assert-Equal $replaySummary.ExportPath $exportPath 'Replay should load export path from startup config.'
             Assert-Equal $replaySummary.TargetPath[0] '\\files01\Finance' 'Replay should load target path from startup config.'
+            Assert-Equal $replaySummary.IncludeSharePermissionDiagnostics $true 'Replay should load share-permission diagnostic choice from startup config.'
             Assert-Equal $replaySummary.SkipUnblock $true 'Replay should preserve skipped unblock setting from startup config.'
             Assert-Equal $replaySummary.UnblockZoneIdentifierRemovedCount 0 'Replay with skipped unblock should report zero cleared downloaded-file markers.'
             Assert-Equal $replaySummary.PostStartupReviewShown $false 'Config replay should not show the post-startup review prompt unless interactive.'
@@ -5775,7 +5789,7 @@ $tests = @(
             $startupCommandText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Public/Start-ShareSurferStartup.ps1') -Raw
             Assert-True ($startupCommandText -like '*Invoke-ShareSurferStartupPostPlanHandoff*') 'Startup command should include an interactive post-plan handoff.'
             Assert-True ($startupCommandText -like '*Show generated startup JSON, scan plan, and rerun script now?*') 'Startup command should offer to review generated files after prompts.'
-            Assert-True ($startupCommandText -like '*Run the generated scan/validate/dashboard script now?*') 'Startup command should offer to run the generated rerun script after review.'
+            Assert-True ($startupCommandText -like '*Run the generated diagnostic/scan/validate/dashboard script now?*') 'Startup command should offer to run the generated rerun script after review.'
             $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
             $currentReleaseTag = [string]$releaseMetadata.currentPrereleaseTag
             $currentReleaseZip = [string]$releaseMetadata.zipAssetName
@@ -5789,7 +5803,8 @@ $tests = @(
             Assert-True ($readmeText -like '*Start-ShareSurferOperatorAssistant*') 'README should include the guided operator assistant command.'
             Assert-True ($readmeText -like '*Start-ShareSurferStartup*') 'README should include the guided startup command.'
             Assert-True ($readmeText -like '*Start-ShareSurfer.ps1*') 'README should include the release-root startup launcher.'
-            Assert-True ($readmeText -like '*offers to show those generated files*' -and $readmeText -like '*run prompt defaults to No*') 'README should explain the interactive review and run handoff.'
+            Assert-True ($readmeText -like '*intensive share-permission diagnostics before the scan*' -and $readmeText -like '*run prompt defaults to No*') 'README should explain the diagnostic startup review and run handoff.'
+            Assert-True ($readmeText -like '*share-permission-diagnostics*share_permission_diagnostics.md*') 'README should point operators to the share-permission diagnostic summary.'
             Assert-True ($readmeText -like '*operator-assistant.plan.json*' -and $readmeText -like '*operator-assistant-rerun.ps1*') 'README should explain operator assistant plan and rerun outputs.'
             Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
             Assert-True ($readmeText -like '*Command Inventory by Workflow*') 'README should group public commands by workflow.'
@@ -5906,7 +5921,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*Start-ShareSurferOperatorAssistant*') 'First-run guide should include the guided operator assistant.'
             Assert-True ($firstRunText -like '*Start-ShareSurferStartup*') 'First-run guide should include the guided startup command.'
             Assert-True ($firstRunText -like '*Start-ShareSurfer.ps1*') 'First-run guide should include the release-root startup launcher.'
-            Assert-True ($firstRunText -like '*offers to display the startup JSON, scan plan, and rerun script*' -and $firstRunText -like '*defaults to*No*') 'First-run guide should explain the interactive review and run handoff.'
+            Assert-True ($firstRunText -like '*generated diagnostic/scan/validate/dashboard script*' -and $firstRunText -like '*defaults to*No*') 'First-run guide should explain the diagnostic startup review and run handoff.'
+            Assert-True ($firstRunText -like '*share-permission-diagnostics*share_permission_diagnostics.md*') 'First-run guide should point operators to the share-permission diagnostic summary.'
             Assert-True ($firstRunText -like '*operator-assistant.plan.json*' -and $firstRunText -like '*operator-assistant-rerun.ps1*') 'First-run guide should explain operator assistant outputs.'
             Assert-True ($firstRunText -like '*Stop gates are conditions*') 'First-run guide should explain stop gates before the longer walkthrough.'
             Assert-True ($firstRunText -like '*latest published prerelease*') 'First-run guide should explain what to do if the checkpoint tag is not published yet.'

@@ -31,6 +31,8 @@ function Start-ShareSurferOperatorAssistant {
 
         [switch] $IncludeFiles,
 
+        [bool] $IncludeSharePermissionDiagnostics = $true,
+
         [switch] $SkipIdentityEnrichment,
 
         [switch] $Interactive,
@@ -63,6 +65,7 @@ function Start-ShareSurferOperatorAssistant {
         $OwnerMappingPath = Read-ShareSurferAssistantText -Prompt 'Owner mapping CSV path (blank if absent)' -Value $OwnerMappingPath -AllowBlank
         $OwnershipEnrichmentPath = Read-ShareSurferAssistantText -Prompt 'Ownership enrichment CSV path (blank if absent)' -Value $OwnershipEnrichmentPath -AllowBlank
         $DiscountedPrincipalPath = Read-ShareSurferAssistantText -Prompt 'Discounted principals CSV path (blank if absent)' -Value $DiscountedPrincipalPath -AllowBlank
+        $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics)
     }
 
     if ($TargetPath.Count -eq 0 -or @($TargetPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count -eq 0) {
@@ -117,8 +120,10 @@ function Start-ShareSurferOperatorAssistant {
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
         -DiscountedPrincipalPath $DiscountedPrincipalPath `
         -IncludeFiles:$IncludeFiles `
+        -IncludeSharePermissionDiagnostics $IncludeSharePermissionDiagnostics `
         -SkipIdentityEnrichment:$SkipIdentityEnrichment
 
+    $sharePermissionDiagnosticPath = Join-Path $ExportPath 'share-permission-diagnostics'
     $plan = [ordered]@{
         version = 1
         createdAt = (Get-Date).ToUniversalTime().ToString('o')
@@ -132,6 +137,7 @@ function Start-ShareSurferOperatorAssistant {
         adLookupMode = $AdLookupMode
         managerIdentityFormat = $ManagerIdentityFormat
         includeFiles = [bool]$IncludeFiles
+        includeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         skipIdentityEnrichment = [bool]$SkipIdentityEnrichment
         optionalInputs = [ordered]@{
             ownerMappingPath = $OwnerMappingPath
@@ -144,12 +150,14 @@ function Start-ShareSurferOperatorAssistant {
         }
         commands = [ordered]@{
             importModule = [string]$commands.ImportModule
+            sharePermissionDiagnostics = [string]$commands.SharePermissionDiagnostics
             scan = [string]$commands.Scan
             validate = [string]$commands.Validate
             packageStandaloneDashboard = [string]$commands.PackageStandaloneDashboard
             optionalInputBehavior = [string]$commands.OptionalInputBehavior
         }
         stopGates = @(
+            'Open share-permission-diagnostics\share_permission_diagnostics.md if share-level permissions are missing, partial, or unexpected.',
             'Review evidence_confidence.csv before owner signoff.',
             'Resolve or document collection_errors.csv and partial shares.',
             'Confirm scan_manifest.csv uses the intended ObsAttribute.',
@@ -180,7 +188,9 @@ function Start-ShareSurferOperatorAssistant {
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
         IncludeFiles = [bool]$IncludeFiles
+        IncludeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         SkipIdentityEnrichment = [bool]$SkipIdentityEnrichment
+        SharePermissionDiagnosticPath = $sharePermissionDiagnosticPath
         Commands = $plan.commands
         StopGates = $plan.stopGates
         NextSteps = $plan.nextSteps
@@ -246,6 +256,8 @@ function New-ShareSurferOperatorAssistantCommandSet {
 
         [switch] $IncludeFiles,
 
+        [bool] $IncludeSharePermissionDiagnostics = $true,
+
         [switch] $SkipIdentityEnrichment
     )
 
@@ -260,6 +272,7 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add(('$releaseRoot = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ReleaseRoot)))
     $lines.Add(('$exportPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath)))
     $lines.Add(('$standaloneDashboardPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $StandaloneDashboardPath)))
+    $lines.Add(('$sharePermissionDiagnosticPath = Join-Path $exportPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value 'share-permission-diagnostics')))
     $lines.Add(('$targetPaths = {0}' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $TargetPath)))
     $lines.Add(('$obsAttribute = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsAttribute)))
     $lines.Add(('$adLookupMode = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AdLookupMode)))
@@ -272,6 +285,10 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add(('$standaloneDashboardScript = Join-Path $releaseRoot {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $dashboardRelativePath)))
     $lines.Add('Import-Module $modulePath -Force')
     $lines.Add('')
+    if ($IncludeSharePermissionDiagnostics) {
+        $lines.Add('Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force')
+        $lines.Add('')
+    }
     $lines.Add('$scanParams = @{')
     $lines.Add('  TargetPath = $targetPaths')
     $lines.Add('  OutputPath = $exportPath')
@@ -334,8 +351,14 @@ function New-ShareSurferOperatorAssistantCommandSet {
         $scanPreviewParts.Add(('-DiscountedPrincipalPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $DiscountedPrincipalPath)))
     }
 
+    $diagnosticPreview = ''
+    if ($IncludeSharePermissionDiagnostics) {
+        $diagnosticPreview = 'Invoke-ShareSurferSharePermissionDiagnostic -TargetPath {0} -OutputPath {1} -Force' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $TargetPath), (ConvertTo-ShareSurferPowerShellLiteral -Value (Join-Path $ExportPath 'share-permission-diagnostics'))
+    }
+
     [pscustomobject]@{
         ImportModule = ('Import-Module {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $modulePathPreview))
+        SharePermissionDiagnostics = $diagnosticPreview
         Scan = ($scanPreviewParts -join ' ')
         Validate = ('Test-ShareSurferExport -ExportPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath))
         PackageStandaloneDashboard = ('& {0} -ExportPath {1} -OutputPath {2} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $dashboardScriptPreview), (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $StandaloneDashboardPath))

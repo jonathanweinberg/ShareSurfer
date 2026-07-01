@@ -40,6 +40,8 @@ function Start-ShareSurferStartup {
 
         [switch] $IncludeFiles,
 
+        [bool] $IncludeSharePermissionDiagnostics = $true,
+
         [switch] $SkipIdentityEnrichment,
 
         [switch] $Interactive,
@@ -72,6 +74,7 @@ function Start-ShareSurferStartup {
         if ($null -ne $definition.PSObject.Properties['adLookupMode'] -and -not $boundParameters.ContainsKey('AdLookupMode')) { $AdLookupMode = [string]$definition.adLookupMode }
         if ($null -ne $definition.PSObject.Properties['managerIdentityFormat'] -and -not $boundParameters.ContainsKey('ManagerIdentityFormat')) { $ManagerIdentityFormat = [string]$definition.managerIdentityFormat }
         if ($null -ne $definition.PSObject.Properties['includeFiles'] -and -not $boundParameters.ContainsKey('IncludeFiles')) { $IncludeFiles = [bool]$definition.includeFiles }
+        if ($null -ne $definition.PSObject.Properties['includeSharePermissionDiagnostics'] -and -not $boundParameters.ContainsKey('IncludeSharePermissionDiagnostics')) { $IncludeSharePermissionDiagnostics = [bool]$definition.includeSharePermissionDiagnostics }
         if ($null -ne $definition.PSObject.Properties['skipIdentityEnrichment'] -and -not $boundParameters.ContainsKey('SkipIdentityEnrichment')) { $SkipIdentityEnrichment = [bool]$definition.skipIdentityEnrichment }
         if ($null -ne $definition.PSObject.Properties['skipUnblock'] -and -not $boundParameters.ContainsKey('SkipUnblock')) { $SkipUnblock = [bool]$definition.skipUnblock }
         if ($null -ne $definition.PSObject.Properties['optionalInputs']) {
@@ -145,6 +148,7 @@ function Start-ShareSurferStartup {
             $HandoffPath = Read-ShareSurferAssistantText -Prompt 'Validated export handoff ZIP path' -Value $HandoffPath
         }
         $IncludeFiles = Read-ShareSurferStartupBoolean -Prompt 'Include file rows as well as folders?' -Value ([bool]$IncludeFiles)
+        $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics)
         $SkipIdentityEnrichment = Read-ShareSurferStartupBoolean -Prompt 'Skip identity enrichment?' -Value ([bool]$SkipIdentityEnrichment)
         $SkipUnblock = Read-ShareSurferStartupBoolean -Prompt 'Skip recursive PowerShell file unblock?' -Value ([bool]$SkipUnblock)
         $SaveConfigPath = Read-ShareSurferAssistantText -Prompt 'Save startup JSON config path' -Value $SaveConfigPath
@@ -184,6 +188,7 @@ function Start-ShareSurferStartup {
         -PlanPath $PlanPath `
         -ReusableCommandPath $ReusableCommandPath `
         -IncludeFiles:$IncludeFiles `
+        -IncludeSharePermissionDiagnostics $IncludeSharePermissionDiagnostics `
         -SkipIdentityEnrichment:$SkipIdentityEnrichment `
         -NoCreateMissingFolders:$NoCreateMissingFolders `
         -Force:$Force
@@ -204,6 +209,7 @@ function Start-ShareSurferStartup {
         adLookupMode = $AdLookupMode
         managerIdentityFormat = $ManagerIdentityFormat
         includeFiles = [bool]$IncludeFiles
+        includeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         skipIdentityEnrichment = [bool]$SkipIdentityEnrichment
         skipUnblock = [bool]$SkipUnblock
         optionalInputs = [ordered]@{
@@ -226,6 +232,7 @@ function Start-ShareSurferStartup {
             operatorRerun = $assistantSummary.ReusableCommandPath
         }
         stopGates = @(
+            'If share-level permissions are missing or suspicious, open share-permission-diagnostics\share_permission_diagnostics.md before owner signoff.',
             'Run and review Test-ShareSurferExport before treating the export as complete.',
             'Review evidence_confidence.csv, collection_errors.csv, shares.csv PartialData, and scan_manifest.csv before owner signoff.',
             'Confirm the selected ObsAttribute is the intended directory OBS/OID source.',
@@ -259,6 +266,7 @@ function Start-ShareSurferStartup {
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
         IncludeFiles = [bool]$IncludeFiles
+        IncludeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         SkipIdentityEnrichment = [bool]$SkipIdentityEnrichment
         SkipUnblock = [bool]$SkipUnblock
         HandoffPath = $HandoffPath
@@ -274,6 +282,7 @@ function Start-ShareSurferStartup {
         StopGates = @($startupConfig.stopGates)
         NextSteps = @(
             'Review the startup JSON config and operator assistant rerun script.',
+            'If enabled, review share-permission-diagnostics\share_permission_diagnostics.md for collection method proof.',
             'Run the operator rerun script on the collector host when ready.',
             'Validate the export before packaging or sharing the dashboard.',
             'Reuse the startup JSON config to regenerate the same startup pattern later.'
@@ -320,8 +329,8 @@ function Invoke-ShareSurferStartupPostPlanHandoff {
     }
 
     Write-Host ''
-    Write-Host 'The rerun script runs collection, validates the export, and packages the standalone dashboard from the validated export folder.'
-    $runNow = Read-ShareSurferStartupBoolean -Prompt 'Run the generated scan/validate/dashboard script now?' -Value $false
+    Write-Host 'The rerun script runs share-permission diagnostics, collection, export validation, and standalone dashboard packaging from the validated export folder.'
+    $runNow = Read-ShareSurferStartupBoolean -Prompt 'Run the generated diagnostic/scan/validate/dashboard script now?' -Value $false
     if ($runNow) {
         Write-Host ('Running generated ShareSurfer script: {0}' -f $ReusableCommandPath)
         & $ReusableCommandPath
