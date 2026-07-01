@@ -346,6 +346,12 @@ function Write-ShareSurferFileShareConnectivityJsonLines {
         [void]$lines.Add(($row | ConvertTo-Json -Depth 8 -Compress))
     }
 
+    if ($lines.Count -eq 0) {
+        $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false
+        [System.IO.File]::WriteAllText($Path, '', $utf8NoBom)
+        return
+    }
+
     Set-Content -LiteralPath $Path -Value @($lines) -Encoding UTF8
 }
 
@@ -367,7 +373,8 @@ function New-ShareSurferFileShareConnectivityToken {
 
     $sha = [System.Security.Cryptography.SHA256]::Create()
     try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Salt + '|' + $Prefix + '|' + $Value)
+        $normalizedValue = ([string]$Value).Trim().ToUpperInvariant()
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Salt + '|' + $Prefix + '|' + $normalizedValue)
         $hash = $sha.ComputeHash($bytes)
         $hex = -join ($hash[0..5] | ForEach-Object { $_.ToString('x2') })
         return ('{0}_{1}' -f $Prefix, $hex)
@@ -388,17 +395,28 @@ function Protect-ShareSurferFileShareConnectivityText {
     }
 
     $redacted = [string]$Value
-    foreach ($key in @($TokenMap.Keys | Sort-Object { [string]$_ } -Descending)) {
+    foreach ($key in @($TokenMap.Keys | Sort-Object { ([string]$_).Length } -Descending)) {
         if ([string]::IsNullOrWhiteSpace([string]$key)) {
             continue
         }
 
-        $redacted = $redacted.Replace([string]$key, [string]$TokenMap[$key])
+        $replacement = [string]$TokenMap[$key]
+        $redacted = [System.Text.RegularExpressions.Regex]::Replace(
+            $redacted,
+            [System.Text.RegularExpressions.Regex]::Escape([string]$key),
+            [System.Text.RegularExpressions.MatchEvaluator]{ param($match) $replacement },
+            [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+        )
     }
 
     if ($redacted -eq $Value) {
         return 'Provider detail redacted. See raw diagnostic output for exact host, share, path, user, or exception text.'
     }
+
+    $redacted = [System.Text.RegularExpressions.Regex]::Replace($redacted, '(?i)\\\\[^\s,;]+', 'PATH_REDACTED')
+    $redacted = [System.Text.RegularExpressions.Regex]::Replace($redacted, '(?i)\b[A-Z]:\\[^\s,;]+', 'PATH_REDACTED')
+    $redacted = [System.Text.RegularExpressions.Regex]::Replace($redacted, '(?i)\b[A-Z0-9._-]+\\[A-Z0-9._$-]+\b', 'IDENTITY_REDACTED')
+    $redacted = [System.Text.RegularExpressions.Regex]::Replace($redacted, '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', 'USER_REDACTED')
 
     $redacted
 }
@@ -412,7 +430,7 @@ function New-ShareSurferFileShareConnectivityTokenMap {
         [string] $Salt
     )
 
-    $map = @{}
+    $map = New-Object -TypeName System.Collections.Hashtable -ArgumentList ([System.StringComparer]::OrdinalIgnoreCase)
     $columns = @(
         'CollectorComputerName',
         'CollectorFqdn',
@@ -464,6 +482,7 @@ function Protect-ShareSurferFileShareConnectivityRows {
     param(
         $Rows,
         [hashtable] $TokenMap,
+        [string] $Salt,
         [string[]] $SensitiveColumns,
         [string[]] $DetailColumns
     )
@@ -485,7 +504,7 @@ function Protect-ShareSurferFileShareConnectivityRows {
                     $record[$name] = $TokenMap[$value]
                 }
                 else {
-                    $record[$name] = New-ShareSurferFileShareConnectivityToken -Value $value -Prefix 'VALUE' -Salt 'adhoc'
+                    $record[$name] = New-ShareSurferFileShareConnectivityToken -Value $value -Prefix 'VALUE' -Salt $Salt
                 }
             }
             else {
@@ -571,15 +590,15 @@ function Export-ShareSurferFileShareConnectivityRedactedPackage {
 
     New-Item -ItemType Directory -Path $RedactedPath -Force | Out-Null
 
-    $salt = if ([string]::IsNullOrWhiteSpace($RedactionSalt)) { [string]$Summary.AssessmentId } else { $RedactionSalt }
+    $salt = if ([string]::IsNullOrWhiteSpace($RedactionSalt)) { [guid]::NewGuid().ToString('N') } else { $RedactionSalt }
     $tokenMap = New-ShareSurferFileShareConnectivityTokenMap -ManifestRows $ManifestRows -TargetRows $TargetRows -CheckRows $CheckRows -EventRows $EventRows -Salt $salt
     $sensitiveColumns = @('CollectorComputerName', 'CollectorFqdn', 'CollectorUser', 'UserDomain', 'Target', 'ComputerName', 'ShareName', 'UNCPath')
     $detailColumns = @('Message', 'Detail')
 
-    $redactedManifestRows = Protect-ShareSurferFileShareConnectivityRows -Rows $ManifestRows -TokenMap $tokenMap -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
-    $redactedTargetRows = Protect-ShareSurferFileShareConnectivityRows -Rows $TargetRows -TokenMap $tokenMap -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
-    $redactedCheckRows = Protect-ShareSurferFileShareConnectivityRows -Rows $CheckRows -TokenMap $tokenMap -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
-    $redactedEventRows = Protect-ShareSurferFileShareConnectivityRows -Rows $EventRows -TokenMap $tokenMap -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
+    $redactedManifestRows = Protect-ShareSurferFileShareConnectivityRows -Rows $ManifestRows -TokenMap $tokenMap -Salt $salt -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
+    $redactedTargetRows = Protect-ShareSurferFileShareConnectivityRows -Rows $TargetRows -TokenMap $tokenMap -Salt $salt -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
+    $redactedCheckRows = Protect-ShareSurferFileShareConnectivityRows -Rows $CheckRows -TokenMap $tokenMap -Salt $salt -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
+    $redactedEventRows = Protect-ShareSurferFileShareConnectivityRows -Rows $EventRows -TokenMap $tokenMap -Salt $salt -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
 
     $schema = Get-ShareSurferFileShareConnectivityExportSchema
     Export-ShareSurferCsv -Path (Join-Path $RedactedPath 'fileshare_connectivity_manifest.csv') -Columns $schema['fileshare_connectivity_manifest.csv'] -Rows $redactedManifestRows

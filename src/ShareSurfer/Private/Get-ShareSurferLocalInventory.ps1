@@ -1,3 +1,20 @@
+function Test-ShareSurferItemIsReparsePoint {
+    param(
+        $Item
+    )
+
+    if ($null -eq $Item -or $null -eq $Item.PSObject.Properties['Attributes']) {
+        return $false
+    }
+
+    try {
+        return ((([System.IO.FileAttributes]$Item.Attributes) -band [System.IO.FileAttributes]::ReparsePoint) -ne 0)
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-ShareSurferLocalInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -59,9 +76,15 @@ function Get-ShareSurferLocalInventory {
         $permissionRows = @()
         $sharePermissionSource = ''
         $nativeSharePermissionAttempted = $false
+        $permissionResult = $null
         if (-not $SkipSharePermissionCollection) {
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Collecting share-level permission evidence for {0}.' -f $targetDisplayPath) -Quiet:$Quiet
-            $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName)
+            $permissionResult = Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName -PassThruResult
+            $permissionRows = @($permissionResult.Rows)
+            if (-not [string]::IsNullOrWhiteSpace([string]$permissionResult.ErrorType)) {
+                $permissionEventLevel = if ([string]$permissionResult.Severity -eq 'Info') { 'Info' } else { 'Warning' }
+                [void]$scanEvents.Add((New-ShareSurferEvent -Level $permissionEventLevel -EventType ([string]$permissionResult.ErrorType) -Source ([string]$permissionResult.Source) -ShareId $shareId -Message ([string]$permissionResult.Message) -Detail ([string]$permissionResult.Detail)))
+            }
             if ($permissionRows.Count -gt 0) {
                 $sharePermissionSource = 'Get-SmbShareAccess'
             }
@@ -109,6 +132,17 @@ function Get-ShareSurferLocalInventory {
                 Message = $permissionMessage
                 Detail = 'Best-effort target path scan cannot prove the share-level access gate for this share.'
             })
+            if ($null -ne $permissionResult -and -not [string]::IsNullOrWhiteSpace([string]$permissionResult.ErrorType) -and [string]$permissionResult.ErrorType -ne 'CimSessionRequired') {
+                [void]$scanErrors.Add([pscustomobject]@{
+                    ShareId = $shareId
+                    FullPath = $targetDisplayPath
+                    ErrorType = [string]$permissionResult.ErrorType
+                    Severity = [string]$permissionResult.Severity
+                    Source = [string]$permissionResult.Source
+                    Message = [string]$permissionResult.Message
+                    Detail = [string]$permissionResult.Detail
+                })
+            }
             [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'Get-SmbShareAccess' -ShareId $shareId -Message $permissionMessage -Detail $targetDisplayPath))
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Share-level permissions were unavailable for {0}; continuing with file/folder ACL collection.' -f $targetDisplayPath) -Quiet:$Quiet
         }
@@ -125,26 +159,48 @@ function Get-ShareSurferLocalInventory {
             PartialReason = if (-not $SkipSharePermissionCollection -and $permissionRows.Count -eq 0) { $permissionMessage } else { '' }
         })
 
-        $scanItems = @($targetItem)
-        $childErrors = @()
-        Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating folders{0} under {1}.' -f $(if ($IncludeFiles) { ' and files' } else { '' }), $targetDisplayPath) -Quiet:$Quiet
-        $children = Get-ChildItem -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path ([string]$targetItem.FullName)) -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable childErrors
-        foreach ($childError in $childErrors) {
-            $errorPath = ConvertFrom-ShareSurferFilesystemPath -Path (Get-ShareSurferCollectionErrorPath -ErrorRecord $childError -FallbackPath $targetDisplayPath)
-            [void]$scanErrors.Add([pscustomobject]@{
-                ShareId = $shareId
-                FullPath = $errorPath
-                ErrorType = 'EnumerationError'
-                Severity = 'Warning'
-                Source = 'Get-ChildItem'
-                Message = [string]$childError.Exception.Message
-                Detail = ('FallbackPath={0}' -f $targetDisplayPath)
-            })
-            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'EnumerationError' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Unable to enumerate child path {0}' -f $errorPath) -Detail ([string]$childError.Exception.Message)))
+        $scanItems = New-Object System.Collections.ArrayList
+        [void]$scanItems.Add($targetItem)
+        $directoriesToEnumerate = New-Object -TypeName 'System.Collections.Generic.Queue[object]'
+        $targetIsReparsePoint = Test-ShareSurferItemIsReparsePoint -Item $targetItem
+        if ($targetItem.PSIsContainer -and -not $targetIsReparsePoint) {
+            $directoriesToEnumerate.Enqueue($targetItem)
         }
-        foreach ($child in $children) {
-            if ($child.PSIsContainer -or $IncludeFiles) {
-                $scanItems += $child
+        elseif ($targetItem.PSIsContainer -and $targetIsReparsePoint) {
+            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'ReparsePointSkipped' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Skipped recursive traversal into reparse point {0}.' -f $targetDisplayPath) -Detail 'The reparse-point directory is recorded as an item, but ShareSurfer does not descend into it.'))
+        }
+
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating folders{0} under {1}.' -f $(if ($IncludeFiles) { ' and files' } else { '' }), $targetDisplayPath) -Quiet:$Quiet
+        while ($directoriesToEnumerate.Count -gt 0) {
+            $directoryItem = $directoriesToEnumerate.Dequeue()
+            $directoryDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$directoryItem.FullName)
+            $childErrors = @()
+            $children = @(Get-ChildItem -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path ([string]$directoryItem.FullName)) -Force -ErrorAction SilentlyContinue -ErrorVariable childErrors)
+            foreach ($childError in $childErrors) {
+                $errorPath = ConvertFrom-ShareSurferFilesystemPath -Path (Get-ShareSurferCollectionErrorPath -ErrorRecord $childError -FallbackPath $directoryDisplayPath)
+                [void]$scanErrors.Add([pscustomobject]@{
+                    ShareId = $shareId
+                    FullPath = $errorPath
+                    ErrorType = 'EnumerationError'
+                    Severity = 'Warning'
+                    Source = 'Get-ChildItem'
+                    Message = [string]$childError.Exception.Message
+                    Detail = ('FallbackPath={0}' -f $directoryDisplayPath)
+                })
+                [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'EnumerationError' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Unable to enumerate child path {0}' -f $errorPath) -Detail ([string]$childError.Exception.Message)))
+            }
+            foreach ($child in $children) {
+                $isReparsePoint = Test-ShareSurferItemIsReparsePoint -Item $child
+                if ($child.PSIsContainer -or $IncludeFiles) {
+                    [void]$scanItems.Add($child)
+                }
+                if ($child.PSIsContainer -and -not $isReparsePoint) {
+                    $directoriesToEnumerate.Enqueue($child)
+                }
+                elseif ($child.PSIsContainer -and $isReparsePoint) {
+                    $childDisplayPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$child.FullName)
+                    [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'ReparsePointSkipped' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Skipped recursive traversal into reparse point {0}.' -f $childDisplayPath) -Detail 'The reparse-point directory is recorded as an item, but ShareSurfer does not descend into it.'))
+                }
             }
         }
 

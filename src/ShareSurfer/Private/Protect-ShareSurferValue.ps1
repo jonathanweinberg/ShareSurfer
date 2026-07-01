@@ -256,9 +256,5 @@ function Protect-ShareSurferValue {
         return $text
     }
 
-    if ($text -match '[\\/@]' -or $text -match '^[A-Z0-9.-]+\.' -or $text.Length -gt 12) {
-        return Get-ShareSurferStableToken -Value $text -Salt $RedactionSalt
-    }
-
-    return $text
+    return Get-ShareSurferStableToken -Value $text -Salt $RedactionSalt
 }

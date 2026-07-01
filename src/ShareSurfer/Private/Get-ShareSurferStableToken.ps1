@@ -9,7 +9,8 @@ function Get-ShareSurferStableToken {
 
     $sha = [System.Security.Cryptography.SHA256]::Create()
     try {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Salt + '|' + $Value)
+        $normalizedValue = ([string]$Value).Trim().ToUpperInvariant()
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Salt + '|' + $normalizedValue)
         $hash = $sha.ComputeHash($bytes)
         $hex = ([System.BitConverter]::ToString($hash)).Replace('-', '').Substring(0, 12)
         'ID-' + $hex

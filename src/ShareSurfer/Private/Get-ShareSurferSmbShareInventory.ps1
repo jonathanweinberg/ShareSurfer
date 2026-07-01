@@ -35,7 +35,9 @@ function Get-ShareSurferSmbShareInventory {
 
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'CollectionProviderSelected' -Source $SmbCollectionProvider -Message ('Using {0} SMB collection provider for {1} explicit share target(s) on {2}.' -f $SmbCollectionProvider, @($ShareName).Count, $ComputerName) -Detail 'PowerShell SMB/CIM collector path'))
 
-    if (Test-ShareSurferRemoteComputerName -ComputerName $ComputerName) {
+    $targetIsRemote = Test-ShareSurferRemoteComputerName -ComputerName $ComputerName
+
+    if ($targetIsRemote) {
         $remoteCimSessionAttempted = $true
         $newCimSession = Get-Command New-CimSession -ErrorAction SilentlyContinue
         if ($null -ne $newCimSession) {
@@ -80,6 +82,7 @@ function Get-ShareSurferSmbShareInventory {
             $localPath = ''
             $description = ''
             $scanPath = $uncPath
+            $pathSelection = 'TargetUNC'
             $source = 'BestEffort'
             $rpcShare = $null
 
@@ -90,7 +93,7 @@ function Get-ShareSurferSmbShareInventory {
                     if ($null -ne $cimSession) {
                         $share = Get-SmbShare -Name $name -CimSession $cimSession
                     }
-                    elseif (-not (Test-ShareSurferRemoteComputerName -ComputerName $ComputerName)) {
+                    elseif (-not $targetIsRemote) {
                         $share = Get-SmbShare -Name $name
                     }
                     else {
@@ -99,8 +102,15 @@ function Get-ShareSurferSmbShareInventory {
                     if ($null -ne $share) {
                         $localPath = [string]$share.Path
                         $description = [string]$share.Description
-                        if ($localPath -ne '' -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
+                        if ($localPath -ne '' -and -not $targetIsRemote -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
                             $scanPath = $localPath
+                            $pathSelection = 'ReturnedLocalPathUsedForLocalTarget'
+                        }
+                        elseif ($localPath -ne '' -and $targetIsRemote) {
+                            $pathSelection = 'ReturnedLocalPathIgnoredForRemoteTarget'
+                        }
+                        elseif ($localPath -ne '') {
+                            $pathSelection = 'ReturnedLocalPathUnavailableOnCollector'
                         }
                         $source = 'Get-SmbShare'
                         [void]$effectiveProviders.Add('PowerShellCim')
@@ -126,8 +136,15 @@ function Get-ShareSurferSmbShareInventory {
                     if ($null -ne $rpcShare) {
                         $localPath = [string]$rpcShare.Path
                         $description = [string]$rpcShare.Description
-                        if ($localPath -ne '' -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
+                        if ($localPath -ne '' -and -not $targetIsRemote -and (Test-Path -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $localPath))) {
                             $scanPath = $localPath
+                            $pathSelection = 'ReturnedLocalPathUsedForLocalTarget'
+                        }
+                        elseif ($localPath -ne '' -and $targetIsRemote) {
+                            $pathSelection = 'ReturnedLocalPathIgnoredForRemoteTarget'
+                        }
+                        elseif ($localPath -ne '') {
+                            $pathSelection = 'ReturnedLocalPathUnavailableOnCollector'
                         }
                         $source = [string]$rpcShare.Source
                         if ($source -eq '') {
@@ -155,7 +172,8 @@ function Get-ShareSurferSmbShareInventory {
                 [void]$effectiveProviders.Add('BestEffort')
             }
 
-            [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source $source -ShareId $shareId -Message ('Resolved share target {0}' -f $uncPath) -Detail $scanPath))
+            $pathSelectionDetail = 'SelectedPath={0}; ReturnedLocalPath={1}; TargetIsRemote={2}; PathSelection={3}' -f $scanPath, $localPath, $targetIsRemote, $pathSelection
+            [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ShareTargetResolved' -Source $source -ShareId $shareId -Message ('Resolved share target {0}' -f $uncPath) -Detail $pathSelectionDetail))
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating {0}.' -f $scanPath) -Quiet:$Quiet
 
             try {
@@ -170,6 +188,9 @@ function Get-ShareSurferSmbShareInventory {
                         $row.LocalPath = $localPath
                     }
                     $row.Description = $description
+                    if ([string]$row.PartialReason -eq 'Target path could not be resolved.') {
+                        $row.PartialReason = 'Unable to enumerate share path.'
+                    }
                     [void]$shares.Add($row)
                 }
                 foreach ($row in @(ConvertTo-ShareSurferArray $inventory.Items)) {
@@ -182,10 +203,19 @@ function Get-ShareSurferSmbShareInventory {
                 }
                 foreach ($row in @(ConvertTo-ShareSurferArray $inventory.ScanErrors)) {
                     $row.ShareId = $shareId
+                    if ([string]$row.ErrorType -eq 'TargetPathResolveError') {
+                        $row.ErrorType = 'ShareEnumerationError'
+                        $row.FullPath = $uncPath
+                    }
                     [void]$scanErrors.Add($row)
                 }
                 foreach ($row in @(ConvertTo-ShareSurferArray $inventory.ScanEvents)) {
                     $row.ShareId = $shareId
+                    if ([string]$row.EventType -eq 'TargetPathResolveError') {
+                        $row.EventType = 'ShareEnumerationError'
+                        $row.Source = 'SmbShare'
+                        $row.Message = ('Unable to enumerate share path {0}' -f $uncPath)
+                    }
                     [void]$scanEvents.Add($row)
                 }
             }
@@ -209,7 +239,12 @@ function Get-ShareSurferSmbShareInventory {
                 })
             }
 
-            $permissionRows = @(Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $name -ComputerName $ComputerName -CimSession $cimSession -SkipRemoteCimSessionCreation:($remoteCimSessionAttempted -and -not $remoteCimSessionAvailable))
+            $permissionResult = Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $name -ComputerName $ComputerName -CimSession $cimSession -SkipRemoteCimSessionCreation:($remoteCimSessionAttempted -and -not $remoteCimSessionAvailable) -PassThruResult
+            $permissionRows = @($permissionResult.Rows)
+            if (-not [string]::IsNullOrWhiteSpace([string]$permissionResult.ErrorType)) {
+                $permissionEventLevel = if ([string]$permissionResult.Severity -eq 'Info') { 'Info' } else { 'Warning' }
+                [void]$scanEvents.Add((New-ShareSurferEvent -Level $permissionEventLevel -EventType ([string]$permissionResult.ErrorType) -Source ([string]$permissionResult.Source) -ShareId $shareId -Message ([string]$permissionResult.Message) -Detail ([string]$permissionResult.Detail)))
+            }
             if ($permissionRows.Count -eq 0) {
                 Write-ShareSurferStatus -Phase 'Collect' -Message ('Get-SmbShareAccess did not return share permissions for {0}; trying native SMB/RPC descriptor fallback.' -f $uncPath) -Quiet:$Quiet
                 $nativeEvidence = Get-ShareSurferNativeSharePermissionEvidence -ShareId $shareId -ComputerName $ComputerName -ShareName $name -RpcShare $rpcShare
@@ -257,8 +292,18 @@ function Get-ShareSurferSmbShareInventory {
             if ($permissionRows.Count -eq 0) {
                 $shareRow = @($shares | Where-Object { $_.ShareId -eq $shareId } | Select-Object -First 1)
                 if ($shareRow.Count -gt 0) {
-                    $shareRow[0].PartialData = $true
-                    $shareRow[0].PartialReason = 'Share-level permissions were not collected through Get-SmbShareAccess or NativeSmbRpc.'
+                    Add-ShareSurferPartialReason -ShareRow $shareRow[0] -Reason 'Share-level permissions were not collected through Get-SmbShareAccess or NativeSmbRpc.'
+                }
+                if (-not [string]::IsNullOrWhiteSpace([string]$permissionResult.ErrorType) -and [string]$permissionResult.ErrorType -ne 'CimSessionRequired') {
+                    [void]$scanErrors.Add([pscustomobject]@{
+                        ShareId = $shareId
+                        FullPath = $uncPath
+                        ErrorType = [string]$permissionResult.ErrorType
+                        Severity = [string]$permissionResult.Severity
+                        Source = [string]$permissionResult.Source
+                        Message = [string]$permissionResult.Message
+                        Detail = [string]$permissionResult.Detail
+                    })
                 }
                 Write-ShareSurferStatus -Phase 'Collect' -Message ('Share-level permissions were unavailable for {0}; continuing with partial share-permission evidence.' -f $uncPath) -Quiet:$Quiet
             }
