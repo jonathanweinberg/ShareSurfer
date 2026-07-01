@@ -356,7 +356,7 @@ function Invoke-ShareSurferStartupPostPlanHandoff {
     $runNow = Read-ShareSurferStartupBoolean -Prompt 'Run the generated diagnostic/scan/validate/dashboard script now?' -Value $false
     if ($runNow) {
         Write-Host ('Running generated ShareSurfer script: {0}' -f $ReusableCommandPath)
-        & $ReusableCommandPath
+        & $ReusableCommandPath | Out-Host
     }
 
     [pscustomobject]@{

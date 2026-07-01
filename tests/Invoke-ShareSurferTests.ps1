@@ -2653,6 +2653,8 @@ $tests = @(
             Assert-Equal $plan.optionalInputs.ownerMappingPath $ownerMappingPath 'Assistant plan should preserve owner mapping path.'
             Assert-True ([string]$plan.commands.sharePermissionDiagnostics -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Assistant plan should include a share-permission diagnostic command preview.'
             Assert-True ([string]$plan.commands.sharePermissionDiagnostics -like '*share-permission-diagnostics*') 'Diagnostic command preview should show the diagnostic output folder.'
+            Assert-True ([string]$plan.commands.portProtocolAssessment -like '*Invoke-ShareSurferPortProtocolAssessment*') 'Assistant plan should include a port/protocol assessment command preview.'
+            Assert-True ([string]$plan.commands.portProtocolAssessment -like '*-OutputPath*') 'Port/protocol assessment command preview should write beside the export.'
             Assert-True ([string]$plan.commands.scan -like '*Invoke-ShareSurferScan*') 'Assistant plan should include a scan command preview.'
             Assert-True ([string]$plan.commands.scan -like '*-OwnershipEnrichmentPath*') 'Scan command preview should show ownership enrichment when provided.'
             Assert-True ([string]$plan.commands.validate -like '*Test-ShareSurferExport*') 'Assistant plan should include export validation command preview.'
@@ -2663,7 +2665,9 @@ $tests = @(
             Assert-True ($scriptText -like '*Import-Module $modulePath -Force*') 'Reusable script should import the module.'
             Assert-True ($scriptText -like '*$sharePermissionDiagnosticPath = Join-Path $exportPath*share-permission-diagnostics*') 'Reusable script should define the share-permission diagnostic output path.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force*') 'Reusable script should run intensive share-permission diagnostics before scanning.'
+            Assert-True ($scriptText -like '*Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force*') 'Reusable script should write port/protocol assessment CSVs beside the export before dashboard packaging.'
             Assert-True ($scriptText.IndexOf('Invoke-ShareSurferSharePermissionDiagnostic') -lt $scriptText.IndexOf('Invoke-ShareSurferScan @scanParams')) 'Reusable script should run share-permission diagnostics before the scan.'
+            Assert-True ($scriptText.IndexOf('Invoke-ShareSurferPortProtocolAssessment') -lt $scriptText.IndexOf('& $standaloneDashboardScript')) 'Reusable script should run port/protocol assessment before dashboard packaging.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Reusable script should run the scan through a splatted command.'
             Assert-True ($scriptText -like '*$validation = Test-ShareSurferExport -ExportPath $exportPath*') 'Reusable script should validate the export.'
             Assert-True ($scriptText -like '*ShareSurfer export validation failed*') 'Reusable script should stop when export validation fails.'
@@ -2704,6 +2708,7 @@ $tests = @(
                 -replace '\$modulePath = Join-Path \$releaseRoot .+', ('$modulePath = {0}' -f $moduleManifestLiteral) `
                 -replace '\$standaloneDashboardScript = Join-Path \$releaseRoot .+', '$standaloneDashboardScript = ''unused-by-validation-guard-test''' `
                 -replace [regex]::Escape('Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force'), '# Diagnostics intentionally skipped by validation guard regression test.' `
+                -replace [regex]::Escape('Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force'), '# Port/protocol assessment intentionally skipped by validation guard regression test.' `
                 -replace [regex]::Escape('Invoke-ShareSurferScan @scanParams'), '# Scan intentionally skipped by validation guard regression test.' `
                 -replace [regex]::Escape('& $standaloneDashboardScript -ExportPath $exportPath -OutputPath $standaloneDashboardPath -Force'), ('Set-Content -LiteralPath {0} -Value ''packaged'' -Encoding UTF8' -f $packageSentinelPathLiteral)
             Set-Content -LiteralPath $validationGuardScriptPath -Value $validationGuardScript -Encoding UTF8
@@ -2792,6 +2797,7 @@ $tests = @(
             Assert-Equal $operatorPlan.includeSharePermissionDiagnostics $true 'Startup should delegate share-permission diagnostic choice into operator assistant plan.'
             Assert-Equal $summary.IncludeSharePermissionDiagnostics $true 'Startup summary should report share-permission diagnostic choice.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Startup-generated operator rerun script should run share-permission diagnostics by default.'
+            Assert-True ($scriptText -like '*Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force*') 'Startup-generated operator rerun script should generate port/protocol readiness CSVs by default.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Startup-generated operator rerun script should run the scan.'
             Assert-True ($scriptText -like '*Test-ShareSurferExport -ExportPath $exportPath*') 'Startup-generated operator rerun script should validate the export.'
 
@@ -2876,6 +2882,51 @@ $tests = @(
             $replayedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
             Assert-Equal $replaySummary.OptionalInputDiscovery.ownershipEnrichment.status 'SkippedFoundInput' 'Config replay should preserve a previously blank optional input even if a conventional file is added later.'
             Assert-Equal $replayedConfig.optionalInputs.ownershipEnrichmentPath '' 'Config replay should not silently add a new optional input that was absent from the saved config.'
+        }
+    },
+    @{
+        Name = 'Start-ShareSurferStartup run-now handoff ignores generated script pipeline output'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStartupRunNow-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $root -Force | Out-Null
+            $configPath = Join-Path $root 'sharesurfer-startup.config.json'
+            $planPath = Join-Path $root 'operator-assistant.plan.json'
+            $rerunPath = Join-Path $root 'operator-assistant-rerun.ps1'
+            Set-Content -LiteralPath $configPath -Value '{"version":1}' -Encoding UTF8
+            Set-Content -LiteralPath $planPath -Value '{"version":1}' -Encoding UTF8
+            Set-Content -LiteralPath $rerunPath -Value @(
+                "Write-Host 'Generated rerun script is running.'",
+                "[pscustomobject]@{ EmittedBy = 'GeneratedRerunScript'; ScanComplete = `$true }"
+            ) -Encoding UTF8
+
+            $global:ShareSurferStartupPromptAnswers = New-Object System.Collections.Queue
+            [void]$global:ShareSurferStartupPromptAnswers.Enqueue('N')
+            [void]$global:ShareSurferStartupPromptAnswers.Enqueue('Y')
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($global:ShareSurferStartupPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected startup prompt: {0}' -f $Prompt)
+                }
+                $global:ShareSurferStartupPromptAnswers.Dequeue()
+            }
+
+            try {
+                $handoffResult = @(& $module {
+                    param($StartupConfigPath, $OperatorPlanPath, $ReusableCommandPath)
+                    Invoke-ShareSurferStartupPostPlanHandoff -StartupConfigPath $StartupConfigPath -OperatorPlanPath $OperatorPlanPath -ReusableCommandPath $ReusableCommandPath
+                } $configPath $planPath $rerunPath)
+
+                Assert-Equal $handoffResult.Count 1 'Run-now handoff should not return generated script pipeline output alongside its summary.'
+                Assert-Equal $handoffResult[0].ReviewShown $false 'Run-now handoff should preserve the review-shown flag.'
+                Assert-Equal $handoffResult[0].RerunLaunched $true 'Run-now handoff should report that the generated script was launched.'
+                Assert-Equal $global:ShareSurferStartupPromptAnswers.Count 0 'Run-now handoff should consume the expected review and run prompts.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name ShareSurferStartupPromptAnswers -Scope Global -ErrorAction SilentlyContinue
+            }
         }
     },
     @{
