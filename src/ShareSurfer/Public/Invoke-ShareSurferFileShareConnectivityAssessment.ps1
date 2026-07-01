@@ -564,13 +564,22 @@ function Test-ShareSurferFileShareConnectivityDiagnosticPackage {
         'fileshare_connectivity_checks.csv',
         'fileshare_connectivity_summary.json',
         'fileshare_connectivity_events.jsonl',
+        'share_permission_diagnostic_manifest.csv',
+        'share_permission_diagnostics.csv',
+        'share_permission_diagnostics.jsonl',
+        'share_permission_diagnostics.md',
         'redacted/fileshare_connectivity_manifest.csv',
         'redacted/fileshare_connectivity_targets.csv',
         'redacted/fileshare_connectivity_checks.csv',
         'redacted/fileshare_connectivity_summary.json',
         'redacted/fileshare_connectivity_events.jsonl',
         'redacted/fileshare_connectivity_llm_summary.md',
-        'redacted/fileshare_connectivity_redaction_manifest.csv'
+        'redacted/fileshare_connectivity_redaction_manifest.csv',
+        'redacted/share_permission_diagnostic_manifest.csv',
+        'redacted/share_permission_diagnostics.csv',
+        'redacted/share_permission_diagnostics.jsonl',
+        'redacted/share_permission_diagnostics.md',
+        'redacted/share_permission_diagnostic_redaction_manifest.csv'
     )
 
     foreach ($fileName in $required) {
@@ -580,6 +589,245 @@ function Test-ShareSurferFileShareConnectivityDiagnosticPackage {
     }
 
     $true
+}
+
+function Get-ShareSurferSharePermissionDiagnosticAttemptedMethod {
+    param($Check)
+
+    switch ([string]$Check.Capability) {
+        'NameResolution' { return 'Resolve file server name before any share-permission proof.' }
+        'SmbTcp445' { return 'Open SMB TCP 445 to prove basic file-share transport only.' }
+        'WinRmHttp5985' { return 'Open WinRM HTTP 5985 for possible CIM collection transport.' }
+        'WinRmHttps5986' { return 'Open WinRM HTTPS 5986 for possible CIM collection transport.' }
+        'RpcEndpointMapper135' { return 'Open RPC endpoint mapper 135 for native or administrative RPC paths.' }
+        'CimSession' { return 'Create a remote CIM session with New-CimSession.' }
+        'CimShareMetadata' { return 'Read share metadata with Get-SmbShare over CIM.' }
+        'CimSharePermissions' { return 'Read share permissions with Get-SmbShareAccess over CIM.' }
+        'NativeShareMetadata' { return 'Read share metadata with native NetShareGetInfo.' }
+        'NativeShareDescriptorReturned' { return 'Request SHARE_INFO_502 share security descriptor bytes from NetShareGetInfo.' }
+        'NativeShareDescriptorParsed' { return 'Parse returned share security descriptor bytes into share permission ACE rows.' }
+        'FileSystemSecurityDescriptorRead' { return 'Read owner and DACL evidence from the share root with GetNamedSecurityInfoW.' }
+        default { return ('Run {0} through {1}.' -f [string]$Check.Capability, [string]$Check.Provider) }
+    }
+}
+
+function Get-ShareSurferSharePermissionDiagnosticWhyItMatters {
+    param($Check)
+
+    switch ([string]$Check.Capability) {
+        'NameResolution' { return 'Share permission checks cannot start if the collector cannot resolve the file server name.' }
+        'SmbTcp445' { return 'SMB reachability is necessary for UNC access, but it does not prove that share permissions or security descriptors can be read.' }
+        'WinRmHttp5985' { return 'The default PowerShell CIM route commonly needs WinRM. A reachable port still does not prove authentication or SMB cmdlet access.' }
+        'WinRmHttps5986' { return 'WinRM over HTTPS may be used in locked-down environments. It is transport evidence, not share-permission proof by itself.' }
+        'RpcEndpointMapper135' { return 'RPC reachability can support native or administrative calls, but passing this check does not prove NetShareGetInfo or descriptor parsing.' }
+        'CimSession' { return 'Get-SmbShare and Get-SmbShareAccess over CIM require a real session, not just an open WinRM port.' }
+        'CimShareMetadata' { return 'Share metadata proves the share name can be resolved by SMB cmdlets before permissions are requested.' }
+        'CimSharePermissions' { return 'This is the normal Windows SMB cmdlet proof that share-level permissions were readable.' }
+        'NativeShareMetadata' { return 'Native SMB/RPC fallback needs NetShareGetInfo to return the share before share security descriptor checks can continue.' }
+        'NativeShareDescriptorReturned' { return 'Native share-permission proof depends on the server returning the share security descriptor, not just confirming the share exists.' }
+        'NativeShareDescriptorParsed' { return 'Returned descriptor bytes are only useful if ShareSurfer can parse them into ACE rows.' }
+        'FileSystemSecurityDescriptorRead' { return 'ShareSurfer also needs file/folder owner and DACL evidence; this can fail even when share metadata succeeds.' }
+        default { return 'This capability affects whether ShareSurfer can trust the share-permission evidence for this target.' }
+    }
+}
+
+function New-ShareSurferSharePermissionDiagnosticRows {
+    param(
+        [string] $AssessmentId,
+        $Checks
+    )
+
+    $sharePermissionCapabilities = @(
+        'NameResolution',
+        'SmbTcp445',
+        'WinRmHttp5985',
+        'WinRmHttps5986',
+        'RpcEndpointMapper135',
+        'CimSession',
+        'CimShareMetadata',
+        'CimSharePermissions',
+        'NativeShareMetadata',
+        'NativeShareDescriptorReturned',
+        'NativeShareDescriptorParsed',
+        'FileSystemSecurityDescriptorRead'
+    )
+
+    $rows = New-Object System.Collections.ArrayList
+    $index = 0
+    foreach ($check in @($Checks | Where-Object { $sharePermissionCapabilities -contains [string]$_.Capability })) {
+        $index++
+        $status = [string]$check.Status
+        $whatSucceeded = ''
+        $whatFailed = ''
+        if ($status -eq 'Pass') {
+            $whatSucceeded = [string]$check.Message
+        }
+        elseif ($status -eq 'Skipped') {
+            $whatFailed = 'This check was not attempted.'
+        }
+        else {
+            $whatFailed = [string]$check.Message
+        }
+
+        [void]$rows.Add([pscustomobject]@{
+            AssessmentId = $AssessmentId
+            DiagnosticId = 'shareperm-{0:0000}' -f $index
+            TargetId = [string]$check.TargetId
+            Target = [string]$check.Target
+            ComputerName = [string]$check.ComputerName
+            ShareName = [string]$check.ShareName
+            Layer = [string]$check.Layer
+            Provider = [string]$check.Provider
+            AttemptedMethod = Get-ShareSurferSharePermissionDiagnosticAttemptedMethod -Check $check
+            Status = $status
+            Severity = [string]$check.Severity
+            EvidenceType = [string]$check.EvidenceType
+            RawResultCode = [string]$check.RawResultCode
+            WhatSucceeded = $whatSucceeded
+            WhatFailed = $whatFailed
+            WhyItMatters = Get-ShareSurferSharePermissionDiagnosticWhyItMatters -Check $check
+            Detail = [string]$check.Detail
+            RecommendedAction = [string]$check.RecommendedAction
+            SourceCheckId = [string]$check.CheckId
+        })
+    }
+
+    @($rows)
+}
+
+function New-ShareSurferSharePermissionDiagnosticMarkdown {
+    param(
+        $Manifest,
+        $Rows
+    )
+
+    $diagnostics = @($Rows)
+    $failed = @($diagnostics | Where-Object { $_.Status -eq 'Fail' })
+    $warnings = @($diagnostics | Where-Object { $_.Status -eq 'Warning' })
+    $skipped = @($diagnostics | Where-Object { $_.Status -eq 'Skipped' })
+    $passed = @($diagnostics | Where-Object { $_.Status -eq 'Pass' })
+
+    $lines = New-Object System.Collections.ArrayList
+    [void]$lines.Add('# Share Permission Diagnostics')
+    [void]$lines.Add('')
+    [void]$lines.Add('This diagnostic view focuses on why share-level permissions are, or are not, available to ShareSurfer. TCP port success is treated as transport evidence only.')
+    [void]$lines.Add('')
+    [void]$lines.Add(('Assessment ID: `{0}`' -f [string]$Manifest.AssessmentId))
+    [void]$lines.Add(('Generated at: `{0}`' -f [string]$Manifest.GeneratedAt))
+    [void]$lines.Add(('Targets: `{0}`; diagnostics: `{1}`; pass `{2}`; warning `{3}`; fail `{4}`; skipped `{5}`' -f [string]$Manifest.TargetCount, [string]$Manifest.DiagnosticCount, [string]$Manifest.PassedCount, [string]$Manifest.WarningCount, [string]$Manifest.FailedCount, [string]$Manifest.SkippedCount))
+    [void]$lines.Add('')
+    [void]$lines.Add('## Where To Look')
+    [void]$lines.Add('')
+    [void]$lines.Add('- Raw diagnostic matrix: `share_permission_diagnostics.csv`')
+    [void]$lines.Add('- Raw event log: `share_permission_diagnostics.jsonl`')
+    [void]$lines.Add('- Full capability evidence: `fileshare_connectivity_checks.csv`')
+    [void]$lines.Add('- Support-safe copy: `redacted\\share_permission_diagnostics.csv` and `redacted\\share_permission_diagnostics.md`')
+    [void]$lines.Add('')
+    [void]$lines.Add('## First Things To Review')
+    $problemRows = @($failed + $warnings | Select-Object -First 25)
+    if ($problemRows.Count -eq 0) {
+        [void]$lines.Add('- No failed or warning share-permission diagnostics were exported. Review skipped rows before treating the run as complete.')
+    }
+    foreach ($row in $problemRows) {
+        [void]$lines.Add(('- `{0}` `{1}` on `{2}` with `{3}`: {4} Action: {5}' -f [string]$row.Status, [string]$row.EvidenceType, [string]$row.TargetId, [string]$row.Provider, [string]$row.WhyItMatters, [string]$row.RecommendedAction))
+    }
+    if ($skipped.Count -gt 0) {
+        [void]$lines.Add(('- Skipped diagnostics: `{0}`. Skipped checks are not proof; rerun without skip switches when you need live evidence.' -f $skipped.Count))
+    }
+    [void]$lines.Add('')
+    [void]$lines.Add('## Capability Counts')
+    foreach ($group in @($diagnostics | Group-Object Provider | Sort-Object Name)) {
+        [void]$lines.Add(('- `{0}`: pass `{1}`, warning `{2}`, fail `{3}`, skipped `{4}`' -f $group.Name, @($group.Group | Where-Object { $_.Status -eq 'Pass' }).Count, @($group.Group | Where-Object { $_.Status -eq 'Warning' }).Count, @($group.Group | Where-Object { $_.Status -eq 'Fail' }).Count, @($group.Group | Where-Object { $_.Status -eq 'Skipped' }).Count))
+    }
+    [void]$lines.Add('')
+    [void]$lines.Add('## Reminder')
+    [void]$lines.Add('')
+    [void]$lines.Add('A reachable SMB/RPC route can still fail to return or parse share security descriptors. A working CIM session can still fail on `Get-SmbShareAccess`. Review the diagnostic rows before accepting share-level permission evidence as complete.')
+    @($lines) -join [Environment]::NewLine
+}
+
+function Export-ShareSurferSharePermissionDiagnosticPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $OutputPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $RedactedPath,
+
+        [Parameter(Mandatory = $true)]
+        [string] $AssessmentId,
+
+        [Parameter(Mandatory = $true)]
+        [string] $GeneratedAt,
+
+        $Targets,
+        $Checks,
+        [string] $RedactionSalt
+    )
+
+    $diagnosticRows = @(New-ShareSurferSharePermissionDiagnosticRows -AssessmentId $AssessmentId -Checks $Checks)
+    $passedCount = @($diagnosticRows | Where-Object { $_.Status -eq 'Pass' }).Count
+    $warningCount = @($diagnosticRows | Where-Object { $_.Status -eq 'Warning' }).Count
+    $failedCount = @($diagnosticRows | Where-Object { $_.Status -eq 'Fail' }).Count
+    $skippedCount = @($diagnosticRows | Where-Object { $_.Status -eq 'Skipped' }).Count
+    $schema = Get-ShareSurferSharePermissionDiagnosticExportSchema
+
+    $manifestRows = @([pscustomobject]@{
+        AssessmentId = $AssessmentId
+        GeneratedAt = $GeneratedAt
+        ExportVersion = '1'
+        PackageKind = 'SharePermissionDiagnostic'
+        TargetCount = [string]@($Targets).Count
+        DiagnosticCount = [string]$diagnosticRows.Count
+        PassedCount = [string]$passedCount
+        WarningCount = [string]$warningCount
+        FailedCount = [string]$failedCount
+        SkippedCount = [string]$skippedCount
+        RawDiagnosticsPath = 'share_permission_diagnostics.csv'
+        RawEventsPath = 'share_permission_diagnostics.jsonl'
+        HumanSummaryPath = 'share_permission_diagnostics.md'
+        RedactedOutputPath = 'redacted'
+        RedactedSummaryPath = 'redacted/share_permission_diagnostics.md'
+    })
+
+    Export-ShareSurferCsv -Path (Join-Path $OutputPath 'share_permission_diagnostic_manifest.csv') -Columns $schema['share_permission_diagnostic_manifest.csv'] -Rows $manifestRows
+    Export-ShareSurferCsv -Path (Join-Path $OutputPath 'share_permission_diagnostics.csv') -Columns $schema['share_permission_diagnostics.csv'] -Rows $diagnosticRows
+    Export-ShareSurferJsonLines -Path (Join-Path $OutputPath 'share_permission_diagnostics.jsonl') -Rows $diagnosticRows
+    Set-Content -LiteralPath (Join-Path $OutputPath 'share_permission_diagnostics.md') -Value (New-ShareSurferSharePermissionDiagnosticMarkdown -Manifest $manifestRows[0] -Rows $diagnosticRows) -Encoding UTF8
+
+    $targetRows = @($Targets)
+    $eventRows = @()
+    $salt = if ([string]::IsNullOrWhiteSpace($RedactionSalt)) { $AssessmentId } else { $RedactionSalt }
+    $tokenMap = New-ShareSurferFileShareConnectivityTokenMap -ManifestRows @() -TargetRows $targetRows -CheckRows $diagnosticRows -EventRows $eventRows -Salt $salt
+    $sensitiveColumns = @('Target', 'ComputerName', 'ShareName')
+    $detailColumns = @('WhatSucceeded', 'WhatFailed', 'Detail', 'RecommendedAction')
+    $redactedManifestRows = $manifestRows
+    $redactedDiagnosticRows = Protect-ShareSurferFileShareConnectivityRows -Rows $diagnosticRows -TokenMap $tokenMap -SensitiveColumns $sensitiveColumns -DetailColumns $detailColumns
+
+    Export-ShareSurferCsv -Path (Join-Path $RedactedPath 'share_permission_diagnostic_manifest.csv') -Columns $schema['share_permission_diagnostic_manifest.csv'] -Rows $redactedManifestRows
+    Export-ShareSurferCsv -Path (Join-Path $RedactedPath 'share_permission_diagnostics.csv') -Columns $schema['share_permission_diagnostics.csv'] -Rows $redactedDiagnosticRows
+    Export-ShareSurferJsonLines -Path (Join-Path $RedactedPath 'share_permission_diagnostics.jsonl') -Rows $redactedDiagnosticRows
+    Set-Content -LiteralPath (Join-Path $RedactedPath 'share_permission_diagnostics.md') -Value (New-ShareSurferSharePermissionDiagnosticMarkdown -Manifest $redactedManifestRows[0] -Rows $redactedDiagnosticRows) -Encoding UTF8
+
+    $manifest = @(
+        [pscustomobject]@{ SourceFile = 'share_permission_diagnostics.csv/jsonl/md'; ColumnName = 'Target'; Strategy = 'StableToken'; RawValuesIncluded = 'False' },
+        [pscustomobject]@{ SourceFile = 'share_permission_diagnostics.csv/jsonl/md'; ColumnName = 'ComputerName'; Strategy = 'StableToken'; RawValuesIncluded = 'False' },
+        [pscustomobject]@{ SourceFile = 'share_permission_diagnostics.csv/jsonl/md'; ColumnName = 'ShareName'; Strategy = 'StableToken'; RawValuesIncluded = 'False' },
+        [pscustomobject]@{ SourceFile = 'share_permission_diagnostics.csv/jsonl/md'; ColumnName = 'WhatSucceeded/WhatFailed/Detail/RecommendedAction'; Strategy = 'TokenizeKnownValuesOrReplaceProviderDetail'; RawValuesIncluded = 'False' }
+    )
+    Export-ShareSurferCsv -Path (Join-Path $RedactedPath 'share_permission_diagnostic_redaction_manifest.csv') -Columns @('SourceFile', 'ColumnName', 'Strategy', 'RawValuesIncluded') -Rows $manifest
+
+    [pscustomobject]@{
+        DiagnosticPath = (Join-Path $OutputPath 'share_permission_diagnostics.csv')
+        DiagnosticEventPath = (Join-Path $OutputPath 'share_permission_diagnostics.jsonl')
+        DiagnosticSummaryPath = (Join-Path $OutputPath 'share_permission_diagnostics.md')
+        RedactedDiagnosticPath = (Join-Path $RedactedPath 'share_permission_diagnostics.csv')
+        RedactedDiagnosticSummaryPath = (Join-Path $RedactedPath 'share_permission_diagnostics.md')
+        DiagnosticCount = $diagnosticRows.Count
+        FailedCount = $failedCount
+        WarningCount = $warningCount
+        SkippedCount = $skippedCount
+    }
 }
 
 function Invoke-ShareSurferFileShareConnectivityAssessment {
@@ -997,6 +1245,12 @@ function Invoke-ShareSurferFileShareConnectivityAssessment {
     Write-ShareSurferStatus -Phase 'Redaction' -Message 'Writing redacted diagnostic package.' -Quiet:$Quiet
     Export-ShareSurferFileShareConnectivityRedactedPackage -OutputPath $OutputPath -RedactedPath $redactedPath -ManifestRows $manifestRows -TargetRows $targetRows -CheckRows $checks -EventRows $eventRows -Summary $summary -RedactionSalt $RedactionSalt
 
+    $sharePermissionDiagnostic = Export-ShareSurferSharePermissionDiagnosticPackage -OutputPath $OutputPath -RedactedPath $redactedPath -AssessmentId $assessmentId -GeneratedAt $generatedAt -Targets $targets -Checks $checks -RedactionSalt $RedactionSalt
+    Write-ShareSurferStatus -Phase 'Diagnostics' -Message ('Share permission diagnostic matrix: {0}' -f $sharePermissionDiagnostic.DiagnosticPath) -Quiet:$Quiet
+    Write-ShareSurferStatus -Phase 'Diagnostics' -Message ('Share permission diagnostic event log: {0}' -f $sharePermissionDiagnostic.DiagnosticEventPath) -Quiet:$Quiet
+    Write-ShareSurferStatus -Phase 'Diagnostics' -Message ('Share permission human summary: {0}' -f $sharePermissionDiagnostic.DiagnosticSummaryPath) -Quiet:$Quiet
+    Write-ShareSurferStatus -Phase 'Diagnostics' -Message ('Redacted support-safe diagnostics: {0}' -f $sharePermissionDiagnostic.RedactedDiagnosticSummaryPath) -Quiet:$Quiet
+
     Write-ShareSurferStatus -Phase 'Summary' -Message ('Assessment complete: {0} pass, {1} warning, {2} fail, {3} skipped.' -f $passedCount, $warningCount, $failedCount, $skippedCount) -Quiet:$Quiet
 
     $result = [pscustomobject]@{
@@ -1010,6 +1264,15 @@ function Invoke-ShareSurferFileShareConnectivityAssessment {
         FailedCount = $failedCount
         SkippedCount = $skippedCount
         OverallRecommendation = $overallRecommendation
+        SharePermissionDiagnosticPath = $sharePermissionDiagnostic.DiagnosticPath
+        SharePermissionDiagnosticEventPath = $sharePermissionDiagnostic.DiagnosticEventPath
+        SharePermissionDiagnosticSummaryPath = $sharePermissionDiagnostic.DiagnosticSummaryPath
+        RedactedSharePermissionDiagnosticPath = $sharePermissionDiagnostic.RedactedDiagnosticPath
+        RedactedSharePermissionDiagnosticSummaryPath = $sharePermissionDiagnostic.RedactedDiagnosticSummaryPath
+        SharePermissionDiagnosticCount = $sharePermissionDiagnostic.DiagnosticCount
+        SharePermissionDiagnosticFailedCount = $sharePermissionDiagnostic.FailedCount
+        SharePermissionDiagnosticWarningCount = $sharePermissionDiagnostic.WarningCount
+        SharePermissionDiagnosticSkippedCount = $sharePermissionDiagnostic.SkippedCount
         IsValid = (Test-ShareSurferFileShareConnectivityDiagnosticPackage -OutputPath $OutputPath)
     }
 

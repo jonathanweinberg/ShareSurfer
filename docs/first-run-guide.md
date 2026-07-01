@@ -444,6 +444,17 @@ Invoke-ShareSurferFileShareConnectivityAssessment `
 
 Use this when WinRM/CIM is unavailable, the server still appears manageable through Computer Management, or SMB/RPC ports are reachable but share permission or security descriptor evidence is missing. It tests more than ports: `New-CimSession`, `Get-SmbShare`, `Get-SmbShareAccess`, native `NetShareGetInfo`, share security descriptor parsing, filesystem owner/DACL reads through Win32 security APIs, open-file enumeration, and optional session enumeration. It writes raw diagnostics plus a `redacted` folder with `fileshare_connectivity_llm_summary.md` for safe support handoff. Share only the redacted folder unless your process allows raw host, share, path, account, and exception evidence to leave trusted handling.
 
+Focused share-permission diagnostic:
+
+```powershell
+Invoke-ShareSurferSharePermissionDiagnostic `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath "$exportPath\share-permission-diagnostics" `
+  -Force
+```
+
+Use this when the scan could enumerate folders but could not prove share-level permissions. The console prints the exact files to open first: `share_permission_diagnostics.md`, `share_permission_diagnostics.csv`, and the redacted support-safe copy under `redacted\`.
+
 ## Step 5: Validate the Export
 
 Run validation after every scan:

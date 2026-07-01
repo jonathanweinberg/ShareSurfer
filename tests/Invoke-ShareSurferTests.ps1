@@ -3184,9 +3184,12 @@ $tests = @(
 
             $withPackageResult = Test-ShareSurferExport -ExportPath $outputPath
             $connectivityResults = @($withPackageResult.FileResults | Where-Object { $_.FileName -like 'fileshare_connectivity_*.csv' })
+            $shareDiagnosticResults = @($withPackageResult.FileResults | Where-Object { $_.FileName -like 'share_permission_diagnostic*.csv' -or $_.FileName -eq 'share_permission_diagnostics.csv' })
             Assert-True $withPackageResult.IsValid 'Export validation should pass when a complete optional file-share connectivity package is present.'
             Assert-Equal $connectivityResults.Count 3 'Export validation should inspect all file-share connectivity assessment CSVs when any are present.'
+            Assert-Equal $shareDiagnosticResults.Count 2 'Export validation should inspect the share-permission diagnostic CSVs when the diagnostic package is present.'
             Assert-True (@($connectivityResults | Where-Object { -not $_.Optional }).Count -eq 0) 'File-share connectivity package file results should be marked optional.'
+            Assert-True (@($shareDiagnosticResults | Where-Object { -not $_.Optional }).Count -eq 0) 'Share-permission diagnostic package file results should be marked optional.'
 
             $checksPath = Join-Path $outputPath 'fileshare_connectivity_checks.csv'
             $brokenChecks = Import-Csv -LiteralPath $checksPath | Select-Object AssessmentId, CheckId, TargetId, Target, InputType, ComputerName, ShareName, Layer, Capability, Provider, Attempted, Status, Severity, EvidenceType, RawResultCode, Message, Detail
@@ -3340,25 +3343,43 @@ $tests = @(
                 $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_manifest.csv'))
                 $targets = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_targets.csv'))
                 $checks = @(Import-Csv -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_checks.csv'))
+                $diagnosticManifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permission_diagnostic_manifest.csv'))
+                $diagnostics = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permission_diagnostics.csv'))
                 $summary = Get-Content -LiteralPath (Join-Path $outputPath 'fileshare_connectivity_summary.json') -Raw | ConvertFrom-Json
+                $diagnosticSummaryText = Get-Content -LiteralPath (Join-Path $outputPath 'share_permission_diagnostics.md') -Raw
                 $redactedChecksText = Get-Content -LiteralPath (Join-Path $outputPath 'redacted/fileshare_connectivity_checks.csv') -Raw
+                $redactedDiagnosticsText = Get-Content -LiteralPath (Join-Path $outputPath 'redacted/share_permission_diagnostics.csv') -Raw
+                $redactedDiagnosticSummaryText = Get-Content -LiteralPath (Join-Path $outputPath 'redacted/share_permission_diagnostics.md') -Raw
                 $redactedSummaryText = Get-Content -LiteralPath (Join-Path $outputPath 'redacted/fileshare_connectivity_llm_summary.md') -Raw
 
                 Assert-True $result.IsValid 'Connectivity assessment should produce a complete raw and redacted diagnostic package.'
                 Assert-Equal $manifest[0].PackageKind 'FileShareConnectivityAssessment' 'Connectivity manifest should identify the package kind.'
+                Assert-Equal $diagnosticManifest[0].PackageKind 'SharePermissionDiagnostic' 'Share-permission diagnostic manifest should identify the package kind.'
                 Assert-Equal $targets[0].RecommendedScanProvider 'NeedsReview' 'Native metadata with descriptor parse failure should require review even when SMB is reachable.'
                 Assert-True ($checks.Capability -contains 'NativeShareDescriptorParsed') 'Connectivity checks should include share descriptor parse proof.'
                 Assert-True ($checks.Capability -contains 'FileSystemSecurityDescriptorRead') 'Connectivity checks should include filesystem owner/DACL proof.'
+                Assert-True (@($diagnostics | Where-Object { $_.AttemptedMethod -like '*Get-SmbShareAccess*' }).Count -gt 0) 'Share-permission diagnostics should include the CIM Get-SmbShareAccess proof path.'
+                Assert-True (@($diagnostics | Where-Object { $_.AttemptedMethod -like '*NetShareGetInfo*' }).Count -gt 0) 'Share-permission diagnostics should include the native NetShareGetInfo proof path.'
+                Assert-True (@($diagnostics | Where-Object { $_.WhyItMatters -like '*TCP*permission proof*' -or $_.WhyItMatters -like '*share security descriptor*' }).Count -gt 0) 'Share-permission diagnostics should explain signal meaning beyond port reachability.'
                 Assert-True ($checks.Capability -contains 'OpenFileEnumeration') 'Connectivity checks should include open-file capability when requested.'
                 Assert-True ($checks.Capability -contains 'SessionEnumeration') 'Connectivity checks should include session capability when requested.'
                 Assert-True (@($checks | Where-Object { $_.Capability -eq 'SmbTcp445' -and $_.Status -eq 'Pass' }).Count -eq 1) 'Connectivity checks should prove SMB TCP without treating it as descriptor proof.'
                 Assert-True (@($checks | Where-Object { $_.Capability -eq 'NativeShareDescriptorParsed' -and $_.EvidenceType -eq 'NativeShareSecurityDescriptorParseFailed' }).Count -eq 1) 'Connectivity checks should classify native share descriptor parse failures separately from SMB reachability.'
+                Assert-True (@($diagnostics | Where-Object { $_.EvidenceType -eq 'NativeShareSecurityDescriptorParseFailed' -and $_.RecommendedAction -like '*raw diagnostics*' }).Count -eq 1) 'Share-permission diagnostics should surface native descriptor parse failures with review guidance.'
                 Assert-True (@($checks | Where-Object { $_.Capability -eq 'FileSystemSecurityDescriptorRead' -and $_.Status -eq 'Pass' }).Count -eq 1) 'Connectivity checks should prove filesystem owner/DACL reads independently from share descriptor parsing.'
                 Assert-Equal $summary.PackageKind 'FileShareConnectivityAssessment' 'Connectivity summary JSON should parse and identify the package kind.'
+                Assert-True ($diagnosticSummaryText -like '*Where To Look*') 'Share-permission diagnostic summary should tell operators which files to open.'
+                Assert-True ($diagnosticSummaryText -like '*TCP port success*') 'Share-permission diagnostic summary should warn that transport success is not permission proof.'
+                Assert-True (Test-Path -LiteralPath $result.SharePermissionDiagnosticPath -PathType Leaf) 'PassThru result should point to the raw share-permission diagnostic CSV.'
+                Assert-True (Test-Path -LiteralPath $result.SharePermissionDiagnosticSummaryPath -PathType Leaf) 'PassThru result should point to the human share-permission diagnostic summary.'
                 Assert-True ($redactedSummaryText -like '*Why TCP Is Not Enough*') 'LLM-ready summary should explain why transport reachability is not collection proof.'
                 Assert-True ($redactedSummaryText -like '*Safe to share*' -or $redactedSummaryText -like '*safe to share*') 'LLM-ready summary should state safe-sharing intent.'
                 Assert-True ($redactedChecksText -notlike '*files01*') 'Redacted checks should not preserve the raw host name.'
                 Assert-True ($redactedChecksText -notlike '*Finance*') 'Redacted checks should not preserve the raw share name.'
+                Assert-True ($redactedDiagnosticsText -notlike '*files01*') 'Redacted share-permission diagnostics should not preserve the raw host name.'
+                Assert-True ($redactedDiagnosticsText -notlike '*Finance*') 'Redacted share-permission diagnostics should not preserve the raw share name.'
+                Assert-True ($redactedDiagnosticSummaryText -notlike '*files01*') 'Redacted share-permission summary should not preserve the raw host name.'
+                Assert-True ($redactedDiagnosticSummaryText -notlike '*Finance*') 'Redacted share-permission summary should not preserve the raw share name.'
                 Assert-True ($redactedChecksText -notlike '*CONTOSO*') 'Redacted checks should not preserve raw account names.'
                 Assert-True ($redactedSummaryText -notlike '*files01*') 'Redacted LLM summary should not preserve the raw host name.'
                 Assert-True ($redactedSummaryText -notlike '*Finance*') 'Redacted LLM summary should not preserve the raw share name.'
@@ -3370,6 +3391,33 @@ $tests = @(
                 Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
                 Remove-Variable -Name ShareSurferNativeSessionProvider -Scope Global -ErrorAction SilentlyContinue
             }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferSharePermissionDiagnostic writes focused share-permission logs and console pointers'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSharePermDiag-' + [guid]::NewGuid().ToString('N'))
+
+            $captured = @(& {
+                Invoke-ShareSurferSharePermissionDiagnostic -TargetPath '\\files01\Finance' -OutputPath $outputPath -SkipNetworkTests -SkipCimChecks -SkipNativeChecks -Force
+            } 6>&1)
+            $capturedText = ($captured | ForEach-Object { [string]$_ }) -join "`n"
+            $result = Invoke-ShareSurferSharePermissionDiagnostic -TargetPath '\\files01\Finance' -OutputPath $outputPath -SkipNetworkTests -SkipCimChecks -SkipNativeChecks -Force -Quiet -PassThru
+            $diagnostics = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permission_diagnostics.csv'))
+            $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permission_diagnostic_manifest.csv'))
+            $diagnosticHeader = Get-Content -LiteralPath (Join-Path $outputPath 'share_permission_diagnostics.csv') -First 1
+
+            Assert-True ($capturedText -like '*Starting intensive share-permission diagnostics*') 'Focused diagnostic command should announce that it is deeper than port checks.'
+            Assert-True ($capturedText -like '*Open this first:*share_permission_diagnostics.md*') 'Focused diagnostic command should tell operators where to start reviewing logs.'
+            Assert-True ($capturedText -like '*share_permission_diagnostics.csv*') 'Focused diagnostic command should point to raw diagnostic rows.'
+            Assert-True $result.IsValid 'Focused diagnostic command should produce a valid diagnostic package.'
+            Assert-Equal $manifest[0].PackageKind 'SharePermissionDiagnostic' 'Focused diagnostic package should include a share-permission manifest.'
+            Assert-True (@($diagnostics | Where-Object { $_.AttemptedMethod -like '*Get-SmbShareAccess*' }).Count -gt 0) 'Focused diagnostics should show the CIM share-permission method even when skipped.'
+            Assert-True (@($diagnostics | Where-Object { $_.AttemptedMethod -like '*NetShareGetInfo*' }).Count -gt 0) 'Focused diagnostics should show the native SMB/RPC method even when skipped.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $outputPath 'share_permission_diagnostics.jsonl') -PathType Leaf) 'Focused diagnostics should write a raw JSONL event-style log.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $outputPath 'redacted/share_permission_diagnostics.md') -PathType Leaf) 'Focused diagnostics should write a redacted support-safe summary.'
+            Assert-True ($diagnosticHeader -like '*AttemptedMethod*' -and $diagnosticHeader -like '*RecommendedAction*') 'Focused standalone diagnostics should write the expected diagnostic CSV columns.'
         }
     },
     @{

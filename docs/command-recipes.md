@@ -33,7 +33,7 @@ If `v0.1.0-pre.23` is not visible yet on the [ShareSurfer Releases page](https:/
 | Validation and dashboards | Recipe 6 | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `New-ShareSurferStandaloneDashboard.ps1` |
 | Review decisions | Recipe 7 | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
 | Locked-down handoff | Recipe 8 | `Compress-Archive`, `Get-FileHash` |
-| Optional assessments | Recipes 9-10A | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment` |
+| Optional assessments and diagnostics | Recipes 5A, 9-10A | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic` |
 | Support and rerun | Recipes 11-12 | `New-ShareSurferSupportBundle`, rerun scan commands |
 
 ## Stop Gates Before Owner Signoff
@@ -344,6 +344,30 @@ Invoke-ShareSurferScan `
 
 `NativeSmbRpc` avoids the normal WinRM/CIM route for core SMB evidence. It is still permission-dependent, so access denied results should be reviewed in `collection_errors.csv`, `findings.csv`, and the dashboard diagnostics. A green SMB/RPC port check means the route is reachable; it does not prove that the collector can read or parse share security descriptors, owner values, or folder/file DACLs. If the scan reports `NativeShareSecurityDescriptorUnavailable`, `NativeShareSecurityDescriptorParseFailed`, `NativeSecurityDescriptorReadFailed`, or `NativeSecurityDescriptorParseFailed`, treat the share as reachable but incomplete and review collector rights or SMB server compatibility.
 
+## Recipe 5A: Intensively Diagnose Missing Share Permissions
+
+Use this when ShareSurfer can reach a share but `share_permissions.csv` is empty, `shares.csv` says `PartialData=True`, or `collection_errors.csv` shows share-permission or native security descriptor failures. This goes past "is the port open" and records each share-permission proof attempt.
+
+```powershell
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.23'
+$diagnosticPath = 'C:\ShareSurfer\diagnostics\finance-share-permissions'
+
+Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
+
+Invoke-ShareSurferSharePermissionDiagnostic `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath $diagnosticPath `
+  -Force
+```
+
+When the command finishes, open these first:
+
+- `$diagnosticPath\share_permission_diagnostics.md`
+- `$diagnosticPath\share_permission_diagnostics.csv`
+- `$diagnosticPath\fileshare_connectivity_checks.csv`
+
+For a support-safe packet, review and share the redacted files under `$diagnosticPath\redacted\`. The diagnostic rows show CIM/WinRM attempts, `Get-SmbShareAccess`, native `NetShareGetInfo`, share security descriptor return/parse, filesystem owner/DACL descriptor reads, raw result codes where available, and recommended next actions.
+
 ## Recipe 6: Validate, Build the Report, and Open the Dashboard
 
 Run this after the collector finishes.
@@ -450,7 +474,7 @@ Compress-Archive -Path "$exportPath\*" -DestinationPath $handoffPath -Force
 Get-FileHash -Algorithm SHA256 -Path $handoffPath
 ```
 
-ShareSurfer commands such as `Invoke-ShareSurferScan`, `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, and `New-ShareSurferReviewDecisionDraft` create missing local output folders by default and announce the folder path. Use `-NoCreateMissingFolders` when you want the command to fail instead. Native PowerShell commands such as `Compress-Archive` do not know ShareSurfer's folder policy, so handoff snippets create their destination folders explicitly.
+ShareSurfer commands such as `Invoke-ShareSurferScan`, `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic`, and `New-ShareSurferReviewDecisionDraft` create missing local output folders by default and announce the folder path. Use `-NoCreateMissingFolders` when you want the command to fail instead. Native PowerShell commands such as `Compress-Archive` do not know ShareSurfer's folder policy, so handoff snippets create their destination folders explicitly.
 
 On the dashboard host, verify the received hash before review:
 

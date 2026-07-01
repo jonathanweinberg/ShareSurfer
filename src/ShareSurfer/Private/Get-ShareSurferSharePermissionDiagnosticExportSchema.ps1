@@ -1,0 +1,42 @@
+function Get-ShareSurferSharePermissionDiagnosticExportSchema {
+    [ordered]@{
+        'share_permission_diagnostic_manifest.csv' = @(
+            'AssessmentId',
+            'GeneratedAt',
+            'ExportVersion',
+            'PackageKind',
+            'TargetCount',
+            'DiagnosticCount',
+            'PassedCount',
+            'WarningCount',
+            'FailedCount',
+            'SkippedCount',
+            'RawDiagnosticsPath',
+            'RawEventsPath',
+            'HumanSummaryPath',
+            'RedactedOutputPath',
+            'RedactedSummaryPath'
+        )
+        'share_permission_diagnostics.csv' = @(
+            'AssessmentId',
+            'DiagnosticId',
+            'TargetId',
+            'Target',
+            'ComputerName',
+            'ShareName',
+            'Layer',
+            'Provider',
+            'AttemptedMethod',
+            'Status',
+            'Severity',
+            'EvidenceType',
+            'RawResultCode',
+            'WhatSucceeded',
+            'WhatFailed',
+            'WhyItMatters',
+            'Detail',
+            'RecommendedAction',
+            'SourceCheckId'
+        )
+    }
+}

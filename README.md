@@ -79,7 +79,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Guided first run | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` |
 | Scan collection | `Invoke-ShareSurferScan` |
-| Optional readiness assessments | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment` |
+| Optional readiness and diagnostics | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic` |
 | Ownership import and mapping | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
 | Review decisions | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
 | Validation and reports | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `scripts\New-ShareSurferStandaloneDashboard.ps1` |
