@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.23",
-  "packageVersion": "0.1.0-pre.23",
-  "packageName": "ShareSurfer-0.1.0-pre.23",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.23.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.23",
+  "currentPrereleaseTag": "v0.1.0-pre.24",
+  "packageVersion": "0.1.0-pre.24",
+  "packageName": "ShareSurfer-0.1.0-pre.24",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.24.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.24",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the Start-ShareSurferStartup review/run handoff, a hardened Start-ShareSurfer.ps1 startup launcher, explicit Zone.Identifier downloaded-file marker cleanup, clearer no-prompt unblock guidance, startup JSON save/replay workflow, permissive and nonpermissive startup planning, version-root quickstart paths, PowerShell verification-lane documentation, file-share connectivity capability diagnostics, raw and redacted connectivity outputs, LLM-ready redacted diagnostic summaries, operator Start Here guidance, workflow command inventory, owner and migration review decision import, migration discovery quality harness coverage, evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the Start-ShareSurferStartup review/run handoff, guided startup share-permission diagnostics before scans, share-permission diagnostic Markdown/CSV/JSONL outputs, a hardened Start-ShareSurfer.ps1 startup launcher, explicit Zone.Identifier downloaded-file marker cleanup, clearer no-prompt unblock guidance, startup JSON save/replay workflow, permissive and nonpermissive startup planning, version-root quickstart paths, PowerShell verification-lane documentation, file-share connectivity capability diagnostics, raw and redacted connectivity outputs, LLM-ready redacted diagnostic summaries, operator Start Here guidance, workflow command inventory, owner and migration review decision import, migration discovery quality harness coverage, evidence confidence/readiness exports, dashboard protocol gates, built PowerShell module files, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
