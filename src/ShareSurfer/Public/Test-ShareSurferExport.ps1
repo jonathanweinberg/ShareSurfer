@@ -20,7 +20,8 @@ function Test-ShareSurferExport {
     $optionalPackages = @(
         (Get-ShareSurferOpenFileExportSchema),
         (Get-ShareSurferPortProtocolExportSchema),
-        (Get-ShareSurferFileShareConnectivityExportSchema)
+        (Get-ShareSurferFileShareConnectivityExportSchema),
+        (Get-ShareSurferSharePermissionDiagnosticExportSchema)
     )
     foreach ($packageSchema in $optionalPackages) {
         $packageFiles = @($packageSchema.Keys)

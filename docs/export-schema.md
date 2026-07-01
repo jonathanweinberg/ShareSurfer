@@ -99,15 +99,17 @@ Each export also includes `scan_events.jsonl`, a raw JSON Lines event log with t
 
 ## Optional File-Share Connectivity Assessment Package
 
-`Invoke-ShareSurferFileShareConnectivityAssessment` can add collection-capability evidence to the same export folder, or it can be run into a standalone troubleshooting folder before a scan. These files are optional. Use them when WinRM/CIM is blocked, MMC can still show share information, or a server passes SMB/RPC port checks but ShareSurfer cannot prove share permissions, owner/DACL security descriptors, open-file visibility, or session visibility.
+`Invoke-ShareSurferFileShareConnectivityAssessment` can add collection-capability evidence to the same export folder, or it can be run into a standalone troubleshooting folder before a scan. `Invoke-ShareSurferSharePermissionDiagnostic` is the focused entry point when the immediate question is why share-level permissions are unavailable. These files are optional. Use them when WinRM/CIM is blocked, MMC can still show share information, or a server passes SMB/RPC port checks but ShareSurfer cannot prove share permissions, owner/DACL security descriptors, open-file visibility, or session visibility.
 
-The command also writes `fileshare_connectivity_summary.json`, `fileshare_connectivity_events.jsonl`, and a `redacted\` folder containing redacted copies plus `fileshare_connectivity_llm_summary.md`. `Test-ShareSurferExport` validates the CSV headers when the CSV package is present. JSON, JSONL, and redacted-summary checks are command-specific diagnostics, not baseline scan export requirements.
+The command also writes `fileshare_connectivity_summary.json`, `fileshare_connectivity_events.jsonl`, `share_permission_diagnostics.jsonl`, `share_permission_diagnostics.md`, and a `redacted\` folder containing redacted copies plus `fileshare_connectivity_llm_summary.md` and `share_permission_diagnostics.md`. `Test-ShareSurferExport` validates the CSV headers when the CSV package is present. JSON, JSONL, and redacted-summary checks are command-specific diagnostics, not baseline scan export requirements.
 
 | File | Grain | Purpose |
 | --- | --- | --- |
 | `fileshare_connectivity_manifest.csv` | One row per connectivity assessment | Records collector context, target count, check totals, and redacted output path. |
 | `fileshare_connectivity_targets.csv` | One row per assessed file share target | Summarizes target status, capability summary, recommended scan provider, and next action. |
 | `fileshare_connectivity_checks.csv` | One row per capability proof | Captures target parsing, DNS, SMB TCP 445, WinRM/CIM, RPC, native share metadata, share descriptor parse, filesystem owner/DACL descriptor read, open-file enumeration, and optional session enumeration results. |
+| `share_permission_diagnostic_manifest.csv` | One row per share-permission diagnostic package | Records diagnostic counts and points to the raw, human-readable, and redacted diagnostic files. |
+| `share_permission_diagnostics.csv` | One row per share-permission proof attempt | Reframes the capability checks around share-permission troubleshooting: attempted method, status, evidence type, raw result code, what succeeded, what failed, why it matters, detail, and recommended action. |
 
 ## Column Reference
 
