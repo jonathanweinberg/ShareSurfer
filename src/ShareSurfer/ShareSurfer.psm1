@@ -25,5 +25,6 @@ Export-ModuleMember -Function @(
     'Start-ShareSurferOperatorAssistant',
     'Start-ShareSurferStartup',
     'Test-ShareSurferExport',
+    'Test-ShareSurferOwnerMapping',
     'Test-ShareSurferOwnershipSource'
 )

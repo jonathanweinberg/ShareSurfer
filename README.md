@@ -81,7 +81,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` |
 | Scan collection | `Invoke-ShareSurferScan` |
 | Optional readiness and diagnostics | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic` |
-| Ownership import and mapping | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
+| Ownership import and mapping | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft`, `Test-ShareSurferOwnerMapping` |
 | Review decisions | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
 | Validation and reports | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `scripts\New-ShareSurferStandaloneDashboard.ps1` |
 | Support and release packaging | `New-ShareSurferSupportBundle`, `scripts\New-ShareSurferRelease.ps1`, `scripts\Test-ShareSurferReleaseReadiness.ps1` |
@@ -115,7 +115,7 @@ Use [workflow-guides.md](docs/workflow-guides.md) for the step-by-step version a
 
 ## Ownership And OBS Data
 
-Use the [admin ownership import guide](docs/admin-ownership-import.md) when HR, employee, OBS, OID, project, or owner facts live in CSVs with unexpected headers. Use the shorter [ownership CSV ingest quick reference](docs/ownership-csv-ingest-quick-reference.md) when another team just needs copy/paste instructions.
+Use the [admin ownership import guide](docs/admin-ownership-import.md) when HR, employee, OBS, OID, project, or owner facts live in CSVs with unexpected headers. Use the [ownership data thinking guide](docs/ownership-data-thinking.md) when you need to decide what `Owner`, OBS, service-account-like rows, group evidence, and coverage targets really mean. Use the shorter [ownership CSV ingest quick reference](docs/ownership-csv-ingest-quick-reference.md) when another team just needs copy/paste instructions.
 
 Key ideas:
 
@@ -125,6 +125,7 @@ Key ideas:
 - Save `ownership-import.definition.json` and `ownership-import-rerun.ps1` so the import can be repeated without rerunning the whole interview.
 - Pass the enriched file to scans with `-OwnershipEnrichmentPath`; the scan exports it as `ownership_enrichment.csv`.
 - If owners are not known yet, create `owner-mapping-draft.csv` and `owner-mapping-rerun.ps1` with `New-ShareSurferOwnerMappingDraft`.
+- Before scanning with a hand-edited `owner-mapping.csv`, run `Test-ShareSurferOwnerMapping` so missing columns, blank owners, and risky sibling-prefix patterns are caught early.
 
 ## Nonpermissive / Two-Host Operation
 

@@ -217,7 +217,19 @@ function Test-ShareSurferWildcardMatch {
 
     $escaped = [System.Text.RegularExpressions.Regex]::Escape($Pattern)
     $regex = '^' + $escaped.Replace('\*', '.*').Replace('\?', '.') + '$'
-    [System.Text.RegularExpressions.Regex]::IsMatch([string]$Value, $regex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+    if ([System.Text.RegularExpressions.Regex]::IsMatch([string]$Value, $regex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)) {
+        return $true
+    }
+
+    if ($Pattern.EndsWith('\*') -or $Pattern.EndsWith('/*')) {
+        $basePattern = $Pattern.Substring(0, $Pattern.Length - 2)
+        $trimmedValue = ([string]$Value).TrimEnd('\', '/')
+        if ($trimmedValue.Equals($basePattern.TrimEnd('\', '/'), [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+    }
+
+    $false
 }
 
 function Test-ShareSurferHighRiskSeverity {

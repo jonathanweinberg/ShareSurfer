@@ -8,13 +8,20 @@ function Read-ShareSurferOwnerMapping {
         throw "Owner mapping file was not found: $Path"
     }
 
+    $validation = Test-ShareSurferOwnerMapping -Path $Path
+    if (-not $validation.IsValid) {
+        throw ("Owner mapping file is invalid: {0}. {1}" -f $Path, ((@($validation.Errors) | Select-Object -First 5) -join ' '))
+    }
+
+    $headers = @(Get-ShareSurferCsvHeaders -Path $Path)
+    $headerMap = Resolve-ShareSurferOwnerMappingHeaderMap -Headers $headers
     $rows = @(Import-Csv -LiteralPath $Path)
     foreach ($row in $rows) {
         [pscustomobject]@{
-            Pattern = [string]$row.Pattern
-            Owner = [string]$row.Owner
-            BusinessUnit = [string]$row.BusinessUnit
-            Source = if ($row.PSObject.Properties['Source'] -and [string]$row.Source -ne '') { [string]$row.Source } else { 'OwnerMappingPath' }
+            Pattern = Get-ShareSurferMappedCsvValue -Row $row -HeaderMap $headerMap -Column 'Pattern'
+            Owner = Get-ShareSurferMappedCsvValue -Row $row -HeaderMap $headerMap -Column 'Owner'
+            BusinessUnit = Get-ShareSurferMappedCsvValue -Row $row -HeaderMap $headerMap -Column 'BusinessUnit'
+            Source = if (-not [string]::IsNullOrWhiteSpace((Get-ShareSurferMappedCsvValue -Row $row -HeaderMap $headerMap -Column 'Source'))) { Get-ShareSurferMappedCsvValue -Row $row -HeaderMap $headerMap -Column 'Source' } else { 'OwnerMappingPath' }
         }
     }
 }
