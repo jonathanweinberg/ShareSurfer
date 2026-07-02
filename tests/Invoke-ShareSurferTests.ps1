@@ -1474,8 +1474,8 @@ $tests = @(
         Body = {
             Import-Module $moduleManifest -Force
             $items = @(
-                [pscustomobject]@{ ItemId = 'item-drive-root'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\'; RelativePath = ''; Depth = 0; Owner = ''; InheritanceEnabled = $false; InheritanceBrokenAt = 'C:\' },
-                [pscustomobject]@{ ItemId = 'item-drive-child'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\DriveChild'; RelativePath = 'DriveChild'; Depth = 1; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' },
+                [pscustomobject]@{ ItemId = 'item-drive-root'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'E:\'; RelativePath = ''; Depth = 0; Owner = ''; InheritanceEnabled = $false; InheritanceBrokenAt = 'E:\' },
+                [pscustomobject]@{ ItemId = 'item-drive-child'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'E:\DriveChild'; RelativePath = 'DriveChild'; Depth = 1; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' },
                 [pscustomobject]@{ ItemId = 'item-fin'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Fin'; RelativePath = 'Fin'; Depth = 1; Owner = ''; InheritanceEnabled = $false; InheritanceBrokenAt = 'C:\Data\Fin' },
                 [pscustomobject]@{ ItemId = 'item-fin-child'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Fin\Reports'; RelativePath = 'Fin\Reports'; Depth = 2; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' },
                 [pscustomobject]@{ ItemId = 'item-finance'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Finance'; RelativePath = 'Finance'; Depth = 1; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' }
@@ -1492,7 +1492,7 @@ $tests = @(
 
             Assert-Equal $finance.InheritanceBrokenAt '' 'Sibling paths that share a string prefix should not inherit another folder inheritance break.'
             Assert-Equal $finChild.InheritanceBrokenAt 'C:\Data\Fin' 'True descendants should inherit the nearest broken-inheritance ancestor.'
-            Assert-Equal $driveChild.InheritanceBrokenAt 'C:\' 'Drive-root inheritance breaks should be reachable for descendants.'
+            Assert-Equal $driveChild.InheritanceBrokenAt 'E:\' 'Drive-root inheritance breaks should be reachable for descendants.'
         }
     },
     @{
