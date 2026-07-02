@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.28",
-  "packageVersion": "0.1.0-pre.28",
-  "packageName": "ShareSurfer-0.1.0-pre.28",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.28.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.28",
+  "currentPrereleaseTag": "v0.1.0-pre.29",
+  "packageVersion": "0.1.0-pre.29",
+  "packageName": "ShareSurfer-0.1.0-pre.29",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.29.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.29",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #326 second-pass bughunt fix wave: redacted support bundles preserve diagnostic vocabulary while still redacting sensitive free-form values, explicit reparse-point targets are scanned by operator intent while nested reparse points remain skipped and logged, missing share-gate conflict noise is deduped and broad share gates are recognized, inheritance-break propagation uses real path ancestry rather than sibling string prefixes, local folder scans verify same-named SMB share paths before attaching share-level permissions, native NetSessionEnum pagination treats ERROR_MORE_DATA pages as usable evidence, review-decision imports protect existing reviewed decisions from stale drafts, and current operator quickstarts reference the v0.1.0-pre.28 release root. The package also includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #338 standalone dashboard repair wave: the Broken/Missing SID filter is now a clear three-state control, broken SID evidence detection is shared across KPI counts and filters, raw owner SID values participate in SID filtering, Access Conflicts opens a conflict-focused review view, conflict rows use business-friendly labels and actions, and conflict display now resolves item/share paths plus owner and business-unit context where the export contains enough evidence. The package also includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
