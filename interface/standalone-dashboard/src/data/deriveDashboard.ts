@@ -229,6 +229,38 @@ function unique(values: Array<string | undefined>): string[] {
   );
 }
 
+function getRowValue(row: Record<string, unknown>, fieldName: string): string {
+  const matchingKey = Object.keys(row).find((key) => key.toLowerCase() === fieldName.toLowerCase());
+  return matchingKey ? String(row[matchingKey] ?? "") : "";
+}
+
+export function isBrokenSidPrincipalValue(value: string): boolean {
+  const trimmed = value.trim();
+  return /^S-\d-\d+(-\d+)+$/i.test(trimmed) || /account\s+unknown/i.test(trimmed) || /unknown\s+(account|sid)/i.test(trimmed);
+}
+
+export function rowHasBrokenSidEvidence(row: Record<string, unknown>): boolean {
+  const findingType = getRowValue(row, "FindingType");
+  const category = getRowValue(row, "Category");
+  if (findingType === "BrokenOrMissingSid" || category === "Broken/Missing SID") {
+    return true;
+  }
+
+  const principalFields = [
+    "Identity",
+    "Owner",
+    "Principal",
+    "Subject",
+    "Trustee",
+    "Account",
+    "AccountName",
+    "SecurityIdentifier",
+    "SID",
+    "Sid"
+  ];
+  return principalFields.some((fieldName) => isBrokenSidPrincipalValue(getRowValue(row, fieldName)));
+}
+
 function splitReasonList(value: string): string[] {
   return value
     .split(";")
@@ -346,15 +378,44 @@ function categoryForFinding(type: string): string {
 }
 
 function categoryForConflict(type: string): string {
-  if (type.includes("Share") || type.includes("Ntfs")) {
-    return "Access Mismatch";
+  switch (type) {
+    case "NtfsIdentityMissingShareGate":
+      return "Missing Share Gate";
+    case "ShareRightsRestrictNtfs":
+      return "Share Gate Restricts Folder Access";
+    case "ShareIdentityMissingNtfsEntry":
+      return "Share Gate Without Folder Evidence";
+    case "NtfsDenyAllowCollision":
+      return "Deny/Allow Collision";
+    case "ShareAllowsNtfsDenies":
+      return "Share Allows But Folder Denies";
+    default:
+      if (type.includes("Share") || type.includes("Ntfs")) {
+        return "Access Mismatch";
+      }
+      return type || "Conflict";
   }
-  return type || "Conflict";
 }
 
 function issueTitle(row: DataRow, source: "finding" | "conflict"): string {
   const type = source === "finding" ? row.FindingType : row.ConflictType;
   const category = source === "finding" ? categoryForFinding(type) : categoryForConflict(type);
+  if (source === "conflict") {
+    switch (type) {
+      case "NtfsIdentityMissingShareGate":
+        return "Folder/file access is missing at the share gate";
+      case "ShareRightsRestrictNtfs":
+        return "Share gate is narrower than folder/file permissions";
+      case "ShareIdentityMissingNtfsEntry":
+        return "Share access has no matching folder/file evidence";
+      case "NtfsDenyAllowCollision":
+        return "Folder/file permissions contain allow and deny entries";
+      case "ShareAllowsNtfsDenies":
+        return "Share allows access that folder/file permissions deny";
+      default:
+        return "Share gate and folder permissions differ";
+    }
+  }
   if (category === "Access Mismatch") {
     return "Share gate and folder permissions differ";
   }
@@ -374,6 +435,16 @@ function issueNextAction(category: string): string {
   switch (category) {
     case "Access Mismatch":
       return "Confirm whether share-level and folder/file permissions should be aligned.";
+    case "Missing Share Gate":
+      return "Confirm whether this identity should be added to the share gate, removed from NTFS, or inherited through an approved broader share principal.";
+    case "Share Gate Restricts Folder Access":
+      return "Compare share rights with folder/file rights and confirm which gate represents the intended access.";
+    case "Share Gate Without Folder Evidence":
+      return "Confirm whether this share-level permission is intentionally broad, stale, or unsupported by folder/file ACL evidence.";
+    case "Deny/Allow Collision":
+      return "Review the deny entry first because it can override apparent allow access.";
+    case "Share Allows But Folder Denies":
+      return "Confirm whether the folder/file deny is intentional before migration or access cleanup.";
     case "Inheritance Stopped":
       return "Ask the data owner whether inheritance was intentionally stopped here.";
     case "Deep Custom Permission":
@@ -397,6 +468,16 @@ function issueWhyItMatters(category: string): string {
   switch (category) {
     case "Access Mismatch":
       return "Users may be blocked or allowed differently than the share owner expects.";
+    case "Missing Share Gate":
+      return "A user or group may appear to have folder/file access but still be stopped before reaching the data.";
+    case "Share Gate Restricts Folder Access":
+      return "The share front gate can reduce effective access even when folder/file ACLs look more permissive.";
+    case "Share Gate Without Folder Evidence":
+      return "Share-level access may be broader than the folder/file evidence needed for confident owner review.";
+    case "Deny/Allow Collision":
+      return "Mixed allow and deny entries can create surprising effective access and migration cleanup risk.";
+    case "Share Allows But Folder Denies":
+      return "The share may let the identity in, but folder/file permissions may still block access.";
     case "Service Account Review":
       return "Accounts without owner signals can be hard to route during access review.";
     case "Incomplete Collection":
@@ -465,6 +546,95 @@ function buildIdentityLookup(rows: DataRow[]): Map<string, DataRow> {
     }
   }
   return lookup;
+}
+
+function buildLookup(rows: DataRow[], key: string): Map<string, DataRow> {
+  const lookup = new Map<string, DataRow>();
+  for (const row of rows) {
+    const value = row[key]?.trim();
+    if (value && !lookup.has(value)) {
+      lookup.set(value, row);
+    }
+  }
+  return lookup;
+}
+
+function wildcardPatternMatches(value: string, pattern: string): boolean {
+  const normalizedValue = value.trim().toLowerCase();
+  const normalizedPattern = pattern.trim().toLowerCase();
+  if (!normalizedValue || !normalizedPattern) {
+    return false;
+  }
+
+  const escaped = normalizedPattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`, "i").test(normalizedValue);
+}
+
+function pathStartsWithPattern(value: string, pattern: string): boolean {
+  const normalizedValue = value.trim().toLowerCase();
+  const prefix = pattern.trim().toLowerCase().split("*")[0];
+  return Boolean(normalizedValue && prefix && normalizedValue.startsWith(prefix));
+}
+
+function findOwnerContextFromPatterns(pathCandidates: string[], rows: DataRow[]): Pick<IssueSummary, "owner" | "businessUnit"> {
+  for (const row of rows) {
+    const pattern = row.Pattern || "";
+    if (!pattern) {
+      continue;
+    }
+    const match = pathCandidates.some((candidate) => wildcardPatternMatches(candidate, pattern) || pathStartsWithPattern(candidate, pattern));
+    if (match && (row.Owner || row.BusinessUnit)) {
+      return {
+        owner: row.Owner || row.DataOwner || "",
+        businessUnit: row.BusinessUnit || ""
+      };
+    }
+  }
+
+  return { owner: "", businessUnit: "" };
+}
+
+interface IssueContextLookups {
+  itemsById: Map<string, DataRow>;
+  sharesById: Map<string, DataRow>;
+}
+
+function resolveIssueContext(row: DataRow, snapshot: NormalizedSnapshot, lookups: IssueContextLookups): Pick<IssueSummary, "owner" | "businessUnit" | "path"> {
+  const item = row.ItemId ? lookups.itemsById.get(row.ItemId) : undefined;
+  const share = row.ShareId ? lookups.sharesById.get(row.ShareId) : undefined;
+  const path = row.FullPath || item?.FullPath || share?.UNCPath || row.ObservedValue || row.ItemId || row.ShareId || "";
+  const pathCandidates = unique([
+    row.FullPath,
+    item?.FullPath,
+    item?.RelativePath,
+    share?.UNCPath,
+    share?.LocalPath,
+    row.ObservedValue,
+    row.PolicyValue
+  ]);
+  const directOwner = row.Owner || row.DataOwner || "";
+  const directBusinessUnit = row.BusinessUnit || "";
+  if (directOwner || directBusinessUnit) {
+    return {
+      owner: directOwner,
+      businessUnit: directBusinessUnit,
+      path
+    };
+  }
+
+  const packetContext = findOwnerContextFromPatterns(pathCandidates, snapshot.datasets.owner_review_packets);
+  if (packetContext.owner || packetContext.businessUnit) {
+    return {
+      ...packetContext,
+      path
+    };
+  }
+
+  const clusterContext = findOwnerContextFromPatterns(pathCandidates, snapshot.datasets.related_data_areas);
+  return {
+    ...clusterContext,
+    path
+  };
 }
 
 function getEmployeeSignal(row: DataRow, identityLookup: Map<string, DataRow>): Pick<IssueSummary, "employeeIdentifier" | "employeeIdentifierField" | "employeePrefix"> {
@@ -558,20 +728,25 @@ function buildReviewQueue(rows: DataRow[]): ReviewQueueRow[] {
 function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, ReviewQueueRow>): IssueSummary[] {
   const issues: IssueSummary[] = [];
   const identityLookup = buildIdentityLookup(snapshot.datasets.identities);
+  const contextLookups: IssueContextLookups = {
+    itemsById: buildLookup(snapshot.datasets.items, "ItemId"),
+    sharesById: buildLookup(snapshot.datasets.shares, "ShareId")
+  };
 
   for (const row of snapshot.datasets.findings) {
     const category = categoryForFinding(row.FindingType);
     const owner = ownerLookup.get((row.Owner || "").toLowerCase());
     const employeeSignal = getEmployeeSignal(row, identityLookup);
+    const issueContext = resolveIssueContext(row, snapshot, contextLookups);
     issues.push({
       id: row.FindingId || `finding-${issues.length}`,
       source: "finding",
       category,
       severity: row.Severity || "Warning",
       title: issueTitle(row, "finding"),
-      owner: owner?.owner ?? row.Owner ?? "",
-      businessUnit: owner?.businessUnit ?? row.BusinessUnit ?? "",
-      path: row.FullPath || row.ObservedValue || "",
+      owner: owner?.owner ?? issueContext.owner,
+      businessUnit: owner?.businessUnit ?? issueContext.businessUnit,
+      path: issueContext.path,
       identity: row.Identity || "",
       ...employeeSignal,
       whatHappened: row.Message || `${category} was observed in the export.`,
@@ -584,15 +759,16 @@ function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, Revi
   for (const row of snapshot.datasets.conflicts) {
     const category = categoryForConflict(row.ConflictType);
     const employeeSignal = getEmployeeSignal(row, identityLookup);
+    const issueContext = resolveIssueContext(row, snapshot, contextLookups);
     issues.push({
       id: row.ConflictId || `conflict-${issues.length}`,
       source: "conflict",
       category,
       severity: row.Severity || "High",
       title: issueTitle(row, "conflict"),
-      owner: "",
-      businessUnit: "",
-      path: row.FullPath || row.ItemId || row.ShareId || "",
+      owner: issueContext.owner,
+      businessUnit: issueContext.businessUnit,
+      path: issueContext.path,
       identity: row.Identity || "",
       ...employeeSignal,
       whatHappened: row.Message || "Share-level and folder/file permissions do not line up.",
@@ -947,10 +1123,11 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
   );
   const reviewQueue = buildReviewQueue(snapshot.datasets.owner_review_packets);
   const ownerLookup = buildOwnerLookup(reviewQueue);
+  const issueSummaries = buildIssues(snapshot, ownerLookup);
   const permissionedGroups = buildGroups(snapshot);
   const criticalScanBlocks = buildCriticalScanBlocks(snapshot.datasets.collection_errors);
   const expandedMembers = permissionedGroups.reduce((sum, group) => sum + group.expandedMembers, 0);
-  const brokenSidFindings = snapshot.datasets.findings.filter((row) => categoryForFinding(row.FindingType) === "Broken/Missing SID").length;
+  const brokenSidFindings = issueSummaries.filter((issue) => rowHasBrokenSidEvidence({ ...issue.raw, Category: issue.category, Identity: issue.identity, Owner: issue.owner })).length;
   const ownershipEnrichmentRows = snapshot.datasets.ownership_enrichment;
   const baseSummary = {
     generatedAt: snapshot.manifest.GeneratedAt || snapshot.generatedAt,
@@ -993,7 +1170,7 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
       ...confidenceResult
     },
     reviewQueue,
-    issueSummaries: buildIssues(snapshot, ownerLookup),
+    issueSummaries,
     criticalScanBlocks,
     protocolReadinessGates,
     migrationClusters: buildMigrationClusters(snapshot.datasets.related_data_areas),

@@ -28,6 +28,7 @@ import {
   deriveDashboard,
   isTruthy,
   normalizeSnapshot,
+  rowHasBrokenSidEvidence,
   type CriticalScanBlock,
   type DashboardModel,
   type GroupTreeRow,
@@ -47,6 +48,7 @@ import { VirtualTable } from "./ui/VirtualTable";
 
 type ViewKey = "overview" | "findings" | "migration" | "groups" | "identity" | "diagnostics" | "raw" | "connectivity";
 type BrokenSidMode = "all" | "only" | "hide";
+type IssueSourceMode = "" | "finding" | "conflict";
 
 interface FilterState {
   query: string;
@@ -55,6 +57,7 @@ interface FilterState {
   risk: string;
   source: string;
   brokenSidMode: BrokenSidMode;
+  issueSource: IssueSourceMode;
 }
 
 interface RuntimeSnapshotState {
@@ -146,7 +149,8 @@ const defaultFilters: FilterState = {
   owner: "",
   risk: "",
   source: "",
-  brokenSidMode: "all"
+  brokenSidMode: "all",
+  issueSource: ""
 };
 
 const dashboardSessionKey = "sharesurfer.dashboard.state.v1";
@@ -268,6 +272,7 @@ function isFilterState(value: unknown): value is FilterState {
   return (
     ["query", "businessUnit", "owner", "risk", "source"].every((key) => typeof candidate[key as keyof FilterState] === "string") &&
     (candidate.brokenSidMode === undefined || candidate.brokenSidMode === "all" || candidate.brokenSidMode === "only" || candidate.brokenSidMode === "hide") &&
+    (candidate.issueSource === undefined || candidate.issueSource === "" || candidate.issueSource === "finding" || candidate.issueSource === "conflict") &&
     ((candidate as { brokenSidOnly?: unknown }).brokenSidOnly === undefined || typeof (candidate as { brokenSidOnly?: unknown }).brokenSidOnly === "boolean")
   );
 }
@@ -564,16 +569,13 @@ function matchesText(value: string, filter: string): boolean {
   return !filter || value.toLowerCase() === filter.toLowerCase();
 }
 
-function isBrokenSidIdentity(value: string): boolean {
-  const trimmed = value.trim();
-  return /^S-\d-\d+(-\d+)+$/i.test(trimmed) || /account\s+unknown/i.test(trimmed) || /unknown\s+(account|sid)/i.test(trimmed);
-}
-
-function rowHasBrokenSid(row: Record<string, unknown>): boolean {
-  const findingType = getRowFieldValue(row, "FindingType");
-  const category = getRowFieldValue(row, "Category");
-  const identity = getRowFieldValue(row, "Identity");
-  return findingType === "BrokenOrMissingSid" || category === "Broken/Missing SID" || isBrokenSidIdentity(identity);
+function issueHasBrokenSid(issue: IssueSummary): boolean {
+  return rowHasBrokenSidEvidence({
+    ...issue.raw,
+    Category: issue.category,
+    Identity: issue.identity,
+    Owner: issue.owner
+  });
 }
 
 function matchesBrokenSidMode(hasBrokenSid: boolean, mode: BrokenSidMode): boolean {
@@ -646,20 +648,25 @@ function rowMatchesShareOrPath(row: Record<string, unknown>, shareIds: Set<strin
   return pathTokens.some((token) => token !== "" && pathText.includes(token));
 }
 
-function brokenSidFindingRows(dashboard: DashboardModel): DataRow[] {
-  return datasetRows(dashboard, "findings").filter(rowHasBrokenSid);
+function brokenSidEvidenceRows(dashboard: DashboardModel): DataRow[] {
+  const keys: DatasetKey[] = ["findings", "conflicts", "acl_entries", "share_permissions", "items"];
+  return keys.flatMap((key) => datasetRows(dashboard, key).filter(rowHasBrokenSidEvidence));
 }
 
 function clusterHasBrokenSidEvidence(cluster: MigrationCluster, dashboard: DashboardModel): boolean {
   const shareIds = shareIdsForCluster(cluster, dashboard);
   const prefixes = clusterPatterns(cluster).map(patternPrefix).filter(Boolean);
-  return brokenSidFindingRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, prefixes));
+  return rowHasBrokenSidEvidence(cluster.raw) || brokenSidEvidenceRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, prefixes));
 }
 
 function groupHasBrokenSidEvidence(group: GroupTreeRow, dashboard: DashboardModel): boolean {
   const shareIds = new Set(splitIds(group.raw.ShareIds || group.raw.ShareId || group.shareIds));
   const pathTokens = [group.examplePath, group.fullPath].filter(Boolean).map((path) => path.toLowerCase());
-  return brokenSidFindingRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, pathTokens));
+  return (
+    rowHasBrokenSidEvidence(group.raw) ||
+    group.children.some(rowHasBrokenSidEvidence) ||
+    brokenSidEvidenceRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, pathTokens))
+  );
 }
 
 function rowsMatchingGroup(group: GroupTreeRow, dashboard: DashboardModel, key: DatasetKey): DataRow[] {
@@ -776,7 +783,7 @@ function booleanChip(label: string, active: boolean, onRemove: () => void) {
 }
 
 function filtersAreClear(filters: FilterState): boolean {
-  return !filters.query && !filters.businessUnit && !filters.owner && !filters.risk && !filters.source && filters.brokenSidMode === "all";
+  return !filters.query && !filters.businessUnit && !filters.owner && !filters.risk && !filters.source && filters.brokenSidMode === "all" && !filters.issueSource;
 }
 
 function hasRuntimeDatasets(snapshot?: RawSnapshot): boolean {
@@ -1037,24 +1044,36 @@ function FilterBar({
           ))}
         </select>
       </label>
-      <div className="sid-filter-stack" aria-label="Broken or missing SID filter mode">
-        <label className="toggle-filter">
+      <fieldset className="sid-filter-stack" aria-label="Broken or missing SID filter mode">
+        <legend>Broken/Missing SID</legend>
+        <label className="segmented-option">
           <input
-            type="checkbox"
+            type="radio"
+            name="broken-sid-mode"
+            checked={filters.brokenSidMode === "all"}
+            onChange={() => update({ brokenSidMode: "all" })}
+          />
+          <span>All</span>
+        </label>
+        <label className="segmented-option">
+          <input
+            type="radio"
+            name="broken-sid-mode"
             checked={filters.brokenSidMode === "only"}
-            onChange={(event) => update({ brokenSidMode: event.target.checked ? "only" : "all" })}
+            onChange={() => update({ brokenSidMode: "only" })}
           />
-          <span>Show only Broken/Missing SIDs</span>
+          <span>Only broken</span>
         </label>
-        <label className="toggle-filter">
+        <label className="segmented-option">
           <input
-            type="checkbox"
+            type="radio"
+            name="broken-sid-mode"
             checked={filters.brokenSidMode === "hide"}
-            onChange={(event) => update({ brokenSidMode: event.target.checked ? "hide" : "all" })}
+            onChange={() => update({ brokenSidMode: "hide" })}
           />
-          <span>Hide Broken/Missing SIDs</span>
+          <span>Hide broken</span>
         </label>
-      </div>
+      </fieldset>
       <div className="active-context">
         <strong>Active Context</strong>
         <div className="filter-chips">
@@ -1075,6 +1094,7 @@ function FilterBar({
           {chip("Owner", filters.owner, () => update({ owner: "" }))}
           {chip("Risk", filters.risk, () => update({ risk: "" }))}
           {chip("Source", filters.source, () => update({ source: "" }))}
+          {chip("Issue Type", filters.issueSource === "conflict" ? "Conflicts" : filters.issueSource === "finding" ? "Findings" : "", () => update({ issueSource: "" }))}
           {booleanChip("Showing only Broken/Missing SIDs", filters.brokenSidMode === "only", () => update({ brokenSidMode: "all" }))}
           {booleanChip("Broken/Missing SIDs hidden", filters.brokenSidMode === "hide", () => update({ brokenSidMode: "all" }))}
           {filtersAreClear(filters) ? <span className="muted">Enterprise-wide view</span> : null}
@@ -1089,10 +1109,34 @@ function FilterBar({
   );
 }
 
-function filterQueue(rows: ReviewQueueRow[], filters: FilterState, query: string) {
+function reviewQueueHasBrokenSidEvidence(row: ReviewQueueRow, dashboard: DashboardModel): boolean {
+  return dashboard.issueSummaries.some(
+    (issue) =>
+      issueHasBrokenSid(issue) &&
+      issue.owner.toLowerCase() === row.owner.toLowerCase() &&
+      issue.businessUnit.toLowerCase() === row.businessUnit.toLowerCase()
+  );
+}
+
+function reviewQueueHasIssueSource(row: ReviewQueueRow, dashboard: DashboardModel, source: IssueSourceMode): boolean {
+  if (!source) {
+    return true;
+  }
+
+  return dashboard.issueSummaries.some(
+    (issue) =>
+      issue.source === source &&
+      issue.owner.toLowerCase() === row.owner.toLowerCase() &&
+      issue.businessUnit.toLowerCase() === row.businessUnit.toLowerCase()
+  );
+}
+
+function filterQueue(rows: ReviewQueueRow[], filters: FilterState, query: string, dashboard: DashboardModel) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
+      (filters.brokenSidMode === "all" || matchesBrokenSidMode(reviewQueueHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode)) &&
+      reviewQueueHasIssueSource(row, dashboard, filters.issueSource) &&
       matchesText(row.businessUnit, filters.businessUnit) &&
       matchesText(row.owner, filters.owner) &&
       (!filters.source || row.source.toLowerCase().includes(filters.source.toLowerCase())) &&
@@ -1115,7 +1159,8 @@ function filterIssues(rows: IssueSummary[], filters: FilterState, query: string)
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      matchesBrokenSidMode(row.category === "Broken/Missing SID" || isBrokenSidIdentity(row.identity), filters.brokenSidMode) &&
+      matchesBrokenSidMode(issueHasBrokenSid(row), filters.brokenSidMode) &&
+      (!filters.issueSource || row.source === filters.issueSource) &&
       (!filters.risk || row.severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.category.toLowerCase().includes(filters.risk.toLowerCase())) &&
       (!filters.owner || row.owner.toLowerCase() === filters.owner.toLowerCase()) &&
       (!filters.businessUnit || row.businessUnit.toLowerCase() === filters.businessUnit.toLowerCase()) &&
@@ -1139,7 +1184,7 @@ function filterClusters(rows: MigrationCluster[], filters: FilterState, query: s
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      matchesBrokenSidMode(clusterHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode) &&
+      (filters.brokenSidMode === "all" || matchesBrokenSidMode(clusterHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode)) &&
       matchesText(row.businessUnit, filters.businessUnit) &&
       matchesText(row.owner, filters.owner) &&
       (!filters.source || row.raw.Source.toLowerCase().includes(filters.source.toLowerCase())) &&
@@ -1165,7 +1210,7 @@ function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string,
     (row) => {
       const evidenceRows = groupFilterEvidenceRows(row, dashboard);
       return (
-      matchesBrokenSidMode(groupHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode) &&
+      (filters.brokenSidMode === "all" || matchesBrokenSidMode(groupHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode)) &&
       evidenceRowsMatchFilter(evidenceRows, ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit, true) &&
       evidenceRowsMatchFilter(evidenceRows, ["Owner", "DataOwner"], filters.owner, true) &&
       evidenceRowsMatchFilter(evidenceRows, ["Source", "Sources", "SourceMode", "CollectionProvider"], filters.source, true) &&
@@ -1196,7 +1241,7 @@ function filterCriticalBlocks(rows: CriticalScanBlock[], filters: FilterState, q
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      matchesBrokenSidMode(rowHasBrokenSid(row), filters.brokenSidMode) &&
+      matchesBrokenSidMode(rowHasBrokenSidEvidence(row), filters.brokenSidMode) &&
       rawRowMatchesTopFilters(row, filters) &&
       (!filters.risk || row.Severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.ErrorType.toLowerCase().includes(filters.risk.toLowerCase())) &&
       matchesParsedSearch(row, parsedQuery)
@@ -1204,7 +1249,7 @@ function filterCriticalBlocks(rows: CriticalScanBlock[], filters: FilterState, q
 }
 
 function hasActiveContext(filters: FilterState, query: string): boolean {
-  return Boolean(query || filters.businessUnit || filters.owner || filters.risk || filters.source || filters.brokenSidMode !== "all");
+  return Boolean(query || filters.businessUnit || filters.owner || filters.risk || filters.source || filters.brokenSidMode !== "all" || filters.issueSource);
 }
 
 function buildOverviewSummary(
@@ -1271,7 +1316,7 @@ function OverviewView({
   onKpiSelect: (destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "broken-sids" | "items") => void;
   onOwnerSelect: (row: ReviewQueueRow) => void;
 }) {
-  const filteredReviewQueue = filterQueue(dashboard.reviewQueue, filters, query);
+  const filteredReviewQueue = filterQueue(dashboard.reviewQueue, filters, query, dashboard);
   const queue = filteredReviewQueue.slice(0, 8);
   const queueTableRows = filteredReviewQueue.map((row) => ({
     ReviewQueueId: row.id,
@@ -1592,10 +1637,13 @@ function FindingsView({
   const reviewedVisibleCount = visibleIssues.filter((issue) => Boolean(reviewDecisions[issue.id])).length;
   const rows = visibleIssues.map((issue) => ({
     IssueId: issue.id,
+    Source: issue.source === "conflict" ? "Conflict" : "Finding",
     Category: issue.category,
     Severity: issue.severity,
     Title: issue.title,
     Identity: issue.identity,
+    Owner: issue.owner || "Unmapped",
+    "Business Unit": issue.businessUnit || "Unmapped",
     Path: issue.path
   }));
 
@@ -1709,7 +1757,7 @@ function FindingsView({
         <VirtualTable
           title="Findings and conflicts"
           rows={rows}
-          columns={["Severity", "Category", "Title", "Identity", "Path"]}
+          columns={["Severity", "Source", "Category", "Title", "Identity", "Owner", "Business Unit", "Path"]}
           pageSize={16}
           onRowSelect={(row) => {
             const nextIssue = visibleIssues.find((issue) => issue.id === row.IssueId);
@@ -1781,6 +1829,12 @@ function FindingsView({
               <article>
                 <h3>Recommended next action</h3>
                 <p>{selected.nextAction}</p>
+              </article>
+              <article>
+                <h3>Owner and path context</h3>
+                <p>
+                  Owner: {selected.owner || "Unmapped"}; Business Unit: {selected.businessUnit || "Unmapped"}; Path: {selected.path || "Not available"}.
+                </p>
               </article>
               <article>
                 <h3>
@@ -2209,7 +2263,7 @@ function RawEvidenceView({
   const [selectedRow, setSelectedRow] = useState<DataRow | null>(null);
   const dataset = dashboard.rawEvidenceCatalog.find((entry) => entry.key === datasetKey) ?? dashboard.rawEvidenceCatalog[0];
   const parsedQuery = useMemo(() => parseSearchQuery(query), [query]);
-  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery) && matchesBrokenSidMode(rowHasBrokenSid(row), filters.brokenSidMode) && rawRowMatchesTopFilters(row, filters));
+  const rows = dataset.rows.filter((row) => matchesParsedSearch(row, parsedQuery) && matchesBrokenSidMode(rowHasBrokenSidEvidence(row), filters.brokenSidMode) && rawRowMatchesTopFilters(row, filters));
   const columns = columnsForDataset(dataset.key, showAllColumns);
   const detailRow = selectedRow ?? rows[0] ?? null;
 
@@ -2496,7 +2550,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [reviewDecisions, setReviewDecisions] = useState<ReviewDecisionMap>(() => loadReviewDecisions());
 
-  const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery), [dashboard.reviewQueue, filters, deferredQuery]);
+  const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
   const filteredIssues = useMemo(() => filterIssues(dashboard.issueSummaries, filters, deferredQuery), [dashboard.issueSummaries, filters, deferredQuery]);
   const filteredCriticalBlocks = useMemo(() => filterCriticalBlocks(dashboard.criticalScanBlocks, filters, deferredQuery), [dashboard.criticalScanBlocks, filters, deferredQuery]);
   const filteredClusters = useMemo(() => filterClusters(dashboard.migrationClusters, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
@@ -2597,7 +2651,12 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
       return;
     }
     if (destination === "broken-sids") {
-      setFilters({ ...filters, brokenSidMode: "only" });
+      setFilters({ ...filters, brokenSidMode: "only", issueSource: "" });
+      setActiveView("findings");
+      return;
+    }
+    if (destination === "access-conflicts") {
+      setFilters({ ...filters, issueSource: "conflict" });
       setActiveView("findings");
       return;
     }
