@@ -15,6 +15,16 @@ function Test-ShareSurferItemIsReparsePoint {
     }
 }
 
+function ConvertTo-ShareSurferComparableLocalPath {
+    param(
+        [string] $Path = ''
+    )
+
+    $text = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$Path)
+    $text = $text.Trim().Replace('/', '\').TrimEnd('\')
+    $text.ToUpperInvariant()
+}
+
 function Get-ShareSurferLocalInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -77,7 +87,33 @@ function Get-ShareSurferLocalInventory {
         $sharePermissionSource = ''
         $nativeSharePermissionAttempted = $false
         $permissionResult = $null
-        if (-not $SkipSharePermissionCollection) {
+        $localShareVerificationMessage = ''
+        if (-not $SkipSharePermissionCollection -and -not [bool]$shareInfo.IsUncTarget) {
+            $getSmbShareCommand = Get-Command Get-SmbShare -ErrorAction SilentlyContinue
+            if ($null -eq $getSmbShareCommand) {
+                $localShareVerificationMessage = 'Share-level permissions were not collected because Get-SmbShare is unavailable to verify that this local folder is an SMB share root.'
+            }
+            else {
+                try {
+                    $candidateShareRows = @(Get-SmbShare -Name $shareInfo.ShareName -ErrorAction Stop)
+                    $targetComparisonPath = ConvertTo-ShareSurferComparableLocalPath -Path $targetDisplayPath
+                    $matchingShareRows = @($candidateShareRows | Where-Object {
+                        $null -ne $_.PSObject.Properties['Path'] -and (ConvertTo-ShareSurferComparableLocalPath -Path ([string]$_.Path)) -eq $targetComparisonPath
+                    })
+                    if ($matchingShareRows.Count -eq 0) {
+                        $localShareVerificationMessage = ('Share-level permissions were not collected because SMB share name "{0}" does not point at scanned local folder {1}.' -f $shareInfo.ShareName, $targetDisplayPath)
+                    }
+                }
+                catch {
+                    $localShareVerificationMessage = ('Share-level permissions were not collected because SMB share name "{0}" could not be verified for scanned local folder {1}: {2}' -f $shareInfo.ShareName, $targetDisplayPath, [string]$_.Exception.Message)
+                }
+            }
+
+            if (-not [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) {
+                [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionVerificationSkipped' -Source 'Get-SmbShare' -ShareId $shareId -Message $localShareVerificationMessage -Detail 'Local folder scans only attach share-level permissions when the named SMB share path matches the scanned folder.'))
+            }
+        }
+        if (-not $SkipSharePermissionCollection -and [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) {
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Collecting share-level permission evidence for {0}.' -f $targetDisplayPath) -Quiet:$Quiet
             $permissionResult = Get-ShareSurferSharePermissionRows -ShareId $shareId -ShareName $shareInfo.ShareName -ComputerName $shareInfo.ComputerName -PassThruResult
             $permissionRows = @($permissionResult.Rows)
@@ -120,15 +156,20 @@ function Get-ShareSurferLocalInventory {
             $permissionMessage = if ($nativeSharePermissionAttempted) {
                 'Share-level permissions were not collected through Get-SmbShareAccess or NativeSmbRpc.'
             }
+            elseif (-not [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) {
+                $localShareVerificationMessage
+            }
             else {
                 'Share-level permissions were not collected through Get-SmbShareAccess.'
             }
+            $permissionErrorType = if (-not [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) { 'SharePermissionVerificationSkipped' } else { 'SharePermissionCollectionUnavailable' }
+            $permissionErrorSource = if (-not [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) { 'Get-SmbShare' } else { 'Get-SmbShareAccess' }
             [void]$scanErrors.Add([pscustomobject]@{
                 ShareId = $shareId
                 FullPath = $targetDisplayPath
-                ErrorType = 'SharePermissionCollectionUnavailable'
+                ErrorType = $permissionErrorType
                 Severity = 'Warning'
-                Source = 'Get-SmbShareAccess'
+                Source = $permissionErrorSource
                 Message = $permissionMessage
                 Detail = 'Best-effort target path scan cannot prove the share-level access gate for this share.'
             })
@@ -143,7 +184,7 @@ function Get-ShareSurferLocalInventory {
                     Detail = [string]$permissionResult.Detail
                 })
             }
-            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionCollectionUnavailable' -Source 'Get-SmbShareAccess' -ShareId $shareId -Message $permissionMessage -Detail $targetDisplayPath))
+            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType $permissionErrorType -Source $permissionErrorSource -ShareId $shareId -Message $permissionMessage -Detail $targetDisplayPath))
             Write-ShareSurferStatus -Phase 'Collect' -Message ('Share-level permissions were unavailable for {0}; continuing with file/folder ACL collection.' -f $targetDisplayPath) -Quiet:$Quiet
         }
 
@@ -163,11 +204,11 @@ function Get-ShareSurferLocalInventory {
         [void]$scanItems.Add($targetItem)
         $directoriesToEnumerate = New-Object -TypeName 'System.Collections.Generic.Queue[object]'
         $targetIsReparsePoint = Test-ShareSurferItemIsReparsePoint -Item $targetItem
-        if ($targetItem.PSIsContainer -and -not $targetIsReparsePoint) {
+        if ($targetItem.PSIsContainer) {
             $directoriesToEnumerate.Enqueue($targetItem)
-        }
-        elseif ($targetItem.PSIsContainer -and $targetIsReparsePoint) {
-            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'ReparsePointSkipped' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Skipped recursive traversal into reparse point {0}.' -f $targetDisplayPath) -Detail 'The reparse-point directory is recorded as an item, but ShareSurfer does not descend into it.'))
+            if ($targetIsReparsePoint) {
+                [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Info' -EventType 'ReparsePointTargetEnumerated' -Source 'Get-ChildItem' -ShareId $shareId -Message ('Enumerating explicit reparse-point target {0}.' -f $targetDisplayPath) -Detail 'The operator selected this target directly, so ShareSurfer treats it as scan intent while still skipping child reparse points.'))
+            }
         }
 
         Write-ShareSurferStatus -Phase 'Collect' -Message ('Enumerating folders{0} under {1}.' -f $(if ($IncludeFiles) { ' and files' } else { '' }), $targetDisplayPath) -Quiet:$Quiet

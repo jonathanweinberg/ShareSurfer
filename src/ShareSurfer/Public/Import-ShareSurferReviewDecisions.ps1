@@ -1,3 +1,137 @@
+function Test-ShareSurferReviewDecisionCsvColumns {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string[]] $RequiredColumns,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Description
+    )
+
+    $rows = @(Read-ShareSurferCsv -Path $Path)
+    $columns = @()
+    if ($rows.Count -gt 0) {
+        $columns = @($rows[0].PSObject.Properties | ForEach-Object { [string]$_.Name })
+    }
+    else {
+        $firstLine = Get-Content -LiteralPath $Path -TotalCount 1 -ErrorAction Stop
+        if (-not [string]::IsNullOrWhiteSpace($firstLine)) {
+            $columns = @($firstLine -split ',' | ForEach-Object { ([string]$_).Trim().Trim('"') })
+        }
+    }
+
+    $missingColumns = @($RequiredColumns | Where-Object { $columns -notcontains $_ })
+    if ($missingColumns.Count -gt 0) {
+        throw ('{0} is missing required column(s): {1}. Path: {2}' -f $Description, ($missingColumns -join ', '), $Path)
+    }
+
+    @($rows)
+}
+
+function Test-ShareSurferReviewDecisionIsDurable {
+    param(
+        $Row
+    )
+
+    if ($null -eq $Row) {
+        return $false
+    }
+
+    $decision = if ($null -ne $Row.PSObject.Properties['Decision']) { [string]$Row.Decision } else { '' }
+    $status = if ($null -ne $Row.PSObject.Properties['DecisionStatus']) { [string]$Row.DecisionStatus } else { '' }
+    (-not [string]::IsNullOrWhiteSpace($decision) -and -not $status.Equals('NeedsCorrection', [System.StringComparison]::OrdinalIgnoreCase))
+}
+
+function Get-ShareSurferReviewDecisionReviewedAt {
+    param(
+        $Row
+    )
+
+    if ($null -eq $Row -or $null -eq $Row.PSObject.Properties['ReviewedAt'] -or [string]::IsNullOrWhiteSpace([string]$Row.ReviewedAt)) {
+        return $null
+    }
+
+    $parsed = [datetime]::MinValue
+    if ([datetime]::TryParse([string]$Row.ReviewedAt, [ref]$parsed)) {
+        return $parsed
+    }
+
+    $null
+}
+
+function Add-ShareSurferDecisionImportWarning {
+    param(
+        $Row,
+
+        [string] $Warning = ''
+    )
+
+    if ($null -eq $Row -or [string]::IsNullOrWhiteSpace($Warning)) {
+        return
+    }
+
+    $existing = if ($null -ne $Row.PSObject.Properties['ImportWarnings']) { [string]$Row.ImportWarnings } else { '' }
+    $warnings = New-Object System.Collections.ArrayList
+    foreach ($value in @($existing -split '; ')) {
+        if (-not [string]::IsNullOrWhiteSpace($value) -and -not $warnings.Contains($value)) {
+            [void]$warnings.Add($value)
+        }
+    }
+    if (-not $warnings.Contains($Warning)) {
+        [void]$warnings.Add($Warning)
+    }
+    if ($null -eq $Row.PSObject.Properties['ImportWarnings']) {
+        $Row | Add-Member -NotePropertyName ImportWarnings -NotePropertyValue ''
+    }
+    $Row.ImportWarnings = @($warnings) -join '; '
+}
+
+function Select-ShareSurferReviewDecisionSource {
+    param(
+        $Existing,
+
+        $Incoming,
+
+        [string] $Key = ''
+    )
+
+    if ($null -eq $Existing) {
+        return $Incoming
+    }
+    if ($null -eq $Incoming) {
+        return $Existing
+    }
+
+    $existingIsDurable = Test-ShareSurferReviewDecisionIsDurable -Row $Existing
+    $incomingIsDurable = Test-ShareSurferReviewDecisionIsDurable -Row $Incoming
+    if ($existingIsDurable -and -not $incomingIsDurable) {
+        Add-ShareSurferDecisionImportWarning -Row $Existing -Warning ('Skipped older or pending incoming decision for {0}; existing reviewed decision was kept.' -f $Key)
+        return $Existing
+    }
+    if (-not $existingIsDurable -and $incomingIsDurable) {
+        return $Incoming
+    }
+    if ($existingIsDurable -and $incomingIsDurable) {
+        $existingReviewedAt = Get-ShareSurferReviewDecisionReviewedAt -Row $Existing
+        $incomingReviewedAt = Get-ShareSurferReviewDecisionReviewedAt -Row $Incoming
+        if ($null -ne $existingReviewedAt -and $null -ne $incomingReviewedAt) {
+            if ($incomingReviewedAt -lt $existingReviewedAt) {
+                Add-ShareSurferDecisionImportWarning -Row $Existing -Warning ('Skipped older incoming decision for {0}; existing ReviewedAt {1:o} is newer than incoming ReviewedAt {2:o}.' -f $Key, $existingReviewedAt, $incomingReviewedAt)
+                return $Existing
+            }
+            if ($incomingReviewedAt -gt $existingReviewedAt) {
+                Add-ShareSurferDecisionImportWarning -Row $Incoming -Warning ('Replaced existing decision for {0}; incoming ReviewedAt {1:o} is newer than existing ReviewedAt {2:o}.' -f $Key, $incomingReviewedAt, $existingReviewedAt)
+                return $Incoming
+            }
+        }
+        Add-ShareSurferDecisionImportWarning -Row $Incoming -Warning ('Replaced existing reviewed decision for {0}; ReviewedAt values were equal or unavailable.' -f $Key)
+    }
+
+    $Incoming
+}
+
 function Import-ShareSurferReviewDecisions {
     [CmdletBinding()]
     param(
@@ -63,13 +197,13 @@ function Import-ShareSurferReviewDecisions {
 
     $ownerInputs = @()
     if (Test-Path -LiteralPath $outputOwnerDecisionPath -PathType Leaf) {
-        $ownerInputs += @(Read-ShareSurferCsv -Path $outputOwnerDecisionPath)
+        $ownerInputs += @(Test-ShareSurferReviewDecisionCsvColumns -Path $outputOwnerDecisionPath -RequiredColumns @('ReviewPacketId') -Description 'Existing owner review decision CSV')
     }
     if (-not [string]::IsNullOrWhiteSpace($OwnerDecisionPath)) {
         if (-not (Test-Path -LiteralPath $OwnerDecisionPath -PathType Leaf)) {
             throw "Owner review decision CSV was not found: $OwnerDecisionPath"
         }
-        $ownerInputs += @(Read-ShareSurferCsv -Path $OwnerDecisionPath | ForEach-Object {
+        $ownerInputs += @(Test-ShareSurferReviewDecisionCsvColumns -Path $OwnerDecisionPath -RequiredColumns @('ReviewPacketId') -Description 'Owner review decision CSV' | ForEach-Object {
             $_ | Add-Member -NotePropertyName SourceDecisionPath -NotePropertyValue $OwnerDecisionPath -Force
             $_
         })
@@ -77,13 +211,13 @@ function Import-ShareSurferReviewDecisions {
 
     $migrationInputs = @()
     if (Test-Path -LiteralPath $outputMigrationDecisionPath -PathType Leaf) {
-        $migrationInputs += @(Read-ShareSurferCsv -Path $outputMigrationDecisionPath)
+        $migrationInputs += @(Test-ShareSurferReviewDecisionCsvColumns -Path $outputMigrationDecisionPath -RequiredColumns @('RelatedAreaId') -Description 'Existing migration cluster decision CSV')
     }
     if (-not [string]::IsNullOrWhiteSpace($MigrationDecisionPath)) {
         if (-not (Test-Path -LiteralPath $MigrationDecisionPath -PathType Leaf)) {
             throw "Migration cluster decision CSV was not found: $MigrationDecisionPath"
         }
-        $migrationInputs += @(Read-ShareSurferCsv -Path $MigrationDecisionPath | ForEach-Object {
+        $migrationInputs += @(Test-ShareSurferReviewDecisionCsvColumns -Path $MigrationDecisionPath -RequiredColumns @('RelatedAreaId') -Description 'Migration cluster decision CSV' | ForEach-Object {
             $_ | Add-Member -NotePropertyName SourceDecisionPath -NotePropertyValue $MigrationDecisionPath -Force
             $_
         })
@@ -93,7 +227,8 @@ function Import-ShareSurferReviewDecisions {
     foreach ($row in $ownerInputs) {
         $key = [string]$row.ReviewPacketId
         if (-not [string]::IsNullOrWhiteSpace($key)) {
-            $ownerInputByKey[$key] = $row
+            $existingSource = if ($ownerInputByKey.ContainsKey($key)) { $ownerInputByKey[$key] } else { $null }
+            $ownerInputByKey[$key] = Select-ShareSurferReviewDecisionSource -Existing $existingSource -Incoming $row -Key $key
         }
     }
 
@@ -121,7 +256,8 @@ function Import-ShareSurferReviewDecisions {
     foreach ($row in $migrationInputs) {
         $key = [string]$row.RelatedAreaId
         if (-not [string]::IsNullOrWhiteSpace($key)) {
-            $migrationInputByKey[$key] = $row
+            $existingSource = if ($migrationInputByKey.ContainsKey($key)) { $migrationInputByKey[$key] } else { $null }
+            $migrationInputByKey[$key] = Select-ShareSurferReviewDecisionSource -Existing $existingSource -Incoming $row -Key $key
         }
     }
 

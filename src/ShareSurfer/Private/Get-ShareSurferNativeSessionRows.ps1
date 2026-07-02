@@ -19,54 +19,54 @@ function Get-ShareSurferNativeSessionRows {
     }
 
     $rows = New-Object System.Collections.ArrayList
-    $buffer = [IntPtr]::Zero
     $resumeHandle = [UInt32]0
-    $entriesRead = [UInt32]0
-    $totalEntries = [UInt32]0
-    $result = [ShareSurfer.NativeWin32Methods]::NetSessionEnum(
-        $serverName,
-        $null,
-        $null,
-        10,
-        [ref]$buffer,
-        [ShareSurfer.NativeWin32Methods]::MAX_PREFERRED_LENGTH,
-        [ref]$entriesRead,
-        [ref]$totalEntries,
-        [ref]$resumeHandle)
+    do {
+        $buffer = [IntPtr]::Zero
+        $entriesRead = [UInt32]0
+        $totalEntries = [UInt32]0
+        $result = [ShareSurfer.NativeWin32Methods]::NetSessionEnum(
+            $serverName,
+            $null,
+            $null,
+            10,
+            [ref]$buffer,
+            [ShareSurfer.NativeWin32Methods]::MAX_PREFERRED_LENGTH,
+            [ref]$entriesRead,
+            [ref]$totalEntries,
+            [ref]$resumeHandle)
 
-    try {
-        if ($result -ne 0) {
-            $win32Message = Get-ShareSurferWin32ResultMessage -ResultCode $result
-            throw ('NativeSessionEnumerationFailed: NetSessionEnum failed for {0} with Win32 result {1} ({2}). SMB/RPC reachability does not guarantee session enumeration rights.' -f $ComputerName, $result, $win32Message)
-        }
-
-        if ($buffer -eq [IntPtr]::Zero -or $entriesRead -eq 0) {
-            return @()
-        }
-
-        $entrySize = [System.Runtime.InteropServices.Marshal]::SizeOf([type][ShareSurfer.NativeWin32Methods+SESSION_INFO_10])
-        for ($index = 0; $index -lt [int]$entriesRead; $index++) {
-            if ($rows.Count -ge $MaxRows) {
-                break
+        try {
+            if ($result -ne 0 -and $result -ne 234) {
+                $win32Message = Get-ShareSurferWin32ResultMessage -ResultCode $result
+                throw ('NativeSessionEnumerationFailed: NetSessionEnum failed for {0} with Win32 result {1} ({2}). SMB/RPC reachability does not guarantee session enumeration rights.' -f $ComputerName, $result, $win32Message)
             }
 
-            $entryPointer = [IntPtr]::Add($buffer, ($index * $entrySize))
-            $session = [System.Runtime.InteropServices.Marshal]::PtrToStructure($entryPointer, [type][ShareSurfer.NativeWin32Methods+SESSION_INFO_10])
-            [void]$rows.Add([pscustomobject]@{
-                ComputerName = $ComputerName
-                ClientComputerName = [string]$session.sesi10_cname
-                ClientUserName = [string]$session.sesi10_username
-                ConnectedSeconds = [int]$session.sesi10_time
-                IdleSeconds = [int]$session.sesi10_idle_time
-                Source = 'NativeNetSessionEnum'
-            })
-        }
+            if ($buffer -ne [IntPtr]::Zero -and $entriesRead -gt 0) {
+                $entrySize = [System.Runtime.InteropServices.Marshal]::SizeOf([type][ShareSurfer.NativeWin32Methods+SESSION_INFO_10])
+                for ($index = 0; $index -lt [int]$entriesRead; $index++) {
+                    if ($rows.Count -ge $MaxRows) {
+                        break
+                    }
 
-        @($rows)
-    }
-    finally {
-        if ($buffer -ne [IntPtr]::Zero) {
-            [void][ShareSurfer.NativeWin32Methods]::NetApiBufferFree($buffer)
+                    $entryPointer = [IntPtr]::Add($buffer, ($index * $entrySize))
+                    $session = [System.Runtime.InteropServices.Marshal]::PtrToStructure($entryPointer, [type][ShareSurfer.NativeWin32Methods+SESSION_INFO_10])
+                    [void]$rows.Add([pscustomobject]@{
+                        ComputerName = $ComputerName
+                        ClientComputerName = [string]$session.sesi10_cname
+                        ClientUserName = [string]$session.sesi10_username
+                        ConnectedSeconds = [int]$session.sesi10_time
+                        IdleSeconds = [int]$session.sesi10_idle_time
+                        Source = 'NativeNetSessionEnum'
+                    })
+                }
+            }
         }
-    }
+        finally {
+            if ($buffer -ne [IntPtr]::Zero) {
+                [void][ShareSurfer.NativeWin32Methods]::NetApiBufferFree($buffer)
+            }
+        }
+    } while ($result -eq 234 -and $resumeHandle -ne 0 -and $rows.Count -lt $MaxRows)
+
+    @($rows)
 }

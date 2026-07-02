@@ -12,6 +12,7 @@ function Get-ShareSurferConflicts {
     $aclEntriesList = @(ConvertTo-ShareSurferArray $AclEntries)
 
     $sharePermissionsByShare = @{}
+    $shareHasBroadAllowGate = @{}
     foreach ($permission in $sharePermissionsList) {
         if (-not $sharePermissionsByShare.ContainsKey($permission.ShareId)) {
             $sharePermissionsByShare[$permission.ShareId] = @{}
@@ -21,6 +22,9 @@ function Get-ShareSurferConflicts {
             $sharePermissionsByShare[$permission.ShareId][$identityKey] = @()
         }
         $sharePermissionsByShare[$permission.ShareId][$identityKey] = @($sharePermissionsByShare[$permission.ShareId][$identityKey]) + $permission
+        if ((Get-ShareSurferAccessType $permission.AccessControlType) -eq 'Allow' -and (Test-ShareSurferBroadSharePrincipal -Identity $permission.Identity)) {
+            $shareHasBroadAllowGate[$permission.ShareId] = $true
+        }
     }
 
     $ntfsByShare = @{}
@@ -49,6 +53,7 @@ function Get-ShareSurferConflicts {
         $ntfsByShareItemIdentity[$ace.ShareId][$itemKey][$identityKey] = @($ntfsByShareItemIdentity[$ace.ShareId][$itemKey][$identityKey]) + $ace
     }
 
+    $missingShareGateKeys = @{}
     foreach ($ace in $aclEntriesList) {
         $identityKey = ([string]$ace.Identity).ToUpperInvariant()
         $shareMap = @{}
@@ -56,7 +61,10 @@ function Get-ShareSurferConflicts {
             $shareMap = $sharePermissionsByShare[$ace.ShareId]
         }
 
-        if ($shareMap.Count -gt 0 -and -not $shareMap.ContainsKey($identityKey)) {
+        $hasBroadAllowGate = ($shareHasBroadAllowGate.ContainsKey($ace.ShareId) -and [bool]$shareHasBroadAllowGate[$ace.ShareId])
+        $missingShareGateKey = '{0}|{1}' -f [string]$ace.ShareId, $identityKey
+        if ($shareMap.Count -gt 0 -and -not $shareMap.ContainsKey($identityKey) -and -not $hasBroadAllowGate -and -not $missingShareGateKeys.ContainsKey($missingShareGateKey)) {
+            $missingShareGateKeys[$missingShareGateKey] = $true
             [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsIdentityMissingShareGate' -ShareId $ace.ShareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights '' -NtfsRights $ace.Rights -Severity 'High' -Message 'NTFS grants rights to an identity that does not appear in the share-level permission gate.'))
         }
 
@@ -106,6 +114,37 @@ function Get-ShareSurferConflicts {
     @($conflicts)
 }
 
+function Test-ShareSurferBroadSharePrincipal {
+    param(
+        [string] $Identity = ''
+    )
+
+    $text = ([string]$Identity).Trim()
+    if ($text -eq '') {
+        return $false
+    }
+
+    $upper = $text.ToUpperInvariant()
+    $leaf = $upper
+    if ($leaf.Contains('\')) {
+        $leaf = $leaf.Substring($leaf.LastIndexOf('\') + 1)
+    }
+
+    if ($upper -in @('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545') -or $upper -match '^S-1-5-21-.+-513$') {
+        return $true
+    }
+
+    $broadNames = @(
+        'EVERYONE',
+        'AUTHENTICATED USERS',
+        'DOMAIN USERS',
+        'USERS',
+        'INTERACTIVE'
+    )
+
+    ($broadNames -contains $upper -or $broadNames -contains $leaf)
+}
+
 function Get-ShareSurferAccessType {
     param(
         $AccessControlType
@@ -129,6 +168,9 @@ function Get-ShareSurferRightsRank {
     )
 
     $text = ([string]$Rights).ToLowerInvariant()
+    if ($text.Contains('genericall')) {
+        return 3
+    }
     if ($text.Contains('full')) {
         return 3
     }

@@ -20,12 +20,19 @@ function Normalize-ShareSurferItems {
     foreach ($item in $sorted) {
         $fullPath = [string]$item.FullPath
         $knownBreak = ''
-        foreach ($breakPath in $protectedByPath.Keys) {
-            if ($fullPath.Length -gt $breakPath.Length -and $fullPath.StartsWith($breakPath, [System.StringComparison]::OrdinalIgnoreCase)) {
-                if ($knownBreak -eq '' -or $breakPath.Length -gt $knownBreak.Length) {
-                    $knownBreak = $breakPath
-                }
+        $ancestorPath = $fullPath
+        while (-not [string]::IsNullOrWhiteSpace($ancestorPath)) {
+            $parentPath = Get-ShareSurferPathParent -Path $ancestorPath
+            if ([string]::IsNullOrWhiteSpace($parentPath) -or $parentPath -eq $ancestorPath) {
+                break
             }
+
+            if ($protectedByPath.ContainsKey($parentPath)) {
+                $knownBreak = $parentPath
+                break
+            }
+
+            $ancestorPath = $parentPath
         }
 
         $inheritanceEnabled = $true
@@ -64,4 +71,28 @@ function Normalize-ShareSurferItems {
     }
 
     @($normalized)
+}
+
+function Get-ShareSurferPathParent {
+    param(
+        [string] $Path = ''
+    )
+
+    $text = ([string]$Path).TrimEnd('\', '/')
+    if ($text -eq '') {
+        return ''
+    }
+
+    $lastBackslash = $text.LastIndexOf('\')
+    $lastSlash = $text.LastIndexOf('/')
+    $lastSeparator = [Math]::Max($lastBackslash, $lastSlash)
+    if ($lastSeparator -le 0) {
+        return ''
+    }
+
+    if ($lastSeparator -eq 2 -and $text.Length -ge 3 -and $text[1] -eq ':') {
+        return ''
+    }
+
+    $text.Substring(0, $lastSeparator)
 }
