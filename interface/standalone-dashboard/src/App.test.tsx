@@ -86,6 +86,15 @@ function renderWithEmployeePrefixSnapshot() {
   return render(<App />);
 }
 
+function renderWithOwnerSidSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(demoSnapshot)) as typeof demoSnapshot;
+  if (snapshot.datasets?.items?.[0]) {
+    snapshot.datasets.items[0].Owner = "S-1-5-21-1000-2000-3000-5050";
+  }
+  window.__SHARESURFER_SNAPSHOT__ = snapshot;
+  return render(<App />);
+}
+
 function ensureLocalStorage() {
   if (window.localStorage) {
     return;
@@ -160,6 +169,15 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByRole("heading", { name: /Findings & Conflicts/i })).toBeInTheDocument();
     expect(screen.getByText("Overview / Access Conflicts")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Back to overview/i })).toBeInTheDocument();
+    expect(screen.getByText("Issue Type: Conflicts")).toBeInTheDocument();
+
+    const table = screen.getByRole("table", { name: /Findings and conflicts/i });
+    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    expect(within(table).getByText("Conflict")).toBeInTheDocument();
+    expect(within(table).getByText("Missing Share Gate")).toBeInTheDocument();
+    expect(within(table).getByText("Finance Operations")).toBeInTheDocument();
+    expect(within(table).getByText("\\\\files01\\Finance\\Payroll")).toBeInTheDocument();
+    expect(within(table).queryByText("Deep Custom Permission")).not.toBeInTheDocument();
   });
 
   test("report date context is prominent in the header and findings review", () => {
@@ -447,24 +465,39 @@ describe("dashboard workbench interactions", () => {
     expect(within(initialMigrationTable).getByText("Finance / Accounts Payable")).toBeInTheDocument();
     expect(within(initialMigrationTable).getByText("HR / Employee Records")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/Show only Broken\/Missing SIDs/i));
+    fireEvent.click(screen.getByRole("radio", { name: /^Only broken$/i }));
 
     const migrationTable = screen.getByRole("table", { name: /Related data area clusters/i });
     expect(within(migrationTable).getByText("Finance / Accounts Payable")).toBeInTheDocument();
     expect(within(migrationTable).queryByText("HR / Employee Records")).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Show only Broken\/Missing SIDs/i)).toBeChecked();
-    expect(screen.getByLabelText(/Hide Broken\/Missing SIDs/i)).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: /^Only broken$/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /^Hide broken$/i })).not.toBeChecked();
 
-    fireEvent.click(screen.getByLabelText(/Hide Broken\/Missing SIDs/i));
+    fireEvent.click(screen.getByRole("radio", { name: /^Hide broken$/i }));
 
-    expect(screen.getByLabelText(/Show only Broken\/Missing SIDs/i)).not.toBeChecked();
-    expect(screen.getByLabelText(/Hide Broken\/Missing SIDs/i)).toBeChecked();
+    expect(screen.getByRole("radio", { name: /^Only broken$/i })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: /^Hide broken$/i })).toBeChecked();
 
     fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
 
     const groupsTable = screen.getByRole("table", { name: /Permissioned groups/i });
     expect(within(groupsTable).queryByText("CONTOSO\\FinanceReaders")).not.toBeInTheDocument();
     expect(within(groupsTable).getByText("CONTOSO\\HRReaders")).toBeInTheDocument();
+  });
+
+  test("Broken/Missing SID mode detects owner SID values in raw evidence", () => {
+    renderWithOwnerSidSnapshot();
+
+    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+    fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "items" } });
+    fireEvent.click(screen.getByRole("radio", { name: /^Only broken$/i }));
+
+    const table = screen.getByRole("table", { name: /Folders and files/i });
+    expect(within(table).getByText("\\\\files01\\Finance")).toBeInTheDocument();
+    expect(within(table).queryByText("\\\\files01\\Finance\\Payroll")).not.toBeInTheDocument();
+
+    expect(screen.getAllByText("Owner").length).toBeGreaterThan(0);
+    expect(screen.getByText("S-1-5-21-1000-2000-3000-5050")).toBeInTheDocument();
   });
 
   test("raw evidence uses readable curated columns before showing all CSV fields", () => {
