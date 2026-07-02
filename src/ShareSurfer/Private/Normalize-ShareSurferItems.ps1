@@ -91,7 +91,7 @@ function Get-ShareSurferPathParent {
     }
 
     if ($lastSeparator -eq 2 -and $text.Length -ge 3 -and $text[1] -eq ':') {
-        return ''
+        return $text.Substring(0, 3)
     }
 
     $text.Substring(0, $lastSeparator)

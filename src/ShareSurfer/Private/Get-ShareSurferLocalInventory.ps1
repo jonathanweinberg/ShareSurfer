@@ -95,22 +95,30 @@ function Get-ShareSurferLocalInventory {
             }
             else {
                 try {
-                    $candidateShareRows = @(Get-SmbShare -Name $shareInfo.ShareName -ErrorAction Stop)
                     $targetComparisonPath = ConvertTo-ShareSurferComparableLocalPath -Path $targetDisplayPath
+                    $candidateShareRows = @(Get-SmbShare -ErrorAction Stop)
                     $matchingShareRows = @($candidateShareRows | Where-Object {
                         $null -ne $_.PSObject.Properties['Path'] -and (ConvertTo-ShareSurferComparableLocalPath -Path ([string]$_.Path)) -eq $targetComparisonPath
-                    })
+                    } | Sort-Object Name)
                     if ($matchingShareRows.Count -eq 0) {
-                        $localShareVerificationMessage = ('Share-level permissions were not collected because SMB share name "{0}" does not point at scanned local folder {1}.' -f $shareInfo.ShareName, $targetDisplayPath)
+                        $localShareVerificationMessage = ('Share-level permissions were not collected because no local SMB share path matched scanned folder {0}.' -f $targetDisplayPath)
+                    }
+                    else {
+                        $matchedShare = $matchingShareRows[0]
+                        $matchedShareName = if ($matchedShare.PSObject.Properties['Name']) { [string]$matchedShare.Name } else { [string]$shareInfo.ShareName }
+                        if (-not [string]::IsNullOrWhiteSpace($matchedShareName)) {
+                            $shareInfo.ShareName = $matchedShareName
+                            $shareInfo.UNCPath = '\\{0}\{1}' -f $shareInfo.ComputerName, $matchedShareName
+                        }
                     }
                 }
                 catch {
-                    $localShareVerificationMessage = ('Share-level permissions were not collected because SMB share name "{0}" could not be verified for scanned local folder {1}: {2}' -f $shareInfo.ShareName, $targetDisplayPath, [string]$_.Exception.Message)
+                    $localShareVerificationMessage = ('Share-level permissions were not collected because local SMB shares could not be enumerated for scanned folder {0}: {1}' -f $targetDisplayPath, [string]$_.Exception.Message)
                 }
             }
 
             if (-not [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) {
-                [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionVerificationSkipped' -Source 'Get-SmbShare' -ShareId $shareId -Message $localShareVerificationMessage -Detail 'Local folder scans only attach share-level permissions when the named SMB share path matches the scanned folder.'))
+                [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Warning' -EventType 'SharePermissionVerificationSkipped' -Source 'Get-SmbShare' -ShareId $shareId -Message $localShareVerificationMessage -Detail 'Local folder scans only attach share-level permissions when a local SMB share path matches the scanned folder.'))
             }
         }
         if (-not $SkipSharePermissionCollection -and [string]::IsNullOrWhiteSpace($localShareVerificationMessage)) {

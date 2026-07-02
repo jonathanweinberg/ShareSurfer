@@ -49,6 +49,8 @@ import { VirtualTable } from "./ui/VirtualTable";
 type ViewKey = "overview" | "findings" | "migration" | "groups" | "identity" | "diagnostics" | "raw" | "connectivity";
 type BrokenSidMode = "all" | "only" | "hide";
 type IssueSourceMode = "" | "finding" | "conflict";
+const unmappedFilterValue = "__sharesurfer_unmapped__";
+const unmappedFilterLabel = "(Unmapped)";
 
 interface FilterState {
   query: string;
@@ -110,6 +112,12 @@ interface EvidenceDrill {
   exportFileName?: string;
   backLabel: string;
   emptyMessage: string;
+}
+
+interface BrokenSidEvidenceIndex {
+  shareIds: Set<string>;
+  pathTexts: string[];
+  ownerBusinessUnitKeys: Set<string>;
 }
 
 type ReviewDecisionValue = "Expected" | "Needs Follow-up";
@@ -569,6 +577,33 @@ function matchesText(value: string, filter: string): boolean {
   return !filter || value.toLowerCase() === filter.toLowerCase();
 }
 
+function normalizeFilterText(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isUnmappedText(value: string): boolean {
+  const normalized = normalizeFilterText(value);
+  return normalized === "" || normalized === "unmapped" || normalized === "unassigned";
+}
+
+function matchesMappedFilter(value: string, filter: string): boolean {
+  if (!filter) {
+    return true;
+  }
+  if (filter === unmappedFilterValue) {
+    return isUnmappedText(value);
+  }
+  return normalizeFilterText(value) === normalizeFilterText(filter);
+}
+
+function filterDisplayValue(value: string): string {
+  return value === unmappedFilterValue ? unmappedFilterLabel : value;
+}
+
+function ownerBusinessUnitKey(owner: string, businessUnit: string): string {
+  return `${normalizeFilterText(owner)}\u0000${normalizeFilterText(businessUnit)}`;
+}
+
 function issueHasBrokenSid(issue: IssueSummary): boolean {
   return rowHasBrokenSidEvidence({
     ...issue.raw,
@@ -590,6 +625,46 @@ function matchesBrokenSidMode(hasBrokenSid: boolean, mode: BrokenSidMode): boole
 
 function datasetRows(dashboard: DashboardModel, key: DatasetKey): DataRow[] {
   return dashboard.rawEvidenceCatalog.find((entry) => entry.key === key)?.rows ?? [];
+}
+
+function buildBrokenSidEvidenceIndex(dashboard: DashboardModel): BrokenSidEvidenceIndex {
+  const keys: DatasetKey[] = ["findings", "conflicts", "acl_entries", "share_permissions", "items"];
+  const pathTextSet = new Set<string>();
+  const shareIds = new Set<string>();
+  const ownerBusinessUnitKeys = new Set<string>();
+  const rows = keys.flatMap((key) => datasetRows(dashboard, key).filter(rowHasBrokenSidEvidence));
+
+  for (const row of rows) {
+    const shareId = getRowFieldValue(row, "ShareId");
+    if (shareId) {
+      shareIds.add(shareId);
+    }
+
+    const pathText = [
+      getRowFieldValue(row, "FullPath"),
+      getRowFieldValue(row, "ExamplePath"),
+      getRowFieldValue(row, "UNCPath"),
+      getRowFieldValue(row, "LocalPath")
+    ]
+      .join(" ")
+      .trim()
+      .toLowerCase();
+    if (pathText !== "") {
+      pathTextSet.add(pathText);
+    }
+  }
+
+  for (const issue of dashboard.issueSummaries) {
+    if (issueHasBrokenSid(issue)) {
+      ownerBusinessUnitKeys.add(ownerBusinessUnitKey(issue.owner, issue.businessUnit));
+    }
+  }
+
+  return {
+    shareIds,
+    pathTexts: Array.from(pathTextSet),
+    ownerBusinessUnitKeys
+  };
 }
 
 function splitIds(value: string): string[] {
@@ -648,24 +723,30 @@ function rowMatchesShareOrPath(row: Record<string, unknown>, shareIds: Set<strin
   return pathTokens.some((token) => token !== "" && pathText.includes(token));
 }
 
-function brokenSidEvidenceRows(dashboard: DashboardModel): DataRow[] {
-  const keys: DatasetKey[] = ["findings", "conflicts", "acl_entries", "share_permissions", "items"];
-  return keys.flatMap((key) => datasetRows(dashboard, key).filter(rowHasBrokenSidEvidence));
+function rowMatchesBrokenSidIndex(index: BrokenSidEvidenceIndex, shareIds: Set<string>, pathTokens: string[]): boolean {
+  for (const shareId of shareIds) {
+    if (index.shareIds.has(shareId)) {
+      return true;
+    }
+  }
+
+  const tokens = pathTokens.map((token) => token.toLowerCase()).filter(Boolean);
+  return tokens.length > 0 && index.pathTexts.some((pathText) => tokens.some((token) => pathText.includes(token)));
 }
 
-function clusterHasBrokenSidEvidence(cluster: MigrationCluster, dashboard: DashboardModel): boolean {
+function clusterHasBrokenSidEvidence(cluster: MigrationCluster, dashboard: DashboardModel, brokenSidIndex: BrokenSidEvidenceIndex): boolean {
   const shareIds = shareIdsForCluster(cluster, dashboard);
   const prefixes = clusterPatterns(cluster).map(patternPrefix).filter(Boolean);
-  return rowHasBrokenSidEvidence(cluster.raw) || brokenSidEvidenceRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, prefixes));
+  return rowHasBrokenSidEvidence(cluster.raw) || rowMatchesBrokenSidIndex(brokenSidIndex, shareIds, prefixes);
 }
 
-function groupHasBrokenSidEvidence(group: GroupTreeRow, dashboard: DashboardModel): boolean {
+function groupHasBrokenSidEvidence(group: GroupTreeRow, brokenSidIndex: BrokenSidEvidenceIndex): boolean {
   const shareIds = new Set(splitIds(group.raw.ShareIds || group.raw.ShareId || group.shareIds));
   const pathTokens = [group.examplePath, group.fullPath].filter(Boolean).map((path) => path.toLowerCase());
   return (
     rowHasBrokenSidEvidence(group.raw) ||
     group.children.some(rowHasBrokenSidEvidence) ||
-    brokenSidEvidenceRows(dashboard).some((row) => rowMatchesShareOrPath(row, shareIds, pathTokens))
+    rowMatchesBrokenSidIndex(brokenSidIndex, shareIds, pathTokens)
   );
 }
 
@@ -705,10 +786,28 @@ function evidenceRowsMatchFilter(rows: DataRow[], fields: string[], filter: stri
   return values.some((value) => value.toLowerCase().includes(normalizedFilter));
 }
 
+function evidenceRowsMatchMappedFilter(rows: DataRow[], fields: string[], filter: string, requireEvidence = false): boolean {
+  if (!filter) {
+    return true;
+  }
+
+  const values = rows.flatMap((row) => fields.map((field) => getRowFieldValue(row, field)).filter(Boolean));
+  if (values.length === 0) {
+    return filter === unmappedFilterValue || !requireEvidence;
+  }
+
+  if (filter === unmappedFilterValue) {
+    return values.some(isUnmappedText);
+  }
+
+  const normalizedFilter = normalizeFilterText(filter);
+  return values.some((value) => normalizeFilterText(value).includes(normalizedFilter));
+}
+
 function rawRowMatchesTopFilters(row: DataRow, filters: FilterState): boolean {
   return (
-    evidenceRowsMatchFilter([row], ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit) &&
-    evidenceRowsMatchFilter([row], ["Owner", "DataOwner"], filters.owner) &&
+    evidenceRowsMatchMappedFilter([row], ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit) &&
+    evidenceRowsMatchMappedFilter([row], ["Owner", "DataOwner"], filters.owner) &&
     evidenceRowsMatchFilter([row], ["RiskLevel", "Severity", "ReviewStatus", "MigrationReadiness"], filters.risk) &&
     evidenceRowsMatchFilter([row], ["Source", "Sources", "SourceMode", "CollectionProvider"], filters.source)
   );
@@ -1012,6 +1111,7 @@ function FilterBar({
         <span>Business Unit</span>
         <select value={filters.businessUnit} onChange={(event) => update({ businessUnit: event.target.value })}>
           <option value="">All</option>
+          <option value={unmappedFilterValue}>{unmappedFilterLabel}</option>
           {dashboard.filters.businessUnits.map((value) => (
             <option key={value}>{value}</option>
           ))}
@@ -1021,6 +1121,7 @@ function FilterBar({
         <span>Data Owner</span>
         <select value={filters.owner} onChange={(event) => update({ owner: event.target.value })}>
           <option value="">All</option>
+          <option value={unmappedFilterValue}>{unmappedFilterLabel}</option>
           {dashboard.filters.owners.map((value) => (
             <option key={value}>{value}</option>
           ))}
@@ -1090,8 +1191,8 @@ function FilterBar({
             </button>
           ))}
           {chip("Search", freeTextSearch, () => update({ query: scopedTokens.map((token) => token.rawTerm).join(" ") }))}
-          {chip("Business Unit", filters.businessUnit, () => update({ businessUnit: "" }))}
-          {chip("Owner", filters.owner, () => update({ owner: "" }))}
+          {chip("Business Unit", filterDisplayValue(filters.businessUnit), () => update({ businessUnit: "" }))}
+          {chip("Owner", filterDisplayValue(filters.owner), () => update({ owner: "" }))}
           {chip("Risk", filters.risk, () => update({ risk: "" }))}
           {chip("Source", filters.source, () => update({ source: "" }))}
           {chip("Issue Type", filters.issueSource === "conflict" ? "Conflicts" : filters.issueSource === "finding" ? "Findings" : "", () => update({ issueSource: "" }))}
@@ -1109,13 +1210,8 @@ function FilterBar({
   );
 }
 
-function reviewQueueHasBrokenSidEvidence(row: ReviewQueueRow, dashboard: DashboardModel): boolean {
-  return dashboard.issueSummaries.some(
-    (issue) =>
-      issueHasBrokenSid(issue) &&
-      issue.owner.toLowerCase() === row.owner.toLowerCase() &&
-      issue.businessUnit.toLowerCase() === row.businessUnit.toLowerCase()
-  );
+function reviewQueueHasBrokenSidEvidence(row: ReviewQueueRow, brokenSidIndex: BrokenSidEvidenceIndex): boolean {
+  return brokenSidIndex.ownerBusinessUnitKeys.has(ownerBusinessUnitKey(row.owner, row.businessUnit));
 }
 
 function reviewQueueHasIssueSource(row: ReviewQueueRow, dashboard: DashboardModel, source: IssueSourceMode): boolean {
@@ -1131,14 +1227,14 @@ function reviewQueueHasIssueSource(row: ReviewQueueRow, dashboard: DashboardMode
   );
 }
 
-function filterQueue(rows: ReviewQueueRow[], filters: FilterState, query: string, dashboard: DashboardModel) {
+function filterQueue(rows: ReviewQueueRow[], filters: FilterState, query: string, dashboard: DashboardModel, brokenSidIndex: BrokenSidEvidenceIndex) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      (filters.brokenSidMode === "all" || matchesBrokenSidMode(reviewQueueHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode)) &&
+      (filters.brokenSidMode === "all" || matchesBrokenSidMode(reviewQueueHasBrokenSidEvidence(row, brokenSidIndex), filters.brokenSidMode)) &&
       reviewQueueHasIssueSource(row, dashboard, filters.issueSource) &&
-      matchesText(row.businessUnit, filters.businessUnit) &&
-      matchesText(row.owner, filters.owner) &&
+      matchesMappedFilter(row.businessUnit, filters.businessUnit) &&
+      matchesMappedFilter(row.owner, filters.owner) &&
       (!filters.source || row.source.toLowerCase().includes(filters.source.toLowerCase())) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase())) &&
       matchesParsedSearch(
@@ -1162,8 +1258,8 @@ function filterIssues(rows: IssueSummary[], filters: FilterState, query: string)
       matchesBrokenSidMode(issueHasBrokenSid(row), filters.brokenSidMode) &&
       (!filters.issueSource || row.source === filters.issueSource) &&
       (!filters.risk || row.severity.toLowerCase().includes(filters.risk.toLowerCase()) || row.category.toLowerCase().includes(filters.risk.toLowerCase())) &&
-      (!filters.owner || row.owner.toLowerCase() === filters.owner.toLowerCase()) &&
-      (!filters.businessUnit || row.businessUnit.toLowerCase() === filters.businessUnit.toLowerCase()) &&
+      matchesMappedFilter(row.owner, filters.owner) &&
+      matchesMappedFilter(row.businessUnit, filters.businessUnit) &&
       (!filters.source || row.source.toLowerCase().includes(filters.source.toLowerCase())) &&
       matchesParsedSearch(
         {
@@ -1180,13 +1276,13 @@ function filterIssues(rows: IssueSummary[], filters: FilterState, query: string)
   );
 }
 
-function filterClusters(rows: MigrationCluster[], filters: FilterState, query: string, dashboard: DashboardModel) {
+function filterClusters(rows: MigrationCluster[], filters: FilterState, query: string, dashboard: DashboardModel, brokenSidIndex: BrokenSidEvidenceIndex) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) =>
-      (filters.brokenSidMode === "all" || matchesBrokenSidMode(clusterHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode)) &&
-      matchesText(row.businessUnit, filters.businessUnit) &&
-      matchesText(row.owner, filters.owner) &&
+      (filters.brokenSidMode === "all" || matchesBrokenSidMode(clusterHasBrokenSidEvidence(row, dashboard, brokenSidIndex), filters.brokenSidMode)) &&
+      matchesMappedFilter(row.businessUnit, filters.businessUnit) &&
+      matchesMappedFilter(row.owner, filters.owner) &&
       (!filters.source || row.raw.Source.toLowerCase().includes(filters.source.toLowerCase())) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase()) || row.readiness.toLowerCase().includes(filters.risk.toLowerCase())) &&
       matchesParsedSearch(
@@ -1204,15 +1300,15 @@ function filterClusters(rows: MigrationCluster[], filters: FilterState, query: s
   );
 }
 
-function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string, dashboard: DashboardModel) {
+function filterGroups(rows: GroupTreeRow[], filters: FilterState, query: string, dashboard: DashboardModel, brokenSidIndex: BrokenSidEvidenceIndex) {
   const parsedQuery = parseSearchQuery(query);
   return rows.filter(
     (row) => {
       const evidenceRows = groupFilterEvidenceRows(row, dashboard);
       return (
-      (filters.brokenSidMode === "all" || matchesBrokenSidMode(groupHasBrokenSidEvidence(row, dashboard), filters.brokenSidMode)) &&
-      evidenceRowsMatchFilter(evidenceRows, ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit, true) &&
-      evidenceRowsMatchFilter(evidenceRows, ["Owner", "DataOwner"], filters.owner, true) &&
+      (filters.brokenSidMode === "all" || matchesBrokenSidMode(groupHasBrokenSidEvidence(row, brokenSidIndex), filters.brokenSidMode)) &&
+      evidenceRowsMatchMappedFilter(evidenceRows, ["BusinessUnit", "OwnerBusinessUnit", "Department"], filters.businessUnit, true) &&
+      evidenceRowsMatchMappedFilter(evidenceRows, ["Owner", "DataOwner"], filters.owner, true) &&
       evidenceRowsMatchFilter(evidenceRows, ["Source", "Sources", "SourceMode", "CollectionProvider"], filters.source, true) &&
       (!filters.risk || row.riskLevel.toLowerCase().includes(filters.risk.toLowerCase()) || evidenceRowsMatchFilter(evidenceRows, ["RiskLevel", "Severity", "ReviewStatus", "MigrationReadiness"], filters.risk, true)) &&
       matchesParsedSearch(
@@ -1304,6 +1400,7 @@ function OverviewView({
   summary,
   filters,
   query,
+  brokenSidIndex,
   onOpenView,
   onKpiSelect,
   onOwnerSelect
@@ -1312,11 +1409,12 @@ function OverviewView({
   summary: ScanSummary;
   filters: FilterState;
   query: string;
+  brokenSidIndex: BrokenSidEvidenceIndex;
   onOpenView: (view: ViewKey) => void;
   onKpiSelect: (destination: "high-priority" | "access-conflicts" | "partial-shares" | "permissioned-groups" | "service-accounts" | "broken-sids" | "items") => void;
   onOwnerSelect: (row: ReviewQueueRow) => void;
 }) {
-  const filteredReviewQueue = filterQueue(dashboard.reviewQueue, filters, query, dashboard);
+  const filteredReviewQueue = filterQueue(dashboard.reviewQueue, filters, query, dashboard, brokenSidIndex);
   const queue = filteredReviewQueue.slice(0, 8);
   const queueTableRows = filteredReviewQueue.map((row) => ({
     ReviewQueueId: row.id,
@@ -2542,6 +2640,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   const deferredQuery = useDeferredValue(filters.query);
   const snapshot = useMemo(() => normalizeSnapshot(snapshotInput), [snapshotInput]);
   const dashboard = useMemo(() => deriveDashboard(snapshot), [snapshot]);
+  const brokenSidIndex = useMemo(() => buildBrokenSidEvidenceIndex(dashboard), [dashboard]);
   const [selectedIssueId, setSelectedIssueId] = useState<string>(initialState.selectedIssueId ?? "");
   const [selectedClusterId, setSelectedClusterId] = useState<string>(initialState.selectedClusterId ?? "");
   const [selectedGroupName, setSelectedGroupName] = useState<string>(initialState.selectedGroupName ?? "");
@@ -2550,11 +2649,11 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [reviewDecisions, setReviewDecisions] = useState<ReviewDecisionMap>(() => loadReviewDecisions());
 
-  const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
+  const filteredQueue = useMemo(() => filterQueue(dashboard.reviewQueue, filters, deferredQuery, dashboard, brokenSidIndex), [dashboard, brokenSidIndex, filters, deferredQuery]);
   const filteredIssues = useMemo(() => filterIssues(dashboard.issueSummaries, filters, deferredQuery), [dashboard.issueSummaries, filters, deferredQuery]);
   const filteredCriticalBlocks = useMemo(() => filterCriticalBlocks(dashboard.criticalScanBlocks, filters, deferredQuery), [dashboard.criticalScanBlocks, filters, deferredQuery]);
-  const filteredClusters = useMemo(() => filterClusters(dashboard.migrationClusters, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
-  const filteredGroups = useMemo(() => filterGroups(dashboard.permissionedGroupTree, filters, deferredQuery, dashboard), [dashboard, filters, deferredQuery]);
+  const filteredClusters = useMemo(() => filterClusters(dashboard.migrationClusters, filters, deferredQuery, dashboard, brokenSidIndex), [dashboard, brokenSidIndex, filters, deferredQuery]);
+  const filteredGroups = useMemo(() => filterGroups(dashboard.permissionedGroupTree, filters, deferredQuery, dashboard, brokenSidIndex), [dashboard, brokenSidIndex, filters, deferredQuery]);
   const overviewSummary = useMemo(
     () => buildOverviewSummary(dashboard, filteredQueue, filteredIssues, filters, deferredQuery),
     [dashboard, filteredQueue, filteredIssues, filters, deferredQuery]
@@ -2748,6 +2847,7 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
             summary={overviewSummary}
             filters={filters}
             query={deferredQuery}
+            brokenSidIndex={brokenSidIndex}
             onOpenView={openView}
             onKpiSelect={openOverviewDestination}
             onOwnerSelect={setOwnerContext}

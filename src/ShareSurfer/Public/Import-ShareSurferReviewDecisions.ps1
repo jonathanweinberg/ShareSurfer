@@ -53,8 +53,15 @@ function Get-ShareSurferReviewDecisionReviewedAt {
         return $null
     }
 
+    $text = ([string]$Row.ReviewedAt).Trim()
     $parsed = [datetime]::MinValue
-    if ([datetime]::TryParse([string]$Row.ReviewedAt, [ref]$parsed)) {
+    $roundtripStyles = [System.Globalization.DateTimeStyles]::RoundtripKind -bor [System.Globalization.DateTimeStyles]::AllowWhiteSpaces
+    if ([datetime]::TryParseExact($text, 'o', [System.Globalization.CultureInfo]::InvariantCulture, $roundtripStyles, [ref]$parsed)) {
+        return $parsed
+    }
+
+    $fallbackStyles = [System.Globalization.DateTimeStyles]::AssumeLocal -bor [System.Globalization.DateTimeStyles]::AllowWhiteSpaces
+    if ([datetime]::TryParse($text, [System.Globalization.CultureInfo]::InvariantCulture, $fallbackStyles, [ref]$parsed)) {
         return $parsed
     }
 
