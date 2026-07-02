@@ -84,9 +84,7 @@ function Invoke-ShareSurferScan {
     $inventory = Add-ShareSurferOwnerMappings -Inventory $inventory -OwnerMappingPath $OwnerMappingPath
 
     if (-not [string]::IsNullOrWhiteSpace($OwnershipEnrichmentPath)) {
-        if (-not (Test-Path -LiteralPath $OwnershipEnrichmentPath)) {
-            throw "Ownership enrichment file was not found: $OwnershipEnrichmentPath"
-        }
+        Test-ShareSurferOwnershipEnrichmentShape -Path $OwnershipEnrichmentPath | Out-Null
 
         Write-ShareSurferStatus -Phase 'Owners' -Message ('Loading ownership enrichment rows from {0}.' -f $OwnershipEnrichmentPath) -Quiet:$Quiet
         $ownershipEnrichmentRows = @(Import-Csv -LiteralPath $OwnershipEnrichmentPath)

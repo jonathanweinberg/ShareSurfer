@@ -71,7 +71,7 @@ function New-ShareSurferOwnerMappingDraft {
         }
 
         if (-not $hasMapping) {
-            $pattern = if ($path.EndsWith('\')) { $path + '*' } else { $path + '*' }
+            $pattern = New-ShareSurferOwnerMappingPattern -Path $path
             $draftRows.Add([pscustomobject]@{
                 Pattern = $pattern
                 Owner = ''
@@ -97,7 +97,7 @@ function New-ShareSurferOwnerMappingDraft {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
     }
 
-    $draftRows | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding UTF8
+    Export-ShareSurferCsv -Path $OutputPath -Columns (Get-ShareSurferOwnerMappingColumns) -Rows @($draftRows.ToArray())
     $reusableCommands = New-ShareSurferOwnerMappingDraftReusableCommands -ExportPath $ExportPath -DraftPath $OutputPath -Scope $Scope -MaximumRows $MaximumRows
     $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
 

@@ -238,7 +238,7 @@ Create an owner mapping CSV when you know who should review a path:
 ```powershell
 @(
   [pscustomobject]@{
-    Pattern = '\\files01\Finance*'
+    Pattern = '\\files01\Finance\*'
     Owner = 'Finance Operations'
     BusinessUnit = 'Finance'
     Source = 'first-run'
@@ -248,7 +248,7 @@ Create an owner mapping CSV when you know who should review a path:
 
 If you do not have owner mappings yet, skip `-OwnerMappingPath` for the first scan. ShareSurfer will still export evidence, but `owner_review_packets.csv` will be less useful because review rows cannot be routed as cleanly to business owners and business units.
 
-If your ownership data exists in an HR, employee, OBS, OID, cost-center, or owner CSV with unexpected headers, use the [admin ownership import guide](admin-ownership-import.md) before building `owner-mapping.csv`. The workflow is offline and deterministic:
+If your ownership data exists in an HR, employee, OBS, OID, cost-center, or owner CSV with unexpected headers, use the [admin ownership import guide](admin-ownership-import.md) before building `owner-mapping.csv`. If you are not sure what should count as an owner, how to handle service-account-like rows, or how to think about one person with multiple accounts, read the [ownership data thinking guide](ownership-data-thinking.md). The workflow is offline and deterministic:
 
 ```powershell
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
@@ -309,6 +309,16 @@ New-ShareSurferOwnerMappingDraft `
 ```
 
 Open the draft, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. The reusable `owner-mapping-rerun.ps1` file shows how to regenerate the draft from the same export and where the completed `owner-mapping.csv` belongs.
+
+Before rerunning the scan with the completed mapping, validate it:
+
+```powershell
+Test-ShareSurferOwnerMapping `
+  -Path 'C:\ShareSurfer\inputs\owner-mapping.csv' `
+  -ExportPath $exportPath
+```
+
+Do not continue until `IsValid` is `True`. The validator catches missing required columns, blank owners, blank business units, dead patterns, and broad patterns that may accidentally match sibling shares.
 
 If broad operational groups have access almost everywhere, create a discounted principals CSV before the scan:
 

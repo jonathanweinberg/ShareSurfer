@@ -28,7 +28,7 @@ If `v0.1.0-pre.29` is not visible yet on the [ShareSurfer Releases page](https:/
 | Guided first-run planning | Recipe 1A | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | README Lab Fixture section | `New-ShareSurferLabFixture` |
 | Optional owner/admin inputs | Recipe 2 | `owner-mapping.csv`, `discounted-principals.csv` |
-| Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft` |
+| Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft`, `Test-ShareSurferOwnerMapping` |
 | Core scan | Recipes 3-5 | `Invoke-ShareSurferScan`, optional `-SmbCollectionProvider NativeSmbRpc` |
 | Validation and dashboards | Recipe 6 | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `New-ShareSurferStandaloneDashboard.ps1` |
 | Review decisions | Recipe 7 | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
@@ -136,7 +136,7 @@ New-Item -ItemType Directory -Force -Path $inputRoot | Out-Null
 
 @(
   [pscustomobject]@{
-    Pattern = '\\files01\Finance*'
+    Pattern = '\\files01\Finance\*'
     Owner = 'Finance Operations'
     BusinessUnit = 'Finance'
     Source = 'first-run'
@@ -238,7 +238,7 @@ Join-ShareSurferOwnershipSources `
   -Force
 ```
 
-Pass `ownership-enrichment.csv` to the scan with `-OwnershipEnrichmentPath`. The scan exports it as `ownership_enrichment.csv`, and the report/dashboard can show matched, ambiguous, source-only, forbidden-OU-skipped, and potential service-account rows beside the permission evidence.
+Pass `ownership-enrichment.csv` to the scan with `-OwnershipEnrichmentPath`. The scan exports it as `ownership_enrichment.csv`, and the report/dashboard can show matched, ambiguous, source-only, forbidden-OU-skipped, and potential service-account rows beside the permission evidence. If the CSV was created by `Import-ShareSurferOwnershipSource`, run `Join-ShareSurferOwnershipSources` first; `normalized-ownership.csv` is not the scan enrichment file.
 
 After a scan, create a draft owner mapping for paths that do not have owner routing yet:
 
@@ -255,6 +255,16 @@ New-ShareSurferOwnerMappingDraft `
 ```
 
 Open the draft CSV, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. The `owner-mapping-rerun.ps1` file shows the draft regeneration command and the copy/use pattern for the completed owner mapping.
+
+Validate the completed mapping before using it:
+
+```powershell
+Test-ShareSurferOwnerMapping `
+  -Path 'C:\ShareSurfer\inputs\owner-mapping.csv' `
+  -ExportPath $exportPath
+```
+
+For the conceptual side of ownership data, including why people, accounts, paths, groups, and OBS are rarely one-to-one, see [ownership-data-thinking.md](ownership-data-thinking.md).
 
 For more detail, see the [admin ownership import guide](admin-ownership-import.md).
 

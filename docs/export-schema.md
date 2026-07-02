@@ -181,6 +181,8 @@ Use this file for business ownership rules such as path prefixes, share names, o
 
 When passed through `Invoke-ShareSurferScan -OwnerMappingPath`, the mapping CSV must include `Pattern`, `Owner`, and `BusinessUnit`; `Source` is optional and defaults to `OwnerMappingPath`.
 
+Validate hand-edited mapping files with `Test-ShareSurferOwnerMapping` before scanning. It checks required columns, blank owner/business-unit cells, broad sibling-prefix patterns, and optional match counts against an existing export.
+
 ### `ownership_enrichment.csv`
 
 Expected columns: `OwnershipKey`, `MatchStatus`, `MatchMethod`, `SourcePaths`, `SourceRowNumbers`, `EmployeeId`, `EmployeeNumber`, `SamAccountName`, `UserPrincipalName`, `Mail`, `DisplayName`, `Title`, `Office`, `Department`, `Company`, `Manager`, `ManagerLevel1`, `ManagerLevel2`, `ManagerLevel3`, `ManagerLevel1Raw`, `ManagerLevel2Raw`, `ManagerLevel3Raw`, `OBS`, `AdObsPath`, `ObsAttribute`, `BusinessUnit`, `DataOwner`, `OwnerMail`, `Project`, `ProjectCode`, `AccountEnabled`, `DistinguishedName`, `ForbiddenOuMatched`, `PotentialServiceAccount`, `ImportWarnings`.
@@ -217,6 +219,8 @@ Use `Import-ShareSurferOwnershipSource` to write a normalized ownership CSV. Exp
 `PotentialServiceAccount=True` means the row has no OBS, no employee ID, and no employee number. Treat it as a review clue, not proof that the account is safe, unsafe, or definitely a service account.
 
 Use `New-ShareSurferOwnerMappingDraft` after a scan to create an admin-fillable owner mapping starter CSV for unmapped shares or top-level folders. The draft includes the scan-compatible columns `Pattern`, `Owner`, `BusinessUnit`, and `Source`, plus helper columns such as `PathPrefix`, `OwnerMail`, `OBS`, `Confidence`, and `Notes`.
+
+Use `Test-ShareSurferOwnerMapping` before passing a completed draft to `Invoke-ShareSurferScan -OwnerMappingPath`. The command fails fast on missing required columns or blank required values and warns about dead or broad patterns.
 
 `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, and `New-ShareSurferOwnerMappingDraft` also return a `ReusableCommands` property. When called with `-ReusableCommandPath`, they write a reusable `.ps1` command file such as `ownership-import-rerun.ps1` or `owner-mapping-rerun.ps1`. Those files are operator convenience artifacts; they are not part of the required normalized scan export set.
 

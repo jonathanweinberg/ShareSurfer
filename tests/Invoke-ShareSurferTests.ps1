@@ -2288,6 +2288,51 @@ $tests = @(
         }
     },
     @{
+        Name = 'Test-ShareSurferOwnerMapping validates required columns and row values'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $missingColumnPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapMissing-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $blankValuePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapBlank-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $validPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapValid-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $missingColumnPath -Value @('Pattern,Owner', '\\files01\Finance\*,Finance Operations') -Encoding UTF8
+            Set-Content -LiteralPath $blankValuePath -Value @('Pattern,Owner,BusinessUnit', '\\files01\Finance\*,Finance Operations,Finance', '\\files01\HR\*,,Human Resources') -Encoding UTF8
+            Set-Content -LiteralPath $validPath -Value @('Pattern,Owner,BusinessUnit,Source', '\\files01\Finance\*,Finance Operations,Finance,unit-test') -Encoding UTF8
+
+            $missingColumn = Test-ShareSurferOwnerMapping -Path $missingColumnPath
+            $blankValue = Test-ShareSurferOwnerMapping -Path $blankValuePath
+            $valid = Test-ShareSurferOwnerMapping -Path $validPath
+
+            Assert-True (-not $missingColumn.IsValid) 'Owner mapping validation should fail when BusinessUnit is missing.'
+            Assert-True ((@($missingColumn.Errors) -join ' ') -like '*missing required column*BusinessUnit*') 'Missing-column error should name the missing required column.'
+            Assert-True (-not $blankValue.IsValid) 'Owner mapping validation should fail when a required row value is blank.'
+            Assert-True ((@($blankValue.Errors) -join ' ') -like '*blank Owner*') 'Blank value error should name the blank required value.'
+            Assert-True $valid.IsValid 'Owner mapping validation should pass with Pattern, Owner, and BusinessUnit populated.'
+            Assert-Equal (Get-Command -Name Test-ShareSurferOwnerMapping -Module ShareSurfer).Name 'Test-ShareSurferOwnerMapping' 'Owner mapping validator should be exported.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferOwnerMapping warns on sibling-prefix patterns and verifies export matches'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $mappingPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapSibling-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            Set-Content -LiteralPath $mappingPath -Value @(
+                'Pattern,Owner,BusinessUnit,Source',
+                '\\files01\Finance*,Finance Operations,Finance,old-shape',
+                '\\files01\Finance\*,Finance Operations,Finance,boundary-safe',
+                '\\files01\NoSuchShare\*,Ghost Owner,Ghost,dead-pattern'
+            ) -Encoding UTF8
+
+            $result = Test-ShareSurferOwnerMapping -Path $mappingPath -ExportPath $exportPath
+
+            Assert-True $result.IsValid 'Sibling-prefix warnings should not make an otherwise complete mapping invalid.'
+            Assert-True ((@($result.Warnings) -join ' ') -like '*may match sibling paths*') 'Validator should warn about sibling-prefix wildcard patterns.'
+            Assert-Equal $result.ZeroMatchPatternCount 1 'Validator should count patterns that match no share or item paths.'
+            Assert-True ((@($result.Warnings) -join ' ') -like '*NoSuchShare*') 'Validator should name the dead pattern.'
+        }
+    },
+    @{
         Name = 'Test-ShareSurferOwnershipSource infers flexible ownership headers'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2704,6 +2749,32 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan rejects normalized ownership CSVs passed as ownership enrichment'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $normalizedPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNormalizedOwnership-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $normalizedPath -Value @(
+                'EmployeeId,EmployeeNumber,SamAccountName,UserPrincipalName,Mail,DisplayName,ManagerMail,SourceRowNumber,SourcePath',
+                'E1001,1001,Ava.Accounting,ava.accounting@example.test,ava.accounting@example.test,Ava Accounting,manager@example.test,2,hr.csv'
+            ) -Encoding UTF8
+
+            $threw = $false
+            $message = ''
+            try {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -OwnershipEnrichmentPath $normalizedPath -SkipIdentityEnrichment | Out-Null
+            }
+            catch {
+                $threw = $true
+                $message = [string]$_.Exception.Message
+            }
+
+            Assert-True $threw 'Scan should reject a normalized ownership import file passed as ownership enrichment.'
+            Assert-True ($message -like '*does not look like Join-ShareSurferOwnershipSources output*') 'Error should explain the expected ownership enrichment producer.'
+            Assert-True ($message -like '*normalized-ownership.csv*') 'Error should identify the common wrong file type.'
+        }
+    },
+    @{
         Name = 'Start-ShareSurferOperatorAssistant writes a reusable first-run plan and command script'
         Body = {
             Import-Module $moduleManifest -Force
@@ -3089,7 +3160,7 @@ $tests = @(
             $commandText = Get-Content -LiteralPath $commandPath -Raw
 
             Assert-Equal $summary.DraftRowCount 1 'Draft summary should report one unmapped share row.'
-            Assert-Equal $rows[0].Pattern '\\files01\Finance*' 'Draft row should use the current owner mapping wildcard pattern shape.'
+            Assert-Equal $rows[0].Pattern '\\files01\Finance\*' 'Draft row should use a boundary-safe wildcard pattern shape.'
             Assert-Equal $rows[0].Source 'OwnerMappingDraft' 'Draft row should identify itself as an owner mapping draft.'
             Assert-Equal $rows[0].Confidence 'NeedsAdminReview' 'Draft row should make clear the owner still needs admin confirmation.'
             Assert-True ([string]$rows[0].Notes -like '*Fill Owner and BusinessUnit*') 'Draft row should tell the admin what must be filled before scanning.'
@@ -3097,6 +3168,24 @@ $tests = @(
             Assert-True ([string]$summary.ReusableCommands -like '*New-ShareSurferOwnerMappingDraft*') 'Draft summary should return reusable draft commands.'
             Assert-True ($commandText -like '*owner-mapping.csv*') 'Reusable draft command file should show the completed owner mapping destination.'
             Assert-True ($commandText -like '*Invoke-ShareSurferScan -OwnerMappingPath*') 'Reusable draft command file should explain how to use the completed owner mapping on the next scan.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferOwnerMappingDraft keeps headers when no draft rows are needed'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $draftPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMappingDraftEmpty-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+
+            $summary = New-ShareSurferOwnerMappingDraft -ExportPath $exportPath -OutputPath $draftPath
+            $header = Get-Content -LiteralPath $draftPath -TotalCount 1
+            $rows = @(Import-Csv -LiteralPath $draftPath)
+
+            Assert-Equal $summary.DraftRowCount 0 'Draft summary should report zero rows when all shares are already mapped.'
+            Assert-True ($header -like '*"Pattern"*') 'Empty draft CSV should still include the Pattern header.'
+            Assert-True ($header -like '*"Owner"*') 'Empty draft CSV should still include the Owner header.'
+            Assert-Equal $rows.Count 0 'Empty draft CSV should import as zero data rows.'
         }
     },
     @{

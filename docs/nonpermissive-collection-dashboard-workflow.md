@@ -67,7 +67,7 @@ Create an owner mapping CSV when you know the expected business owner:
 ```powershell
 @(
   [pscustomobject]@{
-    Pattern = '\\files01\Finance*'
+    Pattern = '\\files01\Finance\*'
     Owner = 'Finance Operations'
     BusinessUnit = 'Finance'
     Source = 'operator'

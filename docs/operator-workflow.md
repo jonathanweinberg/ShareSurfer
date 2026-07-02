@@ -356,6 +356,6 @@ Use the report dashboard as a triage guide, not as the only source of truth.
 - Use the Permissioned Group Review when a security group is assigned rights. Select a group row to focus the Group Browser on that expanded membership path.
 - Use Raw Evidence Tables when an operator needs to inspect the normalized CSV-shaped evidence inside `report.html`. Keep it secondary to the guided review views for business-owner conversations.
 
-Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards, for example `\\files01\Finance*`.
+Owner mapping CSVs should include `Pattern`, `Owner`, `BusinessUnit`, and optional `Source` columns. Patterns support simple wildcards. Prefer boundary-safe patterns such as `\\files01\Finance\*` and validate hand-edited files with `Test-ShareSurferOwnerMapping` before scanning.
 
 Path findings need careful wording. Microsoft documents Azure Files limits of 255-character path components and 2,048-character full paths. ShareSurfer's default warning for full paths over 256 characters is an operational migration policy, not the Azure Files hard full-path limit.

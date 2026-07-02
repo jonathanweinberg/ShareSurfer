@@ -4,7 +4,7 @@ Use this guide when you have an HR, identity, employee, OBS, OID, cost-center, o
 
 This workflow is offline and deterministic. ShareSurfer does not call an AI service, upload the CSV, or guess silently. It reads the headers, suggests mappings from known synonyms, tells you what is missing, and lets you save a reusable mapping profile.
 
-For a shorter copy/paste version to send in team chat, use the [ownership CSV ingest quick reference](ownership-csv-ingest-quick-reference.md).
+For a shorter copy/paste version to send in team chat, use the [ownership CSV ingest quick reference](ownership-csv-ingest-quick-reference.md). For plain-language guidance on what the ownership fields mean and why ownership data is rarely one-to-one, read the [ownership data thinking guide](ownership-data-thinking.md).
 
 ![Ownership import and reusable commands workflow](visuals/readme-flow-guides/ownership-import-reusable-commands.png)
 
@@ -52,6 +52,16 @@ Use the enrichment workflow before scanning when any of these are true:
 - You want the dashboard to show the ownership context that was available at scan time.
 
 If you only need to clean up one CSV for manual review, `normalized-ownership.csv` is enough. If the scan and dashboard should use the joined ownership facts, create an enriched CSV and pass it to the scan.
+
+Before using a hand-edited `owner-mapping.csv`, validate it:
+
+```powershell
+Test-ShareSurferOwnerMapping `
+  -Path 'C:\ShareSurfer\inputs\owner-mapping.csv' `
+  -ExportPath 'C:\ShareSurfer\exports\scan-001'
+```
+
+The validator checks required columns, blank owner/business-unit cells, patterns that match no exported paths, and risky sibling-prefix patterns such as `\\files01\Finance*`.
 
 ## Normalized CSV Versus Enriched Export
 
