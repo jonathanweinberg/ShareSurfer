@@ -1440,6 +1440,58 @@ $tests = @(
         }
     },
     @{
+        Name = 'Get-ShareSurferConflicts dedupes missing share gate noise and respects broad gates'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sharePermissionsWithBroadGate = @(
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'Everyone'; Rights = 'Full'; AccessControlType = 'Allow' }
+            )
+            $aclEntries = @(
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-001'; Identity = 'CONTOSO\FinanceRW'; Rights = 'Modify'; AccessControlType = 'Allow' },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-002'; Identity = 'CONTOSO\FinanceRW'; Rights = 'ReadAndExecute'; AccessControlType = 'Allow' }
+            )
+            $shareSurferModule = Get-Module ShareSurfer
+            $broadGateConflicts = @(& $shareSurferModule {
+                param($SharePermissions, $AclEntries)
+                Get-ShareSurferConflicts -SharePermissions $SharePermissions -AclEntries $AclEntries
+            } $sharePermissionsWithBroadGate $aclEntries)
+            Assert-True (@($broadGateConflicts | Where-Object { $_.ConflictType -eq 'NtfsIdentityMissingShareGate' }).Count -eq 0) 'A broad allow share gate should not create per-ACE high-severity missing-gate noise.'
+
+            $specificSharePermissions = @(
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\OtherGroup'; Rights = 'Read'; AccessControlType = 'Allow' }
+            )
+            $specificGateConflicts = @(& $shareSurferModule {
+                param($SharePermissions, $AclEntries)
+                Get-ShareSurferConflicts -SharePermissions $SharePermissions -AclEntries $AclEntries
+            } $specificSharePermissions $aclEntries)
+            $missingGateConflicts = @($specificGateConflicts | Where-Object { $_.ConflictType -eq 'NtfsIdentityMissingShareGate' })
+            Assert-Equal $missingGateConflicts.Count 1 'Repeated ACEs for the same missing identity should collapse to one share-level gate conflict.'
+            Assert-Equal $missingGateConflicts[0].Identity 'CONTOSO\FinanceRW' 'The deduped conflict should still name the missing NTFS identity.'
+        }
+    },
+    @{
+        Name = 'Normalize-ShareSurferItems keeps inheritance breaks on path boundaries'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $items = @(
+                [pscustomobject]@{ ItemId = 'item-fin'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Fin'; RelativePath = 'Fin'; Depth = 1; Owner = ''; InheritanceEnabled = $false; InheritanceBrokenAt = 'C:\Data\Fin' },
+                [pscustomobject]@{ ItemId = 'item-fin-child'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Fin\Reports'; RelativePath = 'Fin\Reports'; Depth = 2; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' },
+                [pscustomobject]@{ ItemId = 'item-finance'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Finance'; RelativePath = 'Finance'; Depth = 1; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' }
+            )
+
+            $shareSurferModule = Get-Module ShareSurfer
+            $normalized = @(& $shareSurferModule {
+                param($Items)
+                Normalize-ShareSurferItems -Items $Items
+            } $items)
+            $finance = @($normalized | Where-Object { $_.ItemId -eq 'item-finance' })[0]
+            $finChild = @($normalized | Where-Object { $_.ItemId -eq 'item-fin-child' })[0]
+
+            Assert-Equal $finance.InheritanceBrokenAt '' 'Sibling paths that share a string prefix should not inherit another folder inheritance break.'
+            Assert-Equal $finChild.InheritanceBrokenAt 'C:\Data\Fin' 'True descendants should inherit the nearest broken-inheritance ancestor.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan creates missing local output folders with opt-out'
         Body = {
             Import-Module $moduleManifest -Force
@@ -1735,6 +1787,14 @@ $tests = @(
             $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBestEffort-' + [guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $targetPath 'readme.txt') -Value 'best effort evidence' -Encoding UTF8
+            function global:Get-SmbShare {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = $targetPath
+                    Description = 'Mocked matching local share'
+                }
+            }
             function global:Get-SmbShareAccess {
                 param([string] $Name)
                 @()
@@ -1756,6 +1816,7 @@ $tests = @(
                 Assert-True (@($events | Where-Object { $_.EventType -eq 'SharePermissionCollectionUnavailable' }).Count -eq 1) 'Scan events should record the missing share-permission proof.'
             }
             finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
             }
         }
@@ -1767,6 +1828,14 @@ $tests = @(
             $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferShareAccessThrow-' + [guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
             Set-Content -LiteralPath (Join-Path $targetPath 'readme.txt') -Value 'share access throw evidence' -Encoding UTF8
+            function global:Get-SmbShare {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = $targetPath
+                    Description = 'Mocked matching local share'
+                }
+            }
             function global:Get-SmbShareAccess {
                 throw 'mock Get-SmbShareAccess access denied'
             }
@@ -1782,6 +1851,7 @@ $tests = @(
                 Assert-True (@($events | Where-Object { $_.EventType -eq 'GetSmbShareAccessError' -and $_.Message -like '*mock Get-SmbShareAccess access denied*' }).Count -eq 1) 'The original Get-SmbShareAccess exception should be preserved as a scan event.'
             }
             finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
             }
         }
@@ -3154,6 +3224,71 @@ $tests = @(
         }
     },
     @{
+        Name = 'Import-ShareSurferReviewDecisions keeps newer reviewed decisions over stale drafts'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewStaleExport-' + [guid]::NewGuid().ToString('N'))
+            $firstReviewPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewStaleFirst-' + [guid]::NewGuid().ToString('N'))
+            $staleReviewPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewStaleDraft-' + [guid]::NewGuid().ToString('N'))
+            $newerReviewPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewNewerDraft-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $firstReviewPath, $staleReviewPath, $newerReviewPath -Force | Out-Null
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $firstReviewPath -Force | Out-Null
+            $firstOwnerRows = @(Import-Csv -LiteralPath (Join-Path $firstReviewPath 'owner_review_decisions.csv'))
+            $firstOwnerRows[0].Decision = 'ConfirmedOwner'
+            $firstOwnerRows[0].Reviewer = 'First Reviewer'
+            $firstOwnerRows[0].ReviewedAt = '2026-07-01T12:00:00Z'
+            $firstOwnerRows | Export-Csv -LiteralPath (Join-Path $firstReviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -OwnerDecisionPath (Join-Path $firstReviewPath 'owner_review_decisions.csv') -Force | Out-Null
+
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $staleReviewPath -Force | Out-Null
+            $staleOwnerRows = @(Import-Csv -LiteralPath (Join-Path $staleReviewPath 'owner_review_decisions.csv'))
+            $staleOwnerRows[0].Decision = ''
+            $staleOwnerRows[0].Reviewer = 'Stale Draft Reviewer'
+            $staleOwnerRows[0].ReviewedAt = '2026-06-01T12:00:00Z'
+            $staleOwnerRows | Export-Csv -LiteralPath (Join-Path $staleReviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -OwnerDecisionPath (Join-Path $staleReviewPath 'owner_review_decisions.csv') -Force | Out-Null
+            $keptRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'owner_review_decisions.csv'))
+            Assert-Equal $keptRows[0].Decision 'ConfirmedOwner' 'A stale blank/pending draft should not replace an existing reviewed decision.'
+            Assert-Equal $keptRows[0].Reviewer 'First Reviewer' 'A stale draft should not replace reviewer attribution.'
+            Assert-True ($keptRows[0].ImportWarnings -like '*Skipped older or pending incoming decision*') 'Skipped stale decisions should leave warning evidence.'
+
+            New-ShareSurferReviewDecisionDraft -ExportPath $exportPath -OutputPath $newerReviewPath -Force | Out-Null
+            $newerOwnerRows = @(Import-Csv -LiteralPath (Join-Path $newerReviewPath 'owner_review_decisions.csv'))
+            $newerOwnerRows[0].Decision = 'WrongOwner'
+            $newerOwnerRows[0].Reviewer = 'Newer Reviewer'
+            $newerOwnerRows[0].ReviewedAt = '2026-07-02T12:00:00Z'
+            $newerOwnerRows | Export-Csv -LiteralPath (Join-Path $newerReviewPath 'owner_review_decisions.csv') -NoTypeInformation -Encoding UTF8
+            Import-ShareSurferReviewDecisions -ExportPath $exportPath -OwnerDecisionPath (Join-Path $newerReviewPath 'owner_review_decisions.csv') -Force | Out-Null
+            $updatedRows = @(Import-Csv -LiteralPath (Join-Path $exportPath 'owner_review_decisions.csv'))
+            Assert-Equal $updatedRows[0].Decision 'WrongOwner' 'A newer reviewed incoming decision should replace the older reviewed decision.'
+            Assert-Equal $updatedRows[0].Reviewer 'Newer Reviewer' 'A newer reviewed incoming decision should preserve the newer reviewer.'
+            Assert-True ($updatedRows[0].ImportWarnings -like '*Replaced existing decision*') 'Reviewed decision replacement should leave warning evidence.'
+        }
+    },
+    @{
+        Name = 'Import-ShareSurferReviewDecisions validates decision CSV headers'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReviewHeaderExport-' + [guid]::NewGuid().ToString('N'))
+            $badOwnerPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBadOwnerDecision-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+            @(
+                [pscustomobject]@{ RelatedAreaId = 'related-area-0001'; Decision = 'ConfirmedOwner' }
+            ) | Export-Csv -LiteralPath $badOwnerPath -NoTypeInformation -Encoding UTF8
+
+            $threw = $false
+            try {
+                Import-ShareSurferReviewDecisions -ExportPath $exportPath -OwnerDecisionPath $badOwnerPath -Force | Out-Null
+            }
+            catch {
+                $threw = ($_.Exception.Message -like '*missing required column(s): ReviewPacketId*')
+            }
+            Assert-True $threw 'Owner decision imports should fail fast with a readable missing-header message.'
+        }
+    },
+    @{
         Name = 'Test-ShareSurferExport validates the normalized CSV set'
         Body = {
             Import-Module $moduleManifest -Force
@@ -4517,6 +4652,14 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferTarget-' + [guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+            function global:Get-SmbShare {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = $targetPath
+                    Description = 'Mocked matching local share'
+                }
+            }
             function global:Get-SmbShareAccess {
                 param([string] $Name)
                 [pscustomobject]@{
@@ -4536,6 +4679,127 @@ $tests = @(
                 Assert-Equal $shares[0].PartialData 'False' 'Share data should not be partial when share permissions were collected.'
             }
             finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan skips name-coincident local share permissions when paths differ'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) 'Finance'
+            if (Test-Path -LiteralPath $targetPath) {
+                Remove-Item -LiteralPath $targetPath -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+            function global:Get-SmbShare {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = (Join-Path ([System.IO.Path]::GetTempPath()) 'DifferentFinanceShare')
+                    Description = 'Mocked nonmatching local share'
+                }
+            }
+            function global:Get-SmbShareAccess {
+                throw 'Get-SmbShareAccess should not be called for a nonmatching local folder/share path.'
+            }
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferLocalMismatch-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -TargetPath $targetPath -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+                $sharePermissions = @(Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv'))
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $collectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputPath 'collection_errors.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal $sharePermissions.Count 0 'Name-coincident local folder scans should not attach share permissions from a different share path.'
+                Assert-Equal $shares[0].PartialData 'True' 'Local folder scan should stay partial when the share gate cannot be verified.'
+                Assert-True ($collectionErrors.ErrorType -contains 'SharePermissionVerificationSkipped') 'Collection errors should explain local share path verification skip.'
+                Assert-True ($events.EventType -contains 'SharePermissionVerificationSkipped') 'Scan events should record the local share path verification skip.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan enumerates explicit reparse-point targets while skipping child reparse points'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $rootPath = 'C:\ShareSurferMountRoot'
+            $childPath = 'C:\ShareSurferMountRoot\Child'
+            $linkPath = 'C:\ShareSurferMountRoot\LinkedChild'
+
+            function global:Get-Item {
+                param([string] $LiteralPath)
+                [pscustomobject]@{
+                    FullName = $rootPath
+                    Name = 'ShareSurferMountRoot'
+                    PSIsContainer = $true
+                    Attributes = ([System.IO.FileAttributes]::Directory -bor [System.IO.FileAttributes]::ReparsePoint)
+                }
+            }
+            function global:Get-ChildItem {
+                param([string] $LiteralPath)
+                $normalizedLiteralPath = [string]$LiteralPath
+                if ($normalizedLiteralPath.StartsWith('\\?\', [System.StringComparison]::Ordinal)) {
+                    $normalizedLiteralPath = $normalizedLiteralPath.Substring(4)
+                }
+                if ($normalizedLiteralPath -eq $rootPath) {
+                    return @(
+                        [pscustomobject]@{
+                            FullName = $childPath
+                            Name = 'Child'
+                            PSIsContainer = $true
+                            Attributes = [System.IO.FileAttributes]::Directory
+                        },
+                        [pscustomobject]@{
+                            FullName = $linkPath
+                            Name = 'LinkedChild'
+                            PSIsContainer = $true
+                            Attributes = ([System.IO.FileAttributes]::Directory -bor [System.IO.FileAttributes]::ReparsePoint)
+                        }
+                    )
+                }
+                @()
+            }
+            function global:Get-Acl {
+                param([string] $LiteralPath)
+                [pscustomobject]@{
+                    Owner = 'CONTOSO\DataOwner'
+                    AreAccessRulesProtected = $false
+                    Access = @()
+                }
+            }
+            function global:Get-SmbShare {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = $Name
+                    Path = $rootPath
+                    Description = 'Mocked mount-point share'
+                }
+            }
+            function global:Get-SmbShareAccess {
+                @()
+            }
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReparseTarget-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -TargetPath $rootPath -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+                $items = @(Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-True ($items.FullPath -contains $rootPath) 'Explicit reparse-point target should be recorded as an item.'
+                Assert-True ($items.FullPath -contains $childPath) 'Explicit reparse-point target should still be enumerated.'
+                Assert-True ($items.FullPath -contains $linkPath) 'Child reparse-point directories should be recorded as items.'
+                Assert-True ($events.EventType -contains 'ReparsePointTargetEnumerated') 'Scan events should state that an explicit reparse-point target was enumerated by intent.'
+                Assert-True ($events.EventType -contains 'ReparsePointSkipped') 'Child reparse-point directories should still be skipped and logged.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-Item -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-ChildItem -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-Acl -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
             }
         }
@@ -4625,6 +4889,14 @@ $tests = @(
                 Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
                 Remove-Variable -Name ShareSurferSmbRpcShareInfoProvider -Scope Global -ErrorAction SilentlyContinue
             }
+        }
+    },
+    @{
+        Name = 'Get-ShareSurferNativeSessionRows treats NetSessionEnum more-data pages as usable evidence'
+        Body = {
+            $sessionSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferNativeSessionRows.ps1') -Raw
+            Assert-True ($sessionSource -like '*$result -ne 0 -and $result -ne 234*') 'Native session enumeration should not treat ERROR_MORE_DATA as a fatal result.'
+            Assert-True ($sessionSource -like '*while ($result -eq 234 -and $resumeHandle -ne 0 -and $rows.Count -lt $MaxRows)*') 'Native session enumeration should keep paging through ERROR_MORE_DATA until the cap or resume handle ends.'
         }
     },
     @{
@@ -5293,7 +5565,7 @@ $tests = @(
                 [pscustomobject]@{
                     EventId = 'event-sensitive'
                     Timestamp = '2026-06-04T00:00:00.0000000Z'
-                    Level = 'Info'
+                    Level = 'Error'
                     EventType = 'FixtureSensitiveEvent'
                     Source = 'Fixture'
                     ShareId = 'share-finance'
@@ -5438,6 +5710,10 @@ $tests = @(
             Assert-True ($redactedEvidenceConfidence -like '*ConfidenceLabel*' -and $redactedEvidenceConfidence -like '*Review*') 'Evidence confidence support bundle rows should preserve confidence labels.'
             Assert-True ($redactedEvidenceConfidence -like '*Partial data or collection errors*') 'Evidence confidence support bundle rows should preserve reader-facing review guidance.'
             Assert-True ($redactedEvents -notlike '*files01*') 'Redacted scan events must not leak server names.'
+            Assert-True ($redactedEvents -like '*2026-06-04T00:00:00.0000000Z*') 'Redacted scan events should preserve timestamps for diagnostic ordering.'
+            Assert-True ($redactedEvents -like '*Error*') 'Redacted scan events should preserve error levels as diagnostic vocabulary.'
+            Assert-True ($redactedEvents -like '*FixtureSensitiveEvent*') 'Redacted scan events should preserve event type diagnostic vocabulary.'
+            Assert-True ($redactedEvents -notlike '*Collected CONTOSO*') 'Redacted scan events should still redact free-form event messages.'
             Assert-True ($redactedManifest -like '*AdLookupMode*') 'Redacted manifest should preserve AD lookup mode as a support diagnostic setting.'
             Assert-True ($redactedManifest -like '*Auto*') 'Redacted manifest should preserve the selected AD lookup mode value.'
             Assert-True ($redactedManifest -like '*CollectionProvider*') 'Redacted manifest should preserve collection provider as a support diagnostic setting.'

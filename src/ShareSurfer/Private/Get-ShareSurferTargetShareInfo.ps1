@@ -7,11 +7,14 @@ function Get-ShareSurferTargetShareInfo {
         $TargetItem
     )
 
-    if ($TargetPath -match '^\\\\([^\\]+)\\([^\\]+)') {
+    $normalizedTargetPath = ConvertFrom-ShareSurferFilesystemPath -Path $TargetPath
+
+    if ($normalizedTargetPath -match '^\\\\([^\\]+)\\([^\\]+)') {
         return [pscustomobject]@{
             ComputerName = $matches[1]
             ShareName = $matches[2]
             UNCPath = ('\\{0}\{1}' -f $matches[1], $matches[2])
+            IsUncTarget = $true
         }
     }
 
@@ -19,5 +22,6 @@ function Get-ShareSurferTargetShareInfo {
         ComputerName = if ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { [System.Environment]::MachineName }
         ShareName = $TargetItem.Name
         UNCPath = ConvertFrom-ShareSurferFilesystemPath -Path ([string]$TargetItem.FullName)
+        IsUncTarget = $false
     }
 }

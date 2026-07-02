@@ -1268,6 +1268,7 @@ function Test-ShareSurferRedactionAuditValue {
         'RelatedAreaId',
         'ReviewPacketId',
         'EventId',
+        'Timestamp',
         'Level',
         'EventType'
     )

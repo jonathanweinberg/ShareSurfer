@@ -134,7 +134,7 @@ function Copy-ShareSurferReviewDecisionFields {
         return $Target
     }
 
-    foreach ($field in @('Decision', 'DecisionStatus', 'ConfirmedOwner', 'ConfirmedBusinessUnit', 'Reviewer', 'ReviewedAt', 'Notes', 'NextAction')) {
+    foreach ($field in @('Decision', 'DecisionStatus', 'ConfirmedOwner', 'ConfirmedBusinessUnit', 'Reviewer', 'ReviewedAt', 'Notes', 'NextAction', 'ImportWarnings')) {
         if ($null -ne $Source.PSObject.Properties[$field]) {
             $Target.$field = [string]$Source.PSObject.Properties[$field].Value
         }
