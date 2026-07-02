@@ -95,6 +95,24 @@ function renderWithOwnerSidSnapshot() {
   return render(<App />);
 }
 
+function renderWithUnmappedFindingSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(demoSnapshot)) as typeof demoSnapshot;
+  snapshot.datasets?.findings?.push({
+    FindingId: "finding-unmapped-owner-gap",
+    FindingType: "LongPathOperationalPolicy",
+    Severity: "Review",
+    ShareId: "",
+    ItemId: "",
+    FullPath: "\\\\files99\\Orphaned\\Legacy",
+    Identity: "CONTOSO\\LegacyUser",
+    ObservedValue: "312",
+    PolicyValue: "256",
+    Message: "This path has no owner mapping context."
+  });
+  window.__SHARESURFER_SNAPSHOT__ = snapshot;
+  return render(<App />);
+}
+
 function ensureLocalStorage() {
   if (window.localStorage) {
     return;
@@ -498,6 +516,21 @@ describe("dashboard workbench interactions", () => {
 
     expect(screen.getAllByText("Owner").length).toBeGreaterThan(0);
     expect(screen.getByText("S-1-5-21-1000-2000-3000-5050")).toBeInTheDocument();
+  });
+
+  test("owner filters can isolate unmapped findings", () => {
+    renderWithUnmappedFindingSnapshot();
+
+    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+    fireEvent.change(screen.getByLabelText(/Data Owner/i), { target: { value: "__sharesurfer_unmapped__" } });
+
+    const table = screen.getByRole("table", { name: /Findings and conflicts/i });
+    expect(within(table).getByText("\\\\files99\\Orphaned\\Legacy")).toBeInTheDocument();
+    expect(within(table).getByText("CONTOSO\\LegacyUser")).toBeInTheDocument();
+    expect(within(table).getAllByText("Unmapped").length).toBeGreaterThan(0);
+    expect(within(table).queryByText("Finance Operations")).not.toBeInTheDocument();
+    expect(screen.getByText("Owner: (Unmapped)")).toBeInTheDocument();
   });
 
   test("raw evidence uses readable curated columns before showing all CSV fields", () => {

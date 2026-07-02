@@ -308,7 +308,7 @@ New-ShareSurferOwnerMappingDraft `
   -Force
 ```
 
-Open the draft, fill in `Owner` and `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. The reusable `owner-mapping-rerun.ps1` file shows how to regenerate the draft from the same export and where the completed `owner-mapping.csv` belongs.
+Open the draft, fill in `Owner` and, when known, `BusinessUnit`, save it as `owner-mapping.csv`, and rerun the scan with `-OwnerMappingPath`. Blank `BusinessUnit` values are allowed but show up as unmapped business-unit gaps in the report. The reusable `owner-mapping-rerun.ps1` file shows how to regenerate the draft from the same export and where the completed `owner-mapping.csv` belongs.
 
 Before rerunning the scan with the completed mapping, validate it:
 

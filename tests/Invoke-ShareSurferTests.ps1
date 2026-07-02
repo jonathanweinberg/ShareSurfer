@@ -1474,6 +1474,8 @@ $tests = @(
         Body = {
             Import-Module $moduleManifest -Force
             $items = @(
+                [pscustomobject]@{ ItemId = 'item-drive-root'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\'; RelativePath = ''; Depth = 0; Owner = ''; InheritanceEnabled = $false; InheritanceBrokenAt = 'C:\' },
+                [pscustomobject]@{ ItemId = 'item-drive-child'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\DriveChild'; RelativePath = 'DriveChild'; Depth = 1; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' },
                 [pscustomobject]@{ ItemId = 'item-fin'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Fin'; RelativePath = 'Fin'; Depth = 1; Owner = ''; InheritanceEnabled = $false; InheritanceBrokenAt = 'C:\Data\Fin' },
                 [pscustomobject]@{ ItemId = 'item-fin-child'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Fin\Reports'; RelativePath = 'Fin\Reports'; Depth = 2; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' },
                 [pscustomobject]@{ ItemId = 'item-finance'; ShareId = 'share-001'; ItemType = 'Directory'; FullPath = 'C:\Data\Finance'; RelativePath = 'Finance'; Depth = 1; Owner = ''; InheritanceEnabled = $true; InheritanceBrokenAt = '' }
@@ -1486,9 +1488,11 @@ $tests = @(
             } $items)
             $finance = @($normalized | Where-Object { $_.ItemId -eq 'item-finance' })[0]
             $finChild = @($normalized | Where-Object { $_.ItemId -eq 'item-fin-child' })[0]
+            $driveChild = @($normalized | Where-Object { $_.ItemId -eq 'item-drive-child' })[0]
 
             Assert-Equal $finance.InheritanceBrokenAt '' 'Sibling paths that share a string prefix should not inherit another folder inheritance break.'
             Assert-Equal $finChild.InheritanceBrokenAt 'C:\Data\Fin' 'True descendants should inherit the nearest broken-inheritance ancestor.'
+            Assert-Equal $driveChild.InheritanceBrokenAt 'C:\' 'Drive-root inheritance breaks should be reachable for descendants.'
         }
     },
     @{
@@ -2293,19 +2297,24 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $missingColumnPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapMissing-' + [guid]::NewGuid().ToString('N') + '.csv')
             $blankValuePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapBlank-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $blankBusinessUnitPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapBlankBu-' + [guid]::NewGuid().ToString('N') + '.csv')
             $validPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapValid-' + [guid]::NewGuid().ToString('N') + '.csv')
             Set-Content -LiteralPath $missingColumnPath -Value @('Pattern,Owner', '\\files01\Finance\*,Finance Operations') -Encoding UTF8
             Set-Content -LiteralPath $blankValuePath -Value @('Pattern,Owner,BusinessUnit', '\\files01\Finance\*,Finance Operations,Finance', '\\files01\HR\*,,Human Resources') -Encoding UTF8
+            Set-Content -LiteralPath $blankBusinessUnitPath -Value @('Pattern,Owner,BusinessUnit', '\\files01\Finance\*,Finance Operations,') -Encoding UTF8
             Set-Content -LiteralPath $validPath -Value @('Pattern,Owner,BusinessUnit,Source', '\\files01\Finance\*,Finance Operations,Finance,unit-test') -Encoding UTF8
 
             $missingColumn = Test-ShareSurferOwnerMapping -Path $missingColumnPath
             $blankValue = Test-ShareSurferOwnerMapping -Path $blankValuePath
+            $blankBusinessUnit = Test-ShareSurferOwnerMapping -Path $blankBusinessUnitPath
             $valid = Test-ShareSurferOwnerMapping -Path $validPath
 
             Assert-True (-not $missingColumn.IsValid) 'Owner mapping validation should fail when BusinessUnit is missing.'
             Assert-True ((@($missingColumn.Errors) -join ' ') -like '*missing required column*BusinessUnit*') 'Missing-column error should name the missing required column.'
             Assert-True (-not $blankValue.IsValid) 'Owner mapping validation should fail when a required row value is blank.'
             Assert-True ((@($blankValue.Errors) -join ' ') -like '*blank Owner*') 'Blank value error should name the blank required value.'
+            Assert-True $blankBusinessUnit.IsValid 'Blank BusinessUnit values should warn without blocking scans.'
+            Assert-True ((@($blankBusinessUnit.Warnings) -join ' ') -like '*blank BusinessUnit*') 'Blank BusinessUnit warning should name the attribution gap.'
             Assert-True $valid.IsValid 'Owner mapping validation should pass with Pattern, Owner, and BusinessUnit populated.'
             Assert-Equal (Get-Command -Name Test-ShareSurferOwnerMapping -Module ShareSurfer).Name 'Test-ShareSurferOwnerMapping' 'Owner mapping validator should be exported.'
         }
@@ -3354,6 +3363,30 @@ $tests = @(
             Assert-Equal $updatedRows[0].Decision 'WrongOwner' 'A newer reviewed incoming decision should replace the older reviewed decision.'
             Assert-Equal $updatedRows[0].Reviewer 'Newer Reviewer' 'A newer reviewed incoming decision should preserve the newer reviewer.'
             Assert-True ($updatedRows[0].ImportWarnings -like '*Replaced existing decision*') 'Reviewed decision replacement should leave warning evidence.'
+        }
+    },
+    @{
+        Name = 'Import-ShareSurferReviewDecisions parses ReviewedAt with invariant culture'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $originalCulture = [System.Threading.Thread]::CurrentThread.CurrentCulture
+            $originalUiCulture = [System.Threading.Thread]::CurrentThread.CurrentUICulture
+            try {
+                [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('de-DE')
+                [System.Threading.Thread]::CurrentThread.CurrentUICulture = [System.Globalization.CultureInfo]::GetCultureInfo('de-DE')
+                $shareSurferModule = Get-Module ShareSurfer
+                $parsed = & $shareSurferModule {
+                    $row = [pscustomobject]@{ ReviewedAt = '03/07/2026 12:00:00' }
+                    Get-ShareSurferReviewDecisionReviewedAt -Row $row
+                }
+
+                Assert-Equal $parsed.Month 3 'ReviewedAt fallback parsing should use invariant month/day interpretation, not the collector culture.'
+                Assert-Equal $parsed.Day 7 'ReviewedAt fallback parsing should use invariant month/day interpretation, not the collector culture.'
+            }
+            finally {
+                [System.Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
+                [System.Threading.Thread]::CurrentThread.CurrentUICulture = $originalUiCulture
+            }
         }
     },
     @{
@@ -4736,7 +4769,7 @@ $tests = @(
         }
     },
     @{
-        Name = 'Invoke-ShareSurferScan collects mocked share-level permissions during target path scans'
+        Name = 'Invoke-ShareSurferScan discovers local shares by path during target path scans'
         Body = {
             Import-Module $moduleManifest -Force
             $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferTarget-' + [guid]::NewGuid().ToString('N'))
@@ -4744,7 +4777,7 @@ $tests = @(
             function global:Get-SmbShare {
                 param([string] $Name)
                 [pscustomobject]@{
-                    Name = $Name
+                    Name = 'MockFinance$'
                     Path = $targetPath
                     Description = 'Mocked matching local share'
                 }
@@ -4766,6 +4799,7 @@ $tests = @(
 
                 Assert-True ($sharePermissions.Identity -contains 'CONTOSO\MockShareReaders') 'TargetPath scans should collect share-level permissions when Get-SmbShareAccess is available.'
                 Assert-Equal $shares[0].PartialData 'False' 'Share data should not be partial when share permissions were collected.'
+                Assert-Equal $shares[0].ShareName 'MockFinance$' 'TargetPath scans should use the discovered local share name, even when it differs from the folder leaf.'
             }
             finally {
                 Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue

@@ -58,7 +58,7 @@ Good pattern habits:
 - Avoid sibling-prefix patterns such as `\\files01\Finance*`, which may also match `\\files01\FinanceArchive`.
 - Run `Test-ShareSurferOwnerMapping` before scanning with a hand-edited mapping file.
 
-`New-ShareSurferOwnerMappingDraft` creates boundary-safe draft patterns. Fill in `Owner` and `BusinessUnit` before using the draft as `-OwnerMappingPath`.
+`New-ShareSurferOwnerMappingDraft` creates boundary-safe draft patterns. Fill in `Owner` before using the draft as `-OwnerMappingPath`; fill `BusinessUnit` when you know it so the report can route review packets to the right business bucket. Blank `BusinessUnit` values are allowed but are shown as unmapped business-unit gaps.
 
 ## Treat Every File As A Snapshot
 
@@ -90,7 +90,8 @@ Do not wait until owner review to learn that the import was weak. Set expectatio
 | HR rows matched to AD | At least 85%, with the rest explainable |
 | Ambiguous AD matches | Less than 1%, each one reviewed |
 | Shares covered by owner mapping | 100% at share level before business signoff |
-| Owner and BusinessUnit cells in `owner-mapping.csv` | 100% filled before using it in a scan |
+| Owner cells in `owner-mapping.csv` | 100% filled before using it in a scan |
+| BusinessUnit cells in `owner-mapping.csv` | Fill when known; blanks are warning-level unmapped business-unit gaps |
 | Potential service-account-like rows | Reviewed, not ignored |
 
 If a number looks bad, fix it at the earliest step that can see it. A bad import fixed before scanning costs minutes. A bad owner packet discovered by a business reviewer costs trust.
@@ -105,4 +106,3 @@ If a number looks bad, fix it at the earliest step that can see it. A bad import
 | No owner mapping exists yet | Scan once, run `New-ShareSurferOwnerMappingDraft`, fill the draft, validate it, then rerun with `-OwnerMappingPath`. |
 | Service/admin OUs pollute AD matches | Use `-ForbiddenOu` during ownership enrichment. |
 | Post-reorg or stale owners | Refresh CSVs, rerun the saved definition, and review changed owners before signoff. |
-

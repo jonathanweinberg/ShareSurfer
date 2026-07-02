@@ -61,7 +61,7 @@ Test-ShareSurferOwnerMapping `
   -ExportPath 'C:\ShareSurfer\exports\scan-001'
 ```
 
-The validator checks required columns, blank owner/business-unit cells, patterns that match no exported paths, and risky sibling-prefix patterns such as `\\files01\Finance*`.
+The validator checks required columns, blank owner cells, blank business-unit warnings, patterns that match no exported paths, and risky sibling-prefix patterns such as `\\files01\Finance*`. A blank `BusinessUnit` does not stop the scan, but the affected rows appear as unmapped business-unit gaps in reports.
 
 ## Normalized CSV Versus Enriched Export
 

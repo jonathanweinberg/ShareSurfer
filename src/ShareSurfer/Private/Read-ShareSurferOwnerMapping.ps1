@@ -4,18 +4,14 @@ function Read-ShareSurferOwnerMapping {
         [string] $Path
     )
 
-    if (-not (Test-Path -LiteralPath $Path)) {
-        throw "Owner mapping file was not found: $Path"
-    }
-
-    $validation = Test-ShareSurferOwnerMapping -Path $Path
+    $mappingCsv = Read-ShareSurferOwnerMappingCsv -Path $Path
+    $validation = Test-ShareSurferOwnerMappingData -MappingCsv $mappingCsv
     if (-not $validation.IsValid) {
         throw ("Owner mapping file is invalid: {0}. {1}" -f $Path, ((@($validation.Errors) | Select-Object -First 5) -join ' '))
     }
 
-    $headers = @(Get-ShareSurferCsvHeaders -Path $Path)
-    $headerMap = Resolve-ShareSurferOwnerMappingHeaderMap -Headers $headers
-    $rows = @(Import-Csv -LiteralPath $Path)
+    $headerMap = $mappingCsv.HeaderMap
+    $rows = @($mappingCsv.Rows)
     foreach ($row in $rows) {
         [pscustomobject]@{
             Pattern = Get-ShareSurferMappedCsvValue -Row $row -HeaderMap $headerMap -Column 'Pattern'
