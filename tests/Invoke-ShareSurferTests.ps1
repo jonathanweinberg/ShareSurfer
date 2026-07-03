@@ -2292,21 +2292,43 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan exports owner mapping validation warnings as scan events'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExportOwnerMappingWarnings-' + [guid]::NewGuid().ToString('N'))
+            $mappingPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapWarnings-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $mappingPath -Value @(
+                'Pattern,Owner,BusinessUnit,Source',
+                '\\files01\Finance*,Finance Operations,,warning-test'
+            ) -Encoding UTF8
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -OwnerMappingPath $mappingPath -SkipIdentityEnrichment | Out-Null
+            $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'OwnerMappingValidationWarning' -and $_.Message -like '*blank BusinessUnit*' }).Count -eq 1) 'Blank BusinessUnit warnings should be visible in scan_events.csv.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'OwnerMappingValidationWarning' -and $_.Message -like '*may match sibling paths*' }).Count -eq 1) 'Sibling-prefix warnings should be visible in scan_events.csv.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'OwnerMappingValidationWarning' -and $_.Detail -like '*Problem=BlankBusinessUnit*' }).Count -eq 1) 'Owner mapping warning event detail should preserve the validation problem.'
+        }
+    },
+    @{
         Name = 'Test-ShareSurferOwnerMapping validates required columns and row values'
         Body = {
             Import-Module $moduleManifest -Force
             $missingColumnPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapMissing-' + [guid]::NewGuid().ToString('N') + '.csv')
             $blankValuePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapBlank-' + [guid]::NewGuid().ToString('N') + '.csv')
             $blankBusinessUnitPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapBlankBu-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $headersOnlyPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapHeadersOnly-' + [guid]::NewGuid().ToString('N') + '.csv')
             $validPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapValid-' + [guid]::NewGuid().ToString('N') + '.csv')
             Set-Content -LiteralPath $missingColumnPath -Value @('Pattern,Owner', '\\files01\Finance\*,Finance Operations') -Encoding UTF8
             Set-Content -LiteralPath $blankValuePath -Value @('Pattern,Owner,BusinessUnit', '\\files01\Finance\*,Finance Operations,Finance', '\\files01\HR\*,,Human Resources') -Encoding UTF8
             Set-Content -LiteralPath $blankBusinessUnitPath -Value @('Pattern,Owner,BusinessUnit', '\\files01\Finance\*,Finance Operations,') -Encoding UTF8
+            Set-Content -LiteralPath $headersOnlyPath -Value @('Pattern,Owner,BusinessUnit') -Encoding UTF8
             Set-Content -LiteralPath $validPath -Value @('Pattern,Owner,BusinessUnit,Source', '\\files01\Finance\*,Finance Operations,Finance,unit-test') -Encoding UTF8
 
             $missingColumn = Test-ShareSurferOwnerMapping -Path $missingColumnPath
             $blankValue = Test-ShareSurferOwnerMapping -Path $blankValuePath
             $blankBusinessUnit = Test-ShareSurferOwnerMapping -Path $blankBusinessUnitPath
+            $headersOnly = Test-ShareSurferOwnerMapping -Path $headersOnlyPath
             $valid = Test-ShareSurferOwnerMapping -Path $validPath
 
             Assert-True (-not $missingColumn.IsValid) 'Owner mapping validation should fail when BusinessUnit is missing.'
@@ -2315,6 +2337,8 @@ $tests = @(
             Assert-True ((@($blankValue.Errors) -join ' ') -like '*blank Owner*') 'Blank value error should name the blank required value.'
             Assert-True $blankBusinessUnit.IsValid 'Blank BusinessUnit values should warn without blocking scans.'
             Assert-True ((@($blankBusinessUnit.Warnings) -join ' ') -like '*blank BusinessUnit*') 'Blank BusinessUnit warning should name the attribution gap.'
+            Assert-True $headersOnly.IsValid 'Headers-only owner mapping files should warn without blocking scans.'
+            Assert-True ((@($headersOnly.Warnings) -join ' ') -like '*headers but no data rows*') 'Headers-only owner mapping warning should explain that no mappings will be added.'
             Assert-True $valid.IsValid 'Owner mapping validation should pass with Pattern, Owner, and BusinessUnit populated.'
             Assert-Equal (Get-Command -Name Test-ShareSurferOwnerMapping -Module ShareSurfer).Name 'Test-ShareSurferOwnerMapping' 'Owner mapping validator should be exported.'
         }
@@ -2339,6 +2363,29 @@ $tests = @(
             Assert-True ((@($result.Warnings) -join ' ') -like '*may match sibling paths*') 'Validator should warn about sibling-prefix wildcard patterns.'
             Assert-Equal $result.ZeroMatchPatternCount 1 'Validator should count patterns that match no share or item paths.'
             Assert-True ((@($result.Warnings) -join ' ') -like '*NoSuchShare*') 'Validator should name the dead pattern.'
+        }
+    },
+    @{
+        Name = 'Test-ShareSurferOwnerMapping defers item candidate loading when shares match'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExportLazyItems-' + [guid]::NewGuid().ToString('N'))
+            $mappingPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnerMapLazyItems-' + [guid]::NewGuid().ToString('N') + '.csv')
+            New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value @(
+                'ShareId,Source,ComputerName,ShareName,UNCPath,LocalPath,Description,PartialData,PartialReason',
+                'share-finance,Fixture,files01,Finance,\\files01\Finance,C:\Finance,Finance share,False,'
+            ) -Encoding UTF8
+            New-Item -ItemType Directory -Path (Join-Path $exportPath 'items.csv') -Force | Out-Null
+            Set-Content -LiteralPath $mappingPath -Value @(
+                'Pattern,Owner,BusinessUnit,Source',
+                '\\files01\Finance\*,Finance Operations,Finance,unit-test'
+            ) -Encoding UTF8
+
+            $result = Test-ShareSurferOwnerMapping -Path $mappingPath -ExportPath $exportPath
+
+            Assert-True $result.IsValid 'Owner mapping validation should pass when the pattern matches a share path.'
+            Assert-Equal $result.ZeroMatchPatternCount 0 'Share-level matches should avoid item candidate loading.'
         }
     },
     @{
@@ -3541,6 +3588,7 @@ $tests = @(
 
                 Assert-Equal $parsed.Month 3 'ReviewedAt fallback parsing should use invariant month/day interpretation, not the collector culture.'
                 Assert-Equal $parsed.Day 7 'ReviewedAt fallback parsing should use invariant month/day interpretation, not the collector culture.'
+                Assert-Equal $parsed.Kind ([System.DateTimeKind]::Utc) 'ReviewedAt parsing should normalize decision timestamps to UTC before precedence comparison.'
             }
             finally {
                 [System.Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
@@ -4935,11 +4983,20 @@ $tests = @(
             New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
             function global:Get-SmbShare {
                 param([string] $Name)
-                [pscustomobject]@{
-                    Name = 'MockFinance$'
-                    Path = $targetPath
-                    Description = 'Mocked matching local share'
-                }
+                @(
+                    [pscustomobject]@{
+                        Name = 'C$'
+                        Path = $targetPath
+                        Description = 'Mocked matching admin share'
+                        Special = $true
+                    },
+                    [pscustomobject]@{
+                        Name = 'Finance'
+                        Path = $targetPath
+                        Description = 'Mocked matching local share'
+                        Special = $false
+                    }
+                )
             }
             function global:Get-SmbShareAccess {
                 param([string] $Name)
@@ -4955,10 +5012,12 @@ $tests = @(
                 Invoke-ShareSurferScan -TargetPath $targetPath -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
                 $sharePermissions = Import-Csv -LiteralPath (Join-Path $outputPath 'share_permissions.csv')
                 $shares = Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv')
+                $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
 
                 Assert-True ($sharePermissions.Identity -contains 'CONTOSO\MockShareReaders') 'TargetPath scans should collect share-level permissions when Get-SmbShareAccess is available.'
                 Assert-Equal $shares[0].PartialData 'False' 'Share data should not be partial when share permissions were collected.'
-                Assert-Equal $shares[0].ShareName 'MockFinance$' 'TargetPath scans should use the discovered local share name, even when it differs from the folder leaf.'
+                Assert-Equal $shares[0].ShareName 'Finance' 'TargetPath scans should prefer a non-special matching local share over an admin share.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'MultipleLocalSharesMatchedPath' -and $_.Detail -like '*C$*' }).Count -eq 1) 'TargetPath scans should record additional local share names that matched the same path.'
             }
             finally {
                 Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
@@ -4998,6 +5057,45 @@ $tests = @(
                 Assert-Equal $shares[0].PartialData 'True' 'Local folder scan should stay partial when the share gate cannot be verified.'
                 Assert-True ($collectionErrors.ErrorType -contains 'SharePermissionVerificationSkipped') 'Collection errors should explain local share path verification skip.'
                 Assert-True ($events.EventType -contains 'SharePermissionVerificationSkipped') 'Scan events should record the local share path verification skip.'
+            }
+            finally {
+                Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Get-SmbShareAccess -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan records when only a special local share matches'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $targetPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferTargetSpecial-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+            function global:Get-SmbShare {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = 'C$'
+                    Path = $targetPath
+                    Description = 'Mocked matching admin share'
+                    Special = $true
+                }
+            }
+            function global:Get-SmbShareAccess {
+                param([string] $Name)
+                [pscustomobject]@{
+                    Name = $Name
+                    AccountName = 'BUILTIN\Administrators'
+                    AccessRight = 'Full'
+                    AccessControlType = 'Allow'
+                }
+            }
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferSpecialShare-' + [guid]::NewGuid().ToString('N'))
+                Invoke-ShareSurferScan -TargetPath $targetPath -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal $shares[0].ShareName 'C$' 'TargetPath scans should fall back to a special share when it is the only matching local share.'
+                Assert-True (@($events | Where-Object { $_.EventType -eq 'SpecialLocalShareSelected' -and $_.Message -like '*special/admin local SMB share*' }).Count -eq 1) 'TargetPath scans should record when only special/admin share evidence is available.'
             }
             finally {
                 Remove-Item -Path function:\Get-SmbShare -ErrorAction SilentlyContinue

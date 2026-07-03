@@ -61,7 +61,7 @@ Test-ShareSurferOwnerMapping `
   -ExportPath 'C:\ShareSurfer\exports\scan-001'
 ```
 
-The validator checks required columns, blank owner cells, blank business-unit warnings, patterns that match no exported paths, and risky sibling-prefix patterns such as `\\files01\Finance*`. A blank `BusinessUnit` does not stop the scan, but the affected rows appear as unmapped business-unit gaps in reports.
+The validator checks required columns, blank owner cells, blank business-unit warnings, patterns that match no exported paths, and risky sibling-prefix patterns such as `\\files01\Finance*`. The `BusinessUnit` column itself is still required so ShareSurfer can distinguish a deliberate blank value from a malformed two-column file. A blank `BusinessUnit` value does not stop the scan, but the affected rows appear as unmapped business-unit gaps in reports and warning events.
 
 ## Normalized CSV Versus Enriched Export
 
@@ -133,10 +133,10 @@ Enriched rows can add these review fields:
 
 ## Step 1: Test The CSV
 
-If `v0.1.0-pre.29` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
+If `v0.1.0-pre.30` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.29'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.30'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -421,7 +421,7 @@ New-ShareSurferOwnerMappingDraft `
   -Force
 ```
 
-Open `owner-mapping-draft.csv`, fill in `Owner` and `BusinessUnit`, then save it as your owner mapping input:
+Open `owner-mapping-draft.csv`, fill in `Owner` and `BusinessUnit`, then save it as your owner mapping input. Keep the `BusinessUnit` header even when some values are not known yet; blank values warn, but a missing column is treated as the wrong file shape.
 
 ```powershell
 Copy-Item -LiteralPath $draftPath -Destination 'C:\ShareSurfer\inputs\owner-mapping.csv' -Force
