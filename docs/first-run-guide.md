@@ -13,7 +13,7 @@ For a first useful scan:
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
 5. Recommended: run `Start-ShareSurfer.ps1` or `Start-ShareSurferStartup` to generate a reusable first-run JSON config, plan, and rerun script.
-6. If HR, employee, OBS, project, or owner CSVs exist, normalize them and build `ownership-enrichment.csv` before scanning.
+6. If HR, employee, OBS, project, or owner CSVs exist, let the startup prompts help build `ownership-enrichment.csv`, or normalize them before scanning with the ownership import commands.
 7. Run the collector, validate the export, and build `report.html`.
 8. Package the standalone dashboard from the validated export only when you need the richer local dashboard.
 9. Check the stop gates before sending anything to a business owner.
@@ -136,7 +136,11 @@ Confirm the commands are available:
 Get-Command -Module ShareSurfer
 ```
 
-Recommended: generate a guided startup plan before scanning. This does not collect data or change permissions. It recursively unblocks local ShareSurfer PowerShell files, asks the first-run questions when run interactively, asks whether to run intensive share-permission diagnostics before the scan, writes a reusable startup JSON config, then writes a JSON plan and a rerun script so you can review the requested diagnostic, scan, validation, and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist.
+Recommended: generate a guided startup plan before scanning. This does not collect data or change permissions. It recursively unblocks local ShareSurfer PowerShell files, asks the first-run questions when run interactively, asks whether to run intensive share-permission diagnostics before the scan, checks for optional ownership files in the input folder, writes a reusable startup JSON config, then writes a JSON plan and a rerun script so you can review the requested diagnostic, scan, validation, and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist.
+
+If `ownership-enrichment.csv` is missing, interactive startup can offer to open the multi-CSV ownership import picker. Use that when you have HR, employee, OBS, project, application, or owner CSVs that should enrich identities before the scan. The import writes `ownership-enrichment.csv`, `ownership_context.csv`, `ownership_relationships.csv`, `ownership_import_manifest.csv`, `ownership-import.definition.json`, and `ownership-import-rerun.ps1`, then returns to the normal startup flow.
+
+If `owner-mapping.csv` is missing, startup can offer to add post-scan owner mapping draft creation to the generated rerun script. That draft is created after `Test-ShareSurferExport` succeeds because useful path patterns come from scan output. Fill `Owner` and `BusinessUnit` in `owner-mapping-draft.csv`, save it as `owner-mapping.csv`, then rerun the startup config or scan with that completed mapping.
 
 After the interactive questions, ShareSurfer shows the generated file paths, offers to display the startup JSON, scan plan, and rerun script, and then asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to `No` so you can stop and review first.
 
@@ -175,7 +179,7 @@ Start-ShareSurferStartup `
   -Force
 ```
 
-The rerun script runs `Invoke-ShareSurferSharePermissionDiagnostic` before the scan by default and writes the proof/failure package under `$exportPath\share-permission-diagnostics`. It also runs `Invoke-ShareSurferPortProtocolAssessment` into `$exportPath` before dashboard packaging, so the standalone dashboard has `port_protocol_*.csv` readiness evidence without a separate manual step. Open `share_permission_diagnostics.md` when share-level permissions are missing, unexpected, or marked partial. The diagnostic path now records the server-returned share path, checks whether that path is actually local to the collector, and falls back to the target UNC path when a SAN or appliance returns a remote `C:\...` path that the collector cannot see. The collector also tries native SMB/RPC share-permission evidence for UNC target-path scans when `Get-SmbShareAccess` cannot return rows. The startup flow looks for `owner-mapping.csv`, `ownership-enrichment.csv`, and `discounted-principals.csv` under `$inputRoot`, saves found or skipped choices into JSON, and the rerun script only passes optional paths when those files exist.
+The rerun script runs `Invoke-ShareSurferSharePermissionDiagnostic` before the scan by default and writes the proof/failure package under `$exportPath\share-permission-diagnostics`. It also runs `Invoke-ShareSurferPortProtocolAssessment` into `$exportPath` before dashboard packaging, so the standalone dashboard has `port_protocol_*.csv` readiness evidence without a separate manual step. Open `share_permission_diagnostics.md` when share-level permissions are missing, unexpected, or marked partial. The diagnostic path now records the server-returned share path, checks whether that path is actually local to the collector, and falls back to the target UNC path when a SAN or appliance returns a remote `C:\...` path that the collector cannot see. The collector also tries native SMB/RPC share-permission evidence for UNC target-path scans when `Get-SmbShareAccess` cannot return rows. The startup flow looks for `owner-mapping.csv`, `ownership-enrichment.csv`, `ownership_context.csv`, `ownership_relationships.csv`, `ownership_import_manifest.csv`, and `discounted-principals.csv` under `$inputRoot`, saves found or skipped choices into JSON, and the rerun script only passes optional paths when those files exist.
 
 ## Step 2: Choose Scan Targets
 
