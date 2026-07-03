@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.30",
-  "packageVersion": "0.1.0-pre.30",
-  "packageName": "ShareSurfer-0.1.0-pre.30",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.30.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.30",
+  "currentPrereleaseTag": "v0.1.0-pre.31",
+  "packageVersion": "0.1.0-pre.31",
+  "packageName": "ShareSurfer-0.1.0-pre.31",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.31.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.31",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #348 PASS4 hardening wave: owner-mapping warnings now appear in scan_events.csv, headers-only owner-mapping files warn instead of disappearing silently, owner-mapping export validation avoids loading items.csv unless share-level pattern checks miss, review-decision ReviewedAt precedence is normalized to UTC, local target-path scans prefer non-special SMB shares over admin shares when both match, and scans record when multiple local shares or only a special/admin share match the same path. The release also carries the guided ownership context ingestion work from #346, including optional ownership_context.csv, ownership_relationships.csv, and ownership_import_manifest.csv support. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #350 startup ownership setup update. Start-ShareSurfer and Start-ShareSurferStartup can now help first-run operators when ownership inputs are missing: interactive startup can launch the multi-CSV ownership import picker to build ownership-enrichment.csv plus ownership context graph files, save reusable ownership import JSON/script outputs, return to the normal startup flow, and queue post-scan owner-mapping-draft.csv creation when owner-mapping.csv is not available yet. The release also carries the recent ownership import/context graph hardening and PASS4 scan/mapping behavior from #346 and #348. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
