@@ -120,10 +120,12 @@ Use the [admin ownership import guide](docs/admin-ownership-import.md) when HR, 
 Key ideas:
 
 - `Join-ShareSurferOwnershipSources` can combine one or more CSVs before the scan.
+- Add `-IncludeContextGraph` when one source describes projects, apps, path prefixes, groups, or OBS/business context instead of people. This writes `ownership_context.csv`, `ownership_relationships.csv`, and `ownership_import_manifest.csv` beside `ownership-enrichment.csv`.
 - If a source has employee ID or employee number, ShareSurfer can use it to match AD accounts and fill account, mail, title, office, manager, and OBS fields when available.
 - Use `-ForbiddenOu` to skip OUs such as service accounts or admin-only accounts during AD matching.
 - Save `ownership-import.definition.json` and `ownership-import-rerun.ps1` so the import can be repeated without rerunning the whole interview.
 - Pass the enriched file to scans with `-OwnershipEnrichmentPath`; the scan exports it as `ownership_enrichment.csv`.
+- Pass context graph files to scans with `-OwnershipContextPath`, `-OwnershipRelationshipPath`, and `-OwnershipImportManifestPath` when you want the export/dashboard to show project-to-OBS or path/group context evidence.
 - If owners are not known yet, create `owner-mapping-draft.csv` and `owner-mapping-rerun.ps1` with `New-ShareSurferOwnerMappingDraft`.
 - Before scanning with a hand-edited `owner-mapping.csv`, run `Test-ShareSurferOwnerMapping` so missing columns, blank owners, and risky sibling-prefix patterns are caught early.
 

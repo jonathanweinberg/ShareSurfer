@@ -297,6 +297,24 @@ describe("ShareSurfer dashboard data model", () => {
     expect(dashboard.scanSummary.ownershipEnrichmentPotentialServiceAccounts).toBe(1);
   });
 
+  test("includes ownership context graph datasets in raw evidence when present", () => {
+    const dashboard = deriveDashboard(normalizeSnapshot(JSON.parse(JSON.stringify(demoSnapshot))));
+
+    const contextEvidence = dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "ownership_context");
+    const relationshipEvidence = dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "ownership_relationships");
+    const manifestEvidence = dashboard.rawEvidenceCatalog.find((dataset) => dataset.key === "ownership_import_manifest");
+
+    expect(contextEvidence?.label).toBe("Ownership context");
+    expect(contextEvidence?.columns).toEqual(expectedColumns.ownership_context);
+    expect(contextEvidence?.totalRows).toBe(1);
+    expect(relationshipEvidence?.label).toBe("Ownership relationships");
+    expect(relationshipEvidence?.columns).toEqual(expectedColumns.ownership_relationships);
+    expect(relationshipEvidence?.totalRows).toBe(1);
+    expect(manifestEvidence?.label).toBe("Ownership import manifest");
+    expect(manifestEvidence?.columns).toEqual(expectedColumns.ownership_import_manifest);
+    expect(manifestEvidence?.totalRows).toBe(1);
+  });
+
   test("promotes broken SID and access-denied collection blockers for focused review", () => {
     const snapshot = JSON.parse(JSON.stringify(demoSnapshot));
     snapshot.datasets.findings = [

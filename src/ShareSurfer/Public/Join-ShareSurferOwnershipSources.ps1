@@ -10,9 +10,23 @@ function Join-ShareSurferOwnershipSources {
         [Parameter(Mandatory = $true)]
         [string] $OutputPath,
 
+        [switch] $IncludeContextGraph,
+
+        [string] $ContextOutputPath = '',
+
+        [string] $RelationshipOutputPath = '',
+
+        [string] $ManifestOutputPath = '',
+
         [string] $DefinitionPath = '',
 
         [string[]] $MappingProfilePath = @(),
+
+        [ValidateSet('Identity', 'ObsContext', 'ProjectContext', 'PathOwnership', 'GroupContext', 'Mixed')]
+        [string[]] $SourceType = @(),
+
+        [ValidateSet('Authoritative', 'ReviewerHint', 'ContextOnly', 'Unknown')]
+        [string[]] $AuthorityLevel = @(),
 
         [string] $ObsHeader = '',
 
@@ -39,6 +53,7 @@ function Join-ShareSurferOwnershipSources {
     }
 
     $definition = $null
+    $savedSourceProfiles = @()
     if (-not [string]::IsNullOrWhiteSpace($DefinitionPath) -and (Test-Path -LiteralPath $DefinitionPath -PathType Leaf)) {
         $definition = Get-ShareSurferOwnershipImportDefinition -Path $DefinitionPath
         if ([string]::IsNullOrWhiteSpace($SourceFolder) -and -not [string]::IsNullOrWhiteSpace([string]$definition.SourceFolder)) {
@@ -62,6 +77,19 @@ function Join-ShareSurferOwnershipSources {
         if (-not $PSBoundParameters.ContainsKey('ForbiddenOu') -and $ForbiddenOu.Count -eq 0) {
             $ForbiddenOu = @($definition.ForbiddenOus)
         }
+        if (-not $PSBoundParameters.ContainsKey('IncludeContextGraph') -and [bool]$definition.IncludeContextGraph) {
+            $IncludeContextGraph = $true
+        }
+        if ([string]::IsNullOrWhiteSpace($ContextOutputPath) -and -not [string]::IsNullOrWhiteSpace([string]$definition.ContextOutputPath)) {
+            $ContextOutputPath = [string]$definition.ContextOutputPath
+        }
+        if ([string]::IsNullOrWhiteSpace($RelationshipOutputPath) -and -not [string]::IsNullOrWhiteSpace([string]$definition.RelationshipOutputPath)) {
+            $RelationshipOutputPath = [string]$definition.RelationshipOutputPath
+        }
+        if ([string]::IsNullOrWhiteSpace($ManifestOutputPath) -and -not [string]::IsNullOrWhiteSpace([string]$definition.ManifestOutputPath)) {
+            $ManifestOutputPath = [string]$definition.ManifestOutputPath
+        }
+        $savedSourceProfiles = @($definition.SourceProfiles)
     }
 
     $selectedPaths = @(Resolve-ShareSurferOwnershipSourcePaths -Path $Path -SourceFolder $SourceFolder -Interactive:$Interactive -BrowseForCsv:$BrowseForCsv)
@@ -74,13 +102,32 @@ function Join-ShareSurferOwnershipSources {
         $selectedForbiddenOus = @(Select-ShareSurferForbiddenOus -ExistingForbiddenOu $selectedForbiddenOus -AdLookupMode $AdLookupMode)
     }
 
-    $writtenDefinitionPath = ''
-    if (-not [string]::IsNullOrWhiteSpace($DefinitionPath)) {
-        $writtenDefinitionPath = Export-ShareSurferOwnershipImportDefinition -Path $DefinitionPath -SelectedCsvPaths $selectedPaths -SourceFolder $SourceFolder -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -Force
+    if ($IncludeContextGraph) {
+        $outputParent = Split-Path -Parent $OutputPath
+        if ([string]::IsNullOrWhiteSpace($outputParent)) {
+            $outputParent = (Get-Location).Path
+        }
+        if ([string]::IsNullOrWhiteSpace($ContextOutputPath)) {
+            $ContextOutputPath = Join-Path $outputParent 'ownership_context.csv'
+        }
+        if ([string]::IsNullOrWhiteSpace($RelationshipOutputPath)) {
+            $RelationshipOutputPath = Join-Path $outputParent 'ownership_relationships.csv'
+        }
+        if ([string]::IsNullOrWhiteSpace($ManifestOutputPath)) {
+            $ManifestOutputPath = Join-Path $outputParent 'ownership_import_manifest.csv'
+        }
     }
 
+    $writtenDefinitionPath = ''
     $mergedRows = [ordered]@{}
     $obsContextRows = @{}
+    $contextRows = New-Object System.Collections.ArrayList
+    $relationshipRows = New-Object System.Collections.ArrayList
+    $manifestRows = New-Object System.Collections.ArrayList
+    $sourceProfilesForDefinition = New-Object System.Collections.ArrayList
+    $savedSourceProfileMap = ConvertTo-ShareSurferOwnershipSourceProfileMap -SourceProfiles $savedSourceProfiles
+    $contextIndex = 0
+    $relationshipIndex = 0
     $sourceIndex = 0
     $sourceWarnings = New-Object System.Collections.Generic.List[string]
     foreach ($sourcePath in $selectedPaths) {
@@ -108,6 +155,28 @@ function Join-ShareSurferOwnershipSources {
             $fieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $fieldMap -SourcePath $sourcePath -ObsHeader $ObsHeader
         }
 
+        $savedSourceProfile = Get-ShareSurferOwnershipSavedSourceProfile -ProfileMap $savedSourceProfileMap -SourcePath $sourcePath
+        $sourceTypeOverride = ''
+        $authorityLevelOverride = ''
+        if ($SourceType.Count -ge $sourceIndex) {
+            $sourceTypeOverride = [string]$SourceType[$sourceIndex - 1]
+        }
+        elseif ($null -ne $savedSourceProfile -and $null -ne $savedSourceProfile.PSObject.Properties['SourceType']) {
+            $sourceTypeOverride = [string]$savedSourceProfile.SourceType
+        }
+        if ($AuthorityLevel.Count -ge $sourceIndex) {
+            $authorityLevelOverride = [string]$AuthorityLevel[$sourceIndex - 1]
+        }
+        elseif ($null -ne $savedSourceProfile -and $null -ne $savedSourceProfile.PSObject.Properties['AuthorityLevel']) {
+            $authorityLevelOverride = [string]$savedSourceProfile.AuthorityLevel
+        }
+
+        $sourceProfile = New-ShareSurferOwnershipSourceProfile -SourcePath $sourcePath -FieldMap $fieldMap -SourceType $sourceTypeOverride -AuthorityLevel $authorityLevelOverride -Warnings @($resolved.Warnings)
+        if ($Interactive -and $null -eq $savedSourceProfile) {
+            $sourceProfile = Read-ShareSurferOwnershipSourceProfile -SourcePath $sourcePath -FieldMap $fieldMap -InitialProfile $sourceProfile
+        }
+        [void]$sourceProfilesForDefinition.Add($sourceProfile)
+
         foreach ($warning in @($resolved.Warnings)) {
             if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
                 $sourceWarnings.Add(('{0}: {1}' -f $sourcePath, [string]$warning))
@@ -115,10 +184,27 @@ function Join-ShareSurferOwnershipSources {
         }
 
         $sourceRows = @(Import-Csv -LiteralPath $sourcePath)
+        $sourceContextCount = 0
+        $sourceRelationshipCount = 0
         $rowNumber = 1
         foreach ($sourceRow in $sourceRows) {
             $rowNumber++
             $incoming = New-ShareSurferOwnershipEnrichmentRow -SourceRow $sourceRow -FieldMap $fieldMap -SourcePath $sourcePath -SourceRowNumber $rowNumber -ObsAttribute $ObsAttribute
+            if ($IncludeContextGraph) {
+                foreach ($contextRow in @(New-ShareSurferOwnershipContextRows -SourceRow $sourceRow -FieldMap $fieldMap -SourceProfile $sourceProfile -SourcePath $sourcePath -SourceRowNumber $rowNumber)) {
+                    $contextIndex++
+                    $contextRow.ContextId = 'context-{0:d6}' -f $contextIndex
+                    [void]$contextRows.Add($contextRow)
+                    $sourceContextCount++
+                }
+                foreach ($relationshipRow in @(New-ShareSurferOwnershipRelationshipRows -SourceRow $sourceRow -FieldMap $fieldMap -SourceProfile $sourceProfile -SourcePath $sourcePath -SourceRowNumber $rowNumber)) {
+                    $relationshipIndex++
+                    $relationshipRow.RelationshipId = 'relationship-{0:d6}' -f $relationshipIndex
+                    [void]$relationshipRows.Add($relationshipRow)
+                    $sourceRelationshipCount++
+                }
+            }
+
             $obsKey = Get-ShareSurferOwnershipObsMergeKey -Row $incoming
             if (-not (Test-ShareSurferOwnershipStrongJoinKey -Row $incoming) -and -not [string]::IsNullOrWhiteSpace($obsKey)) {
                 if ($obsContextRows.ContainsKey($obsKey)) {
@@ -148,6 +234,20 @@ function Join-ShareSurferOwnershipSources {
             else {
                 $mergedRows[$key] = $incoming
             }
+        }
+
+        if ($IncludeContextGraph) {
+            [void]$manifestRows.Add([pscustomobject]@{
+                SourcePath = $sourcePath
+                SourceType = [string]$sourceProfile.SourceType
+                AuthorityLevel = [string]$sourceProfile.AuthorityLevel
+                PrimaryAnchor = [string]$sourceProfile.PrimaryAnchor
+                MappedFields = [string]$sourceProfile.MappedFields
+                RowCount = [string]$sourceRows.Count
+                ContextRowCount = [string]$sourceContextCount
+                RelationshipRowCount = [string]$sourceRelationshipCount
+                Warnings = [string]$sourceProfile.Warnings
+            })
         }
     }
 
@@ -192,15 +292,31 @@ function Join-ShareSurferOwnershipSources {
     }
 
     Export-ShareSurferCsv -Path $OutputPath -Columns (Get-ShareSurferOwnershipEnrichmentColumns) -Rows $enrichedRows
-    $reusableCommands = New-ShareSurferOwnershipEnrichmentReusableCommands -SourcePaths $selectedPaths -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -DefinitionPath $writtenDefinitionPath
+    if ($IncludeContextGraph) {
+        Export-ShareSurferCsv -Path $ContextOutputPath -Columns (Get-ShareSurferOwnershipContextColumns) -Rows $contextRows
+        Export-ShareSurferCsv -Path $RelationshipOutputPath -Columns (Get-ShareSurferOwnershipRelationshipColumns) -Rows $relationshipRows
+        Export-ShareSurferCsv -Path $ManifestOutputPath -Columns (Get-ShareSurferOwnershipImportManifestColumns) -Rows $manifestRows
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DefinitionPath)) {
+        $writtenDefinitionPath = Export-ShareSurferOwnershipImportDefinition -Path $DefinitionPath -SelectedCsvPaths $selectedPaths -SourceFolder $SourceFolder -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -IncludeContextGraph ([bool]$IncludeContextGraph) -ContextOutputPath $ContextOutputPath -RelationshipOutputPath $RelationshipOutputPath -ManifestOutputPath $ManifestOutputPath -SourceProfiles @($sourceProfilesForDefinition.ToArray()) -Force
+    }
+
+    $reusableCommands = New-ShareSurferOwnershipEnrichmentReusableCommands -SourcePaths $selectedPaths -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -DefinitionPath $writtenDefinitionPath -IncludeContextGraph:$IncludeContextGraph -ContextOutputPath $ContextOutputPath -RelationshipOutputPath $RelationshipOutputPath -ManifestOutputPath $ManifestOutputPath
     $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
 
     [pscustomobject]@{
         OutputPath = $OutputPath
+        ContextOutputPath = if ($IncludeContextGraph) { $ContextOutputPath } else { '' }
+        RelationshipOutputPath = if ($IncludeContextGraph) { $RelationshipOutputPath } else { '' }
+        ManifestOutputPath = if ($IncludeContextGraph) { $ManifestOutputPath } else { '' }
         DefinitionPath = $writtenDefinitionPath
         SourcePaths = (@($selectedPaths) -join '; ')
         SourceCount = $selectedPaths.Count
         RowCount = $enrichedRows.Count
+        ContextRowCount = $contextRows.Count
+        RelationshipRowCount = $relationshipRows.Count
+        ManifestRowCount = $manifestRows.Count
         MatchedCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Matched' }).Count
         AmbiguousCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Ambiguous' }).Count
         ForbiddenOuSkippedCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'ForbiddenOuSkipped' }).Count
@@ -651,4 +767,82 @@ function Read-ShareSurferOwnershipHeaderSelections {
 
     $resolved = Resolve-ShareSurferOwnershipHeaderMap -Headers $Headers -ObsHeader $ObsHeader -FieldMap (ConvertTo-ShareSurferOwnershipFieldMapHashtable -FieldMap ([pscustomobject]$fieldMap))
     $resolved.FieldMap
+}
+
+function Read-ShareSurferOwnershipSourceProfile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        $FieldMap,
+
+        [Parameter(Mandatory = $true)]
+        $InitialProfile
+    )
+
+    Write-Host ''
+    Write-Host ('Ownership source classification for {0}' -f $SourcePath)
+    Write-Host ('Detected source type: {0}' -f $InitialProfile.SourceType)
+    Write-Host ('Detected primary anchor: {0}' -f $InitialProfile.PrimaryAnchor)
+    Write-Host ('Mapped fields: {0}' -f $InitialProfile.MappedFields)
+
+    $sourceTypes = @(Get-ShareSurferOwnershipSourceTypes)
+    for ($index = 0; $index -lt $sourceTypes.Count; $index++) {
+        Write-Host ('  {0}. {1}' -f ($index + 1), $sourceTypes[$index])
+    }
+
+    $selectedSourceType = [string]$InitialProfile.SourceType
+    $sourceTypeAnswer = Read-Host -Prompt ('What does this CSV mostly describe? [{0}]' -f $selectedSourceType)
+    if (-not [string]::IsNullOrWhiteSpace($sourceTypeAnswer)) {
+        $trimmed = $sourceTypeAnswer.Trim()
+        $numericChoice = 0
+        if ([int]::TryParse($trimmed, [ref]$numericChoice) -and $numericChoice -ge 1 -and $numericChoice -le $sourceTypes.Count) {
+            $selectedSourceType = [string]$sourceTypes[$numericChoice - 1]
+        }
+        elseif ($sourceTypes -contains $trimmed) {
+            $selectedSourceType = $trimmed
+        }
+        else {
+            Write-Host ('Unrecognized source type "{0}"; keeping {1}.' -f $trimmed, $selectedSourceType)
+        }
+    }
+
+    $authorityLevels = @(Get-ShareSurferOwnershipAuthorityLevels)
+    $selectedAuthority = Get-ShareSurferOwnershipDefaultAuthorityLevel -SourceType $selectedSourceType
+    if (-not [string]::IsNullOrWhiteSpace([string]$InitialProfile.AuthorityLevel) -and [string]$InitialProfile.AuthorityLevel -ne 'Unknown') {
+        $selectedAuthority = [string]$InitialProfile.AuthorityLevel
+    }
+
+    Write-Host ''
+    for ($index = 0; $index -lt $authorityLevels.Count; $index++) {
+        Write-Host ('  {0}. {1}' -f ($index + 1), $authorityLevels[$index])
+    }
+
+    $authorityAnswer = Read-Host -Prompt ('How authoritative is this file? [{0}]' -f $selectedAuthority)
+    if (-not [string]::IsNullOrWhiteSpace($authorityAnswer)) {
+        $trimmed = $authorityAnswer.Trim()
+        $numericChoice = 0
+        if ([int]::TryParse($trimmed, [ref]$numericChoice) -and $numericChoice -ge 1 -and $numericChoice -le $authorityLevels.Count) {
+            $selectedAuthority = [string]$authorityLevels[$numericChoice - 1]
+        }
+        elseif ($authorityLevels -contains $trimmed) {
+            $selectedAuthority = $trimmed
+        }
+        else {
+            Write-Host ('Unrecognized authority "{0}"; keeping {1}.' -f $trimmed, $selectedAuthority)
+        }
+    }
+
+    $selectedAnchor = Get-ShareSurferOwnershipDefaultPrimaryAnchor -FieldMap $FieldMap -SourceType $selectedSourceType
+    if (-not [string]::IsNullOrWhiteSpace([string]$InitialProfile.PrimaryAnchor)) {
+        $selectedAnchor = [string]$InitialProfile.PrimaryAnchor
+    }
+
+    $anchorAnswer = Read-Host -Prompt ('Strongest anchor field [{0}]' -f $selectedAnchor)
+    if (-not [string]::IsNullOrWhiteSpace($anchorAnswer)) {
+        $selectedAnchor = $anchorAnswer.Trim()
+    }
+
+    New-ShareSurferOwnershipSourceProfile -SourcePath $SourcePath -FieldMap $FieldMap -SourceType $selectedSourceType -AuthorityLevel $selectedAuthority -PrimaryAnchor $selectedAnchor -Warnings @([string]$InitialProfile.Warnings)
 }

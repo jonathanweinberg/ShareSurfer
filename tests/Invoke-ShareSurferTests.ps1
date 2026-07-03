@@ -2592,6 +2592,53 @@ $tests = @(
         }
     },
     @{
+        Name = 'Join-ShareSurferOwnershipSources writes context graph rows for project OBS sources'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProjectContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProjectContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $definitionPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProjectContext-' + [guid]::NewGuid().ToString('N') + '.json')
+            $contextPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $relationshipPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipRelationships-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $manifestPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipImportManifest-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $sourcePath -Value @(
+                'OBS,ProjectCode,ProjectDescription,BusinessUnit,DataOwner',
+                'CORP.FIN.AP,FIN-AP,Accounts Payable modernization,Finance,Finance Operations'
+            ) -Encoding UTF8
+
+            $summary = Join-ShareSurferOwnershipSources `
+                -Path $sourcePath `
+                -OutputPath $outputPath `
+                -DefinitionPath $definitionPath `
+                -IncludeContextGraph `
+                -ContextOutputPath $contextPath `
+                -RelationshipOutputPath $relationshipPath `
+                -ManifestOutputPath $manifestPath `
+                -AdLookupMode DirectoryOnly `
+                -Force
+
+            $contextRows = @(Import-Csv -LiteralPath $contextPath)
+            $relationshipRows = @(Import-Csv -LiteralPath $relationshipPath)
+            $manifestRows = @(Import-Csv -LiteralPath $manifestPath)
+            $definition = Get-Content -LiteralPath $definitionPath -Raw | ConvertFrom-Json
+
+            Assert-Equal $summary.ContextRowCount 2 'Project/OBS source should emit project and OBS context rows.'
+            Assert-True (@($contextRows | Where-Object { $_.SourceType -eq 'ProjectContext' -and $_.EntityType -eq 'Project' -and $_.EntityKey -eq 'FIN-AP' }).Count -eq 1) 'Context rows should include the project entity.'
+            Assert-True (@($contextRows | Where-Object { $_.EntityType -eq 'OBS' -and $_.EntityKey -eq 'CORP.FIN.AP' }).Count -eq 1) 'Context rows should include the OBS entity.'
+            Assert-True (@($relationshipRows | Where-Object { $_.FromType -eq 'Project' -and $_.FromValue -eq 'FIN-AP' -and $_.RelationshipType -eq 'BelongsTo' -and $_.ToType -eq 'OBS' -and $_.ToValue -eq 'CORP.FIN.AP' }).Count -eq 1) 'Relationships should explain Project to OBS.'
+            Assert-True (@($relationshipRows | Where-Object { $_.FromType -eq 'OBS' -and $_.RelationshipType -eq 'ReviewedBy' -and $_.ToType -eq 'DataOwner' -and $_.ToValue -eq 'Finance Operations' }).Count -eq 1) 'Relationships should explain OBS reviewer hint.'
+            Assert-Equal $manifestRows[0].SourceType 'ProjectContext' 'Manifest should record inferred ProjectContext source type.'
+            Assert-Equal $manifestRows[0].PrimaryAnchor 'ProjectCode' 'Manifest should record ProjectCode as the primary anchor.'
+            Assert-Equal ([string]$definition.includeContextGraph) 'True' 'Definition should remember context graph mode.'
+            Assert-Equal $definition.sourceProfiles[0].sourceType 'ProjectContext' 'Definition should remember source profile type.'
+
+            $rerunOutputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProjectContextRerun-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $rerunSummary = Join-ShareSurferOwnershipSources -DefinitionPath $definitionPath -OutputPath $rerunOutputPath -Force
+            Assert-Equal $rerunSummary.ContextRowCount 2 'Definition rerun should reproduce context rows without interactive prompts.'
+            Assert-True (Test-Path -LiteralPath $rerunSummary.RelationshipOutputPath) 'Definition rerun should reproduce relationship output.'
+        }
+    },
+    @{
         Name = 'Join-ShareSurferOwnershipSources reruns from ownership import definition'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2755,6 +2802,118 @@ $tests = @(
             Assert-Equal $rows.Count 1 'Export should include ownership enrichment rows.'
             Assert-Equal $rows[0].ProjectCode 'AP-2026' 'Exported ownership enrichment should preserve project code.'
             Assert-Equal $rows[0].MatchStatus 'Matched' 'Exported ownership enrichment should preserve match status.'
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan exports ownership context graph evidence'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExportContextGraph-' + [guid]::NewGuid().ToString('N'))
+            $contextPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $relationshipPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipRelationships-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $manifestPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipImportManifest-' + [guid]::NewGuid().ToString('N') + '.csv')
+            @(
+                [pscustomobject]@{
+                    ContextId = 'context-000001'
+                    SourceType = 'ProjectContext'
+                    SourcePath = 'project-obs.csv'
+                    SourceRowNumber = '2'
+                    EntityType = 'Project'
+                    EntityKey = 'FIN-AP'
+                    EntityLabel = 'Accounts Payable modernization'
+                    OBS = 'CORP.FIN.AP'
+                    BusinessUnit = 'Finance'
+                    DataOwner = 'Finance Operations'
+                    OwnerMail = 'finance.owner@example.test'
+                    Project = 'Accounts Payable modernization'
+                    ProjectCode = 'FIN-AP'
+                    ProjectDescription = 'Modernize AP share cleanup and migration planning.'
+                    GroupName = ''
+                    PathPattern = ''
+                    AuthorityLevel = 'ReviewerHint'
+                    ConfidenceLabel = 'ProjectContextMatch'
+                    EvidenceReason = 'Source row describes a project, program, application, or initiative.'
+                    ImportWarnings = ''
+                }
+            ) | Export-Csv -LiteralPath $contextPath -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{
+                    RelationshipId = 'relationship-000001'
+                    SourceType = 'ProjectContext'
+                    SourcePath = 'project-obs.csv'
+                    SourceRowNumber = '2'
+                    FromType = 'Project'
+                    FromValue = 'FIN-AP'
+                    RelationshipType = 'BelongsTo'
+                    ToType = 'OBS'
+                    ToValue = 'CORP.FIN.AP'
+                    AuthorityLevel = 'ReviewerHint'
+                    ConfidenceLabel = 'ProjectContextMatch'
+                    EvidenceReason = 'Project source linked project or project code to OBS.'
+                }
+            ) | Export-Csv -LiteralPath $relationshipPath -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{
+                    SourcePath = 'project-obs.csv'
+                    SourceType = 'ProjectContext'
+                    AuthorityLevel = 'ReviewerHint'
+                    PrimaryAnchor = 'ProjectCode'
+                    MappedFields = 'OBS; BusinessUnit; DataOwner; OwnerMail; Project; ProjectCode; ProjectDescription'
+                    RowCount = '1'
+                    ContextRowCount = '1'
+                    RelationshipRowCount = '1'
+                    Warnings = ''
+                }
+            ) | Export-Csv -LiteralPath $manifestPath -NoTypeInformation -Encoding UTF8
+
+            Invoke-ShareSurferScan `
+                -InputObject (New-TestInventory) `
+                -OutputPath $outputPath `
+                -OwnershipContextPath $contextPath `
+                -OwnershipRelationshipPath $relationshipPath `
+                -OwnershipImportManifestPath $manifestPath `
+                -SkipIdentityEnrichment | Out-Null
+
+            $contextRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'ownership_context.csv'))
+            $relationshipRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'ownership_relationships.csv'))
+            $manifestRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'ownership_import_manifest.csv'))
+            $validation = Test-ShareSurferExport -ExportPath $outputPath
+
+            Assert-Equal $contextRows[0].EntityKey 'FIN-AP' 'Export should include ownership context rows.'
+            Assert-Equal $relationshipRows[0].RelationshipType 'BelongsTo' 'Export should include ownership relationship rows.'
+            Assert-Equal $manifestRows[0].SourceType 'ProjectContext' 'Export should include ownership import manifest rows.'
+            Assert-True $validation.IsValid 'Export validation should accept ownership context graph files.'
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan rejects malformed ownership context graph files'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExportBadContextGraph-' + [guid]::NewGuid().ToString('N'))
+            $badRelationshipPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferBadOwnershipRelationships-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $badRelationshipPath -Value @(
+                'FromType,FromValue,ToType,ToValue',
+                'Project,FIN-AP,OBS,CORP.FIN.AP'
+            ) -Encoding UTF8
+
+            $threw = $false
+            $message = ''
+            try {
+                Invoke-ShareSurferScan `
+                    -InputObject (New-TestInventory) `
+                    -OutputPath $outputPath `
+                    -OwnershipRelationshipPath $badRelationshipPath `
+                    -SkipIdentityEnrichment | Out-Null
+            }
+            catch {
+                $threw = $true
+                $message = [string]$_.Exception.Message
+            }
+
+            Assert-True $threw 'Scan should reject malformed ownership context graph files.'
+            Assert-True ($message -like '*ownership_relationships.csv*') 'Error should identify the malformed context graph file.'
+            Assert-True ($message -like '*Missing column(s)*') 'Error should identify missing schema columns.'
+            Assert-True ($message -like '*Join-ShareSurferOwnershipSources -IncludeContextGraph*') 'Error should tell the operator how to rebuild context graph files.'
         }
     },
     @{
@@ -6594,6 +6753,8 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Run once*' -and $commandRecipeText -like '*launcher itself*') 'Command recipes should explain the one launcher prompt boundary.'
             Assert-True ($commandRecipeText -like '*operator-assistant.plan.json*' -and $commandRecipeText -like '*operator-assistant-rerun.ps1*') 'Command recipes should show operator assistant plan and rerun outputs.'
             Assert-True ($commandRecipeText -like '*Join-ShareSurferOwnershipSources*') 'Command recipes should include multi-source ownership join guidance.'
+            Assert-True ($commandRecipeText -like '*-IncludeContextGraph*') 'Command recipes should show ownership context graph ingestion.'
+            Assert-True ($commandRecipeText -like '*ownership_context.csv*' -and $commandRecipeText -like '*ownership_relationships.csv*') 'Command recipes should name ownership context graph outputs.'
             Assert-True ($commandRecipeText -like '*ownership-import.definition.json*') 'Command recipes should show reusable ownership import definition output.'
             Assert-True ($commandRecipeText -like '*-ForbiddenOu*') 'Command recipes should show forbidden OU handling for AD ownership enrichment.'
             Assert-True ($commandRecipeText -like '*-OwnershipEnrichmentPath*') 'Command recipes should explain passing ownership enrichment into the scan.'
@@ -6622,6 +6783,8 @@ $tests = @(
             Assert-True ($adminOwnershipImportText -like '*Test-ShareSurferOwnershipSource*') 'Admin ownership import guide should document source testing.'
             Assert-True ($adminOwnershipImportText -like '*New-ShareSurferOwnershipMappingProfile*') 'Admin ownership import guide should document mapping profiles.'
             Assert-True ($adminOwnershipImportText -like '*Import-ShareSurferOwnershipSource*') 'Admin ownership import guide should document normalized import.'
+            Assert-True ($adminOwnershipImportText -like '*Project, OBS, Path, And Group Context Files*') 'Admin ownership import guide should document context graph ingestion.'
+            Assert-True ($adminOwnershipImportText -like '*Project -> OBS*' -and $adminOwnershipImportText -like '*OBS -> DataOwner*') 'Admin ownership import guide should explain project and OBS relationships.'
             Assert-True ($adminOwnershipImportText -like '*PotentialServiceAccount*') 'Admin ownership import guide should explain potential service-account-like flags.'
             Assert-True ($adminOwnershipImportText -like '*ReusableCommands*') 'Admin ownership import guide should explain reusable command output.'
             Assert-True ($adminOwnershipImportText -like '*-ReusableCommandPath*') 'Admin ownership import guide should document reusable command file output.'
@@ -6632,6 +6795,8 @@ $tests = @(
             Assert-True ($ownershipCsvIngestQuickReferenceText -like '*Test-ShareSurferOwnershipSource*') 'Ownership CSV ingest quick reference should show source testing.'
             Assert-True ($ownershipCsvIngestQuickReferenceText -like '*New-ShareSurferOwnershipMappingProfile*') 'Ownership CSV ingest quick reference should show mapping profile creation.'
             Assert-True ($ownershipCsvIngestQuickReferenceText -like '*Import-ShareSurferOwnershipSource*') 'Ownership CSV ingest quick reference should show normalized import.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*Include Project, OBS, Path, Or Group Context*') 'Ownership CSV ingest quick reference should show context graph ingestion.'
+            Assert-True ($ownershipCsvIngestQuickReferenceText -like '*ownership_import_manifest.csv*') 'Ownership CSV ingest quick reference should name the context graph manifest.'
             Assert-True ($ownershipCsvIngestQuickReferenceText -like '*ownership-import-rerun.ps1*') 'Ownership CSV ingest quick reference should show reusable rerun script usage.'
             Assert-True ($ownershipCsvIngestQuickReferenceText -like '*PotentialServiceAccount=True*') 'Ownership CSV ingest quick reference should explain potential service-account review flags.'
             Assert-True (Test-Path -LiteralPath $glossary) 'Documentation should include a first-run glossary.'

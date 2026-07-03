@@ -545,6 +545,59 @@ export const demoSnapshot: RawSnapshot = {
         ImportWarnings: "Matched account is under a forbidden OU"
       }
     ],
+    ownership_context: [
+      {
+        ContextId: "context-000001",
+        SourceType: "ProjectContext",
+        SourcePath: "project-owners.csv",
+        SourceRowNumber: "2",
+        EntityType: "Project",
+        EntityKey: "FIN-AP",
+        EntityLabel: "Accounts Payable modernization",
+        OBS: "CORP.FIN.AP",
+        BusinessUnit: "Finance",
+        DataOwner: "Finance Operations",
+        OwnerMail: "finance-ops@example.test",
+        Project: "Accounts Payable modernization",
+        ProjectCode: "FIN-AP",
+        ProjectDescription: "Modernize AP share cleanup and migration planning.",
+        GroupName: "",
+        PathPattern: "",
+        AuthorityLevel: "ReviewerHint",
+        ConfidenceLabel: "ProjectContextMatch",
+        EvidenceReason: "Source row describes a project, program, application, or initiative.",
+        ImportWarnings: ""
+      }
+    ],
+    ownership_relationships: [
+      {
+        RelationshipId: "relationship-000001",
+        SourceType: "ProjectContext",
+        SourcePath: "project-owners.csv",
+        SourceRowNumber: "2",
+        FromType: "Project",
+        FromValue: "FIN-AP",
+        RelationshipType: "BelongsTo",
+        ToType: "OBS",
+        ToValue: "CORP.FIN.AP",
+        AuthorityLevel: "ReviewerHint",
+        ConfidenceLabel: "ProjectContextMatch",
+        EvidenceReason: "Project source linked project or project code to OBS."
+      }
+    ],
+    ownership_import_manifest: [
+      {
+        SourcePath: "project-owners.csv",
+        SourceType: "ProjectContext",
+        AuthorityLevel: "ReviewerHint",
+        PrimaryAnchor: "ProjectCode",
+        MappedFields: "OBS; BusinessUnit; DataOwner; OwnerMail; Project; ProjectCode; ProjectDescription",
+        RowCount: "1",
+        ContextRowCount: "1",
+        RelationshipRowCount: "1",
+        Warnings: ""
+      }
+    ],
     owner_risk_pivots: [
       {
         BusinessUnit: "Finance",

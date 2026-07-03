@@ -150,6 +150,54 @@ Join-ShareSurferOwnershipSources `
   -Force
 ```
 
+## 7. Include Project, OBS, Path, Or Group Context
+
+If one of the CSVs describes projects, applications, path prefixes, groups, or OBS/business structure instead of people, add `-IncludeContextGraph`.
+
+Example project/OBS file:
+
+```csv
+OBS,ProjectCode,ProjectDescription,BusinessUnit,DataOwner
+CORP.FIN.AP,FIN-AP,Accounts Payable modernization,Finance,Finance Operations
+```
+
+Run:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -Interactive `
+  -BrowseForCsv `
+  -SourceFolder 'C:\ShareSurfer\inputs' `
+  -DefinitionPath $definitionPath `
+  -OutputPath $enrichmentPath `
+  -IncludeContextGraph `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -ReusableCommandPath $enrichmentRerunPath `
+  -Force
+```
+
+ShareSurfer writes three extra files beside `ownership-enrichment.csv`:
+
+| File | Purpose |
+| --- | --- |
+| `ownership_context.csv` | OBS, project, path, group, business-unit, and owner context rows. |
+| `ownership_relationships.csv` | Explainable links such as `Project -> OBS` and `OBS -> DataOwner`. |
+| `ownership_import_manifest.csv` | Source type, mapped fields, authority level, row counts, and warnings. |
+
+Pass them into the scan when you want the export and dashboard to carry those context clues:
+
+```powershell
+Invoke-ShareSurferScan `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath 'C:\ShareSurfer\exports\scan-001' `
+  -ObsAttribute 'extensionAttribute10' `
+  -OwnershipEnrichmentPath $enrichmentPath `
+  -OwnershipContextPath 'C:\ShareSurfer\inputs\ownership_context.csv' `
+  -OwnershipRelationshipPath 'C:\ShareSurfer\inputs\ownership_relationships.csv' `
+  -OwnershipImportManifestPath 'C:\ShareSurfer\inputs\ownership_import_manifest.csv'
+```
+
 ## Fields ShareSurfer Understands
 
 Useful fields include:
