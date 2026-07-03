@@ -75,9 +75,11 @@ Both `Test-Path` commands should return `True`. If either returns `False`, check
 
 ## Recipe 1A: Generate a Guided Startup Plan
 
-Use this when you want ShareSurfer to ask the first-run questions, unblock local PowerShell files, save the startup choices as JSON, and write the operator plan and rerun script before you collect data. The startup script does not scan shares or change permissions. It writes `sharesurfer-startup.config.json`, `operator-assistant.plan.json`, and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. By default the rerun script also runs intensive share-permission diagnostics before the scan and writes the package under `$exportPath\share-permission-diagnostics`. Optional CSV paths are only used by the rerun script when those files exist.
+Use this when you want ShareSurfer to ask the first-run questions, unblock local PowerShell files, check for optional ownership files, save the startup choices as JSON, and write the operator plan and rerun script before you collect data. The startup script does not scan shares or change permissions. It writes `sharesurfer-startup.config.json`, `operator-assistant.plan.json`, and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. By default the rerun script also runs intensive share-permission diagnostics before the scan and writes the package under `$exportPath\share-permission-diagnostics`. Optional CSV paths are only used by the rerun script when those files exist.
 
 When run interactively, the startup script offers to show the generated JSON/plan/rerun files and then asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to `No`.
+
+If `ownership-enrichment.csv` is missing, interactive startup can offer to launch the same `Join-ShareSurferOwnershipSources -Interactive -BrowseForCsv -IncludeContextGraph` workflow shown in Recipe 2A. That creates the enrichment, context graph, manifest, definition JSON, and reusable ownership import rerun script before startup continues. If `owner-mapping.csv` is missing, startup can add a post-scan `New-ShareSurferOwnerMappingDraft` step to the generated rerun script so the first scan can produce `owner-mapping-draft.csv` for an admin to fill and save as `owner-mapping.csv`.
 
 The easiest release-root launcher is:
 
@@ -121,7 +123,7 @@ Start-ShareSurferStartup `
   -Force
 ```
 
-Open `operator-assistant-rerun.ps1` and review it before running. The script imports the module, optionally runs `Invoke-ShareSurferSharePermissionDiagnostic`, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, and packages the standalone dashboard from the validated export folder. If share permissions are missing or confusing, open `$exportPath\share-permission-diagnostics\share_permission_diagnostics.md` first. For SAN or appliance shares that return a remote server-local path such as `C:\Public\Share`, the diagnostic records the returned path, checks whether it exists on the collector, and falls back to the target UNC path automatically when needed.
+Open `operator-assistant-rerun.ps1` and review it before running. The script imports the module, optionally runs `Invoke-ShareSurferSharePermissionDiagnostic`, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, optionally creates an owner mapping draft after validation, and packages the standalone dashboard from the validated export folder. If share permissions are missing or confusing, open `$exportPath\share-permission-diagnostics\share_permission_diagnostics.md` first. For SAN or appliance shares that return a remote server-local path such as `C:\Public\Share`, the diagnostic records the returned path, checks whether it exists on the collector, and falls back to the target UNC path automatically when needed.
 
 ## Recipe 2: Create Optional Input CSVs
 

@@ -30,6 +30,12 @@ function Start-ShareSurferStartup {
 
         [string] $OwnershipEnrichmentPath = '',
 
+        [string] $OwnershipContextPath = '',
+
+        [string] $OwnershipRelationshipPath = '',
+
+        [string] $OwnershipImportManifestPath = '',
+
         [string] $DiscountedPrincipalPath = '',
 
         [string] $HandoffPath = '',
@@ -47,6 +53,8 @@ function Start-ShareSurferStartup {
         [switch] $Interactive,
 
         [switch] $SkipUnblock,
+
+        [switch] $SkipOwnershipSetup,
 
         [switch] $NoCreateMissingFolders,
 
@@ -82,6 +90,9 @@ function Start-ShareSurferStartup {
             $configOptionalInputsLoaded = $true
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownerMappingPath'] -and -not $boundParameters.ContainsKey('OwnerMappingPath')) { $OwnerMappingPath = [string]$definition.optionalInputs.ownerMappingPath }
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipEnrichmentPath'] -and -not $boundParameters.ContainsKey('OwnershipEnrichmentPath')) { $OwnershipEnrichmentPath = [string]$definition.optionalInputs.ownershipEnrichmentPath }
+            if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipContextPath'] -and -not $boundParameters.ContainsKey('OwnershipContextPath')) { $OwnershipContextPath = [string]$definition.optionalInputs.ownershipContextPath }
+            if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipRelationshipPath'] -and -not $boundParameters.ContainsKey('OwnershipRelationshipPath')) { $OwnershipRelationshipPath = [string]$definition.optionalInputs.ownershipRelationshipPath }
+            if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipImportManifestPath'] -and -not $boundParameters.ContainsKey('OwnershipImportManifestPath')) { $OwnershipImportManifestPath = [string]$definition.optionalInputs.ownershipImportManifestPath }
             if ($null -ne $definition.optionalInputs.PSObject.Properties['discountedPrincipalPath'] -and -not $boundParameters.ContainsKey('DiscountedPrincipalPath')) { $DiscountedPrincipalPath = [string]$definition.optionalInputs.discountedPrincipalPath }
         }
         if ($null -ne $definition.PSObject.Properties['nonpermissive'] -and $null -ne $definition.nonpermissive.PSObject.Properties['handoffPath'] -and -not $boundParameters.ContainsKey('HandoffPath')) {
@@ -125,6 +136,14 @@ function Start-ShareSurferStartup {
         $ReusableCommandPath = Join-Path $InputRoot 'operator-assistant-rerun.ps1'
     }
 
+    $ownershipSetupSummary = New-ShareSurferStartupOwnershipSetupSummary `
+        -OwnerMappingPath $OwnerMappingPath `
+        -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -OwnershipContextPath $OwnershipContextPath `
+        -OwnershipRelationshipPath $OwnershipRelationshipPath `
+        -OwnershipImportManifestPath $OwnershipImportManifestPath `
+        -Skipped:$SkipOwnershipSetup
+
     if ($Interactive) {
         $EnvironmentMode = Read-ShareSurferStartupChoice -Prompt 'Startup path' -Value $EnvironmentMode -Choices @('Permissive', 'Nonpermissive')
         $ReleaseRoot = Read-ShareSurferAssistantText -Prompt 'ShareSurfer release root' -Value $ReleaseRoot
@@ -144,6 +163,23 @@ function Start-ShareSurferStartup {
         $OwnerMappingPath = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
         $OwnershipEnrichmentPath = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
         $DiscountedPrincipalPath = Read-ShareSurferOptionalInputPath -Prompt 'Discounted principals CSV path' -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
+        $ownershipSetupSummary = Invoke-ShareSurferStartupOwnershipSetup `
+            -InputRoot $InputRoot `
+            -OwnerMappingPath $OwnerMappingPath `
+            -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+            -OwnershipContextPath $OwnershipContextPath `
+            -OwnershipRelationshipPath $OwnershipRelationshipPath `
+            -OwnershipImportManifestPath $OwnershipImportManifestPath `
+            -ObsAttribute $ObsAttribute `
+            -AdLookupMode $AdLookupMode `
+            -SkipOwnershipSetup:$SkipOwnershipSetup `
+            -NoCreateMissingFolders:$NoCreateMissingFolders `
+            -Force:$Force
+        $OwnerMappingPath = [string]$ownershipSetupSummary.OwnerMappingPath
+        $OwnershipEnrichmentPath = [string]$ownershipSetupSummary.OwnershipEnrichmentPath
+        $OwnershipContextPath = [string]$ownershipSetupSummary.OwnershipContextPath
+        $OwnershipRelationshipPath = [string]$ownershipSetupSummary.OwnershipRelationshipPath
+        $OwnershipImportManifestPath = [string]$ownershipSetupSummary.OwnershipImportManifestPath
         if ($EnvironmentMode -eq 'Nonpermissive') {
             if ([string]::IsNullOrWhiteSpace($HandoffPath)) {
                 $HandoffPath = Join-Path (Join-Path (Split-Path -Parent $InputRoot) 'handoff') 'scan-001.zip'
@@ -163,9 +199,24 @@ function Start-ShareSurferStartup {
         if (-not $boundParameters.ContainsKey('OwnershipEnrichmentPath')) {
             $OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
         }
+        if (-not $boundParameters.ContainsKey('OwnershipContextPath')) {
+            $OwnershipContextPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_context.csv' -Value $OwnershipContextPath
+        }
+        if (-not $boundParameters.ContainsKey('OwnershipRelationshipPath')) {
+            $OwnershipRelationshipPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_relationships.csv' -Value $OwnershipRelationshipPath
+        }
+        if (-not $boundParameters.ContainsKey('OwnershipImportManifestPath')) {
+            $OwnershipImportManifestPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_import_manifest.csv' -Value $OwnershipImportManifestPath
+        }
         if (-not $boundParameters.ContainsKey('DiscountedPrincipalPath')) {
             $DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
         }
+        $ownershipSetupSummary = New-ShareSurferStartupOwnershipSetupSummary `
+            -OwnerMappingPath $OwnerMappingPath `
+            -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+            -OwnershipContextPath $OwnershipContextPath `
+            -OwnershipRelationshipPath $OwnershipRelationshipPath `
+            -OwnershipImportManifestPath $OwnershipImportManifestPath
     }
 
     if (@('Permissive', 'Nonpermissive') -notcontains $EnvironmentMode) {
@@ -198,7 +249,13 @@ function Start-ShareSurferStartup {
         -ManagerIdentityFormat $ManagerIdentityFormat `
         -OwnerMappingPath $OwnerMappingPath `
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -OwnershipContextPath $OwnershipContextPath `
+        -OwnershipRelationshipPath $OwnershipRelationshipPath `
+        -OwnershipImportManifestPath $OwnershipImportManifestPath `
         -DiscountedPrincipalPath $DiscountedPrincipalPath `
+        -CreateOwnerMappingDraftAfterScan:([bool]$ownershipSetupSummary.CreateOwnerMappingDraftAfterScan) `
+        -OwnerMappingDraftPath ([string]$ownershipSetupSummary.OwnerMappingDraftPath) `
+        -OwnerMappingDraftReusableCommandPath ([string]$ownershipSetupSummary.OwnerMappingDraftReusableCommandPath) `
         -PlanPath $PlanPath `
         -ReusableCommandPath $ReusableCommandPath `
         -IncludeFiles:$IncludeFiles `
@@ -212,6 +269,9 @@ function Start-ShareSurferStartup {
         -InputRoot $InputRoot `
         -OwnerMappingPath $OwnerMappingPath `
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -OwnershipContextPath $OwnershipContextPath `
+        -OwnershipRelationshipPath $OwnershipRelationshipPath `
+        -OwnershipImportManifestPath $OwnershipImportManifestPath `
         -DiscountedPrincipalPath $DiscountedPrincipalPath
 
     $startupReplayCommand = 'Start-ShareSurferStartup -ConfigPath {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $SaveConfigPath)
@@ -236,8 +296,12 @@ function Start-ShareSurferStartup {
         optionalInputs = [ordered]@{
             ownerMappingPath = $OwnerMappingPath
             ownershipEnrichmentPath = $OwnershipEnrichmentPath
+            ownershipContextPath = $OwnershipContextPath
+            ownershipRelationshipPath = $OwnershipRelationshipPath
+            ownershipImportManifestPath = $OwnershipImportManifestPath
             discountedPrincipalPath = $DiscountedPrincipalPath
         }
+        ownershipSetup = $ownershipSetupSummary
         optionalInputDiscovery = $optionalInputDiscovery
         nonpermissive = [ordered]@{
             handoffPath = $HandoffPath
@@ -247,6 +311,10 @@ function Start-ShareSurferStartup {
             startupConfigPath = $SaveConfigPath
             operatorPlanPath = $assistantSummary.PlanPath
             operatorReusableCommandPath = $assistantSummary.ReusableCommandPath
+            ownershipImportDefinitionPath = [string]$ownershipSetupSummary.OwnershipImportDefinitionPath
+            ownershipImportReusableCommandPath = [string]$ownershipSetupSummary.OwnershipImportReusableCommandPath
+            ownerMappingDraftPath = [string]$ownershipSetupSummary.OwnerMappingDraftPath
+            ownerMappingDraftReusableCommandPath = [string]$ownershipSetupSummary.OwnerMappingDraftReusableCommandPath
         }
         commands = [ordered]@{
             startupReplay = $startupReplayCommand
@@ -287,6 +355,13 @@ function Start-ShareSurferStartup {
         ObsAttribute = $ObsAttribute
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
+        OwnerMappingPath = $OwnerMappingPath
+        OwnershipEnrichmentPath = $OwnershipEnrichmentPath
+        OwnershipContextPath = $OwnershipContextPath
+        OwnershipRelationshipPath = $OwnershipRelationshipPath
+        OwnershipImportManifestPath = $OwnershipImportManifestPath
+        DiscountedPrincipalPath = $DiscountedPrincipalPath
+        OwnershipSetup = $ownershipSetupSummary
         IncludeFiles = [bool]$IncludeFiles
         IncludeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         SkipIdentityEnrichment = [bool]$SkipIdentityEnrichment
@@ -311,6 +386,155 @@ function Start-ShareSurferStartup {
             'Reuse the startup JSON config to regenerate the same startup pattern later.'
         )
     }
+}
+
+function New-ShareSurferStartupOwnershipSetupSummary {
+    param(
+        [string] $OwnerMappingPath = '',
+
+        [string] $OwnershipEnrichmentPath = '',
+
+        [string] $OwnershipContextPath = '',
+
+        [string] $OwnershipRelationshipPath = '',
+
+        [string] $OwnershipImportManifestPath = '',
+
+        [switch] $Skipped
+    )
+
+    [pscustomobject]@{
+        Skipped = [bool]$Skipped
+        OwnershipEnrichmentOffered = $false
+        OwnershipEnrichmentBuilt = $false
+        OwnerMappingDraftOffered = $false
+        CreateOwnerMappingDraftAfterScan = $false
+        OwnerMappingPath = $OwnerMappingPath
+        OwnershipEnrichmentPath = $OwnershipEnrichmentPath
+        OwnershipContextPath = $OwnershipContextPath
+        OwnershipRelationshipPath = $OwnershipRelationshipPath
+        OwnershipImportManifestPath = $OwnershipImportManifestPath
+        OwnershipImportDefinitionPath = ''
+        OwnershipImportReusableCommandPath = ''
+        OwnerMappingDraftPath = ''
+        OwnerMappingDraftReusableCommandPath = ''
+        Message = ''
+    }
+}
+
+function Invoke-ShareSurferStartupOwnershipSetup {
+    param(
+        [string] $InputRoot = '',
+
+        [string] $OwnerMappingPath = '',
+
+        [string] $OwnershipEnrichmentPath = '',
+
+        [string] $OwnershipContextPath = '',
+
+        [string] $OwnershipRelationshipPath = '',
+
+        [string] $OwnershipImportManifestPath = '',
+
+        [string] $ObsAttribute = 'extensionAttribute10',
+
+        [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
+        [string] $AdLookupMode = 'Auto',
+
+        [switch] $SkipOwnershipSetup,
+
+        [switch] $NoCreateMissingFolders,
+
+        [switch] $Force
+    )
+
+    $summary = New-ShareSurferStartupOwnershipSetupSummary `
+        -OwnerMappingPath $OwnerMappingPath `
+        -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -OwnershipContextPath $OwnershipContextPath `
+        -OwnershipRelationshipPath $OwnershipRelationshipPath `
+        -OwnershipImportManifestPath $OwnershipImportManifestPath `
+        -Skipped:$SkipOwnershipSetup
+
+    if ($SkipOwnershipSetup) {
+        $summary.Message = 'Ownership setup prompts were skipped.'
+        return $summary
+    }
+
+    $expectedOwnerMappingPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName 'owner-mapping.csv'
+    $expectedOwnershipEnrichmentPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv'
+    $expectedOwnershipContextPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName 'ownership_context.csv'
+    $expectedOwnershipRelationshipPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName 'ownership_relationships.csv'
+    $expectedOwnershipImportManifestPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName 'ownership_import_manifest.csv'
+
+    $enrichmentExists = (Test-ShareSurferOptionalInputFile -Path $OwnershipEnrichmentPath) -or (Test-ShareSurferOptionalInputFile -Path $expectedOwnershipEnrichmentPath)
+    if (-not $enrichmentExists) {
+        $summary.OwnershipEnrichmentOffered = $true
+        Write-Host ''
+        Write-Host 'Ownership enrichment was not found. This optional setup can combine HR, OBS, project, or ownership CSVs before the scan.'
+        Write-Host 'It can also save a reusable ownership import definition so the interview does not have to be repeated next time.'
+        $runOwnershipImport = Read-ShareSurferStartupBoolean -Prompt 'Build ownership enrichment now from CSV files?' -Value $false
+        if ($runOwnershipImport) {
+            $outputPath = if (-not [string]::IsNullOrWhiteSpace($OwnershipEnrichmentPath)) { $OwnershipEnrichmentPath } else { $expectedOwnershipEnrichmentPath }
+            $contextOutputPath = if (-not [string]::IsNullOrWhiteSpace($OwnershipContextPath)) { $OwnershipContextPath } else { $expectedOwnershipContextPath }
+            $relationshipOutputPath = if (-not [string]::IsNullOrWhiteSpace($OwnershipRelationshipPath)) { $OwnershipRelationshipPath } else { $expectedOwnershipRelationshipPath }
+            $manifestOutputPath = if (-not [string]::IsNullOrWhiteSpace($OwnershipImportManifestPath)) { $OwnershipImportManifestPath } else { $expectedOwnershipImportManifestPath }
+            $definitionPath = Join-Path $InputRoot 'ownership-import.definition.json'
+            $reusableCommandPath = Join-Path $InputRoot 'ownership-import-rerun.ps1'
+
+            try {
+                Ensure-ShareSurferLocalDirectory -Path $InputRoot -Purpose 'ownership input' -NoCreateMissingFolders:$NoCreateMissingFolders | Out-Null
+                $importSummary = Join-ShareSurferOwnershipSources `
+                    -SourceFolder $InputRoot `
+                    -BrowseForCsv `
+                    -Interactive `
+                    -OutputPath $outputPath `
+                    -IncludeContextGraph `
+                    -ContextOutputPath $contextOutputPath `
+                    -RelationshipOutputPath $relationshipOutputPath `
+                    -ManifestOutputPath $manifestOutputPath `
+                    -DefinitionPath $definitionPath `
+                    -ReusableCommandPath $reusableCommandPath `
+                    -ObsAttribute $ObsAttribute `
+                    -AdLookupMode $AdLookupMode `
+                    -Force:$Force
+
+                $summary.OwnershipEnrichmentBuilt = $true
+                $summary.OwnershipEnrichmentPath = [string]$importSummary.OutputPath
+                $summary.OwnershipContextPath = [string]$importSummary.ContextOutputPath
+                $summary.OwnershipRelationshipPath = [string]$importSummary.RelationshipOutputPath
+                $summary.OwnershipImportManifestPath = [string]$importSummary.ManifestOutputPath
+                $summary.OwnershipImportDefinitionPath = [string]$importSummary.DefinitionPath
+                $summary.OwnershipImportReusableCommandPath = [string]$importSummary.ReusableCommandPath
+                $summary.Message = 'Ownership enrichment was built before startup continued.'
+                Write-Host ('Ownership enrichment ready: {0}' -f $summary.OwnershipEnrichmentPath)
+            }
+            catch {
+                $summary.Message = ('Ownership enrichment setup did not complete: {0}' -f $_.Exception.Message)
+                Write-Warning $summary.Message
+            }
+        }
+    }
+
+    $ownerMappingExists = (Test-ShareSurferOptionalInputFile -Path $OwnerMappingPath) -or (Test-ShareSurferOptionalInputFile -Path $expectedOwnerMappingPath)
+    if (-not $ownerMappingExists) {
+        $summary.OwnerMappingDraftOffered = $true
+        Write-Host ''
+        Write-Host 'Owner mapping was not found. A useful owner-mapping draft usually needs scan output, so ShareSurfer can create it after the scan finishes.'
+        Write-Host 'The draft will still need a person to fill Owner and BusinessUnit before it is used for a final owner/business-unit report.'
+        $createDraft = Read-ShareSurferStartupBoolean -Prompt 'Add post-scan owner-mapping draft creation to the generated rerun script?' -Value $true
+        if ($createDraft) {
+            $summary.CreateOwnerMappingDraftAfterScan = $true
+            $summary.OwnerMappingDraftPath = Join-Path $InputRoot 'owner-mapping-draft.csv'
+            $summary.OwnerMappingDraftReusableCommandPath = Join-Path $InputRoot 'owner-mapping-draft-rerun.ps1'
+            if ([string]::IsNullOrWhiteSpace($summary.Message)) {
+                $summary.Message = 'Owner-mapping draft creation will run after the first scan.'
+            }
+        }
+    }
+
+    $summary.OwnerMappingPath = $OwnerMappingPath
+    $summary
 }
 
 function Invoke-ShareSurferStartupPostPlanHandoff {

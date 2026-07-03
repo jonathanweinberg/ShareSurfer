@@ -3006,6 +3006,9 @@ $tests = @(
             $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
             $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
             $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+            $ownershipContextPath = Join-Path $inputRoot 'ownership_context.csv'
+            $ownershipRelationshipPath = Join-Path $inputRoot 'ownership_relationships.csv'
+            $ownershipImportManifestPath = Join-Path $inputRoot 'ownership_import_manifest.csv'
             $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
             $summary = Start-ShareSurferOperatorAssistant `
@@ -3019,6 +3022,9 @@ $tests = @(
                 -ManagerIdentityFormat MailTo `
                 -OwnerMappingPath $ownerMappingPath `
                 -OwnershipEnrichmentPath $ownershipEnrichmentPath `
+                -OwnershipContextPath $ownershipContextPath `
+                -OwnershipRelationshipPath $ownershipRelationshipPath `
+                -OwnershipImportManifestPath $ownershipImportManifestPath `
                 -DiscountedPrincipalPath $discountedPrincipalPath `
                 -PlanPath $planPath `
                 -ReusableCommandPath $rerunPath `
@@ -3037,12 +3043,19 @@ $tests = @(
             Assert-Equal $plan.adLookupMode 'DirectoryOnly' 'Assistant plan should preserve AD lookup mode.'
             Assert-Equal $plan.includeSharePermissionDiagnostics $true 'Assistant plan should enable share-permission diagnostics by default.'
             Assert-Equal $plan.optionalInputs.ownerMappingPath $ownerMappingPath 'Assistant plan should preserve owner mapping path.'
+            Assert-Equal $plan.optionalInputs.ownershipEnrichmentPath $ownershipEnrichmentPath 'Assistant plan should preserve ownership enrichment path.'
+            Assert-Equal $plan.optionalInputs.ownershipContextPath $ownershipContextPath 'Assistant plan should preserve ownership context path.'
+            Assert-Equal $plan.optionalInputs.ownershipRelationshipPath $ownershipRelationshipPath 'Assistant plan should preserve ownership relationship path.'
+            Assert-Equal $plan.optionalInputs.ownershipImportManifestPath $ownershipImportManifestPath 'Assistant plan should preserve ownership import manifest path.'
             Assert-True ([string]$plan.commands.sharePermissionDiagnostics -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Assistant plan should include a share-permission diagnostic command preview.'
             Assert-True ([string]$plan.commands.sharePermissionDiagnostics -like '*share-permission-diagnostics*') 'Diagnostic command preview should show the diagnostic output folder.'
             Assert-True ([string]$plan.commands.portProtocolAssessment -like '*Invoke-ShareSurferPortProtocolAssessment*') 'Assistant plan should include a port/protocol assessment command preview.'
             Assert-True ([string]$plan.commands.portProtocolAssessment -like '*-OutputPath*') 'Port/protocol assessment command preview should write beside the export.'
             Assert-True ([string]$plan.commands.scan -like '*Invoke-ShareSurferScan*') 'Assistant plan should include a scan command preview.'
             Assert-True ([string]$plan.commands.scan -like '*-OwnershipEnrichmentPath*') 'Scan command preview should show ownership enrichment when provided.'
+            Assert-True ([string]$plan.commands.scan -like '*-OwnershipContextPath*') 'Scan command preview should show ownership context when provided.'
+            Assert-True ([string]$plan.commands.scan -like '*-OwnershipRelationshipPath*') 'Scan command preview should show ownership relationships when provided.'
+            Assert-True ([string]$plan.commands.scan -like '*-OwnershipImportManifestPath*') 'Scan command preview should show ownership import manifest when provided.'
             Assert-True ([string]$plan.commands.validate -like '*Test-ShareSurferExport*') 'Assistant plan should include export validation command preview.'
             Assert-True ([string]$plan.commands.packageStandaloneDashboard -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Assistant plan should include standalone dashboard packaging command preview.'
             Assert-True ([string]$plan.commands.optionalInputBehavior -like '*rerun script is authoritative*') 'Assistant plan should explain that optional CSV path handling is conditional in the rerun script.'
@@ -3060,6 +3073,9 @@ $tests = @(
             Assert-True ($scriptText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Reusable script should package the standalone dashboard.'
             Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownerMappingPath*') 'Reusable script should only pass optional owner mapping when the file exists.'
             Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownershipEnrichmentPath*') 'Reusable script should only pass optional ownership enrichment when the file exists.'
+            Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownershipContextPath*') 'Reusable script should only pass optional ownership context when the file exists.'
+            Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownershipRelationshipPath*') 'Reusable script should only pass optional ownership relationships when the file exists.'
+            Assert-True ($scriptText -like '*Test-Path -LiteralPath $ownershipImportManifestPath*') 'Reusable script should only pass optional ownership import manifest when the file exists.'
             Assert-True ($scriptText -like '*Test-Path -LiteralPath $discountedPrincipalPath*') 'Reusable script should only pass optional discounted principals when the file exists.'
 
             $threw = $false
@@ -3111,6 +3127,54 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurferOperatorAssistant can add post-scan owner mapping draft creation'
+        Body = {
+            Import-Module $moduleManifest -Force
+
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOperatorAssistantOwnerDraft-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'exports\finance-001'
+            $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $planPath = Join-Path $inputRoot 'operator-assistant.plan.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            $draftPath = Join-Path $inputRoot 'owner-mapping-draft.csv'
+            $draftRerunPath = Join-Path $inputRoot 'owner-mapping-draft-rerun.ps1'
+            $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
+            $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
+
+            $summary = Start-ShareSurferOperatorAssistant `
+                -ReleaseRoot $releaseRoot `
+                -InputRoot $inputRoot `
+                -ExportPath $exportPath `
+                -StandaloneDashboardPath $dashboardPath `
+                -TargetPath '\\files01\Finance' `
+                -ObsAttribute 'info' `
+                -AdLookupMode DirectoryOnly `
+                -PlanPath $planPath `
+                -ReusableCommandPath $rerunPath `
+                -CreateOwnerMappingDraftAfterScan `
+                -OwnerMappingDraftPath $draftPath `
+                -OwnerMappingDraftReusableCommandPath $draftRerunPath `
+                -Force
+
+            $plan = Get-Content -LiteralPath $planPath -Raw | ConvertFrom-Json
+            $scriptText = Get-Content -LiteralPath $rerunPath -Raw
+
+            Assert-Equal $summary.CreateOwnerMappingDraftAfterScan $true 'Assistant summary should report post-scan owner mapping draft creation.'
+            Assert-Equal $summary.OwnerMappingDraftPath $draftPath 'Assistant summary should preserve requested owner mapping draft path.'
+            Assert-Equal $summary.OwnerMappingDraftReusableCommandPath $draftRerunPath 'Assistant summary should preserve requested owner mapping draft rerun path.'
+            Assert-Equal $plan.generatedFiles.ownerMappingDraftPath $draftPath 'Assistant plan should record owner mapping draft output path.'
+            Assert-Equal $plan.generatedFiles.ownerMappingDraftReusableCommandPath $draftRerunPath 'Assistant plan should record owner mapping draft reusable command path.'
+            Assert-True ([string]$plan.commands.ownerMappingDraft -like '*New-ShareSurferOwnerMappingDraft*') 'Assistant plan should include an owner mapping draft command preview.'
+            Assert-True ([string]$plan.commands.optionalInputBehavior -like '*owner-mapping draft*') 'Assistant plan should explain post-scan owner mapping draft behavior.'
+            Assert-True ($scriptText -like '*$createOwnerMappingDraftAfterScan = $true*') 'Reusable script should record owner mapping draft creation state.'
+            Assert-True ($scriptText -like '*Owner mapping CSV was not available for this scan*') 'Reusable script should tell operators why a draft is being created.'
+            Assert-True ($scriptText -like '*New-ShareSurferOwnerMappingDraft -ExportPath $exportPath*') 'Reusable script should create the owner mapping draft after validation.'
+            Assert-True ($scriptText -like '*Fill Owner and BusinessUnit*') 'Reusable script should tell operators how to complete the draft before rerun.'
+            Assert-True ($scriptText.IndexOf('Test-ShareSurferExport -ExportPath $exportPath') -lt $scriptText.IndexOf('New-ShareSurferOwnerMappingDraft -ExportPath $exportPath')) 'Reusable script should create the draft only after export validation.'
+        }
+    },
+    @{
         Name = 'Start-ShareSurferStartup writes and replays startup config'
         Body = {
             Import-Module $moduleManifest -Force
@@ -3129,6 +3193,9 @@ $tests = @(
             $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
             $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
             $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+            $ownershipContextPath = Join-Path $inputRoot 'ownership_context.csv'
+            $ownershipRelationshipPath = Join-Path $inputRoot 'ownership_relationships.csv'
+            $ownershipImportManifestPath = Join-Path $inputRoot 'ownership_import_manifest.csv'
             $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
             $summary = Start-ShareSurferStartup `
@@ -3143,6 +3210,9 @@ $tests = @(
                 -ManagerIdentityFormat MailTo `
                 -OwnerMappingPath $ownerMappingPath `
                 -OwnershipEnrichmentPath $ownershipEnrichmentPath `
+                -OwnershipContextPath $ownershipContextPath `
+                -OwnershipRelationshipPath $ownershipRelationshipPath `
+                -OwnershipImportManifestPath $ownershipImportManifestPath `
                 -DiscountedPrincipalPath $discountedPrincipalPath `
                 -HandoffPath $handoffPath `
                 -SaveConfigPath $configPath `
@@ -3171,7 +3241,12 @@ $tests = @(
             Assert-Equal $config.includeSharePermissionDiagnostics $true 'Startup config should preserve the share-permission diagnostic choice.'
             Assert-Equal $config.optionalInputs.ownerMappingPath $ownerMappingPath 'Startup config should preserve owner mapping path.'
             Assert-Equal $config.optionalInputs.ownershipEnrichmentPath $ownershipEnrichmentPath 'Startup config should preserve ownership enrichment path.'
+            Assert-Equal $config.optionalInputs.ownershipContextPath $ownershipContextPath 'Startup config should preserve ownership context path.'
+            Assert-Equal $config.optionalInputs.ownershipRelationshipPath $ownershipRelationshipPath 'Startup config should preserve ownership relationship path.'
+            Assert-Equal $config.optionalInputs.ownershipImportManifestPath $ownershipImportManifestPath 'Startup config should preserve ownership import manifest path.'
             Assert-Equal $config.optionalInputs.discountedPrincipalPath $discountedPrincipalPath 'Startup config should preserve discounted principals path.'
+            Assert-Equal $config.ownershipSetup.OwnerMappingPath $ownerMappingPath 'Startup config should record ownership setup owner mapping path.'
+            Assert-Equal $config.ownershipSetup.OwnershipEnrichmentPath $ownershipEnrichmentPath 'Startup config should record ownership setup enrichment path.'
             Assert-Equal $config.nonpermissive.handoffPath $handoffPath 'Startup config should preserve nonpermissive handoff path.'
             Assert-Equal $config.generatedFiles.operatorPlanPath $planPath 'Startup config should record generated operator plan path.'
             Assert-Equal $config.generatedFiles.operatorReusableCommandPath $rerunPath 'Startup config should record generated rerun path.'
@@ -3181,7 +3256,13 @@ $tests = @(
             Assert-True (@($config.stopGates | Where-Object { [string]$_ -like '*share-permission-diagnostics*' }).Count -eq 1) 'Startup config should include share-permission diagnostic stop gate guidance.'
             Assert-Equal $operatorPlan.obsAttribute 'info' 'Startup should delegate selected OBS attribute into operator assistant plan.'
             Assert-Equal $operatorPlan.includeSharePermissionDiagnostics $true 'Startup should delegate share-permission diagnostic choice into operator assistant plan.'
+            Assert-Equal $operatorPlan.optionalInputs.ownershipContextPath $ownershipContextPath 'Startup should delegate ownership context path into operator assistant plan.'
+            Assert-Equal $operatorPlan.optionalInputs.ownershipRelationshipPath $ownershipRelationshipPath 'Startup should delegate ownership relationship path into operator assistant plan.'
+            Assert-Equal $operatorPlan.optionalInputs.ownershipImportManifestPath $ownershipImportManifestPath 'Startup should delegate ownership import manifest path into operator assistant plan.'
             Assert-Equal $summary.IncludeSharePermissionDiagnostics $true 'Startup summary should report share-permission diagnostic choice.'
+            Assert-Equal $summary.OwnershipContextPath $ownershipContextPath 'Startup summary should report ownership context path.'
+            Assert-Equal $summary.OwnershipRelationshipPath $ownershipRelationshipPath 'Startup summary should report ownership relationship path.'
+            Assert-Equal $summary.OwnershipImportManifestPath $ownershipImportManifestPath 'Startup summary should report ownership import manifest path.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Startup-generated operator rerun script should run share-permission diagnostics by default.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force*') 'Startup-generated operator rerun script should generate port/protocol readiness CSVs by default.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Startup-generated operator rerun script should run the scan.'
@@ -3193,6 +3274,9 @@ $tests = @(
             Assert-Equal $replaySummary.TargetPath[0] '\\files01\Finance' 'Replay should load target path from startup config.'
             Assert-Equal $replaySummary.IncludeSharePermissionDiagnostics $true 'Replay should load share-permission diagnostic choice from startup config.'
             Assert-Equal $replaySummary.SkipUnblock $true 'Replay should preserve skipped unblock setting from startup config.'
+            Assert-Equal $replaySummary.OwnershipContextPath $ownershipContextPath 'Replay should load ownership context path from startup config.'
+            Assert-Equal $replaySummary.OwnershipRelationshipPath $ownershipRelationshipPath 'Replay should load ownership relationship path from startup config.'
+            Assert-Equal $replaySummary.OwnershipImportManifestPath $ownershipImportManifestPath 'Replay should load ownership import manifest path from startup config.'
             Assert-Equal $replaySummary.UnblockZoneIdentifierRemovedCount 0 'Replay with skipped unblock should report zero cleared downloaded-file markers.'
             Assert-Equal $replaySummary.PostStartupReviewShown $false 'Config replay should not show the post-startup review prompt unless interactive.'
             Assert-Equal $replaySummary.PostStartupRerunLaunched $false 'Config replay should not launch the rerun script unless interactive.'
@@ -3231,10 +3315,16 @@ $tests = @(
             $releaseRoot = 'C:\{0}' -f [string]$releaseMetadata.packageName
             $ownerMappingPath = Join-Path $inputRoot 'owner-mapping.csv'
             $ownershipEnrichmentPath = Join-Path $inputRoot 'ownership-enrichment.csv'
+            $ownershipContextPath = Join-Path $inputRoot 'ownership_context.csv'
+            $ownershipRelationshipPath = Join-Path $inputRoot 'ownership_relationships.csv'
+            $ownershipImportManifestPath = Join-Path $inputRoot 'ownership_import_manifest.csv'
             $discountedPrincipalPath = Join-Path $inputRoot 'discounted-principals.csv'
 
             New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
             Set-Content -LiteralPath $ownerMappingPath -Value 'Pattern,Owner,BusinessUnit,Source,Confidence,Notes' -Encoding UTF8
+            Set-Content -LiteralPath $ownershipContextPath -Value 'ContextId,ContextType,ContextKey,DisplayName,ObsPath,Owner,BusinessUnit,Source,Notes' -Encoding UTF8
+            Set-Content -LiteralPath $ownershipRelationshipPath -Value 'FromContextId,ToContextId,RelationshipType,Confidence,Source,Notes' -Encoding UTF8
+            Set-Content -LiteralPath $ownershipImportManifestPath -Value 'SourcePath,SourceKind,RowCount,OutputPath,DefinitionPath,ReusableCommandPath,Notes' -Encoding UTF8
             Set-Content -LiteralPath $discountedPrincipalPath -Value 'Principal,Reason,Scope,Notes' -Encoding UTF8
 
             $summary = Start-ShareSurferStartup `
@@ -3255,13 +3345,22 @@ $tests = @(
 
             Assert-Equal $summary.OptionalInputDiscovery.ownerMapping.status 'FoundInInputRoot' 'Startup summary should mark owner mapping as discovered from inputs.'
             Assert-Equal $summary.OptionalInputDiscovery.ownershipEnrichment.status 'NotFoundSkipped' 'Startup summary should mark missing ownership enrichment as skipped.'
+            Assert-Equal $summary.OptionalInputDiscovery.ownershipContext.status 'FoundInInputRoot' 'Startup summary should mark ownership context as discovered from inputs.'
+            Assert-Equal $summary.OptionalInputDiscovery.ownershipRelationships.status 'FoundInInputRoot' 'Startup summary should mark ownership relationships as discovered from inputs.'
+            Assert-Equal $summary.OptionalInputDiscovery.ownershipImportManifest.status 'FoundInInputRoot' 'Startup summary should mark ownership import manifest as discovered from inputs.'
             Assert-Equal $summary.OptionalInputDiscovery.discountedPrincipals.status 'FoundInInputRoot' 'Startup summary should mark discounted principals as discovered from inputs.'
             Assert-Equal $config.optionalInputs.ownerMappingPath $ownerMappingPath 'Startup config should auto-use conventional owner mapping path when present.'
             Assert-Equal $config.optionalInputs.ownershipEnrichmentPath '' 'Startup config should leave missing conventional ownership enrichment blank.'
+            Assert-Equal $config.optionalInputs.ownershipContextPath $ownershipContextPath 'Startup config should auto-use conventional ownership context path when present.'
+            Assert-Equal $config.optionalInputs.ownershipRelationshipPath $ownershipRelationshipPath 'Startup config should auto-use conventional ownership relationship path when present.'
+            Assert-Equal $config.optionalInputs.ownershipImportManifestPath $ownershipImportManifestPath 'Startup config should auto-use conventional ownership import manifest path when present.'
             Assert-Equal $config.optionalInputs.discountedPrincipalPath $discountedPrincipalPath 'Startup config should auto-use conventional discounted principals path when present.'
             Assert-Equal $config.optionalInputDiscovery.ownerMapping.status 'FoundInInputRoot' 'Startup config should include durable optional input discovery detail.'
+            Assert-Equal $config.optionalInputDiscovery.ownershipContext.status 'FoundInInputRoot' 'Startup config should include ownership context discovery detail.'
             Assert-Equal $operatorPlan.optionalInputs.ownerMappingPath $ownerMappingPath 'Operator plan should receive discovered owner mapping path.'
+            Assert-Equal $operatorPlan.optionalInputs.ownershipContextPath $ownershipContextPath 'Operator plan should receive discovered ownership context path.'
             Assert-True ($scriptText -like ('*{0}*' -f [string]$ownerMappingPath)) 'Reusable script should include the discovered owner mapping path.'
+            Assert-True ($scriptText -like ('*{0}*' -f [string]$ownershipContextPath)) 'Reusable script should include the discovered ownership context path.'
 
             Set-Content -LiteralPath $ownershipEnrichmentPath -Value 'EmployeeId,ObsPath,Source' -Encoding UTF8
             $replaySummary = Start-ShareSurferStartup -ConfigPath $configPath -Force
@@ -3311,6 +3410,47 @@ $tests = @(
             finally {
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferOptionalPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurferStartup ownership setup can defer enrichment and queue owner mapping draft'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStartupOwnershipSetup-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+
+            $script:shareSurferOwnershipSetupAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferOwnershipSetupAnswers.Enqueue('N')
+            $script:shareSurferOwnershipSetupAnswers.Enqueue('Y')
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferOwnershipSetupAnswers.Count -eq 0) {
+                    throw ('Unexpected ownership setup prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferOwnershipSetupAnswers.Dequeue()
+            }
+
+            try {
+                $summary = & $module {
+                    param($InputRoot)
+                    Invoke-ShareSurferStartupOwnershipSetup -InputRoot $InputRoot -ObsAttribute 'info' -AdLookupMode DirectoryOnly
+                } $inputRoot
+
+                Assert-Equal $summary.Skipped $false 'Ownership setup should not be marked skipped when prompts are enabled.'
+                Assert-Equal $summary.OwnershipEnrichmentOffered $true 'Ownership setup should offer enrichment when ownership-enrichment.csv is missing.'
+                Assert-Equal $summary.OwnershipEnrichmentBuilt $false 'Declining enrichment should return to startup without building enrichment.'
+                Assert-Equal $summary.OwnerMappingDraftOffered $true 'Ownership setup should offer a post-scan owner mapping draft when owner-mapping.csv is missing.'
+                Assert-Equal $summary.CreateOwnerMappingDraftAfterScan $true 'Accepting the draft prompt should queue post-scan draft creation.'
+                Assert-Equal $summary.OwnerMappingDraftPath (Join-Path $inputRoot 'owner-mapping-draft.csv') 'Ownership setup should use the conventional owner mapping draft path.'
+                Assert-Equal $summary.OwnerMappingDraftReusableCommandPath (Join-Path $inputRoot 'owner-mapping-draft-rerun.ps1') 'Ownership setup should use the conventional owner mapping draft rerun path.'
+                Assert-True ([string]$summary.Message -like '*Owner-mapping draft creation*') 'Ownership setup should explain the queued draft behavior.'
+                Assert-Equal $script:shareSurferOwnershipSetupAnswers.Count 0 'Ownership setup should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferOwnershipSetupAnswers -Scope Script -ErrorAction SilentlyContinue
             }
         }
     },
@@ -6847,6 +6987,8 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Start-ShareSurferStartup*') 'Command recipes should include the guided startup command.'
             Assert-True ($commandRecipeText -like '*Start-ShareSurfer.ps1*') 'Command recipes should include the release-root startup launcher.'
             Assert-True ($commandRecipeText -like '*offers to show the generated JSON/plan/rerun files*' -and $commandRecipeText -like '*run prompt defaults to*No*') 'Command recipes should explain the interactive review and run handoff.'
+            Assert-True ($commandRecipeText -like '*ownership-enrichment.csv*is missing*' -and $commandRecipeText -like '*Join-ShareSurferOwnershipSources -Interactive -BrowseForCsv -IncludeContextGraph*') 'Command recipes should explain startup ownership enrichment setup when enrichment is missing.'
+            Assert-True ($commandRecipeText -like '*owner-mapping.csv*is missing*' -and $commandRecipeText -like '*post-scan*New-ShareSurferOwnerMappingDraft*') 'Command recipes should explain startup owner mapping draft setup when owner mapping is missing.'
             Assert-True ($commandRecipeText -like '*Get-ChildItem -LiteralPath $releaseRoot -Recurse -File*') 'Command recipes should use the literal-path recursive unblock pattern.'
             Assert-True ($commandRecipeText -like '*Run once*' -and $commandRecipeText -like '*launcher itself*') 'Command recipes should explain the one launcher prompt boundary.'
             Assert-True ($commandRecipeText -like '*operator-assistant.plan.json*' -and $commandRecipeText -like '*operator-assistant-rerun.ps1*') 'Command recipes should show operator assistant plan and rerun outputs.'
@@ -6975,6 +7117,8 @@ $tests = @(
             Assert-True ($readmeText -like '*Start-ShareSurferStartup*') 'README should include the guided startup command.'
             Assert-True ($readmeText -like '*Start-ShareSurfer.ps1*') 'README should include the release-root startup launcher.'
             Assert-True ($readmeText -like '*intensive share-permission diagnostics before the scan*' -and $readmeText -like '*run prompt defaults to No*') 'README should explain the diagnostic startup review and run handoff.'
+            Assert-True ($readmeText -like '*offers to build missing*ownership-enrichment.csv*' -or $readmeText -like '*missing*ownership-enrichment.csv*can launch the CSV ownership import picker*') 'README should explain startup ownership enrichment setup.'
+            Assert-True ($readmeText -like '*post-scan*owner-mapping-draft.csv*') 'README should explain startup owner mapping draft setup.'
             Assert-True ($readmeText -like '*share-permission-diagnostics*share_permission_diagnostics.md*') 'README should point operators to the share-permission diagnostic summary.'
             Assert-True ($readmeText -like '*operator-assistant.plan.json*' -and $readmeText -like '*operator-assistant-rerun.ps1*') 'README should explain operator assistant plan and rerun outputs.'
             Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
@@ -7093,6 +7237,8 @@ $tests = @(
             Assert-True ($firstRunText -like '*Start-ShareSurferStartup*') 'First-run guide should include the guided startup command.'
             Assert-True ($firstRunText -like '*Start-ShareSurfer.ps1*') 'First-run guide should include the release-root startup launcher.'
             Assert-True ($firstRunText -like '*generated diagnostic/scan/validate/dashboard script*' -and $firstRunText -like '*defaults to*No*') 'First-run guide should explain the diagnostic startup review and run handoff.'
+            Assert-True ($firstRunText -like '*ownership-enrichment.csv*is missing*' -and $firstRunText -like '*multi-CSV ownership import picker*') 'First-run guide should explain startup ownership enrichment setup.'
+            Assert-True ($firstRunText -like '*owner-mapping.csv*is missing*' -and $firstRunText -like '*owner-mapping-draft.csv*') 'First-run guide should explain startup owner mapping draft setup.'
             Assert-True ($firstRunText -like '*share-permission-diagnostics*share_permission_diagnostics.md*') 'First-run guide should point operators to the share-permission diagnostic summary.'
             Assert-True ($firstRunText -like '*operator-assistant.plan.json*' -and $firstRunText -like '*operator-assistant-rerun.ps1*') 'First-run guide should explain operator assistant outputs.'
             Assert-True ($firstRunText -like '*Stop gates are conditions*') 'First-run guide should explain stop gates before the longer walkthrough.'
@@ -7140,6 +7286,7 @@ $tests = @(
             Assert-True ($firstRunTroubleshootingText -like '*Start Here*') 'Troubleshooting guide should include a start-here triage section.'
             Assert-True ($firstRunTroubleshootingText -like '*WinRM or CIM cannot connect*') 'Troubleshooting guide should cover WinRM/CIM collection gaps.'
             Assert-True ($firstRunTroubleshootingText -like '*Owner mapping file was not found*') 'Troubleshooting guide should cover missing owner mapping inputs.'
+            Assert-True ($firstRunTroubleshootingText -like '*ownership-enrichment.csv*is missing*' -and $firstRunTroubleshootingText -like '*ownership-import-rerun.ps1*') 'Troubleshooting guide should cover missing ownership enrichment setup.'
             Assert-True ($firstRunTroubleshootingText -like '*doubled folder*') 'Troubleshooting guide should cover common release extraction folder mistakes.'
             Assert-True ($firstRunTroubleshootingText -like '*release contains tools and dashboard template assets*') 'Troubleshooting guide should distinguish release folders from scan export folders.'
             Assert-True ($firstRunTroubleshootingText -like '*BrokenOrMissingSid*') 'Troubleshooting guide should cover broken or missing SID findings.'

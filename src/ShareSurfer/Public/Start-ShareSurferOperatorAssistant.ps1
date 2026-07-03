@@ -23,7 +23,19 @@ function Start-ShareSurferOperatorAssistant {
 
         [string] $OwnershipEnrichmentPath = '',
 
+        [string] $OwnershipContextPath = '',
+
+        [string] $OwnershipRelationshipPath = '',
+
+        [string] $OwnershipImportManifestPath = '',
+
         [string] $DiscountedPrincipalPath = '',
+
+        [switch] $CreateOwnerMappingDraftAfterScan,
+
+        [string] $OwnerMappingDraftPath = '',
+
+        [string] $OwnerMappingDraftReusableCommandPath = '',
 
         [string] $PlanPath = '',
 
@@ -73,6 +85,9 @@ function Start-ShareSurferOperatorAssistant {
     elseif (-not $DisableOptionalInputDiscovery) {
         $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
         $OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
+        $OwnershipContextPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_context.csv' -Value $OwnershipContextPath
+        $OwnershipRelationshipPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_relationships.csv' -Value $OwnershipRelationshipPath
+        $OwnershipImportManifestPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_import_manifest.csv' -Value $OwnershipImportManifestPath
         $DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
     }
 
@@ -103,10 +118,22 @@ function Start-ShareSurferOperatorAssistant {
         $ReusableCommandPath = Join-Path $InputRoot 'operator-assistant-rerun.ps1'
     }
 
+    if ($CreateOwnerMappingDraftAfterScan) {
+        if ([string]::IsNullOrWhiteSpace($OwnerMappingDraftPath)) {
+            $OwnerMappingDraftPath = Join-Path $InputRoot 'owner-mapping-draft.csv'
+        }
+        if ([string]::IsNullOrWhiteSpace($OwnerMappingDraftReusableCommandPath)) {
+            $OwnerMappingDraftReusableCommandPath = Join-Path $InputRoot 'owner-mapping-draft-rerun.ps1'
+        }
+    }
+
     $optionalInputDiscovery = New-ShareSurferOptionalInputDiscoveryReport `
         -InputRoot $InputRoot `
         -OwnerMappingPath $OwnerMappingPath `
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -OwnershipContextPath $OwnershipContextPath `
+        -OwnershipRelationshipPath $OwnershipRelationshipPath `
+        -OwnershipImportManifestPath $OwnershipImportManifestPath `
         -DiscountedPrincipalPath $DiscountedPrincipalPath
 
     $normalizedPlanPath = ConvertTo-ShareSurferAssistantComparablePath -Path $PlanPath
@@ -132,7 +159,13 @@ function Start-ShareSurferOperatorAssistant {
         -ManagerIdentityFormat $ManagerIdentityFormat `
         -OwnerMappingPath $OwnerMappingPath `
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
+        -OwnershipContextPath $OwnershipContextPath `
+        -OwnershipRelationshipPath $OwnershipRelationshipPath `
+        -OwnershipImportManifestPath $OwnershipImportManifestPath `
         -DiscountedPrincipalPath $DiscountedPrincipalPath `
+        -CreateOwnerMappingDraftAfterScan:$CreateOwnerMappingDraftAfterScan `
+        -OwnerMappingDraftPath $OwnerMappingDraftPath `
+        -OwnerMappingDraftReusableCommandPath $OwnerMappingDraftReusableCommandPath `
         -IncludeFiles:$IncludeFiles `
         -IncludeSharePermissionDiagnostics $IncludeSharePermissionDiagnostics `
         -SkipIdentityEnrichment:$SkipIdentityEnrichment
@@ -156,12 +189,17 @@ function Start-ShareSurferOperatorAssistant {
         optionalInputs = [ordered]@{
             ownerMappingPath = $OwnerMappingPath
             ownershipEnrichmentPath = $OwnershipEnrichmentPath
+            ownershipContextPath = $OwnershipContextPath
+            ownershipRelationshipPath = $OwnershipRelationshipPath
+            ownershipImportManifestPath = $OwnershipImportManifestPath
             discountedPrincipalPath = $DiscountedPrincipalPath
         }
         optionalInputDiscovery = $optionalInputDiscovery
         generatedFiles = [ordered]@{
             planPath = $PlanPath
             reusableCommandPath = $ReusableCommandPath
+            ownerMappingDraftPath = $OwnerMappingDraftPath
+            ownerMappingDraftReusableCommandPath = $OwnerMappingDraftReusableCommandPath
         }
         commands = [ordered]@{
             importModule = [string]$commands.ImportModule
@@ -170,6 +208,7 @@ function Start-ShareSurferOperatorAssistant {
             scan = [string]$commands.Scan
             validate = [string]$commands.Validate
             packageStandaloneDashboard = [string]$commands.PackageStandaloneDashboard
+            ownerMappingDraft = [string]$commands.OwnerMappingDraft
             optionalInputBehavior = [string]$commands.OptionalInputBehavior
         }
         stopGates = @(
@@ -203,6 +242,15 @@ function Start-ShareSurferOperatorAssistant {
         ObsAttribute = $ObsAttribute
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
+        OwnerMappingPath = $OwnerMappingPath
+        OwnershipEnrichmentPath = $OwnershipEnrichmentPath
+        OwnershipContextPath = $OwnershipContextPath
+        OwnershipRelationshipPath = $OwnershipRelationshipPath
+        OwnershipImportManifestPath = $OwnershipImportManifestPath
+        DiscountedPrincipalPath = $DiscountedPrincipalPath
+        CreateOwnerMappingDraftAfterScan = [bool]$CreateOwnerMappingDraftAfterScan
+        OwnerMappingDraftPath = $OwnerMappingDraftPath
+        OwnerMappingDraftReusableCommandPath = $OwnerMappingDraftReusableCommandPath
         IncludeFiles = [bool]$IncludeFiles
         IncludeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         SkipIdentityEnrichment = [bool]$SkipIdentityEnrichment
@@ -387,6 +435,9 @@ function New-ShareSurferOptionalInputDiscoveryReport {
         [string] $InputRoot = '',
         [string] $OwnerMappingPath = '',
         [string] $OwnershipEnrichmentPath = '',
+        [string] $OwnershipContextPath = '',
+        [string] $OwnershipRelationshipPath = '',
+        [string] $OwnershipImportManifestPath = '',
         [string] $DiscountedPrincipalPath = ''
     )
 
@@ -394,6 +445,9 @@ function New-ShareSurferOptionalInputDiscoveryReport {
         inputRoot = $InputRoot
         ownerMapping = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'owner-mapping.csv' -SelectedPath $OwnerMappingPath
         ownershipEnrichment = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -SelectedPath $OwnershipEnrichmentPath
+        ownershipContext = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'ownership_context.csv' -SelectedPath $OwnershipContextPath
+        ownershipRelationships = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'ownership_relationships.csv' -SelectedPath $OwnershipRelationshipPath
+        ownershipImportManifest = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'ownership_import_manifest.csv' -SelectedPath $OwnershipImportManifestPath
         discountedPrincipals = New-ShareSurferOptionalInputDiscoveryEntry -InputRoot $InputRoot -FileName 'discounted-principals.csv' -SelectedPath $DiscountedPrincipalPath
     }
 }
@@ -446,7 +500,19 @@ function New-ShareSurferOperatorAssistantCommandSet {
 
         [string] $OwnershipEnrichmentPath = '',
 
+        [string] $OwnershipContextPath = '',
+
+        [string] $OwnershipRelationshipPath = '',
+
+        [string] $OwnershipImportManifestPath = '',
+
         [string] $DiscountedPrincipalPath = '',
+
+        [switch] $CreateOwnerMappingDraftAfterScan,
+
+        [string] $OwnerMappingDraftPath = '',
+
+        [string] $OwnerMappingDraftReusableCommandPath = '',
 
         [switch] $IncludeFiles,
 
@@ -473,7 +539,14 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add(('$managerIdentityFormat = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ManagerIdentityFormat)))
     $lines.Add(('$ownerMappingPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnerMappingPath)))
     $lines.Add(('$ownershipEnrichmentPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipEnrichmentPath)))
+    $lines.Add(('$ownershipContextPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipContextPath)))
+    $lines.Add(('$ownershipRelationshipPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipRelationshipPath)))
+    $lines.Add(('$ownershipImportManifestPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipImportManifestPath)))
     $lines.Add(('$discountedPrincipalPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $DiscountedPrincipalPath)))
+    $createOwnerMappingDraftAfterScanLiteral = if ($CreateOwnerMappingDraftAfterScan) { '$true' } else { '$false' }
+    $lines.Add(('$createOwnerMappingDraftAfterScan = {0}' -f $createOwnerMappingDraftAfterScanLiteral))
+    $lines.Add(('$ownerMappingDraftPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnerMappingDraftPath)))
+    $lines.Add(('$ownerMappingDraftReusableCommandPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnerMappingDraftReusableCommandPath)))
     $lines.Add('')
     $lines.Add(('$modulePath = Join-Path $releaseRoot {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $moduleRelativePath)))
     $lines.Add(('$standaloneDashboardScript = Join-Path $releaseRoot {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $dashboardRelativePath)))
@@ -504,6 +577,15 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add('if (-not [string]::IsNullOrWhiteSpace($ownershipEnrichmentPath) -and (Test-Path -LiteralPath $ownershipEnrichmentPath)) {')
     $lines.Add('  $scanParams.OwnershipEnrichmentPath = $ownershipEnrichmentPath')
     $lines.Add('}')
+    $lines.Add('if (-not [string]::IsNullOrWhiteSpace($ownershipContextPath) -and (Test-Path -LiteralPath $ownershipContextPath)) {')
+    $lines.Add('  $scanParams.OwnershipContextPath = $ownershipContextPath')
+    $lines.Add('}')
+    $lines.Add('if (-not [string]::IsNullOrWhiteSpace($ownershipRelationshipPath) -and (Test-Path -LiteralPath $ownershipRelationshipPath)) {')
+    $lines.Add('  $scanParams.OwnershipRelationshipPath = $ownershipRelationshipPath')
+    $lines.Add('}')
+    $lines.Add('if (-not [string]::IsNullOrWhiteSpace($ownershipImportManifestPath) -and (Test-Path -LiteralPath $ownershipImportManifestPath)) {')
+    $lines.Add('  $scanParams.OwnershipImportManifestPath = $ownershipImportManifestPath')
+    $lines.Add('}')
     $lines.Add('if (-not [string]::IsNullOrWhiteSpace($discountedPrincipalPath) -and (Test-Path -LiteralPath $discountedPrincipalPath)) {')
     $lines.Add('  $scanParams.DiscountedPrincipalPath = $discountedPrincipalPath')
     $lines.Add('}')
@@ -520,6 +602,14 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add('  }')
     $lines.Add('  throw ("ShareSurfer export validation failed. {0}" -f ($validationDetails -join '' ''))')
     $lines.Add('}')
+    if ($CreateOwnerMappingDraftAfterScan) {
+        $lines.Add('if ($createOwnerMappingDraftAfterScan -and ([string]::IsNullOrWhiteSpace($ownerMappingPath) -or -not (Test-Path -LiteralPath $ownerMappingPath))) {')
+        $lines.Add('  Write-Host "Owner mapping CSV was not available for this scan. Creating a draft from the validated export."')
+        $lines.Add('  $draftSummary = New-ShareSurferOwnerMappingDraft -ExportPath $exportPath -OutputPath $ownerMappingDraftPath -ReusableCommandPath $ownerMappingDraftReusableCommandPath -Force')
+        $lines.Add('  $draftSummary | Format-List | Out-Host')
+        $lines.Add('  Write-Host "Fill Owner and BusinessUnit in the draft, save it as owner-mapping.csv, then rerun Start-ShareSurfer with that file."')
+        $lines.Add('}')
+    }
     $lines.Add('& $standaloneDashboardScript -ExportPath $exportPath -OutputPath $standaloneDashboardPath -Force')
     $lines.Add('')
     $lines.Add('# Stop before owner signoff if evidence_confidence.csv, collection_errors.csv, or scan_manifest.csv show unresolved gaps.')
@@ -543,6 +633,15 @@ function New-ShareSurferOperatorAssistantCommandSet {
     if (-not [string]::IsNullOrWhiteSpace($OwnershipEnrichmentPath)) {
         $scanPreviewParts.Add(('-OwnershipEnrichmentPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipEnrichmentPath)))
     }
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipContextPath)) {
+        $scanPreviewParts.Add(('-OwnershipContextPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipContextPath)))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipRelationshipPath)) {
+        $scanPreviewParts.Add(('-OwnershipRelationshipPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipRelationshipPath)))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipImportManifestPath)) {
+        $scanPreviewParts.Add(('-OwnershipImportManifestPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipImportManifestPath)))
+    }
     if (-not [string]::IsNullOrWhiteSpace($DiscountedPrincipalPath)) {
         $scanPreviewParts.Add(('-DiscountedPrincipalPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $DiscountedPrincipalPath)))
     }
@@ -552,6 +651,10 @@ function New-ShareSurferOperatorAssistantCommandSet {
         $diagnosticPreview = 'Invoke-ShareSurferSharePermissionDiagnostic -TargetPath {0} -OutputPath {1} -Force' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $TargetPath), (ConvertTo-ShareSurferPowerShellLiteral -Value (Join-Path $ExportPath 'share-permission-diagnostics'))
     }
     $portProtocolPreview = 'Invoke-ShareSurferPortProtocolAssessment -TargetPath {0} -OutputPath {1} -Force' -f (ConvertTo-ShareSurferPowerShellArrayLiteral -Values $TargetPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath)
+    $ownerMappingDraftPreview = ''
+    if ($CreateOwnerMappingDraftAfterScan) {
+        $ownerMappingDraftPreview = 'New-ShareSurferOwnerMappingDraft -ExportPath {0} -OutputPath {1} -ReusableCommandPath {2} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnerMappingDraftPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnerMappingDraftReusableCommandPath)
+    }
 
     [pscustomobject]@{
         ImportModule = ('Import-Module {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $modulePathPreview))
@@ -560,7 +663,8 @@ function New-ShareSurferOperatorAssistantCommandSet {
         Scan = ($scanPreviewParts -join ' ')
         Validate = ('Test-ShareSurferExport -ExportPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath))
         PackageStandaloneDashboard = ('& {0} -ExportPath {1} -OutputPath {2} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $dashboardScriptPreview), (ConvertTo-ShareSurferPowerShellLiteral -Value $ExportPath), (ConvertTo-ShareSurferPowerShellLiteral -Value $StandaloneDashboardPath))
-        OptionalInputBehavior = 'Scan preview lists requested optional CSV paths. The generated rerun script is authoritative and passes optional CSV paths only when Test-Path confirms those files exist.'
+        OwnerMappingDraft = $ownerMappingDraftPreview
+        OptionalInputBehavior = 'Scan preview lists requested optional CSV paths. The generated rerun script is authoritative and passes optional CSV paths only when Test-Path confirms those files exist. If requested and owner mapping is still missing, the rerun script creates an owner-mapping draft after export validation.'
         Script = ($lines -join [Environment]::NewLine)
     }
 }
