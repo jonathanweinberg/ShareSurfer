@@ -279,6 +279,62 @@ Join-ShareSurferOwnershipSources `
 
 If you already saved mapping profiles for the same files, pass them with `-MappingProfilePath`.
 
+### Project, OBS, Path, And Group Context Files
+
+Some source files do not describe people or AD accounts. They may describe projects, applications, path prefixes, security groups, or OBS/business structure. These files are still useful because they explain why data areas appear related.
+
+Example project-to-OBS source:
+
+```csv
+OBS,ProjectCode,ProjectDescription,BusinessUnit,DataOwner
+CORP.FIN.AP,FIN-AP,Accounts Payable modernization,Finance,Finance Operations
+```
+
+This does not prove that a specific employee owns a folder. It does prove useful context:
+
+- project `FIN-AP` belongs to OBS `CORP.FIN.AP`
+- OBS `CORP.FIN.AP` belongs to business unit `Finance`
+- `Finance Operations` is a reviewer hint for that OBS/project area
+
+Use `-IncludeContextGraph` when importing these files:
+
+```powershell
+Join-ShareSurferOwnershipSources `
+  -Path @(
+    'C:\ShareSurfer\inputs\hr-employee-obs.csv',
+    'C:\ShareSurfer\inputs\project-obs.csv'
+  ) `
+  -OutputPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
+  -DefinitionPath 'C:\ShareSurfer\inputs\ownership-import.definition.json' `
+  -IncludeContextGraph `
+  -ObsAttribute 'extensionAttribute10' `
+  -AdLookupMode Auto `
+  -Force
+```
+
+This writes:
+
+| File | Meaning |
+| --- | --- |
+| `ownership-enrichment.csv` | Person/account-shaped enrichment rows for scans. |
+| `ownership_context.csv` | Imported OBS, project, path, group, business-unit, and owner context rows. |
+| `ownership_relationships.csv` | Explainable links such as `Project -> OBS`, `OBS -> BusinessUnit`, and `OBS -> DataOwner`. |
+| `ownership_import_manifest.csv` | Source file type, authority level, mapped fields, row counts, and warnings. |
+
+Pass all four files to the scan when the export/dashboard should carry this context:
+
+```powershell
+Invoke-ShareSurferScan `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath 'C:\ShareSurfer\exports\scan-001' `
+  -OwnershipEnrichmentPath 'C:\ShareSurfer\inputs\ownership-enrichment.csv' `
+  -OwnershipContextPath 'C:\ShareSurfer\inputs\ownership_context.csv' `
+  -OwnershipRelationshipPath 'C:\ShareSurfer\inputs\ownership_relationships.csv' `
+  -OwnershipImportManifestPath 'C:\ShareSurfer\inputs\ownership_import_manifest.csv'
+```
+
+The source type and authority choices are saved in `ownership-import.definition.json` so a later rerun can rebuild the same files without repeating the guided interview.
+
 Later, rerun the same join from the saved definition without repeating the picker choices:
 
 ```powershell

@@ -13,6 +13,9 @@ function Test-ShareSurferExport {
 
     $optionalFiles = New-Object System.Collections.ArrayList
     [void]$optionalFiles.Add('ownership_enrichment.csv')
+    [void]$optionalFiles.Add('ownership_context.csv')
+    [void]$optionalFiles.Add('ownership_relationships.csv')
+    [void]$optionalFiles.Add('ownership_import_manifest.csv')
     [void]$optionalFiles.Add('evidence_confidence.csv')
     [void]$optionalFiles.Add('owner_review_decisions.csv')
     [void]$optionalFiles.Add('migration_cluster_decisions.csv')

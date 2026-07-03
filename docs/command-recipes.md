@@ -221,6 +221,7 @@ Join-ShareSurferOwnershipSources `
   -SourceFolder $inputRoot `
   -OutputPath $ownershipEnrichmentPath `
   -DefinitionPath $ownershipDefinitionPath `
+  -IncludeContextGraph `
   -ObsAttribute 'extensionAttribute10' `
   -AdLookupMode Auto `
   -ForbiddenOu @('OU=Service Accounts,DC=contoso,DC=com', 'OU=Admins,DC=contoso,DC=com') `
@@ -228,7 +229,7 @@ Join-ShareSurferOwnershipSources `
   -Force
 ```
 
-Use `-ObsAttribute` for the AD attribute that stores OBS/OID in your directory. The text picker can select one or more CSVs, including one file that only has OBS/project data and another that has employee IDs. The definition JSON saves the selected CSV paths, OBS attribute, AD lookup mode, and forbidden OU choices. Later, rerun the same import without the picker:
+Use `-ObsAttribute` for the AD attribute that stores OBS/OID in your directory. The text picker can select one or more CSVs, including one file that only has OBS/project data and another that has employee IDs. `-IncludeContextGraph` also writes `ownership_context.csv`, `ownership_relationships.csv`, and `ownership_import_manifest.csv` for project, OBS, path, and group context that is not person-shaped. The definition JSON saves the selected CSV paths, source type choices, OBS attribute, AD lookup mode, and forbidden OU choices. Later, rerun the same import without the picker:
 
 ```powershell
 Join-ShareSurferOwnershipSources `
@@ -238,7 +239,20 @@ Join-ShareSurferOwnershipSources `
   -Force
 ```
 
-Pass `ownership-enrichment.csv` to the scan with `-OwnershipEnrichmentPath`. The scan exports it as `ownership_enrichment.csv`, and the report/dashboard can show matched, ambiguous, source-only, forbidden-OU-skipped, and potential service-account rows beside the permission evidence. If the CSV was created by `Import-ShareSurferOwnershipSource`, run `Join-ShareSurferOwnershipSources` first; `normalized-ownership.csv` is not the scan enrichment file.
+Pass `ownership-enrichment.csv` to the scan with `-OwnershipEnrichmentPath`. If context graph files were generated, pass those too:
+
+```powershell
+Invoke-ShareSurferScan `
+  -TargetPath '\\files01\Finance' `
+  -OutputPath 'C:\ShareSurfer\exports\finance-001' `
+  -ObsAttribute 'extensionAttribute10' `
+  -OwnershipEnrichmentPath $ownershipEnrichmentPath `
+  -OwnershipContextPath (Join-Path $inputRoot 'ownership_context.csv') `
+  -OwnershipRelationshipPath (Join-Path $inputRoot 'ownership_relationships.csv') `
+  -OwnershipImportManifestPath (Join-Path $inputRoot 'ownership_import_manifest.csv')
+```
+
+The scan exports these as `ownership_enrichment.csv`, `ownership_context.csv`, `ownership_relationships.csv`, and `ownership_import_manifest.csv`. The report/dashboard can show matched, ambiguous, source-only, forbidden-OU-skipped, potential service-account rows, and project/OBS relationship clues beside the permission evidence. If the CSV was created by `Import-ShareSurferOwnershipSource`, run `Join-ShareSurferOwnershipSources` first; `normalized-ownership.csv` is not the scan enrichment file.
 
 After a scan, create a draft owner mapping for paths that do not have owner routing yet:
 

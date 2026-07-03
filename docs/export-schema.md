@@ -43,7 +43,7 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 
 ## Files
 
-`ownership_enrichment.csv` is optional. ShareSurfer writes it when the scan is run with `Invoke-ShareSurferScan -OwnershipEnrichmentPath`. Older exports and scans without pre-scan ownership enrichment remain valid when this file is absent.
+`ownership_enrichment.csv`, `ownership_context.csv`, `ownership_relationships.csv`, and `ownership_import_manifest.csv` are optional ownership import evidence. ShareSurfer writes them when the scan is run with the matching `Invoke-ShareSurferScan` ownership import paths. Older exports and scans without pre-scan ownership enrichment or context graph files remain valid when these files are absent.
 
 `evidence_confidence.csv` is written by current scans. Older exports created before evidence confidence existed remain valid when this file is absent; the dashboard falls back to the older share and collection-error signals, but current scans should include the exported confidence rows.
 
@@ -62,6 +62,9 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 | `org_chains.csv` | One row per identity with org data | Captures manager chain and OBS ownership context. |
 | `owner_mappings.csv` | One row per owner mapping rule | Maps paths or patterns to business owners. |
 | `ownership_enrichment.csv` | One row per enriched ownership import row | Preserves merged HR, employee, OBS, project, and directory-matched rows supplied before the scan. |
+| `ownership_context.csv` | One row per imported context entity | Preserves OBS, project, path, group, business-unit, and owner context that may not be tied to an employee ID. |
+| `ownership_relationships.csv` | One row per imported context relationship | Explains links such as `Project -> OBS`, `OBS -> BusinessUnit`, and `OBS -> DataOwner`. |
+| `ownership_import_manifest.csv` | One row per ownership source file | Records source type, authority level, mapped fields, row counts, and import warnings. |
 | `owner_risk_pivots.csv` | One row per owner mapping rule | Summarizes mapped item counts, direct access-review sizing, findings, conflicts, partial shares, and review risk. |
 | `related_data_areas.csv` | One row per migration discovery area | Groups like-owned shares, folders, and files for migration planning with explainable relatedness and readiness. |
 | `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
@@ -205,6 +208,18 @@ Common `MatchStatus` values:
 `ForbiddenOuMatched` records the OU that caused a row to be skipped. Use this when the operator selected disabled-user archives, service-account OUs, staging OUs, or test OUs as forbidden lookup locations.
 
 `PotentialServiceAccount=True` means the enriched row has no OBS, no employee ID, and no employee number after import and enrichment. Treat it as a review flag, not proof that the account is definitely a service account.
+
+### Ownership context graph files
+
+Expected `ownership_context.csv` columns: `ContextId`, `SourceType`, `SourcePath`, `SourceRowNumber`, `EntityType`, `EntityKey`, `EntityLabel`, `OBS`, `BusinessUnit`, `DataOwner`, `OwnerMail`, `Project`, `ProjectCode`, `ProjectDescription`, `GroupName`, `PathPattern`, `AuthorityLevel`, `ConfidenceLabel`, `EvidenceReason`, `ImportWarnings`.
+
+Expected `ownership_relationships.csv` columns: `RelationshipId`, `SourceType`, `SourcePath`, `SourceRowNumber`, `FromType`, `FromValue`, `RelationshipType`, `ToType`, `ToValue`, `AuthorityLevel`, `ConfidenceLabel`, `EvidenceReason`.
+
+Expected `ownership_import_manifest.csv` columns: `SourcePath`, `SourceType`, `AuthorityLevel`, `PrimaryAnchor`, `MappedFields`, `RowCount`, `ContextRowCount`, `RelationshipRowCount`, `Warnings`.
+
+These optional files appear when the operator runs `Join-ShareSurferOwnershipSources -IncludeContextGraph` and passes the generated files to `Invoke-ShareSurferScan` with `-OwnershipContextPath`, `-OwnershipRelationshipPath`, and `-OwnershipImportManifestPath`.
+
+Use these files when a source is useful but not employee-shaped. For example, a project CSV may say `ProjectCode FIN-AP` belongs to `OBS CORP.FIN.AP` and should be reviewed by `Finance Operations`. ShareSurfer records that as context and relationships rather than claiming a specific employee owns the data.
 
 ### Ownership import preparation files
 

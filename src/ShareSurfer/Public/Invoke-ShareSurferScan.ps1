@@ -32,6 +32,9 @@ function Invoke-ShareSurferScan {
         [string] $ManagerIdentityFormat = 'MailTo',
         [string] $OwnerMappingPath = '',
         [string] $OwnershipEnrichmentPath = '',
+        [string] $OwnershipContextPath = '',
+        [string] $OwnershipRelationshipPath = '',
+        [string] $OwnershipImportManifestPath = '',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
@@ -93,6 +96,42 @@ function Invoke-ShareSurferScan {
         }
         else {
             $inventory | Add-Member -MemberType NoteProperty -Name OwnershipEnrichment -Value $ownershipEnrichmentRows
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipContextPath)) {
+        Test-ShareSurferOwnershipContextGraphShape -Path $OwnershipContextPath -FileName 'ownership_context.csv' | Out-Null
+        Write-ShareSurferStatus -Phase 'Owners' -Message ('Loading ownership context rows from {0}.' -f $OwnershipContextPath) -Quiet:$Quiet
+        $ownershipContextRows = @(Import-Csv -LiteralPath $OwnershipContextPath)
+        if ($null -ne $inventory.PSObject.Properties['OwnershipContext']) {
+            $inventory.OwnershipContext = $ownershipContextRows
+        }
+        else {
+            $inventory | Add-Member -MemberType NoteProperty -Name OwnershipContext -Value $ownershipContextRows
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipRelationshipPath)) {
+        Test-ShareSurferOwnershipContextGraphShape -Path $OwnershipRelationshipPath -FileName 'ownership_relationships.csv' | Out-Null
+        Write-ShareSurferStatus -Phase 'Owners' -Message ('Loading ownership relationship rows from {0}.' -f $OwnershipRelationshipPath) -Quiet:$Quiet
+        $ownershipRelationshipRows = @(Import-Csv -LiteralPath $OwnershipRelationshipPath)
+        if ($null -ne $inventory.PSObject.Properties['OwnershipRelationships']) {
+            $inventory.OwnershipRelationships = $ownershipRelationshipRows
+        }
+        else {
+            $inventory | Add-Member -MemberType NoteProperty -Name OwnershipRelationships -Value $ownershipRelationshipRows
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($OwnershipImportManifestPath)) {
+        Test-ShareSurferOwnershipContextGraphShape -Path $OwnershipImportManifestPath -FileName 'ownership_import_manifest.csv' | Out-Null
+        Write-ShareSurferStatus -Phase 'Owners' -Message ('Loading ownership import manifest rows from {0}.' -f $OwnershipImportManifestPath) -Quiet:$Quiet
+        $ownershipImportManifestRows = @(Import-Csv -LiteralPath $OwnershipImportManifestPath)
+        if ($null -ne $inventory.PSObject.Properties['OwnershipImportManifest']) {
+            $inventory.OwnershipImportManifest = $ownershipImportManifestRows
+        }
+        else {
+            $inventory | Add-Member -MemberType NoteProperty -Name OwnershipImportManifest -Value $ownershipImportManifestRows
         }
     }
 

@@ -319,3 +319,53 @@ function Test-ShareSurferOwnershipEnrichmentShape {
         RequiredColumns = ($requiredAnchors -join ', ')
     }
 }
+
+function Test-ShareSurferOwnershipContextGraphShape {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('ownership_context.csv', 'ownership_relationships.csv', 'ownership_import_manifest.csv')]
+        [string] $FileName
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "Ownership context graph file was not found: $Path"
+    }
+
+    $schema = Get-ShareSurferExportSchema
+    $expectedColumns = @($schema[$FileName])
+    if ($expectedColumns.Count -eq 0) {
+        throw "ShareSurfer does not have an ownership context graph schema for $FileName."
+    }
+
+    $headers = @(Get-ShareSurferCsvHeaders -Path $Path)
+    $headersByNormalizedName = @{}
+    foreach ($header in $headers) {
+        $normalized = Normalize-ShareSurferOwnershipHeaderName -Name $header
+        if ($normalized -ne '') {
+            $headersByNormalizedName[$normalized] = $true
+        }
+    }
+
+    $missing = New-Object System.Collections.Generic.List[string]
+    foreach ($column in $expectedColumns) {
+        $normalized = Normalize-ShareSurferOwnershipHeaderName -Name $column
+        if (-not $headersByNormalizedName.ContainsKey($normalized)) {
+            $missing.Add($column)
+        }
+    }
+
+    if ($missing.Count -gt 0) {
+        throw ("Ownership context graph file {0} does not match the expected ShareSurfer schema. Missing column(s): {1}. Rebuild this file with Join-ShareSurferOwnershipSources -IncludeContextGraph." -f $FileName, (($missing | Sort-Object) -join ', '))
+    }
+
+    [pscustomobject]@{
+        Path = $Path
+        FileName = $FileName
+        IsValid = $true
+        HeaderCount = $headers.Count
+        ExpectedColumns = ($expectedColumns -join ', ')
+    }
+}

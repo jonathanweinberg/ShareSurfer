@@ -166,6 +166,53 @@ function Get-ShareSurferExportSchema {
             'PotentialServiceAccount',
             'ImportWarnings'
         )
+        'ownership_context.csv' = @(
+            'ContextId',
+            'SourceType',
+            'SourcePath',
+            'SourceRowNumber',
+            'EntityType',
+            'EntityKey',
+            'EntityLabel',
+            'OBS',
+            'BusinessUnit',
+            'DataOwner',
+            'OwnerMail',
+            'Project',
+            'ProjectCode',
+            'ProjectDescription',
+            'GroupName',
+            'PathPattern',
+            'AuthorityLevel',
+            'ConfidenceLabel',
+            'EvidenceReason',
+            'ImportWarnings'
+        )
+        'ownership_relationships.csv' = @(
+            'RelationshipId',
+            'SourceType',
+            'SourcePath',
+            'SourceRowNumber',
+            'FromType',
+            'FromValue',
+            'RelationshipType',
+            'ToType',
+            'ToValue',
+            'AuthorityLevel',
+            'ConfidenceLabel',
+            'EvidenceReason'
+        )
+        'ownership_import_manifest.csv' = @(
+            'SourcePath',
+            'SourceType',
+            'AuthorityLevel',
+            'PrimaryAnchor',
+            'MappedFields',
+            'RowCount',
+            'ContextRowCount',
+            'RelationshipRowCount',
+            'Warnings'
+        )
         'owner_risk_pivots.csv' = @(
             'BusinessUnit',
             'Owner',

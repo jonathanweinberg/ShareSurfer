@@ -42,6 +42,18 @@ function Export-ShareSurferInventory {
     if ($null -ne $Inventory.PSObject.Properties['OwnershipEnrichment']) {
         $ownershipEnrichment = @(ConvertTo-ShareSurferArray $Inventory.OwnershipEnrichment)
     }
+    $ownershipContext = @()
+    if ($null -ne $Inventory.PSObject.Properties['OwnershipContext']) {
+        $ownershipContext = @(ConvertTo-ShareSurferArray $Inventory.OwnershipContext)
+    }
+    $ownershipRelationships = @()
+    if ($null -ne $Inventory.PSObject.Properties['OwnershipRelationships']) {
+        $ownershipRelationships = @(ConvertTo-ShareSurferArray $Inventory.OwnershipRelationships)
+    }
+    $ownershipImportManifest = @()
+    if ($null -ne $Inventory.PSObject.Properties['OwnershipImportManifest']) {
+        $ownershipImportManifest = @(ConvertTo-ShareSurferArray $Inventory.OwnershipImportManifest)
+    }
     if ([string]::IsNullOrWhiteSpace($RequestedSmbCollectionProvider) -and $null -ne $Inventory.PSObject.Properties['RequestedSmbCollectionProvider']) {
         $RequestedSmbCollectionProvider = [string]$Inventory.RequestedSmbCollectionProvider
     }
@@ -192,6 +204,9 @@ function Export-ShareSurferInventory {
         'org_chains.csv' = $orgChains
         'owner_mappings.csv' = $ownerMappings
         'ownership_enrichment.csv' = $ownershipEnrichment
+        'ownership_context.csv' = $ownershipContext
+        'ownership_relationships.csv' = $ownershipRelationships
+        'ownership_import_manifest.csv' = $ownershipImportManifest
         'owner_risk_pivots.csv' = $ownerRiskPivots
         'related_data_areas.csv' = $relatedDataAreas
         'owner_review_packets.csv' = $ownerReviewPackets

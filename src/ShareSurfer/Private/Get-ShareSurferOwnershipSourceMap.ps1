@@ -18,7 +18,10 @@ function Get-ShareSurferOwnershipFieldDefinitions {
         [pscustomobject]@{ Field = 'DataOwner'; Required = $false; Recommended = $false; Synonyms = @('dataowner', 'data_owner', 'data owner', 'owner', 'businessowner', 'business_owner', 'business owner') },
         [pscustomobject]@{ Field = 'OwnerMail'; Required = $false; Recommended = $false; Synonyms = @('ownermail', 'owner_mail', 'owneremail', 'owner_email', 'dataowneremail', 'data_owner_email') },
         [pscustomobject]@{ Field = 'Project'; Required = $false; Recommended = $false; Synonyms = @('project', 'projectname', 'project_name', 'project name', 'program', 'programname', 'program_name') },
-        [pscustomobject]@{ Field = 'ProjectCode'; Required = $false; Recommended = $false; Synonyms = @('projectcode', 'project_code', 'project code', 'programcode', 'program_code', 'chargecode', 'charge_code', 'wbs', 'wbsid') }
+        [pscustomobject]@{ Field = 'ProjectCode'; Required = $false; Recommended = $false; Synonyms = @('projectcode', 'project_code', 'project code', 'programcode', 'program_code', 'chargecode', 'charge_code', 'wbs', 'wbsid') },
+        [pscustomobject]@{ Field = 'ProjectDescription'; Required = $false; Recommended = $false; Synonyms = @('projectdescription', 'project_description', 'project description', 'description', 'desc', 'projectsummary', 'project_summary', 'applicationdescription', 'application_description') },
+        [pscustomobject]@{ Field = 'GroupName'; Required = $false; Recommended = $false; Synonyms = @('groupname', 'group_name', 'group name', 'securitygroup', 'security_group', 'adgroup', 'ad_group', 'permissiongroup', 'permission_group') },
+        [pscustomobject]@{ Field = 'PathPattern'; Required = $false; Recommended = $false; Synonyms = @('pathpattern', 'path_pattern', 'path pattern', 'pathprefix', 'path_prefix', 'path prefix', 'sharepath', 'share_path', 'folderpath', 'folder_path', 'uncpath', 'unc_path') }
     )
 }
 
@@ -59,6 +62,70 @@ function Get-ShareSurferOwnershipEnrichmentColumns {
         'ForbiddenOuMatched',
         'PotentialServiceAccount',
         'ImportWarnings'
+    )
+}
+
+function Get-ShareSurferOwnershipSourceTypes {
+    @('Identity', 'ObsContext', 'ProjectContext', 'PathOwnership', 'GroupContext', 'Mixed')
+}
+
+function Get-ShareSurferOwnershipAuthorityLevels {
+    @('Authoritative', 'ReviewerHint', 'ContextOnly', 'Unknown')
+}
+
+function Get-ShareSurferOwnershipContextColumns {
+    @(
+        'ContextId',
+        'SourceType',
+        'SourcePath',
+        'SourceRowNumber',
+        'EntityType',
+        'EntityKey',
+        'EntityLabel',
+        'OBS',
+        'BusinessUnit',
+        'DataOwner',
+        'OwnerMail',
+        'Project',
+        'ProjectCode',
+        'ProjectDescription',
+        'GroupName',
+        'PathPattern',
+        'AuthorityLevel',
+        'ConfidenceLabel',
+        'EvidenceReason',
+        'ImportWarnings'
+    )
+}
+
+function Get-ShareSurferOwnershipRelationshipColumns {
+    @(
+        'RelationshipId',
+        'SourceType',
+        'SourcePath',
+        'SourceRowNumber',
+        'FromType',
+        'FromValue',
+        'RelationshipType',
+        'ToType',
+        'ToValue',
+        'AuthorityLevel',
+        'ConfidenceLabel',
+        'EvidenceReason'
+    )
+}
+
+function Get-ShareSurferOwnershipImportManifestColumns {
+    @(
+        'SourcePath',
+        'SourceType',
+        'AuthorityLevel',
+        'PrimaryAnchor',
+        'MappedFields',
+        'RowCount',
+        'ContextRowCount',
+        'RelationshipRowCount',
+        'Warnings'
     )
 }
 
@@ -306,6 +373,401 @@ function Get-ShareSurferOwnershipObsMergeKey {
     }
 
     'OBS:{0}' -f $obs.Trim().ToLowerInvariant()
+}
+
+function Get-ShareSurferOwnershipMappedFieldNames {
+    param(
+        [Parameter(Mandatory = $true)]
+        $FieldMap
+    )
+
+    @($FieldMap.PSObject.Properties | Where-Object {
+        -not [string]::IsNullOrWhiteSpace([string]$_.Value)
+    } | ForEach-Object {
+        [string]$_.Name
+    })
+}
+
+function Get-ShareSurferOwnershipDefaultSourceType {
+    param(
+        [Parameter(Mandatory = $true)]
+        $FieldMap
+    )
+
+    $mapped = @(Get-ShareSurferOwnershipMappedFieldNames -FieldMap $FieldMap)
+    foreach ($field in @(Get-ShareSurferOwnershipJoinKeyFields)) {
+        if ($mapped -contains $field) {
+            return 'Identity'
+        }
+    }
+    if (($mapped -contains 'Project' -or $mapped -contains 'ProjectCode' -or $mapped -contains 'ProjectDescription') -and $mapped -contains 'OBS') {
+        return 'ProjectContext'
+    }
+    if ($mapped -contains 'PathPattern') {
+        return 'PathOwnership'
+    }
+    if ($mapped -contains 'GroupName') {
+        return 'GroupContext'
+    }
+    if ($mapped -contains 'OBS') {
+        return 'ObsContext'
+    }
+
+    'Mixed'
+}
+
+function Get-ShareSurferOwnershipDefaultAuthorityLevel {
+    param(
+        [string] $SourceType = 'Mixed'
+    )
+
+    switch ($SourceType) {
+        'ObsContext' { 'ReviewerHint'; break }
+        'ProjectContext' { 'ReviewerHint'; break }
+        'PathOwnership' { 'ReviewerHint'; break }
+        'GroupContext' { 'ContextOnly'; break }
+        'Identity' { 'Authoritative'; break }
+        default { 'Unknown' }
+    }
+}
+
+function Get-ShareSurferOwnershipDefaultPrimaryAnchor {
+    param(
+        [Parameter(Mandatory = $true)]
+        $FieldMap,
+
+        [string] $SourceType = 'Mixed'
+    )
+
+    $mapped = @(Get-ShareSurferOwnershipMappedFieldNames -FieldMap $FieldMap)
+    foreach ($candidate in @('EmployeeId', 'EmployeeNumber', 'SamAccountName', 'UserPrincipalName', 'Mail')) {
+        if ($mapped -contains $candidate) {
+            return $candidate
+        }
+    }
+
+    switch ($SourceType) {
+        'ProjectContext' {
+            foreach ($candidate in @('ProjectCode', 'Project', 'OBS')) {
+                if ($mapped -contains $candidate) { return $candidate }
+            }
+        }
+        'PathOwnership' {
+            foreach ($candidate in @('PathPattern', 'OBS', 'DataOwner')) {
+                if ($mapped -contains $candidate) { return $candidate }
+            }
+        }
+        'GroupContext' {
+            foreach ($candidate in @('GroupName', 'OBS', 'BusinessUnit')) {
+                if ($mapped -contains $candidate) { return $candidate }
+            }
+        }
+        default {
+            foreach ($candidate in @('OBS', 'BusinessUnit', 'DataOwner', 'ProjectCode', 'Project', 'GroupName', 'PathPattern')) {
+                if ($mapped -contains $candidate) { return $candidate }
+            }
+        }
+    }
+
+    ''
+}
+
+function New-ShareSurferOwnershipSourceProfile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        $FieldMap,
+
+        [string] $SourceType = '',
+
+        [string] $AuthorityLevel = '',
+
+        [string] $PrimaryAnchor = '',
+
+        [string[]] $Warnings = @()
+    )
+
+    $validSourceTypes = @(Get-ShareSurferOwnershipSourceTypes)
+    $validAuthorityLevels = @(Get-ShareSurferOwnershipAuthorityLevels)
+    if ([string]::IsNullOrWhiteSpace($SourceType)) {
+        $SourceType = Get-ShareSurferOwnershipDefaultSourceType -FieldMap $FieldMap
+    }
+    if ($validSourceTypes -notcontains $SourceType) {
+        $Warnings += "Unsupported SourceType '$SourceType'; using Mixed."
+        $SourceType = 'Mixed'
+    }
+    if ([string]::IsNullOrWhiteSpace($AuthorityLevel)) {
+        $AuthorityLevel = Get-ShareSurferOwnershipDefaultAuthorityLevel -SourceType $SourceType
+    }
+    if ($validAuthorityLevels -notcontains $AuthorityLevel) {
+        $Warnings += "Unsupported AuthorityLevel '$AuthorityLevel'; using Unknown."
+        $AuthorityLevel = 'Unknown'
+    }
+    if ([string]::IsNullOrWhiteSpace($PrimaryAnchor)) {
+        $PrimaryAnchor = Get-ShareSurferOwnershipDefaultPrimaryAnchor -FieldMap $FieldMap -SourceType $SourceType
+    }
+
+    [pscustomobject]@{
+        SourcePath = $SourcePath
+        SourceType = $SourceType
+        AuthorityLevel = $AuthorityLevel
+        PrimaryAnchor = $PrimaryAnchor
+        MappedFields = (@(Get-ShareSurferOwnershipMappedFieldNames -FieldMap $FieldMap) -join '; ')
+        Warnings = (@($Warnings | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }) -join '; ')
+    }
+}
+
+function ConvertTo-ShareSurferOwnershipSourceProfileMap {
+    param(
+        [object[]] $SourceProfiles = @()
+    )
+
+    $map = @{}
+    foreach ($profile in @($SourceProfiles)) {
+        if ($null -eq $profile -or $null -eq $profile.PSObject.Properties['SourcePath']) {
+            continue
+        }
+        $path = [string]$profile.SourcePath
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            continue
+        }
+        $map[$path.ToLowerInvariant()] = $profile
+    }
+
+    $map
+}
+
+function Get-ShareSurferOwnershipSavedSourceProfile {
+    param(
+        [hashtable] $ProfileMap = @{},
+
+        [string] $SourcePath = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SourcePath)) {
+        return $null
+    }
+    $key = $SourcePath.ToLowerInvariant()
+    if ($ProfileMap.ContainsKey($key)) {
+        return $ProfileMap[$key]
+    }
+
+    $null
+}
+
+function New-ShareSurferOwnershipContextRecord {
+    param(
+        [string] $SourceType = 'Mixed',
+        [string] $SourcePath = '',
+        [int] $SourceRowNumber = 0,
+        [string] $EntityType = '',
+        [string] $EntityKey = '',
+        [string] $EntityLabel = '',
+        [string] $OBS = '',
+        [string] $BusinessUnit = '',
+        [string] $DataOwner = '',
+        [string] $OwnerMail = '',
+        [string] $Project = '',
+        [string] $ProjectCode = '',
+        [string] $ProjectDescription = '',
+        [string] $GroupName = '',
+        [string] $PathPattern = '',
+        [string] $AuthorityLevel = 'Unknown',
+        [string] $ConfidenceLabel = 'NeedsReview',
+        [string] $EvidenceReason = '',
+        [string] $ImportWarnings = ''
+    )
+
+    [pscustomobject]@{
+        ContextId = ''
+        SourceType = $SourceType
+        SourcePath = $SourcePath
+        SourceRowNumber = [string]$SourceRowNumber
+        EntityType = $EntityType
+        EntityKey = $EntityKey
+        EntityLabel = $EntityLabel
+        OBS = $OBS
+        BusinessUnit = $BusinessUnit
+        DataOwner = $DataOwner
+        OwnerMail = $OwnerMail
+        Project = $Project
+        ProjectCode = $ProjectCode
+        ProjectDescription = $ProjectDescription
+        GroupName = $GroupName
+        PathPattern = $PathPattern
+        AuthorityLevel = $AuthorityLevel
+        ConfidenceLabel = $ConfidenceLabel
+        EvidenceReason = $EvidenceReason
+        ImportWarnings = $ImportWarnings
+    }
+}
+
+function New-ShareSurferOwnershipRelationshipRecord {
+    param(
+        [string] $SourceType = 'Mixed',
+        [string] $SourcePath = '',
+        [int] $SourceRowNumber = 0,
+        [string] $FromType = '',
+        [string] $FromValue = '',
+        [string] $RelationshipType = '',
+        [string] $ToType = '',
+        [string] $ToValue = '',
+        [string] $AuthorityLevel = 'Unknown',
+        [string] $ConfidenceLabel = 'NeedsReview',
+        [string] $EvidenceReason = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($FromValue) -or [string]::IsNullOrWhiteSpace($ToValue)) {
+        return $null
+    }
+
+    [pscustomobject]@{
+        RelationshipId = ''
+        SourceType = $SourceType
+        SourcePath = $SourcePath
+        SourceRowNumber = [string]$SourceRowNumber
+        FromType = $FromType
+        FromValue = $FromValue
+        RelationshipType = $RelationshipType
+        ToType = $ToType
+        ToValue = $ToValue
+        AuthorityLevel = $AuthorityLevel
+        ConfidenceLabel = $ConfidenceLabel
+        EvidenceReason = $EvidenceReason
+    }
+}
+
+function Get-ShareSurferOwnershipContextValueSet {
+    param(
+        [Parameter(Mandatory = $true)]
+        $SourceRow,
+
+        [Parameter(Mandatory = $true)]
+        $FieldMap
+    )
+
+    [pscustomobject]@{
+        EmployeeId = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'EmployeeId'
+        EmployeeNumber = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'EmployeeNumber'
+        SamAccountName = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'SamAccountName'
+        UserPrincipalName = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'UserPrincipalName'
+        Mail = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Mail'
+        OBS = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'OBS'
+        BusinessUnit = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'BusinessUnit'
+        DataOwner = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'DataOwner'
+        OwnerMail = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'OwnerMail'
+        Project = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'Project'
+        ProjectCode = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'ProjectCode'
+        ProjectDescription = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'ProjectDescription'
+        GroupName = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'GroupName'
+        PathPattern = Get-ShareSurferOwnershipMappedValue -Row $SourceRow -FieldMap $FieldMap -Field 'PathPattern'
+    }
+}
+
+function New-ShareSurferOwnershipContextRows {
+    param(
+        [Parameter(Mandatory = $true)]
+        $SourceRow,
+
+        [Parameter(Mandatory = $true)]
+        $FieldMap,
+
+        [Parameter(Mandatory = $true)]
+        $SourceProfile,
+
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [int] $SourceRowNumber
+    )
+
+    $values = Get-ShareSurferOwnershipContextValueSet -SourceRow $SourceRow -FieldMap $FieldMap
+    $rows = New-Object System.Collections.Generic.List[object]
+    $sourceType = [string]$SourceProfile.SourceType
+    $authorityLevel = [string]$SourceProfile.AuthorityLevel
+    $confidence = switch ($sourceType) {
+        'Identity' { 'DirectIdentityMatch'; break }
+        'ObsContext' { 'ObsContextMatch'; break }
+        'ProjectContext' { 'ProjectContextMatch'; break }
+        'PathOwnership' { 'PathMapping'; break }
+        'GroupContext' { 'GroupContextMatch'; break }
+        default { 'NeedsReview' }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$values.ProjectCode) -or -not [string]::IsNullOrWhiteSpace([string]$values.Project)) {
+        $key = if (-not [string]::IsNullOrWhiteSpace([string]$values.ProjectCode)) { [string]$values.ProjectCode } else { [string]$values.Project }
+        $label = if (-not [string]::IsNullOrWhiteSpace([string]$values.Project)) { [string]$values.Project } else { $key }
+        [void]$rows.Add((New-ShareSurferOwnershipContextRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -EntityType 'Project' -EntityKey $key -EntityLabel $label -OBS $values.OBS -BusinessUnit $values.BusinessUnit -DataOwner $values.DataOwner -OwnerMail $values.OwnerMail -Project $values.Project -ProjectCode $values.ProjectCode -ProjectDescription $values.ProjectDescription -GroupName $values.GroupName -PathPattern $values.PathPattern -AuthorityLevel $authorityLevel -ConfidenceLabel $confidence -EvidenceReason 'Source row describes a project, program, application, or initiative.'))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$values.OBS)) {
+        [void]$rows.Add((New-ShareSurferOwnershipContextRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -EntityType 'OBS' -EntityKey $values.OBS -EntityLabel $values.OBS -OBS $values.OBS -BusinessUnit $values.BusinessUnit -DataOwner $values.DataOwner -OwnerMail $values.OwnerMail -Project $values.Project -ProjectCode $values.ProjectCode -ProjectDescription $values.ProjectDescription -GroupName $values.GroupName -PathPattern $values.PathPattern -AuthorityLevel $authorityLevel -ConfidenceLabel $confidence -EvidenceReason 'Source row provides OBS/OID or business-structure context.'))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$values.PathPattern)) {
+        [void]$rows.Add((New-ShareSurferOwnershipContextRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -EntityType 'Path' -EntityKey $values.PathPattern -EntityLabel $values.PathPattern -OBS $values.OBS -BusinessUnit $values.BusinessUnit -DataOwner $values.DataOwner -OwnerMail $values.OwnerMail -Project $values.Project -ProjectCode $values.ProjectCode -ProjectDescription $values.ProjectDescription -GroupName $values.GroupName -PathPattern $values.PathPattern -AuthorityLevel $authorityLevel -ConfidenceLabel $confidence -EvidenceReason 'Source row provides path or path-prefix ownership context.'))
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$values.GroupName)) {
+        [void]$rows.Add((New-ShareSurferOwnershipContextRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -EntityType 'Group' -EntityKey $values.GroupName -EntityLabel $values.GroupName -OBS $values.OBS -BusinessUnit $values.BusinessUnit -DataOwner $values.DataOwner -OwnerMail $values.OwnerMail -Project $values.Project -ProjectCode $values.ProjectCode -ProjectDescription $values.ProjectDescription -GroupName $values.GroupName -PathPattern $values.PathPattern -AuthorityLevel $authorityLevel -ConfidenceLabel $confidence -EvidenceReason 'Source row provides security-group context.'))
+    }
+
+    if ($rows.Count -eq 0) {
+        $fallbackKey = if (-not [string]::IsNullOrWhiteSpace([string]$values.DataOwner)) { [string]$values.DataOwner } elseif (-not [string]::IsNullOrWhiteSpace([string]$values.BusinessUnit)) { [string]$values.BusinessUnit } else { 'SourceRow:{0}' -f $SourceRowNumber }
+        [void]$rows.Add((New-ShareSurferOwnershipContextRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -EntityType 'SourceRow' -EntityKey $fallbackKey -EntityLabel $fallbackKey -OBS $values.OBS -BusinessUnit $values.BusinessUnit -DataOwner $values.DataOwner -OwnerMail $values.OwnerMail -Project $values.Project -ProjectCode $values.ProjectCode -ProjectDescription $values.ProjectDescription -GroupName $values.GroupName -PathPattern $values.PathPattern -AuthorityLevel $authorityLevel -ConfidenceLabel 'NeedsReview' -EvidenceReason 'Source row had useful ownership context but no strong typed anchor.'))
+    }
+
+    @($rows.ToArray())
+}
+
+function New-ShareSurferOwnershipRelationshipRows {
+    param(
+        [Parameter(Mandatory = $true)]
+        $SourceRow,
+
+        [Parameter(Mandatory = $true)]
+        $FieldMap,
+
+        [Parameter(Mandatory = $true)]
+        $SourceProfile,
+
+        [Parameter(Mandatory = $true)]
+        [string] $SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [int] $SourceRowNumber
+    )
+
+    $values = Get-ShareSurferOwnershipContextValueSet -SourceRow $SourceRow -FieldMap $FieldMap
+    $rows = New-Object System.Collections.Generic.List[object]
+    $sourceType = [string]$SourceProfile.SourceType
+    $authorityLevel = [string]$SourceProfile.AuthorityLevel
+    $projectKey = if (-not [string]::IsNullOrWhiteSpace([string]$values.ProjectCode)) { [string]$values.ProjectCode } else { [string]$values.Project }
+    $confidence = switch ($sourceType) {
+        'ObsContext' { 'ObsContextMatch'; break }
+        'ProjectContext' { 'ProjectContextMatch'; break }
+        'PathOwnership' { 'PathMapping'; break }
+        'GroupContext' { 'GroupContextMatch'; break }
+        default { 'NeedsReview' }
+    }
+
+    foreach ($candidate in @(
+        (New-ShareSurferOwnershipRelationshipRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -FromType 'Project' -FromValue $projectKey -RelationshipType 'BelongsTo' -ToType 'OBS' -ToValue $values.OBS -AuthorityLevel $authorityLevel -ConfidenceLabel $confidence -EvidenceReason 'Project source linked project or project code to OBS.'),
+        (New-ShareSurferOwnershipRelationshipRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -FromType 'OBS' -FromValue $values.OBS -RelationshipType 'PartOf' -ToType 'BusinessUnit' -ToValue $values.BusinessUnit -AuthorityLevel $authorityLevel -ConfidenceLabel 'ObsContextMatch' -EvidenceReason 'Source supplied BusinessUnit for OBS.'),
+        (New-ShareSurferOwnershipRelationshipRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -FromType 'OBS' -FromValue $values.OBS -RelationshipType 'ReviewedBy' -ToType 'DataOwner' -ToValue $values.DataOwner -AuthorityLevel $authorityLevel -ConfidenceLabel 'ReviewerHint' -EvidenceReason 'Source supplied DataOwner for OBS.'),
+        (New-ShareSurferOwnershipRelationshipRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -FromType 'Project' -FromValue $projectKey -RelationshipType 'ReviewedBy' -ToType 'DataOwner' -ToValue $values.DataOwner -AuthorityLevel $authorityLevel -ConfidenceLabel 'ReviewerHint' -EvidenceReason 'Source supplied DataOwner for project context.'),
+        (New-ShareSurferOwnershipRelationshipRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -FromType 'Path' -FromValue $values.PathPattern -RelationshipType 'ReviewedBy' -ToType 'DataOwner' -ToValue $values.DataOwner -AuthorityLevel $authorityLevel -ConfidenceLabel 'PathMapping' -EvidenceReason 'Source supplied DataOwner for a path or path prefix.'),
+        (New-ShareSurferOwnershipRelationshipRecord -SourceType $sourceType -SourcePath $SourcePath -SourceRowNumber $SourceRowNumber -FromType 'Group' -FromValue $values.GroupName -RelationshipType 'RelatedTo' -ToType 'OBS' -ToValue $values.OBS -AuthorityLevel $authorityLevel -ConfidenceLabel 'GroupContextMatch' -EvidenceReason 'Source linked security group context to OBS.')
+    )) {
+        if ($null -ne $candidate) {
+            [void]$rows.Add($candidate)
+        }
+    }
+
+    @($rows.ToArray())
 }
 
 function Add-ShareSurferDelimitedValue {
@@ -605,6 +1067,38 @@ function Get-ShareSurferDefinitionStringProperty {
     [string]$Definition.PSObject.Properties[$Name].Value
 }
 
+function Get-ShareSurferDefinitionBoolProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Definition,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    if ($null -eq $Definition.PSObject.Properties[$Name] -or $null -eq $Definition.PSObject.Properties[$Name].Value) {
+        return $false
+    }
+
+    [bool]$Definition.PSObject.Properties[$Name].Value
+}
+
+function Get-ShareSurferDefinitionObjectArrayProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Definition,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    if ($null -eq $Definition.PSObject.Properties[$Name] -or $null -eq $Definition.PSObject.Properties[$Name].Value) {
+        return @()
+    }
+
+    @($Definition.PSObject.Properties[$Name].Value)
+}
+
 function Get-ShareSurferOwnershipImportDefinition {
     [CmdletBinding()]
     param(
@@ -632,6 +1126,20 @@ function Get-ShareSurferOwnershipImportDefinition {
         ObsAttribute = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'obsAttribute'
         AdLookupMode = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'adLookupMode'
         ForbiddenOus = @(Get-ShareSurferDefinitionArrayProperty -Definition $definition -Name 'forbiddenOus')
+        IncludeContextGraph = Get-ShareSurferDefinitionBoolProperty -Definition $definition -Name 'includeContextGraph'
+        ContextOutputPath = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'contextOutputPath'
+        RelationshipOutputPath = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'relationshipOutputPath'
+        ManifestOutputPath = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'manifestOutputPath'
+        SourceProfiles = @(Get-ShareSurferDefinitionObjectArrayProperty -Definition $definition -Name 'sourceProfiles' | ForEach-Object {
+            [pscustomobject]@{
+                SourcePath = if ($null -ne $_.PSObject.Properties['sourcePath']) { [string]$_.sourcePath } elseif ($null -ne $_.PSObject.Properties['SourcePath']) { [string]$_.SourcePath } else { '' }
+                SourceType = if ($null -ne $_.PSObject.Properties['sourceType']) { [string]$_.sourceType } elseif ($null -ne $_.PSObject.Properties['SourceType']) { [string]$_.SourceType } else { 'Mixed' }
+                AuthorityLevel = if ($null -ne $_.PSObject.Properties['authorityLevel']) { [string]$_.authorityLevel } elseif ($null -ne $_.PSObject.Properties['AuthorityLevel']) { [string]$_.AuthorityLevel } else { 'Unknown' }
+                PrimaryAnchor = if ($null -ne $_.PSObject.Properties['primaryAnchor']) { [string]$_.primaryAnchor } elseif ($null -ne $_.PSObject.Properties['PrimaryAnchor']) { [string]$_.PrimaryAnchor } else { '' }
+                MappedFields = if ($null -ne $_.PSObject.Properties['mappedFields']) { [string]$_.mappedFields } elseif ($null -ne $_.PSObject.Properties['MappedFields']) { [string]$_.MappedFields } else { '' }
+                Warnings = if ($null -ne $_.PSObject.Properties['warnings']) { [string]$_.warnings } elseif ($null -ne $_.PSObject.Properties['Warnings']) { [string]$_.Warnings } else { '' }
+            }
+        })
         CreatedBy = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'createdBy'
         CreatedAt = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'createdAt'
         UpdatedAt = Get-ShareSurferDefinitionStringProperty -Definition $definition -Name 'updatedAt'
@@ -690,6 +1198,16 @@ function Export-ShareSurferOwnershipImportDefinition {
 
         [string[]] $ForbiddenOu = @(),
 
+        [bool] $IncludeContextGraph = $false,
+
+        [string] $ContextOutputPath = '',
+
+        [string] $RelationshipOutputPath = '',
+
+        [string] $ManifestOutputPath = '',
+
+        [object[]] $SourceProfiles = @(),
+
         [switch] $Force
     )
 
@@ -729,6 +1247,20 @@ function Export-ShareSurferOwnershipImportDefinition {
         obsAttribute = $ObsAttribute
         adLookupMode = $AdLookupMode
         forbiddenOus = @($ForbiddenOu | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+        includeContextGraph = [bool]$IncludeContextGraph
+        contextOutputPath = $ContextOutputPath
+        relationshipOutputPath = $RelationshipOutputPath
+        manifestOutputPath = $ManifestOutputPath
+        sourceProfiles = @($SourceProfiles | ForEach-Object {
+            [ordered]@{
+                sourcePath = if ($null -ne $_.PSObject.Properties['SourcePath']) { [string]$_.SourcePath } else { '' }
+                sourceType = if ($null -ne $_.PSObject.Properties['SourceType']) { [string]$_.SourceType } else { 'Mixed' }
+                authorityLevel = if ($null -ne $_.PSObject.Properties['AuthorityLevel']) { [string]$_.AuthorityLevel } else { 'Unknown' }
+                primaryAnchor = if ($null -ne $_.PSObject.Properties['PrimaryAnchor']) { [string]$_.PrimaryAnchor } else { '' }
+                mappedFields = if ($null -ne $_.PSObject.Properties['MappedFields']) { [string]$_.MappedFields } else { '' }
+                warnings = if ($null -ne $_.PSObject.Properties['Warnings']) { [string]$_.Warnings } else { '' }
+            }
+        })
         createdBy = $createdBy
         createdAt = $createdAt
         updatedAt = $now
@@ -875,7 +1407,15 @@ function New-ShareSurferOwnershipEnrichmentReusableCommands {
 
         [string[]] $ForbiddenOu = @(),
 
-        [string] $DefinitionPath = ''
+        [string] $DefinitionPath = '',
+
+        [switch] $IncludeContextGraph,
+
+        [string] $ContextOutputPath = '',
+
+        [string] $RelationshipOutputPath = '',
+
+        [string] $ManifestOutputPath = ''
     )
 
     $lines = New-Object System.Collections.Generic.List[string]
@@ -898,6 +1438,11 @@ function New-ShareSurferOwnershipEnrichmentReusableCommands {
     $lines.Add(('$outputPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OutputPath)))
     $lines.Add(('$obsAttribute = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsAttribute)))
     $lines.Add(('$adLookupMode = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AdLookupMode)))
+    if ($IncludeContextGraph) {
+        $lines.Add(('$contextOutputPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ContextOutputPath)))
+        $lines.Add(('$relationshipOutputPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $RelationshipOutputPath)))
+        $lines.Add(('$manifestOutputPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ManifestOutputPath)))
+    }
     if (-not [string]::IsNullOrWhiteSpace($ObsHeader)) {
         $lines.Add(('$obsHeader = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsHeader)))
     }
@@ -908,6 +1453,9 @@ function New-ShareSurferOwnershipEnrichmentReusableCommands {
     }
     if (-not [string]::IsNullOrWhiteSpace($ObsHeader)) {
         $command += ' -ObsHeader $obsHeader'
+    }
+    if ($IncludeContextGraph) {
+        $command += ' -IncludeContextGraph -ContextOutputPath $contextOutputPath -RelationshipOutputPath $relationshipOutputPath -ManifestOutputPath $manifestOutputPath'
     }
     $lines.Add($command)
     $lines.Add('')
