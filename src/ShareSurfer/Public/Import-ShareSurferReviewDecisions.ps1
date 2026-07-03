@@ -57,12 +57,12 @@ function Get-ShareSurferReviewDecisionReviewedAt {
     $parsed = [datetime]::MinValue
     $roundtripStyles = [System.Globalization.DateTimeStyles]::RoundtripKind -bor [System.Globalization.DateTimeStyles]::AllowWhiteSpaces
     if ([datetime]::TryParseExact($text, 'o', [System.Globalization.CultureInfo]::InvariantCulture, $roundtripStyles, [ref]$parsed)) {
-        return $parsed
+        return $parsed.ToUniversalTime()
     }
 
     $fallbackStyles = [System.Globalization.DateTimeStyles]::AssumeLocal -bor [System.Globalization.DateTimeStyles]::AllowWhiteSpaces
     if ([datetime]::TryParse($text, [System.Globalization.CultureInfo]::InvariantCulture, $fallbackStyles, [ref]$parsed)) {
-        return $parsed
+        return $parsed.ToUniversalTime()
     }
 
     $null

@@ -31,12 +31,12 @@ For the fuller explanation, use the [visual field guide](docs/visual-field-guide
 
 For the first real run:
 
-1. Download `ShareSurfer-0.1.0-pre.29.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.29). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
-2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.29\`.
+1. Download `ShareSurfer-0.1.0-pre.30.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.30). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
+2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.30\`.
 3. Recursively unblock extracted PowerShell files:
 
    ```powershell
-   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.29'
+   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.30'
    Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
      Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
      Unblock-File
@@ -149,7 +149,7 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 Use this compact pattern when the release folder has been copied to a locked-down Windows collector host:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.29'
+$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.30'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -232,7 +232,7 @@ Current screenshots are under [docs/visuals/dashboard-screenshots/2026-06-09-cur
 
 ## Pre-1.0 Release Packaging
 
-The first packages are unsigned but fully built. `v0.1.0-pre.29` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
+The first packages are unsigned but fully built. `v0.1.0-pre.30` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
 
 Release identity lives in [release-metadata.json](release-metadata.json). Update that file first when preparing a prerelease; packaging fails closed when the manual version or tag does not match.
 

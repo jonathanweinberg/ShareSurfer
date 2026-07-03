@@ -104,11 +104,26 @@ function Get-ShareSurferLocalInventory {
                         $localShareVerificationMessage = ('Share-level permissions were not collected because no local SMB share path matched scanned folder {0}.' -f $targetDisplayPath)
                     }
                     else {
-                        $matchedShare = $matchingShareRows[0]
+                        $preferredShareRows = @($matchingShareRows | Where-Object {
+                            $null -eq $_.PSObject.Properties['Special'] -or -not [bool]$_.Special
+                        })
+                        $matchedShare = if ($preferredShareRows.Count -gt 0) { $preferredShareRows[0] } else { $matchingShareRows[0] }
                         $matchedShareName = if ($matchedShare.PSObject.Properties['Name']) { [string]$matchedShare.Name } else { [string]$shareInfo.ShareName }
                         if (-not [string]::IsNullOrWhiteSpace($matchedShareName)) {
                             $shareInfo.ShareName = $matchedShareName
                             $shareInfo.UNCPath = '\\{0}\{1}' -f $shareInfo.ComputerName, $matchedShareName
+                        }
+                        $matchedShareIsSpecial = ($null -ne $matchedShare.PSObject.Properties['Special'] -and [bool]$matchedShare.Special)
+                        if ($matchedShareIsSpecial) {
+                            [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Info' -EventType 'SpecialLocalShareSelected' -Source 'Get-SmbShare' -ShareId $shareId -Message ('Only a special/admin local SMB share matched scanned folder {0}; using {1} as best available share-gate evidence.' -f $targetDisplayPath, $matchedShareName) -Detail ('MatchedShares={0}' -f ((@($matchingShareRows | ForEach-Object { [string]$_.Name }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ', '))))
+                        }
+                        if ($matchingShareRows.Count -gt 1) {
+                            $additionalNames = @($matchingShareRows | Where-Object {
+                                $null -ne $_.PSObject.Properties['Name'] -and -not [string]::Equals([string]$_.Name, $matchedShareName, [System.StringComparison]::OrdinalIgnoreCase)
+                            } | ForEach-Object { [string]$_.Name } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+                            if ($additionalNames.Count -gt 0) {
+                                [void]$scanEvents.Add((New-ShareSurferEvent -Level 'Info' -EventType 'MultipleLocalSharesMatchedPath' -Source 'Get-SmbShare' -ShareId $shareId -Message ('Multiple local SMB shares matched scanned folder {0}; using {1} for share-permission collection.' -f $targetDisplayPath, $matchedShareName) -Detail ('AdditionalMatchingShares={0}' -f ($additionalNames -join ', '))))
+                            }
                         }
                     }
                 }

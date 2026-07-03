@@ -129,6 +129,18 @@ function Test-ShareSurferOwnerMappingData {
         $errors.Add(("Owner mapping CSV is missing required column(s): {0}. Required columns are Pattern, Owner, and BusinessUnit." -f (($missingRequired | Sort-Object) -join ', ')))
     }
     else {
+        if ($rows.Count -eq 0) {
+            $message = 'Owner mapping CSV contains headers but no data rows. The scan can continue, but no owner/business-unit mappings will be added from this file.'
+            $warnings.Add($message)
+            $problemRows.Add([pscustomobject]@{
+                RowNumber = 0
+                Column = ''
+                Severity = 'Warning'
+                Problem = 'HeadersOnlyOwnerMapping'
+                Message = $message
+            })
+        }
+
         $rowNumber = 1
         foreach ($row in $rows) {
             $rowNumber++
@@ -182,7 +194,6 @@ function Test-ShareSurferOwnerMappingData {
         }
 
         $shareCandidatePaths = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
-        $itemCandidatePaths = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
         $sharesPath = Join-Path $ExportPath 'shares.csv'
         if (Test-Path -LiteralPath $sharesPath) {
             foreach ($share in @(Read-ShareSurferCsv -Path $sharesPath)) {
@@ -195,14 +206,7 @@ function Test-ShareSurferOwnerMappingData {
         }
 
         $itemsPath = Join-Path $ExportPath 'items.csv'
-        if (Test-Path -LiteralPath $itemsPath) {
-            foreach ($item in @(Read-ShareSurferCsv -Path $itemsPath)) {
-                $candidate = [string]$item.FullPath
-                if (-not [string]::IsNullOrWhiteSpace($candidate)) {
-                    [void]$itemCandidatePaths.Add($candidate)
-                }
-            }
-        }
+        $itemCandidatePaths = $null
 
         if ($missingRequired.Count -eq 0) {
             $rowNumber = 1
@@ -222,6 +226,18 @@ function Test-ShareSurferOwnerMappingData {
                 }
 
                 if (-not $matched) {
+                    if ($null -eq $itemCandidatePaths) {
+                        $itemCandidatePaths = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
+                        if (Test-Path -LiteralPath $itemsPath) {
+                            foreach ($item in @(Read-ShareSurferCsv -Path $itemsPath)) {
+                                $candidate = [string]$item.FullPath
+                                if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+                                    [void]$itemCandidatePaths.Add($candidate)
+                                }
+                            }
+                        }
+                    }
+
                     foreach ($candidatePath in @($itemCandidatePaths)) {
                         if (Test-ShareSurferWildcardMatch -Pattern $pattern -Value $candidatePath) {
                             $matched = $true

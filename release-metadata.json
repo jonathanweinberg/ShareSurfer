@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.29",
-  "packageVersion": "0.1.0-pre.29",
-  "packageName": "ShareSurfer-0.1.0-pre.29",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.29.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.29",
+  "currentPrereleaseTag": "v0.1.0-pre.30",
+  "packageVersion": "0.1.0-pre.30",
+  "packageName": "ShareSurfer-0.1.0-pre.30",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.30.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.30",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #338 standalone dashboard repair wave: the Broken/Missing SID filter is now a clear three-state control, broken SID evidence detection is shared across KPI counts and filters, raw owner SID values participate in SID filtering, Access Conflicts opens a conflict-focused review view, conflict rows use business-friendly labels and actions, and conflict display now resolves item/share paths plus owner and business-unit context where the export contains enough evidence. The package also includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #348 PASS4 hardening wave: owner-mapping warnings now appear in scan_events.csv, headers-only owner-mapping files warn instead of disappearing silently, owner-mapping export validation avoids loading items.csv unless share-level pattern checks miss, review-decision ReviewedAt precedence is normalized to UTC, local target-path scans prefer non-special SMB shares over admin shares when both match, and scans record when multiple local shares or only a special/admin share match the same path. The release also carries the guided ownership context ingestion work from #346, including optional ownership_context.csv, ownership_relationships.csv, and ownership_import_manifest.csv support. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
