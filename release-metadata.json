@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.31",
-  "packageVersion": "0.1.0-pre.31",
-  "packageName": "ShareSurfer-0.1.0-pre.31",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.31.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.31",
+  "currentPrereleaseTag": "v0.1.0-pre.32",
+  "packageVersion": "0.1.0-pre.32",
+  "packageName": "ShareSurfer-0.1.0-pre.32",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.32.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.32",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #350 startup ownership setup update. Start-ShareSurfer and Start-ShareSurferStartup can now help first-run operators when ownership inputs are missing: interactive startup can launch the multi-CSV ownership import picker to build ownership-enrichment.csv plus ownership context graph files, save reusable ownership import JSON/script outputs, return to the normal startup flow, and queue post-scan owner-mapping-draft.csv creation when owner-mapping.csv is not available yet. The release also carries the recent ownership import/context graph hardening and PASS4 scan/mapping behavior from #346 and #348. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #354 ownership import progress and stall-hardening update. Join-ShareSurferOwnershipSources now prints phase and row-count heartbeat messages while processing multi-CSV ownership imports, reports AD lookup attempts and cache hits, warns when a source is OBS-only with no mapped employee/account join key, and uses an OBS-key index so context-only rows do not repeatedly scan every merged ownership row. Documentation now explains what progress messages mean and that older silent runs can be safely stopped and rerun from ownership-import.definition.json or ownership-enrichment-rerun.ps1. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
