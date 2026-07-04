@@ -279,6 +279,10 @@ Join-ShareSurferOwnershipSources `
 
 If you already saved mapping profiles for the same files, pass them with `-MappingProfilePath`.
 
+During a multi-source join, ShareSurfer now prints progress in phases: selected CSVs, source rows being processed, merged ownership rows, OBS context merge, AD lookup attempts, output files, and the final matched/source-only/ambiguous counts. Long AD-backed imports should continue to print a heartbeat instead of sitting silently after the header interview.
+
+If an older ShareSurfer run has been silent for a long time, it is safe to stop it with `Ctrl+C` and rerun with the saved `ownership-import.definition.json` or `ownership-enrichment-rerun.ps1`. The import reads CSVs and AD, then writes local output files; it does not modify AD, shares, or permissions.
+
 ### Project, OBS, Path, And Group Context Files
 
 Some source files do not describe people or AD accounts. They may describe projects, applications, path prefixes, security groups, or OBS/business structure. These files are still useful because they explain why data areas appear related.

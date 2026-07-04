@@ -2639,6 +2639,42 @@ $tests = @(
         }
     },
     @{
+        Name = 'Join-ShareSurferOwnershipSources reports progress during ownership import'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourceOnePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProgressHr-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $sourceTwoPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProgressProjects-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipProgressOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+
+            @(
+                [pscustomobject]@{ employee_id = 'E1001'; display_name = 'Ava Accounting'; obs = 'CORP.FIN.AP' },
+                [pscustomobject]@{ employee_id = 'E1002'; display_name = 'Ben Billing'; obs = 'CORP.FIN.AR' }
+            ) | Export-Csv -LiteralPath $sourceOnePath -NoTypeInformation -Encoding UTF8
+            @(
+                [pscustomobject]@{ obs = 'CORP.FIN.AP'; project_code = 'AP-2026'; project = 'Accounts Payable Modernization' },
+                [pscustomobject]@{ obs = 'CORP.FIN.AR'; project_code = 'AR-2026'; project = 'Accounts Receivable Cleanup' }
+            ) | Export-Csv -LiteralPath $sourceTwoPath -NoTypeInformation -Encoding UTF8
+
+            $captured = & {
+                Join-ShareSurferOwnershipSources `
+                    -Path @($sourceOnePath, $sourceTwoPath) `
+                    -OutputPath $outputPath `
+                    -AdLookupMode DirectoryOnly `
+                    -ProgressRowInterval 1 `
+                    -ProgressIntervalSeconds 0 `
+                    -Force | Out-Null
+            } 6>&1
+            $capturedText = (@($captured) | ForEach-Object { [string]$_ }) -join "`n"
+
+            Assert-True ($capturedText -like '*Selected 2 ownership source CSV file(s)*') 'Progress output should announce selected CSV source count.'
+            Assert-True ($capturedText -like '*Source 1/2: processing 2 row(s)*') 'Progress output should announce per-source row counts.'
+            Assert-True ($capturedText -like '*Source 2/2: processed 2/2 row(s)*') 'Progress output should announce OBS-only context source progress.'
+            Assert-True ($capturedText -like '*Directory enrichment: processed 2/2 row(s)*') 'Progress output should announce directory enrichment progress.'
+            Assert-True ($capturedText -like '*Ownership import complete: 2 row(s)*') 'Progress output should announce completion summary.'
+            Assert-True (Test-Path -LiteralPath $outputPath) 'Ownership import should still write the enrichment output.'
+        }
+    },
+    @{
         Name = 'Join-ShareSurferOwnershipSources writes context graph rows for project OBS sources'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2725,10 +2761,12 @@ $tests = @(
             $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipAdEnrichment-' + [guid]::NewGuid().ToString('N') + '.csv')
             @(
                 [pscustomobject]@{ employee_id = 'E1001'; obs = 'CORP.FIN.AP' },
+                [pscustomobject]@{ employee_id = 'E1001'; obs = 'CORP.FIN.AP.REPEAT' },
                 [pscustomobject]@{ employee_id = 'E2002'; obs = 'CORP.OLD.DISABLED' }
             ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
 
             try {
+                $script:shareSurferOwnershipAdLookupCount = 0
                 function global:Get-ADUser {
                     param(
                         [string] $LDAPFilter,
@@ -2736,6 +2774,9 @@ $tests = @(
                         [string[]] $Properties
                     )
 
+                    if ($LDAPFilter) {
+                        $script:shareSurferOwnershipAdLookupCount++
+                    }
                     if ($LDAPFilter -like '*E1001*') {
                         return [pscustomobject]@{
                             SamAccountName = 'Ava.Accounting'
@@ -2782,6 +2823,9 @@ $tests = @(
 
                 Assert-Equal $summary.MatchedCount 1 'Join summary should count the allowed AD match.'
                 Assert-Equal $summary.ForbiddenOuSkippedCount 1 'Join summary should count the forbidden OU skip.'
+                Assert-Equal $summary.AdLookupAttemptCount 2 'Join summary should count unique AD lookup attempts after merge.'
+                Assert-Equal $summary.DirectoryLookupCacheHitCount 0 'Exact duplicate employee IDs should be merged before lookup caching is needed.'
+                Assert-Equal $script:shareSurferOwnershipAdLookupCount 2 'AD lookup should run once per merged employee identifier.'
                 Assert-Equal $matched.MatchStatus 'Matched' 'Allowed row should be marked as matched.'
                 Assert-Equal $matched.SamAccountName 'Ava.Accounting' 'Allowed row should be enriched with SAM account name.'
                 Assert-Equal $matched.Title 'Accounting Analyst' 'Allowed row should be enriched with title.'

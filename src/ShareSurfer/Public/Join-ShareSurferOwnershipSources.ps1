@@ -41,6 +41,14 @@ function Join-ShareSurferOwnershipSources {
 
         [string] $ReusableCommandPath = '',
 
+        [ValidateRange(0, 2147483647)]
+        [int] $ProgressRowInterval = 250,
+
+        [ValidateRange(0, 2147483647)]
+        [int] $ProgressIntervalSeconds = 10,
+
+        [switch] $Quiet,
+
         [switch] $Force
     )
 
@@ -97,9 +105,16 @@ function Join-ShareSurferOwnershipSources {
         throw 'No ownership source CSV files were selected.'
     }
 
+    $progressClock = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastProgressSecond = -1 * [Math]::Max(1, $ProgressIntervalSeconds)
+    Write-ShareSurferOwnershipImportStatus -Message ('Selected {0} ownership source CSV file(s). AD lookup mode: {1}. Context graph: {2}.' -f $selectedPaths.Count, $AdLookupMode, $(if ($IncludeContextGraph) { 'enabled' } else { 'disabled' })) -Quiet:$Quiet
+
     $selectedForbiddenOus = @($ForbiddenOu | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($Interactive) {
         $selectedForbiddenOus = @(Select-ShareSurferForbiddenOus -ExistingForbiddenOu $selectedForbiddenOus -AdLookupMode $AdLookupMode)
+    }
+    if ($selectedForbiddenOus.Count -gt 0) {
+        Write-ShareSurferOwnershipImportStatus -Message ('Using {0} forbidden OU filter(s) for AD enrichment.' -f $selectedForbiddenOus.Count) -Quiet:$Quiet
     }
 
     if ($IncludeContextGraph) {
@@ -120,6 +135,7 @@ function Join-ShareSurferOwnershipSources {
 
     $writtenDefinitionPath = ''
     $mergedRows = [ordered]@{}
+    $mergedKeysByObsKey = @{}
     $obsContextRows = @{}
     $contextRows = New-Object System.Collections.ArrayList
     $relationshipRows = New-Object System.Collections.ArrayList
@@ -132,12 +148,14 @@ function Join-ShareSurferOwnershipSources {
     $sourceWarnings = New-Object System.Collections.Generic.List[string]
     foreach ($sourcePath in $selectedPaths) {
         $sourceIndex++
+        Write-ShareSurferOwnershipImportStatus -Message ('Reading source {0}/{1}: {2}' -f $sourceIndex, $selectedPaths.Count, $sourcePath) -Quiet:$Quiet
         $profilePath = ''
         if ($MappingProfilePath.Count -ge $sourceIndex) {
             $profilePath = [string]$MappingProfilePath[$sourceIndex - 1]
         }
 
         $headers = @(Get-ShareSurferCsvHeaders -Path $sourcePath)
+        Write-ShareSurferOwnershipImportStatus -Message ('Source {0}/{1}: found {2} CSV header(s).' -f $sourceIndex, $selectedPaths.Count, $headers.Count) -Quiet:$Quiet
         $fieldMapOverride = @{}
         if (-not [string]::IsNullOrWhiteSpace($profilePath)) {
             if (-not (Test-Path -LiteralPath $profilePath)) {
@@ -184,11 +202,16 @@ function Join-ShareSurferOwnershipSources {
         }
 
         $sourceRows = @(Import-Csv -LiteralPath $sourcePath)
+        Write-ShareSurferOwnershipImportStatus -Message ('Source {0}/{1}: processing {2} row(s).' -f $sourceIndex, $selectedPaths.Count, $sourceRows.Count) -Quiet:$Quiet
         $sourceContextCount = 0
         $sourceRelationshipCount = 0
+        $sourceStrongKeyCount = 0
+        $sourceWeakObsOnlyCount = 0
         $rowNumber = 1
+        $sourceProcessed = 0
         foreach ($sourceRow in $sourceRows) {
             $rowNumber++
+            $sourceProcessed++
             $incoming = New-ShareSurferOwnershipEnrichmentRow -SourceRow $sourceRow -FieldMap $fieldMap -SourcePath $sourcePath -SourceRowNumber $rowNumber -ObsAttribute $ObsAttribute
             if ($IncludeContextGraph) {
                 foreach ($contextRow in @(New-ShareSurferOwnershipContextRows -SourceRow $sourceRow -FieldMap $fieldMap -SourceProfile $sourceProfile -SourcePath $sourcePath -SourceRowNumber $rowNumber)) {
@@ -206,7 +229,15 @@ function Join-ShareSurferOwnershipSources {
             }
 
             $obsKey = Get-ShareSurferOwnershipObsMergeKey -Row $incoming
-            if (-not (Test-ShareSurferOwnershipStrongJoinKey -Row $incoming) -and -not [string]::IsNullOrWhiteSpace($obsKey)) {
+            $hasStrongJoinKey = Test-ShareSurferOwnershipStrongJoinKey -Row $incoming
+            if ($hasStrongJoinKey) {
+                $sourceStrongKeyCount++
+            }
+            elseif (-not [string]::IsNullOrWhiteSpace($obsKey)) {
+                $sourceWeakObsOnlyCount++
+            }
+
+            if (-not $hasStrongJoinKey -and -not [string]::IsNullOrWhiteSpace($obsKey)) {
                 if ($obsContextRows.ContainsKey($obsKey)) {
                     $obsContextRows[$obsKey] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $obsContextRows[$obsKey] -Incoming $incoming
                 }
@@ -214,11 +245,19 @@ function Join-ShareSurferOwnershipSources {
                     $obsContextRows[$obsKey] = $incoming
                 }
 
-                foreach ($existingKey in @($mergedRows.Keys)) {
-                    $existingObsKey = Get-ShareSurferOwnershipObsMergeKey -Row $mergedRows[$existingKey]
-                    if ($existingObsKey -eq $obsKey) {
+                if ($mergedKeysByObsKey.ContainsKey($obsKey)) {
+                    foreach ($existingKey in @($mergedKeysByObsKey[$obsKey].Keys)) {
                         $mergedRows[$existingKey] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $mergedRows[$existingKey] -Incoming $incoming
                     }
+                }
+
+                $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
+                $rowIntervalDue = ($ProgressRowInterval -gt 0 -and (($sourceProcessed % $ProgressRowInterval) -eq 0))
+                $timeIntervalDue = ($ProgressIntervalSeconds -gt 0 -and (($elapsedSeconds - $lastProgressSecond) -ge $ProgressIntervalSeconds))
+                if ($rowIntervalDue -or $timeIntervalDue -or $sourceProcessed -eq $sourceRows.Count) {
+                    $lastProgressSecond = $elapsedSeconds
+                    Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership import' -Status ('Source {0}/{1}: {2}/{3} rows' -f $sourceIndex, $selectedPaths.Count, $sourceProcessed, $sourceRows.Count) -CurrentOperation ('Merged rows: {0}; OBS-only context rows: {1}; context rows: {2}; relationship rows: {3}' -f $mergedRows.Count, $obsContextRows.Count, $contextRows.Count, $relationshipRows.Count) -Processed $sourceProcessed -Total $sourceRows.Count -Quiet:$Quiet
+                    Write-ShareSurferOwnershipImportStatus -Message ('Source {0}/{1}: processed {2}/{3} row(s); merged rows {4}; OBS-only context rows {5}; context rows {6}; relationship rows {7}; elapsed {8}.' -f $sourceIndex, $selectedPaths.Count, $sourceProcessed, $sourceRows.Count, $mergedRows.Count, $obsContextRows.Count, $contextRows.Count, $relationshipRows.Count, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
                 }
                 continue
             }
@@ -234,8 +273,26 @@ function Join-ShareSurferOwnershipSources {
             else {
                 $mergedRows[$key] = $incoming
             }
+
+            $indexedObsKey = Get-ShareSurferOwnershipObsMergeKey -Row $mergedRows[$key]
+            Add-ShareSurferOwnershipObsMergeIndex -Index $mergedKeysByObsKey -ObsKey $indexedObsKey -MergeKey $key
+
+            $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
+            $rowIntervalDue = ($ProgressRowInterval -gt 0 -and (($sourceProcessed % $ProgressRowInterval) -eq 0))
+            $timeIntervalDue = ($ProgressIntervalSeconds -gt 0 -and (($elapsedSeconds - $lastProgressSecond) -ge $ProgressIntervalSeconds))
+            if ($rowIntervalDue -or $timeIntervalDue -or $sourceProcessed -eq $sourceRows.Count) {
+                $lastProgressSecond = $elapsedSeconds
+                Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership import' -Status ('Source {0}/{1}: {2}/{3} rows' -f $sourceIndex, $selectedPaths.Count, $sourceProcessed, $sourceRows.Count) -CurrentOperation ('Merged rows: {0}; context rows: {1}; relationship rows: {2}' -f $mergedRows.Count, $contextRows.Count, $relationshipRows.Count) -Processed $sourceProcessed -Total $sourceRows.Count -Quiet:$Quiet
+                Write-ShareSurferOwnershipImportStatus -Message ('Source {0}/{1}: processed {2}/{3} row(s); merged rows {4}; context rows {5}; relationship rows {6}; elapsed {7}.' -f $sourceIndex, $selectedPaths.Count, $sourceProcessed, $sourceRows.Count, $mergedRows.Count, $contextRows.Count, $relationshipRows.Count, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
+            }
         }
 
+        Write-ShareSurferOwnershipImportStatus -Message ('Source {0}/{1} complete: {2} row(s), {3} strong-key row(s), {4} OBS-only context row(s), {5} context row(s), {6} relationship row(s).' -f $sourceIndex, $selectedPaths.Count, $sourceRows.Count, $sourceStrongKeyCount, $sourceWeakObsOnlyCount, $sourceContextCount, $sourceRelationshipCount) -Quiet:$Quiet
+        if ($sourceRows.Count -gt 0 -and $sourceStrongKeyCount -eq 0 -and $sourceWeakObsOnlyCount -gt 0) {
+            $weakWarning = 'Source has OBS-only rows but no mapped employee/account join keys. That can be valid for context files, but if this file should describe people, rerun the header interview or mapping profile and explicitly map EmployeeId, EmployeeNumber, SamAccountName, UserPrincipalName, or Mail.'
+            $sourceWarnings.Add(('{0}: {1}' -f $sourcePath, $weakWarning))
+            Write-ShareSurferOwnershipImportStatus -Message ('Review source {0}/{1}: {2}' -f $sourceIndex, $selectedPaths.Count, $weakWarning) -Quiet:$Quiet
+        }
         if ($IncludeContextGraph) {
             [void]$manifestRows.Add([pscustomobject]@{
                 SourcePath = $sourcePath
@@ -251,24 +308,50 @@ function Join-ShareSurferOwnershipSources {
         }
     }
 
+    Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership import' -Completed -Quiet:$Quiet
+    Write-ShareSurferOwnershipImportStatus -Message ('CSV merge complete: {0} merged ownership row(s), {1} OBS-only context row(s).' -f $mergedRows.Count, $obsContextRows.Count) -Quiet:$Quiet
+
+    $obsContextProcessed = 0
     foreach ($obsKey in @($obsContextRows.Keys)) {
-        $hasMatchingStrongRow = $false
-        foreach ($existing in @($mergedRows.Values)) {
-            if ((Get-ShareSurferOwnershipObsMergeKey -Row $existing) -eq $obsKey) {
-                $hasMatchingStrongRow = $true
-                break
-            }
-        }
+        $obsContextProcessed++
+        $hasMatchingStrongRow = ($mergedKeysByObsKey.ContainsKey($obsKey) -and @($mergedKeysByObsKey[$obsKey].Keys).Count -gt 0)
 
         if (-not $hasMatchingStrongRow) {
             $mergedRows[$obsKey] = $obsContextRows[$obsKey]
+            Add-ShareSurferOwnershipObsMergeIndex -Index $mergedKeysByObsKey -ObsKey $obsKey -MergeKey $obsKey
+        }
+
+        $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
+        $rowIntervalDue = ($ProgressRowInterval -gt 0 -and (($obsContextProcessed % $ProgressRowInterval) -eq 0))
+        $timeIntervalDue = ($ProgressIntervalSeconds -gt 0 -and (($elapsedSeconds - $lastProgressSecond) -ge $ProgressIntervalSeconds))
+        if ($rowIntervalDue -or $timeIntervalDue -or $obsContextProcessed -eq $obsContextRows.Count) {
+            $lastProgressSecond = $elapsedSeconds
+            Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership OBS context merge' -Status ('{0}/{1} OBS context row(s)' -f $obsContextProcessed, $obsContextRows.Count) -CurrentOperation ('Merged rows: {0}' -f $mergedRows.Count) -Processed $obsContextProcessed -Total $obsContextRows.Count -Quiet:$Quiet
+            Write-ShareSurferOwnershipImportStatus -Message ('OBS context merge: processed {0}/{1}; merged rows {2}; elapsed {3}.' -f $obsContextProcessed, $obsContextRows.Count, $mergedRows.Count, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
         }
     }
+    Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership OBS context merge' -Completed -Quiet:$Quiet
 
     $enrichedRows = New-Object System.Collections.ArrayList
+    $enrichmentTotal = @($mergedRows.Values).Count
+    $enrichmentProcessed = 0
+    $lookupAttemptCount = 0
+    $lookupCacheHitCount = 0
+    $lookupCache = @{}
+    Write-ShareSurferOwnershipImportStatus -Message ('Starting directory enrichment for {0} row(s). AD lookup mode: {1}.' -f $enrichmentTotal, $AdLookupMode) -Quiet:$Quiet
     foreach ($row in @($mergedRows.Values)) {
+        $enrichmentProcessed++
         if ($AdLookupMode -ne 'DirectoryOnly' -and (-not [string]::IsNullOrWhiteSpace([string]$row.EmployeeId) -or -not [string]::IsNullOrWhiteSpace([string]$row.EmployeeNumber))) {
-            $lookup = Get-ShareSurferDirectoryIdentityByEmployee -EmployeeId ([string]$row.EmployeeId) -EmployeeNumber ([string]$row.EmployeeNumber) -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus
+            $lookupKey = New-ShareSurferOwnershipDirectoryLookupCacheKey -EmployeeId ([string]$row.EmployeeId) -EmployeeNumber ([string]$row.EmployeeNumber)
+            if ($lookupCache.ContainsKey($lookupKey)) {
+                $lookup = $lookupCache[$lookupKey]
+                $lookupCacheHitCount++
+            }
+            else {
+                $lookupAttemptCount++
+                $lookup = Get-ShareSurferDirectoryIdentityByEmployee -EmployeeId ([string]$row.EmployeeId) -EmployeeNumber ([string]$row.EmployeeNumber) -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus
+                $lookupCache[$lookupKey] = $lookup
+            }
             $row = Update-ShareSurferOwnershipRowFromDirectory -Row $row -LookupResult $lookup
         }
         elseif ($AdLookupMode -eq 'DirectoryOnly') {
@@ -284,26 +367,44 @@ function Join-ShareSurferOwnershipSources {
 
         $row.PotentialServiceAccount = [string]([string]::IsNullOrWhiteSpace([string]$row.OBS) -and [string]::IsNullOrWhiteSpace([string]$row.AdObsPath) -and [string]::IsNullOrWhiteSpace([string]$row.EmployeeId) -and [string]::IsNullOrWhiteSpace([string]$row.EmployeeNumber))
         [void]$enrichedRows.Add($row)
+
+        $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
+        $rowIntervalDue = ($ProgressRowInterval -gt 0 -and (($enrichmentProcessed % $ProgressRowInterval) -eq 0))
+        $timeIntervalDue = ($ProgressIntervalSeconds -gt 0 -and (($elapsedSeconds - $lastProgressSecond) -ge $ProgressIntervalSeconds))
+        if ($rowIntervalDue -or $timeIntervalDue -or $enrichmentProcessed -eq $enrichmentTotal) {
+            $lastProgressSecond = $elapsedSeconds
+            Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership directory enrichment' -Status ('{0}/{1} rows enriched' -f $enrichmentProcessed, $enrichmentTotal) -CurrentOperation ('AD lookup attempts: {0}; cache hits: {1}; output rows: {2}' -f $lookupAttemptCount, $lookupCacheHitCount, $enrichedRows.Count) -Processed $enrichmentProcessed -Total $enrichmentTotal -Quiet:$Quiet
+            Write-ShareSurferOwnershipImportStatus -Message ('Directory enrichment: processed {0}/{1} row(s); AD lookup attempts {2}; cache hits {3}; elapsed {4}.' -f $enrichmentProcessed, $enrichmentTotal, $lookupAttemptCount, $lookupCacheHitCount, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
+        }
     }
+    Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership directory enrichment' -Completed -Quiet:$Quiet
 
     $parent = Split-Path -Parent $OutputPath
     if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
     }
 
+    Write-ShareSurferOwnershipImportStatus -Message ('Writing ownership enrichment CSV: {0} ({1} row(s)).' -f $OutputPath, $enrichedRows.Count) -Quiet:$Quiet
     Export-ShareSurferCsv -Path $OutputPath -Columns (Get-ShareSurferOwnershipEnrichmentColumns) -Rows $enrichedRows
     if ($IncludeContextGraph) {
+        Write-ShareSurferOwnershipImportStatus -Message ('Writing ownership context graph files: {0} context row(s), {1} relationship row(s), {2} manifest row(s).' -f $contextRows.Count, $relationshipRows.Count, $manifestRows.Count) -Quiet:$Quiet
         Export-ShareSurferCsv -Path $ContextOutputPath -Columns (Get-ShareSurferOwnershipContextColumns) -Rows $contextRows
         Export-ShareSurferCsv -Path $RelationshipOutputPath -Columns (Get-ShareSurferOwnershipRelationshipColumns) -Rows $relationshipRows
         Export-ShareSurferCsv -Path $ManifestOutputPath -Columns (Get-ShareSurferOwnershipImportManifestColumns) -Rows $manifestRows
     }
 
     if (-not [string]::IsNullOrWhiteSpace($DefinitionPath)) {
+        Write-ShareSurferOwnershipImportStatus -Message ('Writing reusable ownership import definition: {0}' -f $DefinitionPath) -Quiet:$Quiet
         $writtenDefinitionPath = Export-ShareSurferOwnershipImportDefinition -Path $DefinitionPath -SelectedCsvPaths $selectedPaths -SourceFolder $SourceFolder -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -IncludeContextGraph ([bool]$IncludeContextGraph) -ContextOutputPath $ContextOutputPath -RelationshipOutputPath $RelationshipOutputPath -ManifestOutputPath $ManifestOutputPath -SourceProfiles @($sourceProfilesForDefinition.ToArray()) -Force
     }
 
     $reusableCommands = New-ShareSurferOwnershipEnrichmentReusableCommands -SourcePaths $selectedPaths -OutputPath $OutputPath -MappingProfilePaths $MappingProfilePath -ObsHeader $ObsHeader -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ForbiddenOu $selectedForbiddenOus -DefinitionPath $writtenDefinitionPath -IncludeContextGraph:$IncludeContextGraph -ContextOutputPath $ContextOutputPath -RelationshipOutputPath $RelationshipOutputPath -ManifestOutputPath $ManifestOutputPath
     $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText $reusableCommands
+    if (-not [string]::IsNullOrWhiteSpace($writtenReusableCommandPath)) {
+        Write-ShareSurferOwnershipImportStatus -Message ('Writing reusable ownership import command: {0}' -f $writtenReusableCommandPath) -Quiet:$Quiet
+    }
+
+    Write-ShareSurferOwnershipImportStatus -Message ('Ownership import complete: {0} row(s), {1} matched, {2} ambiguous, {3} forbidden-OU skipped, {4} source-only, {5} potential service-account-like row(s), {6} AD lookup attempt(s), {7} cache hit(s). Elapsed {8}.' -f $enrichedRows.Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Matched' }).Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Ambiguous' }).Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'ForbiddenOuSkipped' }).Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'SourceOnly' }).Count, @($enrichedRows | Where-Object { [string]$_.PotentialServiceAccount -eq 'True' }).Count, $lookupAttemptCount, $lookupCacheHitCount, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
 
     [pscustomobject]@{
         OutputPath = $OutputPath
@@ -324,6 +425,9 @@ function Join-ShareSurferOwnershipSources {
         PotentialServiceAccountCount = @($enrichedRows | Where-Object { [string]$_.PotentialServiceAccount -eq 'True' }).Count
         ForbiddenOu = (@($selectedForbiddenOus) -join '; ')
         ObsAttribute = $ObsAttribute
+        AdLookupAttemptCount = $lookupAttemptCount
+        DirectoryLookupCacheHitCount = $lookupCacheHitCount
+        ElapsedSeconds = [Math]::Round($progressClock.Elapsed.TotalSeconds, 3)
         Warnings = @($sourceWarnings)
         ReusableCommandPath = $writtenReusableCommandPath
         ReusableCommands = $reusableCommands
@@ -845,4 +949,119 @@ function Read-ShareSurferOwnershipSourceProfile {
     }
 
     New-ShareSurferOwnershipSourceProfile -SourcePath $SourcePath -FieldMap $FieldMap -SourceType $selectedSourceType -AuthorityLevel $selectedAuthority -PrimaryAnchor $selectedAnchor -Warnings @([string]$InitialProfile.Warnings)
+}
+
+function Write-ShareSurferOwnershipImportStatus {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Message,
+
+        [switch] $Quiet
+    )
+
+    if ($Quiet) {
+        return
+    }
+
+    if ($null -ne (Get-Command Write-ShareSurferStatus -ErrorAction SilentlyContinue)) {
+        Write-ShareSurferStatus -Phase 'Ownership' -Message $Message
+        return
+    }
+
+    $timestamp = Get-Date -Format 'HH:mm:ss'
+    Write-Host ('[{0}] ShareSurfer Ownership: {1}' -f $timestamp, $Message)
+}
+
+function Write-ShareSurferOwnershipImportProgress {
+    param(
+        [string] $Activity = 'ShareSurfer ownership import',
+
+        [string] $Status = '',
+
+        [string] $CurrentOperation = '',
+
+        [int] $Processed = 0,
+
+        [int] $Total = 0,
+
+        [switch] $Completed,
+
+        [switch] $Quiet
+    )
+
+    if ($Quiet) {
+        return
+    }
+
+    try {
+        if ($Completed) {
+            Write-Progress -Activity $Activity -Completed
+            return
+        }
+
+        $progressParameters = @{
+            Activity = $Activity
+            Status = $Status
+        }
+        if (-not [string]::IsNullOrWhiteSpace($CurrentOperation)) {
+            $progressParameters.CurrentOperation = $CurrentOperation
+        }
+        if ($Total -gt 0) {
+            $percent = [int][Math]::Min(100, [Math]::Max(0, (($Processed / $Total) * 100)))
+            $progressParameters.PercentComplete = $percent
+        }
+
+        Write-Progress @progressParameters
+    }
+    catch {
+        # Console progress is helpful but should never stop ownership import work.
+    }
+}
+
+function Get-ShareSurferOwnershipElapsedText {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Diagnostics.Stopwatch] $Stopwatch
+    )
+
+    $elapsed = $Stopwatch.Elapsed
+    if ($elapsed.TotalHours -ge 1) {
+        return ('{0:0.0}h' -f $elapsed.TotalHours)
+    }
+    if ($elapsed.TotalMinutes -ge 1) {
+        return ('{0:0.0}m' -f $elapsed.TotalMinutes)
+    }
+
+    '{0:0.0}s' -f $elapsed.TotalSeconds
+}
+
+function Add-ShareSurferOwnershipObsMergeIndex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable] $Index,
+
+        [string] $ObsKey = '',
+
+        [string] $MergeKey = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ObsKey) -or [string]::IsNullOrWhiteSpace($MergeKey)) {
+        return
+    }
+
+    if (-not $Index.ContainsKey($ObsKey)) {
+        $Index[$ObsKey] = @{}
+    }
+
+    $Index[$ObsKey][$MergeKey] = $true
+}
+
+function New-ShareSurferOwnershipDirectoryLookupCacheKey {
+    param(
+        [string] $EmployeeId = '',
+
+        [string] $EmployeeNumber = ''
+    )
+
+    'employeeId={0}|employeeNumber={1}' -f ([string]$EmployeeId).Trim().ToLowerInvariant(), ([string]$EmployeeNumber).Trim().ToLowerInvariant()
 }
