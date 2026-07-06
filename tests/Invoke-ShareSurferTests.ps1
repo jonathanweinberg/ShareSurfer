@@ -2472,6 +2472,47 @@ $tests = @(
         }
     },
     @{
+        Name = 'New-ShareSurferOwnershipMappingProfile interactive skips stay blank'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $profilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSource-' + [guid]::NewGuid().ToString('N') + '.mapping.json')
+            @(
+                [pscustomobject]@{
+                    workerid = 'E1001'
+                    user_name = 'Ava.Accounting'
+                    org_path = 'CORP.FIN.AP'
+                    owner_email = 'finance.owner@example.test'
+                }
+            ) | Export-Csv -LiteralPath $sourcePath -NoTypeInformation -Encoding UTF8
+
+            $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            for ($index = 0; $index -lt 22; $index++) {
+                $script:shareSurferPromptAnswers.Enqueue('S')
+            }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferPromptAnswers.Dequeue()
+            }
+
+            try {
+                New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -Interactive -Force | Out-Null
+                $profile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+
+                Assert-Equal $profile.FieldMap.EmployeeId '' 'A deliberate interactive skip should stay blank in the saved profile.'
+                Assert-Equal $profile.FieldMap.OBS '' 'A deliberate interactive skip should not be auto-remapped by profile creation.'
+                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Profile interview should consume one answer per canonical field.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Import-ShareSurferOwnershipSource normalizes rows and flags review warnings'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2594,6 +2635,188 @@ $tests = @(
 
             Invoke-ShareSurferCsvPickerCommand -State $state -Command 'C' | Out-Null
             Assert-Equal @($state.SelectedCsvPaths).Count 0 'C should clear selected CSVs.'
+        }
+    },
+    @{
+        Name = 'Ownership prompt choice state supports keyboard-style navigation'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $state = New-ShareSurferPromptChoiceState -Options @(
+                (New-ShareSurferPromptChoiceOption -Value 'One'),
+                (New-ShareSurferPromptChoiceOption -Value 'Two'),
+                (New-ShareSurferPromptChoiceOption -Value 'Three')
+            ) -DefaultValue 'One'
+
+            Invoke-ShareSurferPromptChoiceCommand -State $state -Command 'Down' -AllowBack -AllowSkip -AllowQuit | Out-Null
+            Assert-Equal $state.SelectedIndex 1 'Down should advance the selection.'
+            Invoke-ShareSurferPromptChoiceCommand -State $state -Command 'Up' -AllowBack -AllowSkip -AllowQuit | Out-Null
+            Assert-Equal $state.SelectedIndex 0 'Up should move the selection back.'
+            Invoke-ShareSurferPromptChoiceCommand -State $state -Command '3' -AllowBack -AllowSkip -AllowQuit | Out-Null
+            Assert-Equal $state.Action 'Select' 'Numbered fallback should select an option.'
+            Assert-Equal $state.SelectedValue 'Three' 'Numbered fallback should select the requested value.'
+
+            $backState = New-ShareSurferPromptChoiceState -Options @('One', 'Two') -DefaultValue 'One'
+            Invoke-ShareSurferPromptChoiceCommand -State $backState -Command 'B' -AllowBack | Out-Null
+            Assert-Equal $backState.Action 'Back' 'B should request back navigation when allowed.'
+        }
+    },
+    @{
+        Name = 'Ownership header interview supports backtracking and skip'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $headers = @('employee_id', 'employee_number', 'obs')
+            $initial = [pscustomobject][ordered]@{
+                EmployeeId = 'employee_id'
+                EmployeeNumber = 'employee_number'
+                SamAccountName = ''
+                UserPrincipalName = ''
+                Mail = ''
+                DisplayName = ''
+                Title = ''
+                Office = ''
+                Department = ''
+                Company = ''
+                ManagerMail = ''
+                ManagerLevel2Mail = ''
+                ManagerLevel3Mail = ''
+                OBS = 'obs'
+                BusinessUnit = ''
+                DataOwner = ''
+                OwnerMail = ''
+                Project = ''
+                ProjectCode = ''
+                ProjectDescription = ''
+                GroupName = ''
+                PathPattern = ''
+            }
+            $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            foreach ($answer in @('wrong_header', 'B', 'employee_id', 'S')) {
+                $script:shareSurferPromptAnswers.Enqueue($answer)
+            }
+            for ($index = 0; $index -lt 20; $index++) {
+                $script:shareSurferPromptAnswers.Enqueue('S')
+            }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferPromptAnswers.Dequeue()
+            }
+
+            try {
+                $fieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $initial -SourcePath 'ownership.csv'
+                Assert-Equal $fieldMap.EmployeeId 'employee_id' 'Backtracking should allow the previous field to be corrected.'
+                Assert-Equal $fieldMap.EmployeeNumber '' 'S should skip the current field.'
+                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Header interview should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Ownership header interview opens a small-header picker on blank unsuggested fields'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $headers = @('PersonKey', 'OrgPath')
+            $initial = [pscustomobject][ordered]@{
+                EmployeeId = ''
+                EmployeeNumber = ''
+                SamAccountName = ''
+                UserPrincipalName = ''
+                Mail = ''
+                DisplayName = ''
+                Title = ''
+                Office = ''
+                Department = ''
+                Company = ''
+                ManagerMail = ''
+                ManagerLevel2Mail = ''
+                ManagerLevel3Mail = ''
+                OBS = ''
+                BusinessUnit = ''
+                DataOwner = ''
+                OwnerMail = ''
+                Project = ''
+                ProjectCode = ''
+                ProjectDescription = ''
+                GroupName = ''
+                PathPattern = ''
+            }
+            $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferPromptAnswers.Enqueue('')
+            $script:shareSurferPromptAnswers.Enqueue('1')
+            for ($index = 0; $index -lt 21; $index++) {
+                $script:shareSurferPromptAnswers.Enqueue('S')
+            }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferPromptAnswers.Dequeue()
+            }
+
+            try {
+                $fieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $initial -SourcePath 'ownership.csv'
+                Assert-Equal $fieldMap.EmployeeId 'PersonKey' 'Blank unsuggested fields with fewer than 10 headers should open a selectable picker.'
+                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Header picker test should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Ownership source profile selector explains and records choices'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $fieldMap = [pscustomobject][ordered]@{
+                ProjectCode = 'project_code'
+                OBS = 'obs'
+                DataOwner = 'owner'
+            }
+            $initialProfile = [pscustomobject]@{
+                SourcePath = 'projects.csv'
+                SourceType = 'Mixed'
+                AuthorityLevel = 'Unknown'
+                PrimaryAnchor = ''
+                MappedFields = 'ProjectCode; OBS; DataOwner'
+                Warnings = ''
+            }
+            $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            foreach ($answer in @('3', '1', '2')) {
+                $script:shareSurferPromptAnswers.Enqueue($answer)
+            }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferPromptAnswers.Dequeue()
+            }
+
+            try {
+                $profile = Read-ShareSurferOwnershipSourceProfile -SourcePath 'projects.csv' -FieldMap $fieldMap -InitialProfile $initialProfile
+                Assert-Equal $profile.SourceType 'ProjectContext' 'Source type selector should accept numbered fallback choices.'
+                Assert-Equal $profile.AuthorityLevel 'Authoritative' 'Authority selector should accept alternate choices.'
+                Assert-Equal $profile.PrimaryAnchor 'OBS' 'Primary anchor selector should record the selected mapped field.'
+                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Profile selector should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
         }
     },
     @{

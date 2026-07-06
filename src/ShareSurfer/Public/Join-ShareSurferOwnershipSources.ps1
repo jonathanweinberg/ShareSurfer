@@ -843,6 +843,323 @@ function ConvertFrom-ShareSurferInteractiveSelection {
     @($values)
 }
 
+function New-ShareSurferPromptChoiceOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Value,
+
+        [string] $Label = '',
+
+        [string] $Description = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Label)) {
+        $Label = $Value
+    }
+
+    [pscustomobject]@{
+        Value = $Value
+        Label = $Label
+        Description = $Description
+    }
+}
+
+function New-ShareSurferPromptChoiceState {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]] $Options,
+
+        [string] $DefaultValue = ''
+    )
+
+    $normalizedOptions = @($Options | ForEach-Object {
+        if ($null -ne $_.PSObject.Properties['Value']) {
+            $_
+        }
+        else {
+            New-ShareSurferPromptChoiceOption -Value ([string]$_)
+        }
+    })
+    $selectedIndex = 0
+    if (-not [string]::IsNullOrWhiteSpace($DefaultValue)) {
+        for ($index = 0; $index -lt $normalizedOptions.Count; $index++) {
+            if ([string]$normalizedOptions[$index].Value -eq $DefaultValue -or [string]$normalizedOptions[$index].Label -eq $DefaultValue) {
+                $selectedIndex = $index
+                break
+            }
+        }
+    }
+
+    [pscustomobject]@{
+        Options = $normalizedOptions
+        SelectedIndex = $selectedIndex
+        Done = $false
+        Action = ''
+        SelectedValue = ''
+        CustomValue = ''
+        Message = ''
+    }
+}
+
+function Get-ShareSurferPromptChoiceSelectedOption {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    if (@($State.Options).Count -eq 0) {
+        return $null
+    }
+
+    $index = [Math]::Max(0, [Math]::Min([int]$State.SelectedIndex, @($State.Options).Count - 1))
+    @($State.Options)[$index]
+}
+
+function Invoke-ShareSurferPromptChoiceCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [string] $Command = '',
+
+        [switch] $AllowSkip,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit,
+
+        [switch] $AllowCustom
+    )
+
+    $State.Action = ''
+    $State.SelectedValue = ''
+    $State.CustomValue = ''
+    $State.Message = ''
+    $text = ([string]$Command).Trim()
+    $upper = $text.ToUpperInvariant()
+    $optionCount = @($State.Options).Count
+
+    if ([string]::IsNullOrWhiteSpace($text) -or $upper -in @('ENTER', 'SELECT')) {
+        $selected = Get-ShareSurferPromptChoiceSelectedOption -State $State
+        $State.Done = $true
+        $State.Action = 'Select'
+        if ($null -ne $selected) {
+            $State.SelectedValue = [string]$selected.Value
+        }
+        return $State
+    }
+
+    if ($upper -in @('UP', 'UPARROW')) {
+        if ($optionCount -gt 0) {
+            $State.SelectedIndex = if ([int]$State.SelectedIndex -le 0) { $optionCount - 1 } else { [int]$State.SelectedIndex - 1 }
+        }
+        return $State
+    }
+
+    if ($upper -in @('DOWN', 'DOWNARROW')) {
+        if ($optionCount -gt 0) {
+            $State.SelectedIndex = if ([int]$State.SelectedIndex -ge ($optionCount - 1)) { 0 } else { [int]$State.SelectedIndex + 1 }
+        }
+        return $State
+    }
+
+    if ($upper -eq '?' -or $upper -eq 'HELP') {
+        $State.Action = 'Help'
+        $State.Message = 'Use Up/Down or a number to choose. Enter selects. S skips when available. B goes back when available. Q quits when available.'
+        return $State
+    }
+
+    if ($upper -in @('S', 'SKIP') -and $AllowSkip) {
+        $State.Done = $true
+        $State.Action = 'Skip'
+        return $State
+    }
+
+    if ($upper -in @('B', 'BACK', 'BACKSPACE') -and $AllowBack) {
+        $State.Done = $true
+        $State.Action = 'Back'
+        return $State
+    }
+
+    if ($upper -in @('Q', 'QUIT', 'ESC', 'ESCAPE') -and $AllowQuit) {
+        $State.Done = $true
+        $State.Action = 'Quit'
+        return $State
+    }
+
+    if ($text -match '^\d+$') {
+        $index = [int]$text
+        if ($index -ge 1 -and $index -le $optionCount) {
+            $State.SelectedIndex = $index - 1
+            $selected = Get-ShareSurferPromptChoiceSelectedOption -State $State
+            $State.Done = $true
+            $State.Action = 'Select'
+            $State.SelectedValue = [string]$selected.Value
+        }
+        else {
+            $State.Message = ('Choose a number from 1 to {0}.' -f $optionCount)
+        }
+        return $State
+    }
+
+    if ($AllowCustom) {
+        $State.Done = $true
+        $State.Action = 'Custom'
+        $State.CustomValue = $text
+        return $State
+    }
+
+    $State.Message = 'Command not recognized. Type ? for controls.'
+    $State
+}
+
+function ConvertFrom-ShareSurferPromptKeyInfo {
+    param(
+        [Parameter(Mandatory = $true)]
+        $KeyInfo
+    )
+
+    $key = [string]$KeyInfo.VirtualKeyCode
+    try {
+        $consoleKey = [System.ConsoleKey]$KeyInfo.VirtualKeyCode
+        switch ($consoleKey) {
+            'UpArrow' { return 'Up' }
+            'DownArrow' { return 'Down' }
+            'Enter' { return 'Enter' }
+            'Backspace' { return 'Back' }
+            'Escape' { return 'Quit' }
+        }
+    }
+    catch {
+    }
+
+    if ($null -ne $KeyInfo.Character -and [char]$KeyInfo.Character -ne [char]0) {
+        return [string]$KeyInfo.Character
+    }
+
+    $key
+}
+
+function Test-ShareSurferPromptRawKeyAvailable {
+    try {
+        return ($Host.Name -eq 'ConsoleHost' -and -not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and $null -ne $Host.UI.RawUI)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Show-ShareSurferPromptChoice {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Title,
+
+        [string] $HelpText = '',
+
+        [switch] $AllowSkip,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit
+    )
+
+    Write-Host ''
+    Write-Host $Title
+    if (-not [string]::IsNullOrWhiteSpace($HelpText)) {
+        Write-Host $HelpText
+    }
+    Write-Host 'Controls: Enter=accept/select | S=skip | B=back | ?=help | Q=quit'
+    Write-Host ''
+    for ($index = 0; $index -lt @($State.Options).Count; $index++) {
+        $option = @($State.Options)[$index]
+        $marker = if ($index -eq [int]$State.SelectedIndex) { '>' } else { ' ' }
+        $description = if ([string]::IsNullOrWhiteSpace([string]$option.Description)) { '' } else { ' - {0}' -f [string]$option.Description }
+        Write-Host (' {0} {1}. {2}{3}' -f $marker, ($index + 1), [string]$option.Label, $description)
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$State.Message)) {
+        Write-Host ''
+        Write-Host $State.Message
+    }
+}
+
+function Read-ShareSurferPromptChoice {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Title,
+
+        [Parameter(Mandatory = $true)]
+        [object[]] $Options,
+
+        [string] $DefaultValue = '',
+
+        [string] $HelpText = '',
+
+        [switch] $AllowSkip,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit,
+
+        [switch] $AllowCustom
+    )
+
+    $state = New-ShareSurferPromptChoiceState -Options $Options -DefaultValue $DefaultValue
+    $useRawKeys = Test-ShareSurferPromptRawKeyAvailable
+    while (-not $state.Done) {
+        Show-ShareSurferPromptChoice -State $state -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit
+        if ($useRawKeys) {
+            try {
+                $keyInfo = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+                $command = ConvertFrom-ShareSurferPromptKeyInfo -KeyInfo $keyInfo
+            }
+            catch {
+                $useRawKeys = $false
+                $command = Read-Host -Prompt 'Selection'
+            }
+        }
+        else {
+            $command = Read-Host -Prompt 'Selection'
+        }
+
+        Invoke-ShareSurferPromptChoiceCommand -State $state -Command $command -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom | Out-Null
+        if ($state.Action -eq 'Help') {
+            Write-Host $state.Message
+            $state.Message = ''
+        }
+    }
+
+    $state
+}
+
+function Get-ShareSurferOwnershipSourceTypePromptOptions {
+    foreach ($sourceType in @(Get-ShareSurferOwnershipSourceTypes)) {
+        $description = switch ($sourceType) {
+            'Identity' { 'People or accounts, usually HR or directory-aligned employee data.'; break }
+            'ObsContext' { 'Business structure, OBS/OID, owner, or business-unit clues.'; break }
+            'ProjectContext' { 'Projects, programs, apps, or WBS codes linked to OBS or owners.'; break }
+            'PathOwnership' { 'Share, folder, UNC, or path-prefix ownership clues.'; break }
+            'GroupContext' { 'Security groups linked to owners, OBS, projects, or business units.'; break }
+            default { 'Mixed or unclear source; keep this when the file has several kinds of clues.' }
+        }
+        New-ShareSurferPromptChoiceOption -Value $sourceType -Description $description
+    }
+}
+
+function Get-ShareSurferOwnershipAuthorityPromptOptions {
+    foreach ($authority in @(Get-ShareSurferOwnershipAuthorityLevels)) {
+        $description = switch ($authority) {
+            'Authoritative' { 'Trusted source of record, such as HR or directory-backed employee data.'; break }
+            'ReviewerHint' { 'Useful owner/business clue that should be reviewed before approval.'; break }
+            'ContextOnly' { 'Context used for grouping; not direct ownership approval.'; break }
+            default { 'Use when the file trust level is unclear.' }
+        }
+        New-ShareSurferPromptChoiceOption -Value $authority -Description $description
+    }
+}
+
 function Read-ShareSurferOwnershipHeaderSelections {
     param(
         [Parameter(Mandatory = $true)]
@@ -861,17 +1178,25 @@ function Read-ShareSurferOwnershipHeaderSelections {
     foreach ($property in $InitialFieldMap.PSObject.Properties) {
         $fieldMap[$property.Name] = [string]$property.Value
     }
+    $skippedFields = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
 
     Write-Host ''
     Write-Host ('Header interview for {0}' -f $SourcePath)
     Write-Host ('Available headers: {0}' -f ($Headers -join ', '))
-    Write-Host 'Press Enter to accept a suggestion, type a different header, or type S to skip a field.'
-    foreach ($definition in @(Get-ShareSurferOwnershipFieldDefinitions)) {
+    Write-Host 'Controls: Enter=accept/select | S=skip | B=back | ?=help | Q=quit'
+    $definitions = @(Get-ShareSurferOwnershipFieldDefinitions)
+    $fieldIndex = 0
+    while ($fieldIndex -lt $definitions.Count) {
+        $definition = $definitions[$fieldIndex]
         $field = [string]$definition.Field
         $suggested = ''
         if ($fieldMap.Contains($field)) {
             $suggested = [string]$fieldMap[$field]
         }
+        $recommended = if ([bool]$definition.Recommended) { 'recommended' } else { 'optional' }
+        Write-Host ''
+        Write-Host ('Field {0}/{1}: {2} ({3})' -f ($fieldIndex + 1), $definitions.Count, $field, $recommended)
+        Write-Host 'Controls: Enter=accept/select | S=skip | B=back | ?=help | Q=quit'
 
         $prompt = if ([string]::IsNullOrWhiteSpace($suggested)) {
             'Column for {0}' -f $field
@@ -882,17 +1207,67 @@ function Read-ShareSurferOwnershipHeaderSelections {
 
         $answer = Read-Host -Prompt $prompt
         if ([string]::IsNullOrWhiteSpace($answer)) {
+            if ([string]::IsNullOrWhiteSpace($suggested) -and $Headers.Count -gt 0 -and $Headers.Count -lt 10) {
+                $headerOptions = @($Headers | ForEach-Object { New-ShareSurferPromptChoiceOption -Value ([string]$_) -Description ('Map {0} to this source header.' -f $field) })
+                $selection = Read-ShareSurferPromptChoice -Title ('Choose source header for {0}' -f $field) -Options $headerOptions -HelpText 'Use this picker when ShareSurfer did not have a confident suggestion.' -AllowSkip -AllowBack -AllowQuit
+                if ($selection.Action -eq 'Select') {
+                    $fieldMap[$field] = [string]$selection.SelectedValue
+                    $fieldIndex++
+                    continue
+                }
+                if ($selection.Action -eq 'Skip') {
+                    $fieldMap[$field] = ''
+                    [void]$skippedFields.Add($field)
+                    $fieldIndex++
+                    continue
+                }
+                if ($selection.Action -eq 'Back') {
+                    if ($fieldIndex -gt 0) { $fieldIndex-- }
+                    continue
+                }
+                if ($selection.Action -eq 'Quit') {
+                    throw 'Ownership header interview cancelled by operator.'
+                }
+            }
+            $fieldIndex++
             continue
         }
-        if ($answer.Trim().ToUpperInvariant() -eq 'S') {
+        $trimmedAnswer = $answer.Trim()
+        $upperAnswer = $trimmedAnswer.ToUpperInvariant()
+        if ($upperAnswer -eq '?') {
+            Write-Host ('Map {0} to the source CSV header that contains that value. Type S to skip this field or B to return to the previous field.' -f $field)
+            continue
+        }
+        if ($upperAnswer -in @('B', 'BACK')) {
+            if ($fieldIndex -gt 0) {
+                $fieldIndex--
+            }
+            else {
+                Write-Host 'Already at the first field.'
+            }
+            continue
+        }
+        if ($upperAnswer -in @('Q', 'QUIT')) {
+            throw 'Ownership header interview cancelled by operator.'
+        }
+        if ($upperAnswer -in @('S', 'SKIP')) {
             $fieldMap[$field] = ''
+            [void]$skippedFields.Add($field)
+            $fieldIndex++
             continue
         }
 
-        $fieldMap[$field] = $answer.Trim()
+        $fieldMap[$field] = $trimmedAnswer
+        [void]$skippedFields.Remove($field)
+        $fieldIndex++
     }
 
     $resolved = Resolve-ShareSurferOwnershipHeaderMap -Headers $Headers -ObsHeader $ObsHeader -FieldMap (ConvertTo-ShareSurferOwnershipFieldMapHashtable -FieldMap ([pscustomobject]$fieldMap))
+    foreach ($field in @($skippedFields)) {
+        if ($null -ne $resolved.FieldMap.PSObject.Properties[$field]) {
+            $resolved.FieldMap.PSObject.Properties[$field].Value = ''
+        }
+    }
     $resolved.FieldMap
 }
 
@@ -914,61 +1289,75 @@ function Read-ShareSurferOwnershipSourceProfile {
     Write-Host ('Detected primary anchor: {0}' -f $InitialProfile.PrimaryAnchor)
     Write-Host ('Mapped fields: {0}' -f $InitialProfile.MappedFields)
 
-    $sourceTypes = @(Get-ShareSurferOwnershipSourceTypes)
-    for ($index = 0; $index -lt $sourceTypes.Count; $index++) {
-        Write-Host ('  {0}. {1}' -f ($index + 1), $sourceTypes[$index])
-    }
-
     $selectedSourceType = [string]$InitialProfile.SourceType
-    $sourceTypeAnswer = Read-Host -Prompt ('What does this CSV mostly describe? [{0}]' -f $selectedSourceType)
-    if (-not [string]::IsNullOrWhiteSpace($sourceTypeAnswer)) {
-        $trimmed = $sourceTypeAnswer.Trim()
-        $numericChoice = 0
-        if ([int]::TryParse($trimmed, [ref]$numericChoice) -and $numericChoice -ge 1 -and $numericChoice -le $sourceTypes.Count) {
-            $selectedSourceType = [string]$sourceTypes[$numericChoice - 1]
-        }
-        elseif ($sourceTypes -contains $trimmed) {
-            $selectedSourceType = $trimmed
-        }
-        else {
-            Write-Host ('Unrecognized source type "{0}"; keeping {1}.' -f $trimmed, $selectedSourceType)
-        }
-    }
-
-    $authorityLevels = @(Get-ShareSurferOwnershipAuthorityLevels)
     $selectedAuthority = Get-ShareSurferOwnershipDefaultAuthorityLevel -SourceType $selectedSourceType
     if (-not [string]::IsNullOrWhiteSpace([string]$InitialProfile.AuthorityLevel) -and [string]$InitialProfile.AuthorityLevel -ne 'Unknown') {
         $selectedAuthority = [string]$InitialProfile.AuthorityLevel
     }
-
-    Write-Host ''
-    for ($index = 0; $index -lt $authorityLevels.Count; $index++) {
-        Write-Host ('  {0}. {1}' -f ($index + 1), $authorityLevels[$index])
-    }
-
-    $authorityAnswer = Read-Host -Prompt ('How authoritative is this file? [{0}]' -f $selectedAuthority)
-    if (-not [string]::IsNullOrWhiteSpace($authorityAnswer)) {
-        $trimmed = $authorityAnswer.Trim()
-        $numericChoice = 0
-        if ([int]::TryParse($trimmed, [ref]$numericChoice) -and $numericChoice -ge 1 -and $numericChoice -le $authorityLevels.Count) {
-            $selectedAuthority = [string]$authorityLevels[$numericChoice - 1]
-        }
-        elseif ($authorityLevels -contains $trimmed) {
-            $selectedAuthority = $trimmed
-        }
-        else {
-            Write-Host ('Unrecognized authority "{0}"; keeping {1}.' -f $trimmed, $selectedAuthority)
-        }
-    }
-
     $selectedAnchor = Get-ShareSurferOwnershipDefaultPrimaryAnchor -FieldMap $FieldMap -SourceType $selectedSourceType
     if (-not [string]::IsNullOrWhiteSpace([string]$InitialProfile.PrimaryAnchor)) {
         $selectedAnchor = [string]$InitialProfile.PrimaryAnchor
     }
 
-    $anchorAnswer = Read-Host -Prompt ('Strongest anchor field [{0}]' -f $selectedAnchor)
-    if (-not [string]::IsNullOrWhiteSpace($anchorAnswer)) {
-        $selectedAnchor = $anchorAnswer.Trim()
+    $profileStep = 0
+    while ($profileStep -lt 3) {
+        if ($profileStep -eq 0) {
+            $sourceSelection = Read-ShareSurferPromptChoice -Title 'What does this CSV mostly describe?' -Options @(Get-ShareSurferOwnershipSourceTypePromptOptions) -DefaultValue $selectedSourceType -HelpText 'Source type controls how ShareSurfer explains context rows and relationships from this file.' -AllowBack -AllowQuit
+            if ($sourceSelection.Action -eq 'Select') {
+                $selectedSourceType = [string]$sourceSelection.SelectedValue
+                $selectedAuthority = Get-ShareSurferOwnershipDefaultAuthorityLevel -SourceType $selectedSourceType
+                $selectedAnchor = Get-ShareSurferOwnershipDefaultPrimaryAnchor -FieldMap $FieldMap -SourceType $selectedSourceType
+                $profileStep++
+                continue
+            }
+            if ($sourceSelection.Action -eq 'Back') {
+                Write-Host 'Already at the first source-classification prompt.'
+                continue
+            }
+            if ($sourceSelection.Action -eq 'Quit') {
+                throw 'Ownership source classification cancelled by operator.'
+            }
+        }
+        elseif ($profileStep -eq 1) {
+            $authoritySelection = Read-ShareSurferPromptChoice -Title 'How authoritative is this file?' -Options @(Get-ShareSurferOwnershipAuthorityPromptOptions) -DefaultValue $selectedAuthority -HelpText 'This tells reviewers how much trust to place in ownership facts from this CSV.' -AllowBack -AllowQuit
+            if ($authoritySelection.Action -eq 'Select') {
+                $selectedAuthority = [string]$authoritySelection.SelectedValue
+                $profileStep++
+                continue
+            }
+            if ($authoritySelection.Action -eq 'Back') {
+                $profileStep--
+                continue
+            }
+            if ($authoritySelection.Action -eq 'Quit') {
+                throw 'Ownership source classification cancelled by operator.'
+            }
+        }
+        else {
+            $mappedFields = @(Get-ShareSurferOwnershipMappedFieldNames -FieldMap $FieldMap)
+            if ($mappedFields.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($selectedAnchor)) {
+                $mappedFields = @($selectedAnchor)
+            }
+            $anchorOptions = @($mappedFields | ForEach-Object {
+                New-ShareSurferPromptChoiceOption -Value ([string]$_) -Description 'Use this field as the strongest clue for this source.'
+            })
+            if ($anchorOptions.Count -eq 0) {
+                $anchorOptions = @(New-ShareSurferPromptChoiceOption -Value '' -Label '(no mapped anchor)' -Description 'No mapped fields are available yet.')
+            }
+            $anchorSelection = Read-ShareSurferPromptChoice -Title 'Which mapped field is the strongest anchor?' -Options $anchorOptions -DefaultValue $selectedAnchor -HelpText 'The anchor is the best field for explaining why this source links to identities, OBS, paths, projects, or groups.' -AllowBack -AllowQuit
+            if ($anchorSelection.Action -eq 'Select') {
+                $selectedAnchor = [string]$anchorSelection.SelectedValue
+                $profileStep++
+                continue
+            }
+            if ($anchorSelection.Action -eq 'Back') {
+                $profileStep--
+                continue
+            }
+            if ($anchorSelection.Action -eq 'Quit') {
+                throw 'Ownership source classification cancelled by operator.'
+            }
+        }
     }
 
     New-ShareSurferOwnershipSourceProfile -SourcePath $SourcePath -FieldMap $FieldMap -SourceType $selectedSourceType -AuthorityLevel $selectedAuthority -PrimaryAnchor $selectedAnchor -Warnings @([string]$InitialProfile.Warnings)

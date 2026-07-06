@@ -14,10 +14,10 @@ C:\ShareSurfer\inputs\hr-obs.csv
 
 ## 2. Set Paths And Import ShareSurfer
 
-If `v0.1.0-pre.33` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
+If `v0.1.0-pre.34` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.33'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.34'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 $profilePath = 'C:\ShareSurfer\inputs\hr-obs.mapping.json'
 $normalizedPath = 'C:\ShareSurfer\inputs\normalized-ownership.csv'
@@ -69,7 +69,13 @@ New-ShareSurferOwnershipMappingProfile `
   -Force
 ```
 
-During interactive mode, ShareSurfer asks which source CSV header should map to each ShareSurfer field. Press Enter to accept a suggestion, type a different header, or type `S` to skip a field.
+During interactive mode, ShareSurfer asks which source CSV header should map to each ShareSurfer field and keeps this controls line visible:
+
+```text
+Enter=accept/select | S=skip | B=back | ?=help | Q=quit
+```
+
+Press Enter to accept a suggestion, type a different header when you already know it, press `S` to intentionally leave a field blank, or press `B` to go back and fix the previous field. If ShareSurfer does not have a suggestion and the CSV has fewer than 10 headers, pressing Enter opens a small selector. Arrow keys work in normal consoles; numbered selection is used as the fallback.
 
 ## 5. Normalize The CSV
 
@@ -128,6 +134,14 @@ Join-ShareSurferOwnershipSources `
 In the picker, you can browse folders, toggle CSV files, select all CSVs in the current folder, clear selected paths, show selected paths, go up, finish, or quit.
 
 The definition JSON remembers the selected CSV paths and settings. It is useful for reruns, but it is not scan evidence by itself.
+
+When the workflow asks about each source file, use these plain-English choices:
+
+| Prompt | Choices | How To Think About It |
+| --- | --- | --- |
+| Source type | `Identity`, `ObsContext`, `ProjectContext`, `PathOwnership`, `GroupContext`, `Mixed` | Pick the business purpose of the CSV. HR/account files are usually `Identity`; project or app files are usually `ProjectContext`; owner-by-path files are usually `PathOwnership`. |
+| Authority level | `Authoritative`, `ReviewerHint`, `ContextOnly`, `Unknown` | `Authoritative` is a trusted source of record. `ReviewerHint` is useful but needs owner review. `ContextOnly` helps grouping but is not approval. `Unknown` is safest when trust is unclear. |
+| Primary anchor | One mapped field from the file | Pick the strongest field explaining how this source links to people, OBS, paths, projects, or groups. |
 
 Pass the enriched file to the scan:
 

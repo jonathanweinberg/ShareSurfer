@@ -31,47 +31,16 @@ function New-ShareSurferOwnershipMappingProfile {
     }
 
     if ($Interactive) {
-        Write-Host 'ShareSurfer found these CSV headers:'
-        Write-Host ('  {0}' -f ($headers -join ', '))
-        Write-Host ''
-        Write-Host 'Press Enter to accept a suggested header, type a different header, or type S to skip that field.'
-
-        foreach ($definition in @(Get-ShareSurferOwnershipFieldDefinitions)) {
-            $field = [string]$definition.Field
-            $suggested = ''
-            if ($fieldMap.Contains($field)) {
-                $suggested = [string]$fieldMap[$field]
-            }
-
-            $prompt = if ([string]::IsNullOrWhiteSpace($suggested)) {
-                ("Column for {0}" -f $field)
-            }
-            else {
-                ("Column for {0} [{1}]" -f $field, $suggested)
-            }
-
-            $answer = Read-Host -Prompt $prompt
-            if ([string]::IsNullOrWhiteSpace($answer)) {
-                continue
-            }
-            elseif ($answer.Trim().ToUpperInvariant() -eq 'S') {
-                $fieldMap[$field] = ''
-            }
-            else {
-                $fieldMap[$field] = $answer.Trim()
-            }
-        }
-
-        $interactiveResolved = Resolve-ShareSurferOwnershipHeaderMap -Headers $headers -ObsHeader $ObsHeader -FieldMap (ConvertTo-ShareSurferOwnershipFieldMapHashtable -FieldMap ([pscustomobject]$fieldMap))
+        $interactiveFieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap ([pscustomobject]$fieldMap) -SourcePath $Path -ObsHeader $ObsHeader
         $fieldMap = [ordered]@{}
-        foreach ($property in $interactiveResolved.FieldMap.PSObject.Properties) {
+        foreach ($property in $interactiveFieldMap.PSObject.Properties) {
             $fieldMap[$property.Name] = [string]$property.Value
         }
         $assessment = [pscustomobject]@{
             IsUsable = (@(Get-ShareSurferOwnershipJoinKeyFields | Where-Object { $fieldMap.Contains($_) -and -not [string]::IsNullOrWhiteSpace([string]$fieldMap[$_]) }).Count -gt 0)
             JoinKeyFields = (@(Get-ShareSurferOwnershipJoinKeyFields | Where-Object { $fieldMap.Contains($_) -and -not [string]::IsNullOrWhiteSpace([string]$fieldMap[$_]) }) -join ', ')
             ObsHeader = if ($fieldMap.Contains('OBS')) { [string]$fieldMap['OBS'] } else { '' }
-            Warnings = @($interactiveResolved.Warnings)
+            Warnings = @($assessment.Warnings)
         }
     }
 
