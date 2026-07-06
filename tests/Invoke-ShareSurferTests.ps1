@@ -2758,6 +2758,84 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start menu entries report readiness from inputs and exports'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenu-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'export'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $inputRoot 'owner-mapping.csv') -Value 'Pattern,Owner,BusinessUnit' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value 'ShareId' -Encoding UTF8
+
+            try {
+                $entries = @(& $module {
+                    param($InputRoot, $ExportPath)
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath
+                } $inputRoot $exportPath)
+
+                Assert-Equal $entries.Count 7 'Start menu should list the seven operator tasks.'
+                $ownership = @($entries | Where-Object { $_.Key -eq 'ownership' })[0]
+                Assert-Equal $ownership.Readiness 'owner mapping: found - enrichment: missing' 'Ownership readiness should reflect which input files exist.'
+                $validate = @($entries | Where-Object { $_.Key -eq 'validate' })[0]
+                Assert-Equal $validate.Readiness 'export: found' 'Validate readiness should reflect the export folder.'
+                Assert-True ([bool]$validate.Runnable) 'Validate should be runnable when shares.csv exists.'
+                Assert-True ($validate.CommandPreview.Contains('Test-ShareSurferExport')) 'Validate entry should preview the exact command.'
+                $scan = @($entries | Where-Object { $_.Key -eq 'scan' })[0]
+                Assert-Equal $scan.Readiness 'setup not recorded yet' 'Scan readiness should say when no saved config exists.'
+                Assert-True ($scan.CommandPreview.Contains('Start-ShareSurferStartup -Interactive')) 'Scan entry should preview interactive startup when no config is saved.'
+
+                $screen = @(& $module {
+                    param($Entries, $InputRoot, $ExportPath)
+                    Get-ShareSurferMenuScreen -Entries $Entries -InputRoot $InputRoot -ExportPath $ExportPath
+                } $entries $inputRoot $exportPath) -join [Environment]::NewLine
+                Assert-True ($screen.Contains('ShareSurfer Start Menu')) 'Menu screen should render its title.'
+                Assert-True ($screen.Contains('1. Preflight & connectivity')) 'Menu screen should number the tasks.'
+                Assert-True ($screen.Contains('owner mapping: found')) 'Menu screen should show readiness beside tasks.'
+            }
+            finally {
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurfer previews commands and exits on Q without running anything'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuRun-' + [guid]::NewGuid().ToString('N'))
+            $exportPath = Join-Path $root 'export'
+            New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value 'ShareId' -Encoding UTF8
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferMenuAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferMenuAnswers.Enqueue('4')
+            $script:shareSurferMenuAnswers.Enqueue('N')
+            $script:shareSurferMenuAnswers.Enqueue('Q')
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferMenuAnswers.Count -eq 0) {
+                    throw ('Unexpected menu prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferMenuAnswers.Dequeue()
+            }
+
+            try {
+                Start-ShareSurfer -ExportPath $exportPath
+                Assert-Equal $script:shareSurferMenuAnswers.Count 0 'Menu should consume the selection, the declined confirmation, and the quit command.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferMenuAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Startup selections screen summarizes choices and missing optional inputs'
         Body = {
             Import-Module $moduleManifest -Force
