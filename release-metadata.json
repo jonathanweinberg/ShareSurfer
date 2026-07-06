@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.34",
-  "packageVersion": "0.1.0-pre.34",
-  "packageName": "ShareSurfer-0.1.0-pre.34",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.34.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.34",
+  "currentPrereleaseTag": "v0.1.0-pre.35",
+  "packageVersion": "0.1.0-pre.35",
+  "packageName": "ShareSurfer-0.1.0-pre.35",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.35.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.35",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with improved interactive ownership enrichment controls from #363. Join-ShareSurferOwnershipSources -Interactive and New-ShareSurferOwnershipMappingProfile -Interactive now show a persistent controls line, support back/edit navigation, keep deliberate skips blank, offer a small header selector when there is no suggestion and fewer than 10 headers are available, and explain source type, authority level, and primary anchor choices in plain business language. Arrow-key selection is used where a real console supports raw keys, with numbered fallback for simpler hosts. Non-interactive DefinitionPath, mapping profile, and saved rerun workflows remain backward compatible. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with the staged ShareSurfer Start Menu and text-console wizard foundation from #367. The release-root Start-ShareSurfer.ps1 launcher now opens the Start-ShareSurfer menu by default, while -ConfigPath still replays saved startup configs. The menu shows readiness for ownership inputs, guided scan setup, export validation, standalone dashboard packaging, stop gates, and support bundle guidance; runnable entries preview the commands they execute before asking for confirmation. Ownership import prompts are safer for first-time admins: Enter accepts an existing suggestion, but when no suggestion exists ShareSurfer stays on that field and asks for a numbered/header choice or an explicit S skip. Command previews now quote Windows paths safely and avoid provider errors during non-Windows development checks. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
