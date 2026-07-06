@@ -31,16 +31,19 @@ function New-ShareSurferOwnershipMappingProfile {
     }
 
     if ($Interactive) {
-        $interactiveFieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap ([pscustomobject]$fieldMap) -SourcePath $Path -ObsHeader $ObsHeader
+        $interview = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap ([pscustomobject]$fieldMap) -SourcePath $Path -ObsHeader $ObsHeader
+        if ([bool]$interview.Cancelled) {
+            throw 'Ownership header interview cancelled by operator.'
+        }
         $fieldMap = [ordered]@{}
-        foreach ($property in $interactiveFieldMap.PSObject.Properties) {
+        foreach ($property in $interview.FieldMap.PSObject.Properties) {
             $fieldMap[$property.Name] = [string]$property.Value
         }
         $assessment = [pscustomobject]@{
             IsUsable = (@(Get-ShareSurferOwnershipJoinKeyFields | Where-Object { $fieldMap.Contains($_) -and -not [string]::IsNullOrWhiteSpace([string]$fieldMap[$_]) }).Count -gt 0)
             JoinKeyFields = (@(Get-ShareSurferOwnershipJoinKeyFields | Where-Object { $fieldMap.Contains($_) -and -not [string]::IsNullOrWhiteSpace([string]$fieldMap[$_]) }) -join ', ')
             ObsHeader = if ($fieldMap.Contains('OBS')) { [string]$fieldMap['OBS'] } else { '' }
-            Warnings = @($assessment.Warnings)
+            Warnings = @($interview.Warnings)
         }
     }
 

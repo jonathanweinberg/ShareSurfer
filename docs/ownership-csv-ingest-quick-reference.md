@@ -69,13 +69,13 @@ New-ShareSurferOwnershipMappingProfile `
   -Force
 ```
 
-During interactive mode, ShareSurfer asks which source CSV header should map to each ShareSurfer field and keeps this controls line visible:
+During interactive mode, ShareSurfer walks one guided screen per field, showing the step counter, the suggestion, the CSV's headers as a numbered list, and why the field matters, with this controls line visible:
 
 ```text
-Enter=accept/select | S=skip | B=back | ?=help | Q=quit
+Enter=accept | numbers=choose | type a header name | /text=filter | S=skip | B=back | ?=help | Q=quit
 ```
 
-Press Enter to accept a suggestion, type a different header when you already know it, press `S` to intentionally leave a field blank, or press `B` to go back and fix the previous field. If ShareSurfer does not have a suggestion and the CSV has fewer than 10 headers, pressing Enter opens a small selector. Arrow keys work in normal consoles; numbered selection is used as the fallback.
+Press Enter to accept a suggestion. When there is no suggestion, choose a numbered header, type a header name, type `/text` to filter a long header list, or press `S` to intentionally leave the field blank. Press `B` to go back and fix the previous field, or press `Q` to cancel without writing any files. A typed header that is not in the CSV is called out on screen and recorded as a warning in the saved mapping profile.
 
 ## 5. Normalize The CSV
 

@@ -81,7 +81,7 @@ When run interactively, the startup script offers to show the generated JSON/pla
 
 If `ownership-enrichment.csv` is missing, interactive startup can offer to launch the same `Join-ShareSurferOwnershipSources -Interactive -BrowseForCsv -IncludeContextGraph` workflow shown in Recipe 2A. That creates the enrichment, context graph, manifest, definition JSON, and reusable ownership import rerun script before startup continues. If `owner-mapping.csv` is missing, startup can add a post-scan `New-ShareSurferOwnerMappingDraft` step to the generated rerun script so the first scan can produce `owner-mapping-draft.csv` for an admin to fill and save as `owner-mapping.csv`.
 
-The easiest release-root launcher is:
+The easiest release-root launcher opens the ShareSurfer Start Menu:
 
 ```powershell
 $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.34'
@@ -90,6 +90,8 @@ $exportPath = 'C:\ShareSurfer\exports\finance-001'
 
 & "$releaseRoot\Start-ShareSurfer.ps1" -Force
 ```
+
+The menu shows readiness for ownership inputs, saved startup config, export validation, standalone dashboard packaging, and stop gates. Each menu entry previews the command it will run before asking for confirmation. If you want to replay an existing startup config without the menu, pass `-ConfigPath` to the same launcher.
 
 If you already know the answers and want to generate the same files without prompts, import the module and call the startup command directly:
 
@@ -206,7 +208,7 @@ This recipe creates three reusable files:
 - `normalized-ownership.csv`: canonical ownership rows for review.
 - `ownership-import-rerun.ps1`: reusable commands to retest the source and regenerate the normalized CSV without repeating the header interview.
 
-If you need ShareSurfer to ask you about each header in the console, add `-Interactive` to `New-ShareSurferOwnershipMappingProfile`. The saved rerun file still uses the profile afterward. Interactive prompts show `Enter=accept/select | S=skip | B=back | ?=help | Q=quit`; use `B` to fix the previous field, `S` to intentionally leave a ShareSurfer field blank, and `?` for a reminder. When there is no suggestion and the source has fewer than 10 headers, Enter opens a small selector with arrow-key support where available and numbered fallback everywhere else.
+If you need ShareSurfer to ask you about each header in the console, add `-Interactive` to `New-ShareSurferOwnershipMappingProfile`. The saved rerun file still uses the profile afterward. Interactive prompts show `Enter=accept/select | S=skip | B=back | ?=help | Q=quit`; use `B` to fix the previous field, `S` to intentionally leave a ShareSurfer field blank, and `?` for a reminder. When there is no suggestion and the source has fewer than 10 headers, the prompt keeps the numbered header list on screen and asks you to choose a number, type a header name, or press `S` to skip deliberately.
 
 To gather AD data from an HR or OBS file before scanning, create an enrichment CSV. ShareSurfer uses employee ID or employee number values from the source CSV to look up matching AD accounts when `-AdLookupMode Auto` or `ActiveDirectory` can read the directory. It fills available account, mail, title, office, manager, and OBS fields, then writes a local CSV that travels with the scan evidence.
 

@@ -22,6 +22,7 @@
         'New-ShareSurferReviewDecisionDraft',
         'New-ShareSurferLabFixture',
         'New-ShareSurferSupportBundle',
+        'Start-ShareSurfer',
         'Start-ShareSurferOperatorAssistant',
         'Start-ShareSurferStartup',
         'Test-ShareSurferExport',

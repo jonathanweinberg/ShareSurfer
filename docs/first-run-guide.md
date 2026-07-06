@@ -12,7 +12,7 @@ For a first useful scan:
 2. Use `C:\ShareSurfer-0.1.0-pre.34\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
-5. Recommended: run `Start-ShareSurfer.ps1` or `Start-ShareSurferStartup` to generate a reusable first-run JSON config, plan, and rerun script.
+5. Recommended: run `Start-ShareSurfer.ps1` to open the ShareSurfer Start Menu, then choose the guided scan setup when you are ready to generate a reusable first-run JSON config, plan, and rerun script. If you already know the startup command you want, you can still import the module and run `Start-ShareSurferStartup` directly.
 6. If HR, employee, OBS, project, or owner CSVs exist, let the startup prompts help build `ownership-enrichment.csv`, or normalize them before scanning with the ownership import commands.
 7. Run the collector, validate the export, and build `report.html`.
 8. Package the standalone dashboard from the validated export only when you need the richer local dashboard.

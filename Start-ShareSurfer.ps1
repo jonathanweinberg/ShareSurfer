@@ -4,7 +4,20 @@ param(
 
     [string] $SaveConfigPath = '',
 
+    [string] $InputRoot = '',
+
+    [string] $ExportPath = '',
+
+    [string] $StandaloneDashboardPath = '',
+
+    [string] $ObsAttribute = 'extensionAttribute10',
+
+    [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
+    [string] $AdLookupMode = 'Auto',
+
     [switch] $Interactive,
+
+    [switch] $StartupOnly,
 
     [switch] $Force
 )
@@ -92,8 +105,36 @@ if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
 
 Import-Module $modulePath -Force
 
+if ([string]::IsNullOrWhiteSpace($InputRoot)) {
+    $InputRoot = Join-Path $releaseRoot 'inputs'
+}
+
+if ([string]::IsNullOrWhiteSpace($ExportPath)) {
+    $ExportPath = Join-Path (Join-Path $releaseRoot 'exports') 'startup-scan'
+}
+
+if ([string]::IsNullOrWhiteSpace($StandaloneDashboardPath)) {
+    $StandaloneDashboardPath = Join-Path $ExportPath 'standalone-dashboard'
+}
+
+if ([string]::IsNullOrWhiteSpace($ConfigPath) -and [string]::IsNullOrWhiteSpace($SaveConfigPath) -and -not $StartupOnly) {
+    Start-ShareSurfer `
+        -ReleaseRoot $releaseRoot `
+        -InputRoot $InputRoot `
+        -ExportPath $ExportPath `
+        -StandaloneDashboardPath $StandaloneDashboardPath `
+        -ObsAttribute $ObsAttribute `
+        -AdLookupMode $AdLookupMode
+    return
+}
+
 $startupParams = @{
     ReleaseRoot = $releaseRoot
+    InputRoot = $InputRoot
+    ExportPath = $ExportPath
+    StandaloneDashboardPath = $StandaloneDashboardPath
+    ObsAttribute = $ObsAttribute
+    AdLookupMode = $AdLookupMode
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ConfigPath)) {
