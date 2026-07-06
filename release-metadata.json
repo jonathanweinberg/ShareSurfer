@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.33",
-  "packageVersion": "0.1.0-pre.33",
-  "packageName": "ShareSurfer-0.1.0-pre.33",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.33.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.33",
+  "currentPrereleaseTag": "v0.1.0-pre.34",
+  "packageVersion": "0.1.0-pre.34",
+  "packageName": "ShareSurfer-0.1.0-pre.34",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.34.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.34",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with ownership import performance and provenance fixes from #358 and #361. Join-ShareSurferOwnershipSources aggregates OBS-only project/path/group context by OBS bucket, applies that context once per matching strong identity row, and keeps provenance merging set-backed while the import is running instead of repeatedly splitting and rejoining large delimited strings. This addresses the large-context CSV path observed in a 150,003-row source that was still crawling after roughly 40 hours, fixes context-before-identity duplicate provenance, prevents row-scoped NoJoinKey warnings from being stamped onto strong identity rows, adds a no-key source guardrail, and keeps the previous prerelease progress output plus OBS context application/orphan counters. Operators with older long-running context imports should stop that run and rerun on this optimized release. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with improved interactive ownership enrichment controls from #363. Join-ShareSurferOwnershipSources -Interactive and New-ShareSurferOwnershipMappingProfile -Interactive now show a persistent controls line, support back/edit navigation, keep deliberate skips blank, offer a small header selector when there is no suggestion and fewer than 10 headers are available, and explain source type, authority level, and primary anchor choices in plain business language. Arrow-key selection is used where a real console supports raw keys, with numbered fallback for simpler hosts. Non-interactive DefinitionPath, mapping profile, and saved rerun workflows remain backward compatible. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",

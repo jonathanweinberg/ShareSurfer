@@ -133,10 +133,10 @@ Enriched rows can add these review fields:
 
 ## Step 1: Test The CSV
 
-If `v0.1.0-pre.33` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
+If `v0.1.0-pre.34` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.33'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.34'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
@@ -192,7 +192,13 @@ New-ShareSurferOwnershipMappingProfile `
   -Force
 ```
 
-During interactive mode, press Enter to accept a suggested header, type another header, or type `S` to skip a field.
+During interactive mode, ShareSurfer keeps a controls line on screen:
+
+```text
+Enter=accept/select | S=skip | B=back | ?=help | Q=quit
+```
+
+Press Enter to accept a suggested header, type another header name when you know it, press `S` to deliberately leave that ShareSurfer field blank, or press `B` to go back and fix the previous field. If there is no confident suggestion and the source has fewer than 10 headers, pressing Enter opens a small selector so you can choose the right header with arrow keys where the console supports them, or by number in simpler hosts.
 
 ## Step 3: Import A Normalized Ownership CSV
 
@@ -256,6 +262,17 @@ Join-ShareSurferOwnershipSources `
 ```
 
 In the picker, use the numbered folder and file choices to move around and toggle CSVs. The menu also lets you select all CSVs in the current folder, clear selected paths, show selected paths, go up to the parent folder, finish, or quit.
+
+After you choose source CSV files, interactive ownership enrichment asks what each file mostly describes and how much trust to place in it. The prompts use the same `Enter`, `S`, `B`, `?`, and `Q` controls where they apply. Source type choices are written in business terms:
+
+- `Identity`: people or accounts, usually HR or directory-aligned employee data.
+- `ObsContext`: OBS/OID, business-unit, or owner clues.
+- `ProjectContext`: projects, programs, apps, or WBS codes linked to OBS or owners.
+- `PathOwnership`: share, folder, UNC, or path-prefix ownership clues.
+- `GroupContext`: security groups linked to owners, OBS, projects, or business units.
+- `Mixed`: several kinds of clues or a file whose purpose is not cleanly separated.
+
+Authority choices tell reviewers how strongly to trust the file: `Authoritative` means a trusted source of record, `ReviewerHint` means useful but review-needed, `ContextOnly` means grouping context only, and `Unknown` means the trust level is unclear. `B` lets you return to an earlier source-classification prompt before the definition JSON is saved.
 
 If you already know the exact files, you can still pass them directly:
 
