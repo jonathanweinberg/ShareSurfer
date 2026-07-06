@@ -784,18 +784,186 @@ function Add-ShareSurferDelimitedValue {
     }
 
     $values = New-Object System.Collections.Generic.List[string]
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($item in @($Existing -split [regex]::Escape($Delimiter))) {
         if (-not [string]::IsNullOrWhiteSpace($item)) {
-            $values.Add($item.Trim())
+            $trimmed = $item.Trim()
+            if ($seen.Add($trimmed)) {
+                $values.Add($trimmed)
+            }
         }
     }
 
-    $candidate = $Value.Trim()
-    if (-not (@($values) | Where-Object { $_.ToLowerInvariant() -eq $candidate.ToLowerInvariant() })) {
-        $values.Add($candidate)
+    foreach ($item in @($Value -split [regex]::Escape($Delimiter))) {
+        if ([string]::IsNullOrWhiteSpace($item)) {
+            continue
+        }
+
+        $candidate = $item.Trim()
+        if ($seen.Add($candidate)) {
+            $values.Add($candidate)
+        }
     }
 
     (@($values) -join $Delimiter)
+}
+
+function Get-ShareSurferDelimitedStatePropertyName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Column
+    )
+
+    '__ShareSurferDelimitedState_{0}' -f $Column
+}
+
+function Get-ShareSurferDelimitedPropertyState {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Column,
+
+        [string] $Delimiter = '; '
+    )
+
+    $statePropertyName = Get-ShareSurferDelimitedStatePropertyName -Column $Column
+    $stateProperty = $Row.PSObject.Properties[$statePropertyName]
+    if ($null -ne $stateProperty) {
+        return $stateProperty.Value
+    }
+
+    $values = New-Object System.Collections.Generic.List[string]
+    $seen = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    $existingValue = ''
+    $existingProperty = $Row.PSObject.Properties[$Column]
+    if ($null -ne $existingProperty -and $null -ne $existingProperty.Value) {
+        $existingValue = [string]$existingProperty.Value
+    }
+
+    foreach ($item in @($existingValue -split [regex]::Escape($Delimiter))) {
+        if ([string]::IsNullOrWhiteSpace($item)) {
+            continue
+        }
+
+        $trimmed = $item.Trim()
+        if ($seen.Add($trimmed)) {
+            $values.Add($trimmed)
+        }
+    }
+
+    $state = [pscustomobject]@{
+        Values = $values
+        Seen = $seen
+        Delimiter = $Delimiter
+    }
+    $Row | Add-Member -NotePropertyName $statePropertyName -NotePropertyValue $state -Force
+    $state
+}
+
+function Add-ShareSurferDelimitedPropertyValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Column,
+
+        [string] $Value = '',
+
+        [string] $Delimiter = '; '
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return
+    }
+
+    $state = Get-ShareSurferDelimitedPropertyState -Row $Row -Column $Column -Delimiter $Delimiter
+    foreach ($item in @($Value -split [regex]::Escape($Delimiter))) {
+        if ([string]::IsNullOrWhiteSpace($item)) {
+            continue
+        }
+
+        $candidate = $item.Trim()
+        if ($state.Seen.Add($candidate)) {
+            $state.Values.Add($candidate)
+        }
+    }
+}
+
+function Complete-ShareSurferDelimitedProperties {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Row,
+
+        [string[]] $Columns = @('SourcePaths', 'SourceRowNumbers', 'ImportWarnings')
+    )
+
+    foreach ($column in @($Columns)) {
+        $statePropertyName = Get-ShareSurferDelimitedStatePropertyName -Column $column
+        $stateProperty = $Row.PSObject.Properties[$statePropertyName]
+        if ($null -eq $stateProperty) {
+            continue
+        }
+
+        $targetProperty = $Row.PSObject.Properties[$column]
+        if ($null -ne $targetProperty) {
+            $targetProperty.Value = (@($stateProperty.Value.Values) -join [string]$stateProperty.Value.Delimiter)
+        }
+    }
+
+    $Row
+}
+
+function Remove-ShareSurferDelimitedValue {
+    param(
+        [string] $Existing = '',
+
+        [string[]] $Values = @(),
+
+        [string] $Delimiter = '; '
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Existing)) {
+        return ''
+    }
+
+    $remove = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($value in @($Values)) {
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            [void]$remove.Add($value.Trim())
+        }
+    }
+
+    $kept = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($Existing -split [regex]::Escape($Delimiter))) {
+        if ([string]::IsNullOrWhiteSpace($item)) {
+            continue
+        }
+
+        $trimmed = $item.Trim()
+        if (-not $remove.Contains($trimmed)) {
+            $kept.Add($trimmed)
+        }
+    }
+
+    (@($kept) -join $Delimiter)
+}
+
+function Copy-ShareSurferOwnershipContextForStrongRow {
+    param(
+        [Parameter(Mandatory = $true)]
+        $ContextRow
+    )
+
+    Complete-ShareSurferDelimitedProperties -Row $ContextRow | Out-Null
+    $copy = $ContextRow.PSObject.Copy()
+    $warningProperty = $copy.PSObject.Properties['ImportWarnings']
+    if ($null -ne $warningProperty) {
+        $warningProperty.Value = Remove-ShareSurferDelimitedValue -Existing ([string]$warningProperty.Value) -Values @('NoJoinKey')
+    }
+    $copy
 }
 
 function Merge-ShareSurferOwnershipEnrichmentRow {
@@ -818,11 +986,7 @@ function Merge-ShareSurferOwnershipEnrichmentRow {
         }
 
         if ($column -in @('SourcePaths', 'SourceRowNumbers', 'ImportWarnings')) {
-            $existingValue = ''
-            if ($null -ne $Existing.PSObject.Properties[$column]) {
-                $existingValue = [string]$Existing.PSObject.Properties[$column].Value
-            }
-            $Existing.PSObject.Properties[$column].Value = Add-ShareSurferDelimitedValue -Existing $existingValue -Value ([string]$incomingProperty.Value)
+            Add-ShareSurferDelimitedPropertyValue -Row $Existing -Column $column -Value ([string]$incomingProperty.Value)
             continue
         }
 
@@ -928,7 +1092,7 @@ function Update-ShareSurferOwnershipRowFromDirectory {
         $Row.ForbiddenOuMatched = [string]$LookupResult.ForbiddenOuMatched
     }
     if ($null -ne $LookupResult.PSObject.Properties['Message'] -and -not [string]::IsNullOrWhiteSpace([string]$LookupResult.Message)) {
-        $Row.ImportWarnings = Add-ShareSurferDelimitedValue -Existing ([string]$Row.ImportWarnings) -Value ([string]$LookupResult.Message)
+        Add-ShareSurferDelimitedPropertyValue -Row $Row -Column 'ImportWarnings' -Value ([string]$LookupResult.Message)
     }
 
     if ($null -eq $LookupResult.PSObject.Properties['IdentityRecord'] -or $null -eq $LookupResult.IdentityRecord) {

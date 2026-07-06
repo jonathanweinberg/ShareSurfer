@@ -256,10 +256,6 @@ function Join-ShareSurferOwnershipSources {
                 continue
             }
 
-            if (-not [string]::IsNullOrWhiteSpace($obsKey) -and $obsContextRows.ContainsKey($obsKey)) {
-                $incoming = Merge-ShareSurferOwnershipEnrichmentRow -Existing $incoming -Incoming $obsContextRows[$obsKey]
-            }
-
             $key = Get-ShareSurferOwnershipMergeKey -Row $incoming
             if ($mergedRows.Contains($key)) {
                 $mergedRows[$key] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $mergedRows[$key] -Incoming $incoming
@@ -287,6 +283,11 @@ function Join-ShareSurferOwnershipSources {
             $sourceWarnings.Add(('{0}: {1}' -f $sourcePath, $weakWarning))
             Write-ShareSurferOwnershipImportStatus -Message ('Review source {0}/{1}: {2}' -f $sourceIndex, $selectedPaths.Count, $weakWarning) -Quiet:$Quiet
         }
+        elseif ($sourceRows.Count -gt 0 -and $sourceStrongKeyCount -eq 0 -and $sourceWeakObsOnlyCount -eq 0) {
+            $noKeyWarning = 'Source has rows, but no rows mapped to an employee/account join key or OBS key. Rerun the header interview or mapping profile before relying on this file.'
+            $sourceWarnings.Add(('{0}: {1}' -f $sourcePath, $noKeyWarning))
+            Write-ShareSurferOwnershipImportStatus -Message ('Review source {0}/{1}: {2}' -f $sourceIndex, $selectedPaths.Count, $noKeyWarning) -Quiet:$Quiet
+        }
         if ($IncludeContextGraph) {
             [void]$manifestRows.Add([pscustomobject]@{
                 SourcePath = $sourcePath
@@ -313,12 +314,14 @@ function Join-ShareSurferOwnershipSources {
         $hasMatchingStrongRow = ($mergedKeysByObsKey.ContainsKey($obsKey) -and @($mergedKeysByObsKey[$obsKey].Keys).Count -gt 0)
 
         if ($hasMatchingStrongRow) {
+            $contextForStrongRow = Copy-ShareSurferOwnershipContextForStrongRow -ContextRow $obsContextRows[$obsKey]
             foreach ($existingKey in @($mergedKeysByObsKey[$obsKey].Keys)) {
-                $mergedRows[$existingKey] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $mergedRows[$existingKey] -Incoming $obsContextRows[$obsKey]
+                $mergedRows[$existingKey] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $mergedRows[$existingKey] -Incoming $contextForStrongRow
                 $obsContextStrongRowMergeCount++
             }
         }
         else {
+            Complete-ShareSurferDelimitedProperties -Row $obsContextRows[$obsKey] | Out-Null
             $mergedRows[$obsKey] = $obsContextRows[$obsKey]
             Add-ShareSurferOwnershipObsMergeIndex -Index $mergedKeysByObsKey -ObsKey $obsKey -MergeKey $obsKey
             $obsContextOrphanRowCount++
@@ -361,14 +364,12 @@ function Join-ShareSurferOwnershipSources {
             $row.MatchStatus = 'SourceOnly'
             $row.MatchMethod = ''
         }
-        elseif ([string]::IsNullOrWhiteSpace([string]$row.ImportWarnings)) {
-            $row.ImportWarnings = 'NoEmployeeIdentifierForAdMatch'
-        }
         else {
-            $row.ImportWarnings = Add-ShareSurferDelimitedValue -Existing ([string]$row.ImportWarnings) -Value 'NoEmployeeIdentifierForAdMatch'
+            Add-ShareSurferDelimitedPropertyValue -Row $row -Column 'ImportWarnings' -Value 'NoEmployeeIdentifierForAdMatch'
         }
 
         $row.PotentialServiceAccount = [string]([string]::IsNullOrWhiteSpace([string]$row.OBS) -and [string]::IsNullOrWhiteSpace([string]$row.AdObsPath) -and [string]::IsNullOrWhiteSpace([string]$row.EmployeeId) -and [string]::IsNullOrWhiteSpace([string]$row.EmployeeNumber))
+        Complete-ShareSurferDelimitedProperties -Row $row | Out-Null
         [void]$enrichedRows.Add($row)
 
         $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
@@ -407,7 +408,24 @@ function Join-ShareSurferOwnershipSources {
         Write-ShareSurferOwnershipImportStatus -Message ('Writing reusable ownership import command: {0}' -f $writtenReusableCommandPath) -Quiet:$Quiet
     }
 
-    Write-ShareSurferOwnershipImportStatus -Message ('Ownership import complete: {0} row(s), {1} matched, {2} ambiguous, {3} forbidden-OU skipped, {4} source-only, {5} potential service-account-like row(s), {6} AD lookup attempt(s), {7} cache hit(s). Elapsed {8}.' -f $enrichedRows.Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Matched' }).Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Ambiguous' }).Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'ForbiddenOuSkipped' }).Count, @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'SourceOnly' }).Count, @($enrichedRows | Where-Object { [string]$_.PotentialServiceAccount -eq 'True' }).Count, $lookupAttemptCount, $lookupCacheHitCount, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
+    $matchedCount = 0
+    $ambiguousCount = 0
+    $forbiddenOuSkippedCount = 0
+    $sourceOnlyCount = 0
+    $potentialServiceAccountCount = 0
+    foreach ($row in @($enrichedRows)) {
+        switch ([string]$row.MatchStatus) {
+            'Matched' { $matchedCount++; break }
+            'Ambiguous' { $ambiguousCount++; break }
+            'ForbiddenOuSkipped' { $forbiddenOuSkippedCount++; break }
+            'SourceOnly' { $sourceOnlyCount++; break }
+        }
+        if ([string]$row.PotentialServiceAccount -eq 'True') {
+            $potentialServiceAccountCount++
+        }
+    }
+
+    Write-ShareSurferOwnershipImportStatus -Message ('Ownership import complete: {0} row(s), {1} matched, {2} ambiguous, {3} forbidden-OU skipped, {4} source-only, {5} potential service-account-like row(s), {6} AD lookup attempt(s), {7} cache hit(s). Elapsed {8}.' -f $enrichedRows.Count, $matchedCount, $ambiguousCount, $forbiddenOuSkippedCount, $sourceOnlyCount, $potentialServiceAccountCount, $lookupAttemptCount, $lookupCacheHitCount, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
 
     [pscustomobject]@{
         OutputPath = $OutputPath
@@ -421,11 +439,11 @@ function Join-ShareSurferOwnershipSources {
         ContextRowCount = $contextRows.Count
         RelationshipRowCount = $relationshipRows.Count
         ManifestRowCount = $manifestRows.Count
-        MatchedCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Matched' }).Count
-        AmbiguousCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'Ambiguous' }).Count
-        ForbiddenOuSkippedCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'ForbiddenOuSkipped' }).Count
-        SourceOnlyCount = @($enrichedRows | Where-Object { [string]$_.MatchStatus -eq 'SourceOnly' }).Count
-        PotentialServiceAccountCount = @($enrichedRows | Where-Object { [string]$_.PotentialServiceAccount -eq 'True' }).Count
+        MatchedCount = $matchedCount
+        AmbiguousCount = $ambiguousCount
+        ForbiddenOuSkippedCount = $forbiddenOuSkippedCount
+        SourceOnlyCount = $sourceOnlyCount
+        PotentialServiceAccountCount = $potentialServiceAccountCount
         ForbiddenOu = (@($selectedForbiddenOus) -join '; ')
         ObsAttribute = $ObsAttribute
         ObsContextStrongRowMergeCount = $obsContextStrongRowMergeCount

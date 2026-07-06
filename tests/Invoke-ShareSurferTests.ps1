@@ -2771,6 +2771,89 @@ $tests = @(
         }
     },
     @{
+        Name = 'Join-ShareSurferOwnershipSources applies context-before-identity provenance once'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $identityPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipContextFirstIdentity-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $contextPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipContextFirstContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipContextFirstOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+
+            Set-Content -LiteralPath $contextPath -Value @(
+                'obs,project_code,project,business_unit,data_owner',
+                'CORP.FIN.AP,AP-2026,Accounts Payable Modernization,Finance,Finance Operations',
+                'CORP.FIN.AP,AP-2027,Accounts Payable Archive,Finance,Finance Operations'
+            ) -Encoding UTF8
+            Set-Content -LiteralPath $identityPath -Value @(
+                'employee_id,display_name,obs,business_unit',
+                'E1001,Ava Accounting,CORP.FIN.AP,Finance'
+            ) -Encoding UTF8
+
+            $summary = Join-ShareSurferOwnershipSources `
+                -Path @($contextPath, $identityPath) `
+                -OutputPath $outputPath `
+                -AdLookupMode DirectoryOnly `
+                -Quiet `
+                -Force
+            $rows = @(Import-Csv -LiteralPath $outputPath)
+
+            Assert-Equal $summary.RowCount 1 'Context-first input should still produce one strong ownership row.'
+            Assert-Equal $summary.ObsContextStrongRowMergeCount 1 'OBS context should be applied once to the matching strong row.'
+            Assert-Equal $rows[0].SourceRowNumbers '2; 3' 'Context provenance row numbers should not be duplicated by ingest-time and post-pass merges.'
+            Assert-True ([string]$rows[0].SourcePaths -like '*ShareSurferOwnershipContextFirstContext*') 'Context source path should remain visible in provenance.'
+            Assert-True ([string]$rows[0].SourcePaths -like '*ShareSurferOwnershipContextFirstIdentity*') 'Identity source path should remain visible in provenance.'
+            Assert-True ([string]$rows[0].ImportWarnings -notlike '*NoJoinKey*') 'Strong rows should not inherit row-scoped NoJoinKey warnings from OBS context files.'
+        }
+    },
+    @{
+        Name = 'Join-ShareSurferOwnershipSources warns when a source maps no join or OBS keys'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipNoKeys-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipNoKeysOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+            Set-Content -LiteralPath $sourcePath -Value @(
+                'UnmappedColumn,AnotherUnmappedColumn',
+                'alpha,beta'
+            ) -Encoding UTF8
+
+            $summary = Join-ShareSurferOwnershipSources `
+                -Path $sourcePath `
+                -OutputPath $outputPath `
+                -AdLookupMode DirectoryOnly `
+                -Quiet `
+                -Force
+
+            Assert-Equal $summary.RowCount 1 'No-key source should still export evidence for review.'
+            Assert-True ((@($summary.Warnings) -join "`n") -like '*no rows mapped to an employee/account join key or OBS key*') 'No-key source should produce a source-level warning.'
+        }
+    },
+    @{
+        Name = 'Join-ShareSurferOwnershipSources handles skewed OBS context buckets without crawl'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $contextPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSkewContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipSkewOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $lines = New-Object System.Collections.Generic.List[string]
+            $lines.Add('obs,project_code,project,business_unit,data_owner')
+            for ($index = 1; $index -le 1500; $index++) {
+                $lines.Add(('CORP.FIN.AP,AP-{0:0000},Accounts Payable {0},Finance,Finance Operations' -f $index))
+            }
+            Set-Content -LiteralPath $contextPath -Value $lines -Encoding UTF8
+
+            $clock = [System.Diagnostics.Stopwatch]::StartNew()
+            $summary = Join-ShareSurferOwnershipSources `
+                -Path $contextPath `
+                -OutputPath $outputPath `
+                -AdLookupMode DirectoryOnly `
+                -Quiet `
+                -Force
+            $clock.Stop()
+
+            Assert-Equal $summary.RowCount 1 'Skewed OBS-only context should aggregate into one orphan OBS row.'
+            Assert-Equal $summary.ObsContextOrphanRowCount 1 'Skewed OBS-only context should be reported as one orphan OBS bucket.'
+            Assert-True ($clock.Elapsed.TotalSeconds -lt 20) ('Skewed OBS context import should not crawl; elapsed seconds: {0:n2}' -f $clock.Elapsed.TotalSeconds)
+        }
+    },
+    @{
         Name = 'Join-ShareSurferOwnershipSources reruns from ownership import definition'
         Body = {
             Import-Module $moduleManifest -Force
