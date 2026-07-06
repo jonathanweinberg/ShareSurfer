@@ -2722,6 +2722,55 @@ $tests = @(
         }
     },
     @{
+        Name = 'Join-ShareSurferOwnershipSources defers OBS context fan-out until bucket merge'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $identityPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipFanoutIdentity-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $contextPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipFanoutContext-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipFanoutOutput-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $ownershipContextPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipFanoutContextOut-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $relationshipPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipFanoutRelationships-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $manifestPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferOwnershipFanoutManifest-' + [guid]::NewGuid().ToString('N') + '.csv')
+
+            $identityRows = for ($index = 1; $index -le 5; $index++) {
+                [pscustomobject]@{
+                    employee_id = 'E{0:0000}' -f $index
+                    display_name = 'User {0}' -f $index
+                    obs = 'CORP.FIN.AP'
+                    business_unit = 'Finance'
+                }
+            }
+            $contextRows = for ($index = 1; $index -le 10; $index++) {
+                [pscustomobject]@{
+                    obs = 'CORP.FIN.AP'
+                    project_code = 'AP-{0:0000}' -f $index
+                    project = 'Accounts Payable {0}' -f $index
+                    business_unit = 'Finance'
+                    data_owner = 'Finance Operations'
+                }
+            }
+            $identityRows | Export-Csv -LiteralPath $identityPath -NoTypeInformation -Encoding UTF8
+            $contextRows | Export-Csv -LiteralPath $contextPath -NoTypeInformation -Encoding UTF8
+
+            $summary = Join-ShareSurferOwnershipSources `
+                -Path @($identityPath, $contextPath) `
+                -OutputPath $outputPath `
+                -ContextOutputPath $ownershipContextPath `
+                -RelationshipOutputPath $relationshipPath `
+                -ManifestOutputPath $manifestPath `
+                -IncludeContextGraph `
+                -AdLookupMode DirectoryOnly `
+                -Quiet `
+                -Force
+            $rows = @(Import-Csv -LiteralPath $outputPath)
+
+            Assert-Equal $summary.RowCount 5 'Strong identity rows should remain the output ownership rows.'
+            Assert-Equal $summary.ObsContextStrongRowMergeCount 5 'OBS context should be applied once per matching strong row, not once per context row per strong row.'
+            Assert-Equal $summary.ObsContextOrphanRowCount 0 'Matching OBS context should not create orphan ownership rows.'
+            Assert-True (@($rows | Where-Object { $_.ProjectCode -eq 'AP-0001' }).Count -eq 5) 'Strong rows should still receive aggregated OBS context.'
+        }
+    },
+    @{
         Name = 'Join-ShareSurferOwnershipSources reruns from ownership import definition'
         Body = {
             Import-Module $moduleManifest -Force
