@@ -81,6 +81,14 @@ Enter=accept | arrows/numbers=choose | S=skip | B=back | ?=help | Q=quit
 
 For source classification, the same layer should show source type, authority level, and primary anchor choices with short plain-English descriptions.
 
+### Wide CSVs Are The Norm, Not The Edge Case
+
+The example above shows five headers. Real HR, PMO, and org exports commonly have 30-80 columns, and that audience is exactly who this wizard serves. The header screens must therefore:
+
+- always allow typing a header name directly, exactly as the current interview does, in addition to numbered and arrow selection;
+- display long header lists compactly (wrapped into columns) and cap the visible list instead of scrolling the screen away;
+- support a minimal `/text` filter that narrows the visible header list. This is pulled forward from the later rich-TUI list because without it the numbered list is a usability regression against today's type-the-header-name interview on wide files.
+
 ## Behavior Contract
 
 The console layer should use one controls contract everywhere:
@@ -101,6 +109,15 @@ Behavior rules:
 - Cancel should not partially overwrite mapping profiles, definition JSON, or rerun scripts.
 
 Where the console cannot safely read raw keys, the same screens should still work with typed numbers and typed commands.
+
+### Cancellation Mechanism
+
+The rules above are only testable with one defined mechanism, so the console layer uses **return-based cancellation**:
+
+- Prompts and wizard loops signal cancel by returning a result whose action is `Cancelled`. They do not throw.
+- Only flow entry points (startup, operator assistant, import commands) decide what cancel means there: abort the command, skip an optional step, or save-and-exit.
+- Today `Q` throws a plain string from the interviews, and `Start-ShareSurferStartup` catches it but keeps the intended output paths in its summary, so a saved startup config can name enrichment files that were never created. Converting a flow to the console layer includes converting its cancel handling; a cancelled ownership setup must blank the never-created output paths before the config is saved.
+- Quit tests assert both the returned `Cancelled` action and that every durable output is either absent or unchanged from its prior state.
 
 ## Reusable Output Contract
 
@@ -124,7 +141,7 @@ Required test lanes:
 - choice state machine: up/down/select/number/back/skip/help/quit;
 - key translation: arrow keys, enter, escape, backspace, zero-character modifier keys, and unsupported function keys;
 - render snapshots: ownership field screen, source type screen, authority screen, primary anchor screen, validation error screen;
-- header interview: back edits a prior field, skip stays blank, quit does not write partial output;
+- header interview: back edits a prior field, skip stays blank, quit does not write partial output, and a typo'd header surfaces as a recorded warning in the saved mapping profile;
 - fallback mode: typed-number selection works when raw keys are unavailable;
 - compatibility: existing `-DefinitionPath`, mapping profile, and rerun tests still pass.
 
@@ -144,11 +161,13 @@ Dashboard tests are not required unless dashboard files change.
 - Move the existing prompt-choice state machine out of `Join-ShareSurferOwnershipSources.ps1`.
 - Add capability detection and render-to-string helpers.
 - Add tests for state, key translation, and plain rendering.
-- Preserve current behavior through compatibility shims.
+- Preserve current behavior through compatibility shims. The shims cover the existing #364 state-machine tests too: the current `*-ShareSurferPromptChoice*` names keep working until the tests are migrated to the `*-ShareSurferConsoleChoice*` names in this same slice, so the suite stays green mid-move.
 
 ### Slice 2: Ownership Import Wizard
 
 - Rework `Read-ShareSurferOwnershipHeaderSelections` to render full wizard screens through the console layer.
+- Change its return shape to carry both the field map and the interview's resolve warnings, and store the post-interview warnings in the mapping profile. Today the warnings are discarded and `New-ShareSurferOwnershipMappingProfile` saves the stale pre-interview ones, so a typo'd header leaves no recorded trace (fifth-pass review finding P5-E). This rework touches exactly that function; if the return shape does not change here, the regression survives the rewrite.
+- Preserve free-typed header entry and add the `/text` header filter for wide CSVs (see "Wide CSVs Are The Norm" above).
 - Add field explanations for canonical ownership fields.
 - Preserve mapping profile and definition replay behavior.
 - Add snapshot tests and cancellation tests.
@@ -162,6 +181,7 @@ Dashboard tests are not required unless dashboard files change.
 ### Slice 4: Broader Prompt Convergence
 
 - Convert startup prompts, operator assistant prompts, CSV picker, and forbidden-OU picker to the same layer.
+- Converting startup includes its cancel path: a cancelled guided ownership setup must not leave intended-but-never-created output paths in the saved startup config (see Cancellation Mechanism).
 - Add breadcrumbs and selection summaries.
 - Add a test that blocks new ad hoc `Read-Host` loops outside approved prompt-layer code.
 
@@ -216,3 +236,8 @@ The first build should be considered successful when:
 ## Open Follow-Up
 
 The later richer TUI should be tracked as a long-term goal after the console layer proves itself in the field. The immediate release path should focus on the internal console layer and ownership import wizard first.
+
+Deferred deliberately, tracked so they are deferred rather than lost:
+
+- `Test-ShareSurferCollectorReadiness`: Slice 5's menu shows a preflight readiness row, but the underlying command does not exist yet. Commission it as its own issue, landing before or with Slice 5, aggregating the existing connectivity, port/protocol, module-availability, and write-path checks.
+- `START-HERE.md` generated into the release ZIP, pointing first-time operators at `Start-ShareSurfer` once the menu shell ships. Two lines: import the module, run `Start-ShareSurfer`.
