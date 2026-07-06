@@ -272,22 +272,8 @@ function Read-ShareSurferAssistantText {
         [switch] $AllowBlank
     )
 
-    $displayPrompt = if ([string]::IsNullOrWhiteSpace($Value)) {
-        $Prompt
-    }
-    else {
-        '{0} [{1}]' -f $Prompt, $Value
-    }
-
-    $answer = Read-Host -Prompt $displayPrompt
-    if ([string]::IsNullOrWhiteSpace($answer)) {
-        if ($AllowBlank -and [string]::IsNullOrWhiteSpace($Value)) {
-            return ''
-        }
-        return $Value
-    }
-
-    $answer
+    $result = Read-ShareSurferConsoleText -Prompt $Prompt -Default $Value
+    [string]$result.Value
 }
 
 function Get-ShareSurferOptionalInputExpectedPath {

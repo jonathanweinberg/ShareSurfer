@@ -680,18 +680,19 @@ function Invoke-ShareSurferCsvPickerCommand {
     $State
 }
 
-function Show-ShareSurferCsvPicker {
+function Get-ShareSurferCsvPickerScreen {
     param(
         [Parameter(Mandatory = $true)]
         $State
     )
 
     $view = Get-ShareSurferCsvPickerView -State $State
-    Write-Host ''
-    Write-Host ('Current folder: {0}' -f $view.CurrentFolder)
-    Write-Host ''
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('')
+    $lines.Add(('Current folder: {0}' -f $view.CurrentFolder))
+    $lines.Add('')
     if (@($view.Entries).Count -eq 0) {
-        Write-Host '  No subfolders or CSV files found here.'
+        $lines.Add('  No subfolders or CSV files found here.')
     }
     else {
         for ($index = 0; $index -lt @($view.Entries).Count; $index++) {
@@ -705,13 +706,45 @@ function Show-ShareSurferCsvPicker {
             else {
                 '[ ]'
             }
-            Write-Host ('  [{0}] {1,-10} {2}' -f ($index + 1), $marker, $entry.Name)
+            $lines.Add(('  [{0}] {1,-10} {2}' -f ($index + 1), $marker, $entry.Name))
         }
     }
 
-    Write-Host ''
-    Write-Host ('Selected CSVs: {0}' -f @($State.SelectedCsvPaths).Count)
-    Write-Host 'Commands: number=open folder/toggle CSV, A=select all CSVs here, C=clear, U=up, P=show selected, D=done, Q=quit'
+    $lines.Add('')
+    $lines.Add(('Selected CSVs: {0}' -f @($State.SelectedCsvPaths).Count))
+    $lines.Add('Commands: number=open folder/toggle CSV, A=select all CSVs here, C=clear, U=up, P=show selected, D=done, Q=quit')
+
+    @($lines.ToArray())
+}
+
+function Show-ShareSurferCsvPicker {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    Write-ShareSurferConsoleLines -Lines (Get-ShareSurferCsvPickerScreen -State $State)
+}
+
+function Get-ShareSurferCsvPickerSelectedPathsScreen {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add('')
+    $lines.Add('Selected CSV files:')
+    if (@($State.SelectedCsvPaths).Count -eq 0) {
+        $lines.Add('  None yet.')
+    }
+    else {
+        foreach ($path in @($State.SelectedCsvPaths)) {
+            $lines.Add(('  {0}' -f $path))
+        }
+    }
+
+    @($lines.ToArray())
 }
 
 function Show-ShareSurferCsvPickerSelectedPaths {
@@ -720,16 +753,7 @@ function Show-ShareSurferCsvPickerSelectedPaths {
         $State
     )
 
-    Write-Host ''
-    Write-Host 'Selected CSV files:'
-    if (@($State.SelectedCsvPaths).Count -eq 0) {
-        Write-Host '  None yet.'
-        return
-    }
-
-    foreach ($path in @($State.SelectedCsvPaths)) {
-        Write-Host ('  {0}' -f $path)
-    }
+    Write-ShareSurferConsoleLines -Lines (Get-ShareSurferCsvPickerSelectedPathsScreen -State $State)
 }
 
 function Read-ShareSurferCsvPickerSelection {
@@ -783,30 +807,27 @@ function Select-ShareSurferForbiddenOus {
         return @()
     }
 
-    Write-Host ''
-    Write-Host 'Forbidden OUs are skipped during EmployeeID-to-AD matching.'
-    Write-Host 'Use this for disabled-account archives, service-account containers, staging/test OUs, or areas that should not influence ownership.'
-    Write-Host ''
-    for ($index = 0; $index -lt $ous.Count; $index++) {
-        $display = if (-not [string]::IsNullOrWhiteSpace([string]$ous[$index].CanonicalName)) { [string]$ous[$index].CanonicalName } else { [string]$ous[$index].DistinguishedName }
-        Write-Host ('  [{0}] {1}' -f ($index + 1), $display)
+    $ouOptions = @($ous | ForEach-Object {
+        $display = if (-not [string]::IsNullOrWhiteSpace([string]$_.CanonicalName)) { [string]$_.CanonicalName } else { [string]$_.DistinguishedName }
+        New-ShareSurferConsoleChoiceOption -Value ([string]$_.DistinguishedName) -Label $display
+    })
+    $listedValues = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($option in $ouOptions) {
+        [void]$listedValues.Add([string]$option.Value)
     }
-    Write-Host ''
-    Write-Host 'Type numbers separated by commas, a range like 2-4, N for none, or press Enter to keep existing selections.'
-    $answer = Read-Host -Prompt 'OUs to ignore'
-    if ([string]::IsNullOrWhiteSpace($answer)) {
+    $unlistedExisting = @($selected | Where-Object { -not $listedValues.Contains([string]$_) })
+
+    $selection = Read-ShareSurferConsoleMultiSelect `
+        -Title 'Forbidden OUs are skipped during EmployeeID-to-AD matching.' `
+        -HelpText 'Use this for disabled-account archives, service-account containers, staging/test OUs, or areas that should not influence ownership.' `
+        -Options $ouOptions `
+        -SelectedValues @($selected) `
+        -AllowQuit
+    if ($selection.Action -eq 'Cancelled') {
         return @($selected)
     }
-    if ($answer.Trim().ToUpperInvariant() -eq 'N') {
-        return @()
-    }
 
-    $indexes = @(ConvertFrom-ShareSurferInteractiveSelection -Selection $answer -Maximum $ous.Count)
-    foreach ($index in $indexes) {
-        $selected.Add([string]$ous[$index - 1].DistinguishedName)
-    }
-
-    @($selected | Select-Object -Unique)
+    @(@($unlistedExisting) + @(Get-ShareSurferConsoleMultiSelectValues -State $selection) | Select-Object -Unique)
 }
 
 function ConvertFrom-ShareSurferInteractiveSelection {

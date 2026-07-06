@@ -2739,6 +2739,53 @@ $tests = @(
         }
     },
     @{
+        Name = 'Console layer owns all interactive Read-Host prompts'
+        Body = {
+            $allowedReadHostCounts = @{
+                'Private/ShareSurfer.Console.ps1' = 4
+                'Public/Join-ShareSurferOwnershipSources.ps1' = 4
+            }
+            $moduleRoot = Join-Path $repoRoot 'src/ShareSurfer'
+            foreach ($file in @(Get-ChildItem -LiteralPath $moduleRoot -Recurse -Filter '*.ps1' -File)) {
+                $relativePath = $file.FullName.Substring($moduleRoot.Length + 1).Replace('\', '/')
+                $matchingLines = @(Select-String -LiteralPath $file.FullName -Pattern 'Read-Host' -SimpleMatch)
+                $allowed = 0
+                if ($allowedReadHostCounts.ContainsKey($relativePath)) {
+                    $allowed = [int]$allowedReadHostCounts[$relativePath]
+                }
+                Assert-True ($matchingLines.Count -le $allowed) ('New ad hoc Read-Host prompt found in {0} ({1} use(s), {2} allowed). Use the ShareSurfer.Console prompt layer instead of raw Read-Host loops.' -f $relativePath, $matchingLines.Count, $allowed)
+            }
+        }
+    },
+    @{
+        Name = 'Startup selections screen summarizes choices and missing optional inputs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $screen = @(& $module {
+                Get-ShareSurferStartupSelectionsScreen `
+                    -EnvironmentMode 'Permissive' `
+                    -TargetPath @('\\filer01\finance') `
+                    -ExportPath 'C:\ShareSurfer\export' `
+                    -StandaloneDashboardPath 'C:\ShareSurfer\dashboard' `
+                    -ObsAttribute 'extensionAttribute10' `
+                    -AdLookupMode 'Auto' `
+                    -ManagerIdentityFormat 'MailTo' `
+                    -OwnerMappingPath '' `
+                    -OwnershipEnrichmentPath 'C:\missing\ownership-enrichment.csv' `
+                    -DiscountedPrincipalPath '' `
+                    -SaveConfigPath 'C:\ShareSurfer\inputs\sharesurfer-startup.config.json'
+            }) -join [Environment]::NewLine
+
+            Assert-True ($screen.Contains('Startup selections')) 'Selections screen should render a heading.'
+            Assert-True ($screen.Contains('Startup path: Permissive')) 'Selections screen should show the chosen startup path.'
+            Assert-True ($screen.Contains('\\filer01\finance')) 'Selections screen should show scan targets.'
+            Assert-True ($screen.Contains('Owner mapping CSV: (none - the scan runs without it)')) 'Selections screen should mark skipped optional inputs.'
+            Assert-True ($screen.Contains('(not found yet)')) 'Selections screen should mark optional paths that do not exist yet.'
+            Assert-True ($screen.Contains('sharesurfer-startup.config.json')) 'Selections screen should show where the config will be saved.'
+        }
+    },
+    @{
         Name = 'Ownership header interview supports backtracking and skip'
         Body = {
             Import-Module $moduleManifest -Force
