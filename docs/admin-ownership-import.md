@@ -281,6 +281,8 @@ If you already saved mapping profiles for the same files, pass them with `-Mappi
 
 During a multi-source join, ShareSurfer now prints progress in phases: selected CSVs, source rows being processed, merged ownership rows, OBS context merge, AD lookup attempts, output files, and the final matched/source-only/ambiguous counts. Long AD-backed imports should continue to print a heartbeat instead of sitting silently after the header interview.
 
+Large project, OBS, path, or group context files can legitimately create many `ownership_context.csv` and `ownership_relationships.csv` rows. Current optimized builds aggregate OBS-only context and apply it by OBS bucket instead of merging every context row into every matching identity as the file is read. If a large context import is crawling for hours, stop the older run and move to the optimized release before trying again.
+
 If an older ShareSurfer run has been silent for a long time, it is safe to stop it with `Ctrl+C` and rerun with the saved `ownership-import.definition.json` or `ownership-enrichment-rerun.ps1`. The import reads CSVs and AD, then writes local output files; it does not modify AD, shares, or permissions.
 
 ### Project, OBS, Path, And Group Context Files

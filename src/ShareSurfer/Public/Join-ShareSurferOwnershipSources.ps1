@@ -245,12 +245,6 @@ function Join-ShareSurferOwnershipSources {
                     $obsContextRows[$obsKey] = $incoming
                 }
 
-                if ($mergedKeysByObsKey.ContainsKey($obsKey)) {
-                    foreach ($existingKey in @($mergedKeysByObsKey[$obsKey].Keys)) {
-                        $mergedRows[$existingKey] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $mergedRows[$existingKey] -Incoming $incoming
-                    }
-                }
-
                 $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
                 $rowIntervalDue = ($ProgressRowInterval -gt 0 -and (($sourceProcessed % $ProgressRowInterval) -eq 0))
                 $timeIntervalDue = ($ProgressIntervalSeconds -gt 0 -and (($elapsedSeconds - $lastProgressSecond) -ge $ProgressIntervalSeconds))
@@ -312,13 +306,22 @@ function Join-ShareSurferOwnershipSources {
     Write-ShareSurferOwnershipImportStatus -Message ('CSV merge complete: {0} merged ownership row(s), {1} OBS-only context row(s).' -f $mergedRows.Count, $obsContextRows.Count) -Quiet:$Quiet
 
     $obsContextProcessed = 0
+    $obsContextStrongRowMergeCount = 0
+    $obsContextOrphanRowCount = 0
     foreach ($obsKey in @($obsContextRows.Keys)) {
         $obsContextProcessed++
         $hasMatchingStrongRow = ($mergedKeysByObsKey.ContainsKey($obsKey) -and @($mergedKeysByObsKey[$obsKey].Keys).Count -gt 0)
 
-        if (-not $hasMatchingStrongRow) {
+        if ($hasMatchingStrongRow) {
+            foreach ($existingKey in @($mergedKeysByObsKey[$obsKey].Keys)) {
+                $mergedRows[$existingKey] = Merge-ShareSurferOwnershipEnrichmentRow -Existing $mergedRows[$existingKey] -Incoming $obsContextRows[$obsKey]
+                $obsContextStrongRowMergeCount++
+            }
+        }
+        else {
             $mergedRows[$obsKey] = $obsContextRows[$obsKey]
             Add-ShareSurferOwnershipObsMergeIndex -Index $mergedKeysByObsKey -ObsKey $obsKey -MergeKey $obsKey
+            $obsContextOrphanRowCount++
         }
 
         $elapsedSeconds = [int][Math]::Floor($progressClock.Elapsed.TotalSeconds)
@@ -326,8 +329,8 @@ function Join-ShareSurferOwnershipSources {
         $timeIntervalDue = ($ProgressIntervalSeconds -gt 0 -and (($elapsedSeconds - $lastProgressSecond) -ge $ProgressIntervalSeconds))
         if ($rowIntervalDue -or $timeIntervalDue -or $obsContextProcessed -eq $obsContextRows.Count) {
             $lastProgressSecond = $elapsedSeconds
-            Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership OBS context merge' -Status ('{0}/{1} OBS context row(s)' -f $obsContextProcessed, $obsContextRows.Count) -CurrentOperation ('Merged rows: {0}' -f $mergedRows.Count) -Processed $obsContextProcessed -Total $obsContextRows.Count -Quiet:$Quiet
-            Write-ShareSurferOwnershipImportStatus -Message ('OBS context merge: processed {0}/{1}; merged rows {2}; elapsed {3}.' -f $obsContextProcessed, $obsContextRows.Count, $mergedRows.Count, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
+            Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership OBS context merge' -Status ('{0}/{1} OBS context row(s)' -f $obsContextProcessed, $obsContextRows.Count) -CurrentOperation ('Applied to strong rows: {0}; orphan OBS rows: {1}; merged rows: {2}' -f $obsContextStrongRowMergeCount, $obsContextOrphanRowCount, $mergedRows.Count) -Processed $obsContextProcessed -Total $obsContextRows.Count -Quiet:$Quiet
+            Write-ShareSurferOwnershipImportStatus -Message ('OBS context merge: processed {0}/{1}; applied to {2} strong row(s); orphan OBS rows {3}; merged rows {4}; elapsed {5}.' -f $obsContextProcessed, $obsContextRows.Count, $obsContextStrongRowMergeCount, $obsContextOrphanRowCount, $mergedRows.Count, (Get-ShareSurferOwnershipElapsedText -Stopwatch $progressClock)) -Quiet:$Quiet
         }
     }
     Write-ShareSurferOwnershipImportProgress -Activity 'ShareSurfer ownership OBS context merge' -Completed -Quiet:$Quiet
@@ -425,6 +428,8 @@ function Join-ShareSurferOwnershipSources {
         PotentialServiceAccountCount = @($enrichedRows | Where-Object { [string]$_.PotentialServiceAccount -eq 'True' }).Count
         ForbiddenOu = (@($selectedForbiddenOus) -join '; ')
         ObsAttribute = $ObsAttribute
+        ObsContextStrongRowMergeCount = $obsContextStrongRowMergeCount
+        ObsContextOrphanRowCount = $obsContextOrphanRowCount
         AdLookupAttemptCount = $lookupAttemptCount
         DirectoryLookupCacheHitCount = $lookupCacheHitCount
         ElapsedSeconds = [Math]::Round($progressClock.Elapsed.TotalSeconds, 3)
