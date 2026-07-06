@@ -198,7 +198,7 @@ During interactive mode, ShareSurfer walks one guided screen per field. Each scr
 Enter=accept | numbers=choose | type a header name | /text=filter | S=skip | B=back | ?=help | Q=quit
 ```
 
-Press Enter to accept the suggested header (or to move on when there is no suggestion), type a header's number or its name to map it, type `/` followed by text to narrow a long header list (for example `/mail`), press `S` to deliberately leave that ShareSurfer field blank, press `B` to go back and fix the previous field, or press `Q` to cancel without writing any files. If you type a header name that is not in the CSV, ShareSurfer says so on screen and records it as a warning in the saved mapping profile so it can be reviewed later.
+Press Enter to accept the suggested header. When there is no suggestion, ShareSurfer keeps you on that field and asks you to choose a numbered header, type a header name, filter with `/text`, or press `S` to deliberately leave that ShareSurfer field blank. Press `B` to go back and fix the previous field, or press `Q` to cancel without writing any files. If you type a header name that is not in the CSV, ShareSurfer says so on screen and records it as a warning in the saved mapping profile so it can be reviewed later.
 
 ## Step 3: Import A Normalized Ownership CSV
 

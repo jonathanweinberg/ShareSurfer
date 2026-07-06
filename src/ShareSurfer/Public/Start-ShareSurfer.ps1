@@ -9,13 +9,55 @@ function Get-ShareSurferMenuPathState {
         return 'folder not set'
     }
     if ([string]::IsNullOrWhiteSpace($FileName)) {
-        if (Test-Path -LiteralPath $FolderPath -PathType Container) { return 'found' }
+        try {
+            if (Test-Path -LiteralPath $FolderPath -PathType Container) { return 'found' }
+        }
+        catch {
+        }
         return 'missing'
     }
 
-    $candidate = Join-Path $FolderPath $FileName
-    if (Test-Path -LiteralPath $candidate -PathType Leaf) { return 'found' }
+    $candidate = Join-ShareSurferAssistantPathText -Root $FolderPath -Child $FileName
+    try {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return 'found' }
+    }
+    catch {
+    }
     'missing'
+}
+
+function Format-ShareSurferMenuLiteral {
+    param(
+        [string] $Value = '',
+
+        [string] $Placeholder = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $Placeholder
+    }
+
+    ConvertTo-ShareSurferPowerShellLiteral -Value $Value
+}
+
+function Join-ShareSurferMenuCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $CommandName,
+
+        [hashtable] $Parameters = @{}
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $parts.Add($CommandName)
+    foreach ($name in @($Parameters.Keys | Sort-Object)) {
+        $value = [string]$Parameters[$name]
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            $parts.Add(('-{0} {1}' -f $name, $value))
+        }
+    }
+
+    ($parts.ToArray() -join ' ')
 }
 
 function Get-ShareSurferMenuEntries {
@@ -26,7 +68,12 @@ function Get-ShareSurferMenuEntries {
 
         [string] $StandaloneDashboardPath = '',
 
-        [string] $ReleaseRoot = ''
+        [string] $ReleaseRoot = '',
+
+        [string] $ObsAttribute = 'extensionAttribute10',
+
+        [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
+        [string] $AdLookupMode = 'Auto'
     )
 
     $entries = New-Object System.Collections.Generic.List[object]
@@ -41,7 +88,7 @@ function Get-ShareSurferMenuEntries {
         Key = 'preflight'
         Label = 'Preflight & connectivity'
         Readiness = $preflightReadiness
-        CommandPreview = ('Invoke-ShareSurferPortProtocolAssessment -TargetPath <your scan targets> -OutputPath {0} -Force' -f $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>' } else { $ExportPath }))
+        CommandPreview = ('Invoke-ShareSurferPortProtocolAssessment -TargetPath <your scan targets> -OutputPath {0} -Force' -f (Format-ShareSurferMenuLiteral -Value $ExportPath -Placeholder '<export folder>'))
         Runnable = $false
         Guidance = 'Preflight needs your scan target paths. Copy the preview command and supply -TargetPath, or record targets by running scan setup first.'
     })
@@ -52,7 +99,11 @@ function Get-ShareSurferMenuEntries {
         Key = 'ownership'
         Label = 'Ownership inputs'
         Readiness = ('owner mapping: {0} - enrichment: {1}' -f $mappingState, $enrichmentState)
-        CommandPreview = ('Join-ShareSurferOwnershipSources -SourceFolder {0} -BrowseForCsv -Interactive -IncludeContextGraph -OutputPath {1}' -f $(if ([string]::IsNullOrWhiteSpace($InputRoot)) { '<input folder>' } else { $InputRoot }), $(if ([string]::IsNullOrWhiteSpace($InputRoot)) { '<input folder>\ownership-enrichment.csv' } else { Join-Path $InputRoot 'ownership-enrichment.csv' }))
+        CommandPreview = (Join-ShareSurferMenuCommand -CommandName 'Invoke-ShareSurferStartupOwnershipSetup' -Parameters @{
+            InputRoot = (Format-ShareSurferMenuLiteral -Value $InputRoot -Placeholder '<input folder>')
+            ObsAttribute = (Format-ShareSurferMenuLiteral -Value $ObsAttribute -Placeholder '<OBS attribute>')
+            AdLookupMode = (Format-ShareSurferMenuLiteral -Value $AdLookupMode -Placeholder '<AD lookup mode>')
+        })
         Runnable = (-not [string]::IsNullOrWhiteSpace($InputRoot))
         Guidance = 'Set -InputRoot when starting the menu to run guided ownership setup from here.'
     })
@@ -68,10 +119,23 @@ function Get-ShareSurferMenuEntries {
         'input folder not set'
     }
     $scanPreview = if ($configState -eq 'found') {
-        'Start-ShareSurferStartup -ConfigPath {0} -Force' -f (Join-Path $InputRoot 'sharesurfer-startup.config.json')
+        'Start-ShareSurferStartup -ConfigPath {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value (Join-ShareSurferAssistantPathText -Root $InputRoot -Child 'sharesurfer-startup.config.json'))
     }
     else {
-        'Start-ShareSurferStartup -Interactive'
+        $scanPreviewParts = New-Object System.Collections.Generic.List[string]
+        $scanPreviewParts.Add('Start-ShareSurferStartup')
+        $scanPreviewParts.Add('-Interactive')
+        foreach ($parameter in @(
+            [pscustomobject]@{ Name = 'InputRoot'; Value = (Format-ShareSurferMenuLiteral -Value $InputRoot) },
+            [pscustomobject]@{ Name = 'ExportPath'; Value = (Format-ShareSurferMenuLiteral -Value $ExportPath) },
+            [pscustomobject]@{ Name = 'StandaloneDashboardPath'; Value = (Format-ShareSurferMenuLiteral -Value $StandaloneDashboardPath) },
+            [pscustomobject]@{ Name = 'ReleaseRoot'; Value = (Format-ShareSurferMenuLiteral -Value $ReleaseRoot) }
+        )) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$parameter.Value)) {
+                $scanPreviewParts.Add(('-{0} {1}' -f [string]$parameter.Name, [string]$parameter.Value))
+            }
+        }
+        $scanPreviewParts.ToArray() -join ' '
     }
     [void]$entries.Add([pscustomobject]@{
         Key = 'scan'
@@ -87,22 +151,31 @@ function Get-ShareSurferMenuEntries {
         Key = 'validate'
         Label = 'Validate export'
         Readiness = ('export: {0}' -f $exportState)
-        CommandPreview = ('Test-ShareSurferExport -ExportPath {0}' -f $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>' } else { $ExportPath }))
+        CommandPreview = ('Test-ShareSurferExport -ExportPath {0}' -f (Format-ShareSurferMenuLiteral -Value $ExportPath -Placeholder '<export folder>'))
         Runnable = ($exportState -eq 'found')
         Guidance = 'Run a scan first; validation needs shares.csv in the export folder.'
     })
 
     $dashboardScriptPath = ''
     if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot)) {
-        $dashboardScriptPath = Join-Path $ReleaseRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1'
+        $dashboardScriptPath = Join-ShareSurferAssistantPathText -Root $ReleaseRoot -Child 'scripts/New-ShareSurferStandaloneDashboard.ps1'
     }
     $dashboardState = Get-ShareSurferMenuPathState -FolderPath $StandaloneDashboardPath
+    $dashboardScriptExists = $false
+    if (-not [string]::IsNullOrWhiteSpace($dashboardScriptPath)) {
+        try {
+            $dashboardScriptExists = Test-Path -LiteralPath $dashboardScriptPath -PathType Leaf
+        }
+        catch {
+            $dashboardScriptExists = $false
+        }
+    }
     [void]$entries.Add([pscustomobject]@{
         Key = 'dashboard'
         Label = 'Package standalone dashboard'
         Readiness = ('dashboard folder: {0}' -f $dashboardState)
-        CommandPreview = ('& {0} -ExportPath {1} -OutputPath {2} -Force' -f $(if ([string]::IsNullOrWhiteSpace($dashboardScriptPath)) { '<release root>\scripts\New-ShareSurferStandaloneDashboard.ps1' } else { $dashboardScriptPath }), $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>' } else { $ExportPath }), $(if ([string]::IsNullOrWhiteSpace($StandaloneDashboardPath)) { '<dashboard folder>' } else { $StandaloneDashboardPath }))
-        Runnable = ($exportState -eq 'found' -and -not [string]::IsNullOrWhiteSpace($dashboardScriptPath) -and (Test-Path -LiteralPath $dashboardScriptPath -PathType Leaf) -and -not [string]::IsNullOrWhiteSpace($StandaloneDashboardPath))
+        CommandPreview = ('& {0} -ExportPath {1} -OutputPath {2} -Force' -f (Format-ShareSurferMenuLiteral -Value $dashboardScriptPath -Placeholder '<release root>\scripts\New-ShareSurferStandaloneDashboard.ps1'), (Format-ShareSurferMenuLiteral -Value $ExportPath -Placeholder '<export folder>'), (Format-ShareSurferMenuLiteral -Value $StandaloneDashboardPath -Placeholder '<dashboard folder>'))
+        Runnable = ($exportState -eq 'found' -and -not [string]::IsNullOrWhiteSpace($dashboardScriptPath) -and $dashboardScriptExists -and -not [string]::IsNullOrWhiteSpace($StandaloneDashboardPath))
         Guidance = 'Packaging needs a validated export, -ReleaseRoot (for the packaging script), and -StandaloneDashboardPath.'
     })
 
@@ -121,7 +194,7 @@ function Get-ShareSurferMenuEntries {
         Key = 'support'
         Label = 'Support bundle'
         Readiness = ''
-        CommandPreview = ('New-ShareSurferSupportBundle -ExportPath {0} -OutputPath {1}' -f $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>' } else { $ExportPath }), $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>\support-bundle' } else { Join-Path $ExportPath 'support-bundle' }))
+        CommandPreview = ('New-ShareSurferSupportBundle -ExportPath {0} -OutputPath {1}' -f (Format-ShareSurferMenuLiteral -Value $ExportPath -Placeholder '<export folder>'), $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>\support-bundle' } else { ConvertTo-ShareSurferPowerShellLiteral -Value (Join-ShareSurferAssistantPathText -Root $ExportPath -Child 'support-bundle') }))
         Runnable = $false
         Guidance = 'Copy the preview command when you need a redacted bundle for a bug report; it can take a while on large exports.'
     })
@@ -174,7 +247,7 @@ function Start-ShareSurfer {
     )
 
     while ($true) {
-        $entries = Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $StandaloneDashboardPath -ReleaseRoot $ReleaseRoot
+        $entries = Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $StandaloneDashboardPath -ReleaseRoot $ReleaseRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode
         Write-ShareSurferConsoleLines -Lines (Get-ShareSurferMenuScreen -Entries $entries -InputRoot $InputRoot -ExportPath $ExportPath)
 
         $options = @($entries | ForEach-Object { New-ShareSurferConsoleChoiceOption -Value ([string]$_.Key) -Label ([string]$_.Label) })
@@ -225,7 +298,7 @@ function Start-ShareSurfer {
                 break
             }
             'dashboard' {
-                $dashboardScriptPath = Join-Path $ReleaseRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1'
+                $dashboardScriptPath = Join-ShareSurferAssistantPathText -Root $ReleaseRoot -Child 'scripts/New-ShareSurferStandaloneDashboard.ps1'
                 & $dashboardScriptPath -ExportPath $ExportPath -OutputPath $StandaloneDashboardPath -Force | Out-Host
                 break
             }

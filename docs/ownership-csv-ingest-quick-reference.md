@@ -75,7 +75,7 @@ During interactive mode, ShareSurfer walks one guided screen per field, showing 
 Enter=accept | numbers=choose | type a header name | /text=filter | S=skip | B=back | ?=help | Q=quit
 ```
 
-Press Enter to accept a suggestion, type a header's number or name to map it, type `/text` to filter a long header list, press `S` to intentionally leave a field blank, press `B` to go back and fix the previous field, or press `Q` to cancel without writing any files. A typed header that is not in the CSV is called out on screen and recorded as a warning in the saved mapping profile.
+Press Enter to accept a suggestion. When there is no suggestion, choose a numbered header, type a header name, type `/text` to filter a long header list, or press `S` to intentionally leave the field blank. Press `B` to go back and fix the previous field, or press `Q` to cancel without writing any files. A typed header that is not in the CSV is called out on screen and recorded as a warning in the saved mapping profile.
 
 ## 5. Normalize The CSV
 

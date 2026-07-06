@@ -50,7 +50,7 @@ For the first real run:
    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\Start-ShareSurfer.ps1" -Force
    ```
 
-   It recursively unblocks ShareSurfer PowerShell files, imports the module, asks the first-run questions, asks whether to run intensive share-permission diagnostics before the scan, checks the `inputs` folder for ownership files, offers to build missing `ownership-enrichment.csv` evidence from CSVs, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then offers to show those generated files and asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to No.
+   It recursively unblocks ShareSurfer PowerShell files, imports the module, and opens the **ShareSurfer Start Menu**. From that menu you can review readiness, build ownership inputs, start the guided scan setup, validate exports, package the standalone dashboard, and review stop gates. The scan setup asks the first-run questions, asks whether to run intensive share-permission diagnostics before the scan, checks the `inputs` folder for ownership files, offers to build missing `ownership-enrichment.csv` evidence from CSVs, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then offers to show those generated files and asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to No.
 
 5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked. The startup diagnostic path automatically checks whether a server-returned local path such as `C:\Public\Share` really exists on the collector; when it does not, ShareSurfer attempts the target UNC path instead and records that decision in `share-permission-diagnostics\share_permission_diagnostics.md` and `.csv`.
 6. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
@@ -58,7 +58,7 @@ For the first real run:
 8. Open `report.html`, or package a real export with `scripts\New-ShareSurferStandaloneDashboard.ps1`.
 9. Review the stop gates before owner signoff or migration planning.
 
-New operators should start with the [first-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby. For a guided console starting point, run `Start-ShareSurfer.ps1` from the release root or `Start-ShareSurferStartup` after importing the module. The startup flow writes a reusable JSON config and delegates to `Start-ShareSurferOperatorAssistant`; it does not collect data or change permissions until you review and run the generated rerun script. If `owner-mapping.csv` or `ownership-enrichment.csv` is missing, interactive startup can help build enrichment from candidate CSVs and can queue a post-scan `owner-mapping-draft.csv` for the first rerun.
+New operators should start with the [first-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby. For a guided console starting point, run `Start-ShareSurfer.ps1` from the release root; it opens the ShareSurfer Start Menu unless you supply `-ConfigPath` for startup replay. After importing the module, advanced operators can run `Start-ShareSurfer` for the same menu or `Start-ShareSurferStartup` to jump directly into startup config generation. The startup flow writes a reusable JSON config and delegates to `Start-ShareSurferOperatorAssistant`; it does not collect data or change permissions until you review and run the generated rerun script. If `owner-mapping.csv` or `ownership-enrichment.csv` is missing, interactive startup can help build enrichment from candidate CSVs and can queue a post-scan `owner-mapping-draft.csv` for the first rerun.
 
 ## Pause Before Owner Signoff
 
@@ -77,7 +77,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 
 | Workflow | Commands and scripts |
 | --- | --- |
-| Guided first run | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
+| Guided first run | `Start-ShareSurfer.ps1`, `Start-ShareSurfer`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | `New-ShareSurferLabFixture`, `scripts\Invoke-ShareSurferLabValidation.ps1` |
 | Scan collection | `Invoke-ShareSurferScan` |
 | Optional readiness and diagnostics | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic` |

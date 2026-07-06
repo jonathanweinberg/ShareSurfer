@@ -2779,6 +2779,8 @@ $tests = @(
                 Assert-Equal $entries.Count 7 'Start menu should list the seven operator tasks.'
                 $ownership = @($entries | Where-Object { $_.Key -eq 'ownership' })[0]
                 Assert-Equal $ownership.Readiness 'owner mapping: found - enrichment: missing' 'Ownership readiness should reflect which input files exist.'
+                Assert-True ($ownership.CommandPreview.Contains('Invoke-ShareSurferStartupOwnershipSetup')) 'Ownership entry should preview the exact startup ownership setup command it runs.'
+                Assert-True ($ownership.CommandPreview.Contains($inputRoot)) 'Ownership preview should include the selected input root.'
                 $validate = @($entries | Where-Object { $_.Key -eq 'validate' })[0]
                 Assert-Equal $validate.Readiness 'export: found' 'Validate readiness should reflect the export folder.'
                 Assert-True ([bool]$validate.Runnable) 'Validate should be runnable when shares.csv exists.'
@@ -2786,6 +2788,8 @@ $tests = @(
                 $scan = @($entries | Where-Object { $_.Key -eq 'scan' })[0]
                 Assert-Equal $scan.Readiness 'setup not recorded yet' 'Scan readiness should say when no saved config exists.'
                 Assert-True ($scan.CommandPreview.Contains('Start-ShareSurferStartup -Interactive')) 'Scan entry should preview interactive startup when no config is saved.'
+                Assert-True ($scan.CommandPreview.Contains($inputRoot)) 'Scan preview should include the input root passed to the menu.'
+                Assert-True ($scan.CommandPreview.Contains($exportPath)) 'Scan preview should include the export path passed to the menu.'
 
                 $screen = @(& $module {
                     param($Entries, $InputRoot, $ExportPath)
@@ -2923,6 +2927,48 @@ $tests = @(
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
             }
+        }
+    },
+    @{
+        Name = 'Ownership header wizard requires an explicit skip when no suggestion exists'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $initial = [pscustomobject][ordered]@{
+                EmployeeId = ''
+                EmployeeNumber = ''
+                SamAccountName = ''
+                UserPrincipalName = ''
+                Mail = ''
+                DisplayName = ''
+                Title = ''
+                Office = ''
+                Department = ''
+                Company = ''
+                ManagerMail = ''
+                ManagerLevel2Mail = ''
+                ManagerLevel3Mail = ''
+                OBS = ''
+                BusinessUnit = ''
+                DataOwner = ''
+                OwnerMail = ''
+                Project = ''
+                ProjectCode = ''
+                ProjectDescription = ''
+                GroupName = ''
+                PathPattern = ''
+            }
+
+            $state = New-ShareSurferOwnershipHeaderWizardState -Headers @('PersonKey', 'OrgPath') -InitialFieldMap $initial -SourcePath 'ownership.csv'
+            Invoke-ShareSurferOwnershipHeaderWizardCommand -State $state -Command '' | Out-Null
+            Assert-Equal $state.FieldIndex 0 'Blank Enter with no suggestion should keep the admin on the current field.'
+            Assert-True ([string]$state.Message -like '*No suggestion exists*') 'Blank Enter with no suggestion should explain how to choose or skip deliberately.'
+
+            Invoke-ShareSurferOwnershipHeaderWizardCommand -State $state -Command 'S' | Out-Null
+            Assert-Equal $state.FieldIndex 1 'S should still skip deliberately and advance.'
+            Assert-Equal $state.FieldMap.EmployeeId '' 'Deliberate skip should leave the field blank.'
         }
     },
     @{
@@ -7866,6 +7912,8 @@ $tests = @(
             Assert-True ($startupLauncherText -like '*Remove-ShareSurferLauncherZoneIdentifierStream*') 'Release-root launcher should explicitly clear Zone.Identifier markers before module import.'
             Assert-True ($startupLauncherText -like '*Get-ChildItem -LiteralPath $Root -Recurse -File*') 'Release-root launcher should use literal recursive file enumeration for unblock.'
             Assert-True ($startupLauncherText -like '*explicitly cleared*downloaded-file marker*') 'Release-root launcher should report downloaded-file marker cleanup.'
+            Assert-True ($startupLauncherText -like '*Start-ShareSurfer*' -and $startupLauncherText -like '*-ReleaseRoot $releaseRoot*') 'Release-root launcher should enter the Start-ShareSurfer menu when no startup config path is supplied.'
+            Assert-True ($startupLauncherText -like '*Start-ShareSurferStartup @startupParams*') 'Release-root launcher should preserve startup config replay.'
             $startupCommandText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Public/Start-ShareSurferStartup.ps1') -Raw
             Assert-True ($startupCommandText -like '*Invoke-ShareSurferStartupPostPlanHandoff*') 'Startup command should include an interactive post-plan handoff.'
             Assert-True ($startupCommandText -like '*Show generated startup JSON, scan plan, and rerun script now?*') 'Startup command should offer to review generated files after prompts.'
@@ -7883,6 +7931,7 @@ $tests = @(
             Assert-True ($readmeText -like '*Start-ShareSurferOperatorAssistant*') 'README should include the guided operator assistant command.'
             Assert-True ($readmeText -like '*Start-ShareSurferStartup*') 'README should include the guided startup command.'
             Assert-True ($readmeText -like '*Start-ShareSurfer.ps1*') 'README should include the release-root startup launcher.'
+            Assert-True ($readmeText -like '*ShareSurfer Start Menu*') 'README should explain that the release-root launcher opens the ShareSurfer Start Menu.'
             Assert-True ($readmeText -like '*intensive share-permission diagnostics before the scan*' -and $readmeText -like '*run prompt defaults to No*') 'README should explain the diagnostic startup review and run handoff.'
             Assert-True ($readmeText -like '*offers to build missing*ownership-enrichment.csv*' -or $readmeText -like '*missing*ownership-enrichment.csv*can launch the CSV ownership import picker*') 'README should explain startup ownership enrichment setup.'
             Assert-True ($readmeText -like '*post-scan*owner-mapping-draft.csv*') 'README should explain startup owner mapping draft setup.'

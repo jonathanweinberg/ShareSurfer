@@ -1025,14 +1025,20 @@ function Invoke-ShareSurferOwnershipHeaderWizardCommand {
 
     if ([string]::IsNullOrWhiteSpace($text)) {
         if ([string]::IsNullOrWhiteSpace($suggested)) {
-            $State.FieldMap[$field] = ''
-            [void]$State.Skipped.Add($field)
+            $visible = @(Get-ShareSurferOwnershipHeaderWizardVisibleHeaders -State $State)
+            if ($visible.Count -gt 0 -and $visible.Count -le 10) {
+                $State.Message = ('No suggestion exists for {0}. Choose one of the numbered headers above, type a header name, or press S to skip deliberately.' -f $field)
+            }
+            else {
+                $State.Message = ('No suggestion exists for {0}. Type /text to filter, type a header name, or press S to skip deliberately.' -f $field)
+            }
+            return $State
         }
         return (Step-ShareSurferOwnershipHeaderWizard -State $State)
     }
 
     if ($upper -eq '?' -or $upper -eq 'HELP') {
-        $State.Message = ('{0} Type a header name or its number to map {1}, Enter to accept the suggestion, /text to filter the header list, S to skip, B to go back, Q to cancel.' -f (Get-ShareSurferOwnershipFieldExplanation -Field $field), $field)
+        $State.Message = ('{0} Type a header name or its number to map {1}, Enter to accept an existing suggestion, /text to filter the header list, S to skip, B to go back, Q to cancel.' -f (Get-ShareSurferOwnershipFieldExplanation -Field $field), $field)
         return $State
     }
 
