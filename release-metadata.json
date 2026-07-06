@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.32",
-  "packageVersion": "0.1.0-pre.32",
-  "packageName": "ShareSurfer-0.1.0-pre.32",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.32.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.32",
+  "currentPrereleaseTag": "v0.1.0-pre.33",
+  "packageVersion": "0.1.0-pre.33",
+  "packageName": "ShareSurfer-0.1.0-pre.33",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.33.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.33",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the #354 ownership import progress and stall-hardening update. Join-ShareSurferOwnershipSources now prints phase and row-count heartbeat messages while processing multi-CSV ownership imports, reports AD lookup attempts and cache hits, warns when a source is OBS-only with no mapped employee/account join key, and uses an OBS-key index so context-only rows do not repeatedly scan every merged ownership row. Documentation now explains what progress messages mean and that older silent runs can be safely stopped and rerun from ownership-import.definition.json or ownership-enrichment-rerun.ps1. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with ownership import performance and provenance fixes from #358 and #361. Join-ShareSurferOwnershipSources aggregates OBS-only project/path/group context by OBS bucket, applies that context once per matching strong identity row, and keeps provenance merging set-backed while the import is running instead of repeatedly splitting and rejoining large delimited strings. This addresses the large-context CSV path observed in a 150,003-row source that was still crawling after roughly 40 hours, fixes context-before-identity duplicate provenance, prevents row-scoped NoJoinKey warnings from being stamped onto strong identity rows, adds a no-key source guardrail, and keeps the previous prerelease progress output plus OBS context application/orphan counters. Operators with older long-running context imports should stop that run and rerun on this optimized release. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
