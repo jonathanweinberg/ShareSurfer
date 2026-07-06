@@ -192,13 +192,13 @@ New-ShareSurferOwnershipMappingProfile `
   -Force
 ```
 
-During interactive mode, ShareSurfer keeps a controls line on screen:
+During interactive mode, ShareSurfer walks one guided screen per field. Each screen shows the step counter, the suggested header when there is one, the source CSV's headers as a numbered list, a short explanation of why the field matters, and this controls line:
 
 ```text
-Enter=accept/select | S=skip | B=back | ?=help | Q=quit
+Enter=accept | numbers=choose | type a header name | /text=filter | S=skip | B=back | ?=help | Q=quit
 ```
 
-Press Enter to accept a suggested header, type another header name when you know it, press `S` to deliberately leave that ShareSurfer field blank, or press `B` to go back and fix the previous field. If there is no confident suggestion and the source has fewer than 10 headers, pressing Enter opens a small selector so you can choose the right header with arrow keys where the console supports them, or by number in simpler hosts.
+Press Enter to accept the suggested header (or to move on when there is no suggestion), type a header's number or its name to map it, type `/` followed by text to narrow a long header list (for example `/mail`), press `S` to deliberately leave that ShareSurfer field blank, press `B` to go back and fix the previous field, or press `Q` to cancel without writing any files. If you type a header name that is not in the CSV, ShareSurfer says so on screen and records it as a warning in the saved mapping profile so it can be reviewed later.
 
 ## Step 3: Import A Normalized Ownership CSV
 

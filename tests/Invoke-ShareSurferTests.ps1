@@ -2638,27 +2638,104 @@ $tests = @(
         }
     },
     @{
-        Name = 'Ownership prompt choice state supports keyboard-style navigation'
+        Name = 'Console choice state supports keyboard-style navigation and cancellation'
         Body = {
             Import-Module $moduleManifest -Force
-            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
-            $state = New-ShareSurferPromptChoiceState -Options @(
-                (New-ShareSurferPromptChoiceOption -Value 'One'),
-                (New-ShareSurferPromptChoiceOption -Value 'Two'),
-                (New-ShareSurferPromptChoiceOption -Value 'Three')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            $state = New-ShareSurferConsoleChoiceState -Options @(
+                (New-ShareSurferConsoleChoiceOption -Value 'One'),
+                (New-ShareSurferConsoleChoiceOption -Value 'Two'),
+                (New-ShareSurferConsoleChoiceOption -Value 'Three')
             ) -DefaultValue 'One'
 
-            Invoke-ShareSurferPromptChoiceCommand -State $state -Command 'Down' -AllowBack -AllowSkip -AllowQuit | Out-Null
+            Invoke-ShareSurferConsoleChoiceCommand -State $state -Command 'Down' -AllowBack -AllowSkip -AllowQuit | Out-Null
             Assert-Equal $state.SelectedIndex 1 'Down should advance the selection.'
-            Invoke-ShareSurferPromptChoiceCommand -State $state -Command 'Up' -AllowBack -AllowSkip -AllowQuit | Out-Null
+            Invoke-ShareSurferConsoleChoiceCommand -State $state -Command 'Up' -AllowBack -AllowSkip -AllowQuit | Out-Null
             Assert-Equal $state.SelectedIndex 0 'Up should move the selection back.'
-            Invoke-ShareSurferPromptChoiceCommand -State $state -Command '3' -AllowBack -AllowSkip -AllowQuit | Out-Null
+            Invoke-ShareSurferConsoleChoiceCommand -State $state -Command '3' -AllowBack -AllowSkip -AllowQuit | Out-Null
             Assert-Equal $state.Action 'Select' 'Numbered fallback should select an option.'
             Assert-Equal $state.SelectedValue 'Three' 'Numbered fallback should select the requested value.'
 
-            $backState = New-ShareSurferPromptChoiceState -Options @('One', 'Two') -DefaultValue 'One'
-            Invoke-ShareSurferPromptChoiceCommand -State $backState -Command 'B' -AllowBack | Out-Null
+            $backState = New-ShareSurferConsoleChoiceState -Options @('One', 'Two') -DefaultValue 'One'
+            Invoke-ShareSurferConsoleChoiceCommand -State $backState -Command 'B' -AllowBack | Out-Null
             Assert-Equal $backState.Action 'Back' 'B should request back navigation when allowed.'
+
+            $cancelState = New-ShareSurferConsoleChoiceState -Options @('One', 'Two') -DefaultValue 'Two'
+            Assert-Equal $cancelState.SelectedIndex 1 'Default value should seed the selected index.'
+            Invoke-ShareSurferConsoleChoiceCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
+            Assert-Equal $cancelState.Action 'Cancelled' 'Q should report a Cancelled action under the cancellation contract.'
+
+            $shimState = New-ShareSurferPromptChoiceState -Options @('One', 'Two') -DefaultValue 'One'
+            Invoke-ShareSurferPromptChoiceCommand -State $shimState -Command '2' | Out-Null
+            Assert-Equal $shimState.SelectedValue 'Two' 'Compatibility shims should keep the legacy prompt names working.'
+        }
+    },
+    @{
+        Name = 'Console key translation ignores modifier and function keys'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            $shiftKey = [pscustomobject]@{ VirtualKeyCode = 16; Character = [char]0 }
+            Assert-True ((ConvertFrom-ShareSurferConsoleKeyInfo -KeyInfo $shiftKey) -eq '') 'Shift keydown should translate to an ignorable empty command.'
+            $f5Key = [pscustomobject]@{ VirtualKeyCode = 116; Character = [char]0 }
+            Assert-True ((ConvertFrom-ShareSurferConsoleKeyInfo -KeyInfo $f5Key) -eq '') 'Function keys should translate to an ignorable empty command.'
+            $upKey = [pscustomobject]@{ VirtualKeyCode = 38; Character = [char]0 }
+            Assert-Equal (ConvertFrom-ShareSurferConsoleKeyInfo -KeyInfo $upKey) 'Up' 'Up arrow should translate to Up.'
+            $enterKey = [pscustomobject]@{ VirtualKeyCode = 13; Character = [char]13 }
+            Assert-Equal (ConvertFrom-ShareSurferConsoleKeyInfo -KeyInfo $enterKey) 'Enter' 'Enter should translate to Enter.'
+            $letterKey = [pscustomobject]@{ VirtualKeyCode = 83; Character = [char]'S' }
+            Assert-Equal (ConvertFrom-ShareSurferConsoleKeyInfo -KeyInfo $letterKey) 'S' 'Character keys should pass through as commands.'
+        }
+    },
+    @{
+        Name = 'Console multi-select state toggles ranges and cancels'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $state = New-ShareSurferConsoleMultiSelectState -Options @('a.csv', 'b.csv', 'c.csv', 'd.csv')
+            Invoke-ShareSurferConsoleMultiSelectCommand -State $state -Command '2-3' | Out-Null
+            Assert-Equal (@(Get-ShareSurferConsoleMultiSelectValues -State $state) -join ',') 'b.csv,c.csv' 'Ranges should toggle selections on.'
+            Invoke-ShareSurferConsoleMultiSelectCommand -State $state -Command '2' | Out-Null
+            Assert-Equal (@(Get-ShareSurferConsoleMultiSelectValues -State $state) -join ',') 'c.csv' 'Repeating a number should toggle it off.'
+            Invoke-ShareSurferConsoleMultiSelectCommand -State $state -Command 'A' | Out-Null
+            Assert-Equal @(Get-ShareSurferConsoleMultiSelectValues -State $state).Count 4 'A should select all options.'
+            Invoke-ShareSurferConsoleMultiSelectCommand -State $state -Command 'C' | Out-Null
+            Assert-True (@(Get-ShareSurferConsoleMultiSelectValues -State $state).Count -eq 0) 'C should clear selections.'
+            Invoke-ShareSurferConsoleMultiSelectCommand -State $state -Command 'D' | Out-Null
+            Assert-Equal $state.Action 'Done' 'D should finish the multi-select.'
+
+            $screen = @(Get-ShareSurferConsoleMultiSelectScreen -State $state -Title 'Pick CSVs') -join [Environment]::NewLine
+            Assert-True ($screen -like '*Pick CSVs*') 'Multi-select screen should render its title.'
+            Assert-True ($screen.Contains('[ ] 1. a.csv')) 'Multi-select screen should render unselected markers.'
+
+            $cancelState = New-ShareSurferConsoleMultiSelectState -Options @('a.csv')
+            Invoke-ShareSurferConsoleMultiSelectCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
+            Assert-Equal $cancelState.Action 'Cancelled' 'Q should cancel the multi-select when allowed.'
+        }
+    },
+    @{
+        Name = 'Console text prompt validates, defaults, and cancels'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            $state = New-ShareSurferConsoleTextState -Default 'default-value'
+            Invoke-ShareSurferConsoleTextCommand -State $state -Command '' | Out-Null
+            Assert-Equal $state.Action 'Accept' 'Enter should accept the default.'
+            Assert-Equal $state.Value 'default-value' 'Enter should return the default value.'
+
+            $validateState = New-ShareSurferConsoleTextState
+            $validator = { param($text) if ($text -ne 'good') { 'Only good is allowed.' } else { '' } }
+            Invoke-ShareSurferConsoleTextCommand -State $validateState -Command 'bad' -Validate $validator | Out-Null
+            Assert-True (-not $validateState.Done) 'Validation failure should keep the prompt open.'
+            Assert-True ($validateState.Message -like 'Only good*') 'Validation failure should explain the problem.'
+            Invoke-ShareSurferConsoleTextCommand -State $validateState -Command 'good' -Validate $validator | Out-Null
+            Assert-Equal $validateState.Action 'Accept' 'Valid input should accept.'
+            Assert-Equal $validateState.Value 'good' 'Valid input should return the typed value.'
+
+            $cancelState = New-ShareSurferConsoleTextState
+            Invoke-ShareSurferConsoleTextCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
+            Assert-Equal $cancelState.Action 'Cancelled' 'Q should cancel the text prompt when allowed.'
         }
     },
     @{
@@ -2666,6 +2743,7 @@ $tests = @(
         Body = {
             Import-Module $moduleManifest -Force
             . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
             . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
             $headers = @('employee_id', 'employee_number', 'obs')
             $initial = [pscustomobject][ordered]@{
@@ -2692,6 +2770,7 @@ $tests = @(
                 GroupName = ''
                 PathPattern = ''
             }
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
             $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
             foreach ($answer in @('wrong_header', 'B', 'employee_id', 'S')) {
                 $script:shareSurferPromptAnswers.Enqueue($answer)
@@ -2708,22 +2787,25 @@ $tests = @(
             }
 
             try {
-                $fieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $initial -SourcePath 'ownership.csv'
-                Assert-Equal $fieldMap.EmployeeId 'employee_id' 'Backtracking should allow the previous field to be corrected.'
-                Assert-Equal $fieldMap.EmployeeNumber '' 'S should skip the current field.'
+                $interview = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $initial -SourcePath 'ownership.csv'
+                Assert-True (-not [bool]$interview.Cancelled) 'Interview should complete without cancellation.'
+                Assert-Equal $interview.FieldMap.EmployeeId 'employee_id' 'Backtracking should allow the previous field to be corrected.'
+                Assert-Equal $interview.FieldMap.EmployeeNumber '' 'S should skip the current field.'
                 Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Header interview should consume the expected prompts.'
             }
             finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
             }
         }
     },
     @{
-        Name = 'Ownership header interview opens a small-header picker on blank unsuggested fields'
+        Name = 'Ownership header wizard selects headers by number and records typo warnings'
         Body = {
             Import-Module $moduleManifest -Force
             . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
             . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
             $headers = @('PersonKey', 'OrgPath')
             $initial = [pscustomobject][ordered]@{
@@ -2750,10 +2832,11 @@ $tests = @(
                 GroupName = ''
                 PathPattern = ''
             }
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
             $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
-            $script:shareSurferPromptAnswers.Enqueue('')
             $script:shareSurferPromptAnswers.Enqueue('1')
-            for ($index = 0; $index -lt 21; $index++) {
+            $script:shareSurferPromptAnswers.Enqueue('zz_nope')
+            for ($index = 0; $index -lt 20; $index++) {
                 $script:shareSurferPromptAnswers.Enqueue('S')
             }
             function global:Read-Host {
@@ -2765,11 +2848,14 @@ $tests = @(
             }
 
             try {
-                $fieldMap = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $initial -SourcePath 'ownership.csv'
-                Assert-Equal $fieldMap.EmployeeId 'PersonKey' 'Blank unsuggested fields with fewer than 10 headers should open a selectable picker.'
-                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Header picker test should consume the expected prompts.'
+                $interview = Read-ShareSurferOwnershipHeaderSelections -Headers $headers -InitialFieldMap $initial -SourcePath 'ownership.csv'
+                Assert-Equal $interview.FieldMap.EmployeeId 'PersonKey' 'Typing a number should map the field to that header from the visible list.'
+                Assert-Equal $interview.FieldMap.EmployeeNumber '' 'A typo header with no synonym match should resolve to blank.'
+                Assert-True ((@($interview.Warnings) -join ' ').Contains('zz_nope')) 'A typo header should surface as a recorded interview warning.'
+                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Header wizard test should consume the expected prompts.'
             }
             finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
             }
@@ -2780,6 +2866,7 @@ $tests = @(
         Body = {
             Import-Module $moduleManifest -Force
             . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
             . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
             $fieldMap = [pscustomobject][ordered]@{
                 ProjectCode = 'project_code'
@@ -2794,6 +2881,7 @@ $tests = @(
                 MappedFields = 'ProjectCode; OBS; DataOwner'
                 Warnings = ''
             }
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
             $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
             foreach ($answer in @('3', '1', '2')) {
                 $script:shareSurferPromptAnswers.Enqueue($answer)
@@ -2814,8 +2902,163 @@ $tests = @(
                 Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Profile selector should consume the expected prompts.'
             }
             finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Ownership header wizard renders guided screens and filters headers'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $headers = @('PersonKey', 'OrgPath', 'ProjectCode', 'OwnerMail')
+            $initial = [pscustomobject][ordered]@{
+                EmployeeId = 'PersonKey'
+                EmployeeNumber = ''
+                SamAccountName = ''
+                UserPrincipalName = ''
+                Mail = ''
+                DisplayName = ''
+                Title = ''
+                Office = ''
+                Department = ''
+                Company = ''
+                ManagerMail = ''
+                ManagerLevel2Mail = ''
+                ManagerLevel3Mail = ''
+                OBS = ''
+                BusinessUnit = ''
+                DataOwner = ''
+                OwnerMail = ''
+                Project = ''
+                ProjectCode = ''
+                ProjectDescription = ''
+                GroupName = ''
+                PathPattern = ''
+            }
+            $state = New-ShareSurferOwnershipHeaderWizardState -Headers $headers -InitialFieldMap $initial -SourcePath 'hr-export.csv'
+            $screen = @(Get-ShareSurferOwnershipHeaderWizardScreen -State $state -WindowWidth 100) -join [Environment]::NewLine
+            Assert-True ($screen.Contains('ShareSurfer Ownership Import')) 'Wizard screen should render the title.'
+            Assert-True ($screen.Contains('Source: hr-export.csv')) 'Wizard screen should render the source file.'
+            Assert-True ($screen.Contains('Step 1/22 - EmployeeId (recommended)')) 'Wizard screen should render the step counter and field.'
+            Assert-True ($screen.Contains('Suggested header')) 'Wizard screen should render the suggestion section.'
+            Assert-True ($screen.Contains('> PersonKey')) 'Wizard screen should render the suggested header.'
+            Assert-True ($screen.Contains('1 PersonKey')) 'Wizard screen should render numbered available headers.'
+            Assert-True ($screen.Contains('Why this matters')) 'Wizard screen should explain the field.'
+            Assert-True ($screen.Contains('Q=quit')) 'Wizard screen should render the controls contract.'
+
+            Invoke-ShareSurferOwnershipHeaderWizardCommand -State $state -Command '/org' | Out-Null
+            $visible = @(Get-ShareSurferOwnershipHeaderWizardVisibleHeaders -State $state)
+            Assert-Equal ($visible -join ',') 'OrgPath' 'The /text filter should narrow visible headers.'
+            $filteredScreen = @(Get-ShareSurferOwnershipHeaderWizardScreen -State $state -WindowWidth 100) -join [Environment]::NewLine
+            Assert-True ($filteredScreen.Contains('Filter: org')) 'Filtered screen should show the active filter.'
+            Assert-True ($filteredScreen.Contains('1 OrgPath')) 'Filtered screen should renumber the visible headers.'
+
+            Invoke-ShareSurferOwnershipHeaderWizardCommand -State $state -Command '1' | Out-Null
+            Assert-Equal ([string]$state.FieldMap['EmployeeId']) 'OrgPath' 'Numbered selection should map from the filtered list.'
+            Assert-Equal ([string]$state.Filter) '' 'Advancing to the next field should clear the filter.'
+            Assert-Equal ([int]$state.FieldIndex) 1 'Selection should advance to the next field.'
+        }
+    },
+    @{
+        Name = 'Ownership source classification cancel returns without throwing'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            $fieldMap = [pscustomobject][ordered]@{
+                ProjectCode = 'project_code'
+                OBS = 'obs'
+            }
+            $initialProfile = [pscustomobject]@{
+                SourcePath = 'projects.csv'
+                SourceType = 'Mixed'
+                AuthorityLevel = 'Unknown'
+                PrimaryAnchor = ''
+                MappedFields = 'ProjectCode; OBS'
+                Warnings = ''
+            }
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferPromptAnswers.Enqueue('Q')
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferPromptAnswers.Dequeue()
+            }
+
+            try {
+                $result = Read-ShareSurferOwnershipSourceProfile -SourcePath 'projects.csv' -FieldMap $fieldMap -InitialProfile $initialProfile
+                Assert-True ([bool]$result.Cancelled) 'Q should return a Cancelled result instead of throwing.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Ownership mapping profile stores interview warnings and cancels cleanly'
+        Body = {
+            Import-Module $moduleManifest -Force
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/Get-ShareSurferOwnershipSourceMap.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Private/ShareSurfer.Console.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Join-ShareSurferOwnershipSources.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/Test-ShareSurferOwnershipSource.ps1')
+            . (Join-Path $repoRoot 'src/ShareSurfer/Public/New-ShareSurferOwnershipMappingProfile.ps1')
+            $sourcePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferProfileWarnings-' + [guid]::NewGuid().ToString('N') + '.csv')
+            $profilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferProfileWarnings-' + [guid]::NewGuid().ToString('N') + '.json')
+            $cancelProfilePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferProfileCancel-' + [guid]::NewGuid().ToString('N') + '.json')
+            Set-Content -LiteralPath $sourcePath -Value @('PersonKey,OrgPath', 'p1,Corp/Finance') -Encoding UTF8
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferPromptAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferPromptAnswers.Enqueue('zz_nope')
+            for ($index = 0; $index -lt 21; $index++) {
+                $script:shareSurferPromptAnswers.Enqueue('S')
+            }
+            $script:shareSurferPromptAnswers.Enqueue('Q')
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferPromptAnswers.Count -eq 0) {
+                    throw ('Unexpected prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferPromptAnswers.Dequeue()
+            }
+
+            try {
+                $summary = New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $profilePath -Interactive -Force
+                Assert-True ((@($summary.Warnings) -join ' ').Contains('zz_nope')) 'Profile summary should carry post-interview warnings.'
+                $savedProfile = Get-Content -LiteralPath $profilePath -Raw | ConvertFrom-Json
+                Assert-True ((@($savedProfile.Warnings) -join ' ').Contains('zz_nope')) 'Saved mapping profile should record interview typo warnings.'
+
+                $threw = $false
+                try {
+                    New-ShareSurferOwnershipMappingProfile -Path $sourcePath -OutputPath $cancelProfilePath -Interactive -Force | Out-Null
+                }
+                catch {
+                    $threw = $true
+                    Assert-True ($_.Exception.Message.Contains('cancelled by operator')) 'Cancel should abort with the operator-cancel message.'
+                }
+                Assert-True $threw 'Cancelling the interview should abort mapping profile creation.'
+                Assert-True (-not (Test-Path -LiteralPath $cancelProfilePath)) 'A cancelled interview should not write a partial mapping profile.'
+                Assert-Equal $script:shareSurferPromptAnswers.Count 0 'Mapping profile tests should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferPromptAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $sourcePath -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $profilePath -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $cancelProfilePath -ErrorAction SilentlyContinue
             }
         }
     },
