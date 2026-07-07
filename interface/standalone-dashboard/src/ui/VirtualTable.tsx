@@ -103,12 +103,12 @@ function csvEscape(value: string): string {
   return value;
 }
 
-function buildCsvDataUri(rows: Array<{ row: DataRow }>, columns: string[]): string {
+function buildCsvText(rows: Array<{ row: DataRow }>, columns: string[]): string {
   const csvRows = [
     columns.map(csvEscape).join(","),
     ...rows.map(({ row }) => columns.map((column) => csvEscape(row[column] ?? "")).join(","))
   ];
-  return `data:text/csv;charset=utf-8,${encodeURIComponent(csvRows.join("\r\n"))}`;
+  return csvRows.join("\r\n");
 }
 
 function safeDownloadName(title: string): string {
@@ -118,6 +118,29 @@ function safeDownloadName(title: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `${normalized || "sharesurfer-evidence"}-filtered.csv`;
+}
+
+function downloadCsv(rows: Array<{ row: DataRow }>, columns: string[], fileName: string): void {
+  const csvText = buildCsvText(rows, columns);
+  const link = document.createElement("a");
+  link.download = fileName;
+
+  if (typeof URL.createObjectURL === "function" && typeof URL.revokeObjectURL === "function") {
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
+    const revokeObjectUrl = URL.revokeObjectURL.bind(URL);
+    link.href = objectUrl;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => revokeObjectUrl(objectUrl), 0);
+    return;
+  }
+
+  link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csvText)}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function splitFilterTerms(value: string): string[] {
@@ -238,7 +261,6 @@ export function VirtualTable({
     sortedRows.length === 0 ? `Showing 0 of ${filteredRows.length}` : `Showing ${start + 1}-${end} of ${filteredRows.length}`;
   const filteredSummary =
     (filterText.trim() || activeColumnFilters.length > 0) && filteredRows.length !== rows.length ? `${pageSummary} (filtered from ${rows.length})` : pageSummary;
-  const exportHref = useMemo(() => buildCsvDataUri(sortedRows, visibleColumns), [sortedRows, visibleColumns]);
   const tableMinWidth = useMemo(
     () => Math.max(920, visibleColumns.reduce((sum, column) => sum + (columnWidths[column] ?? 160), 0)),
     [columnWidths, visibleColumns]
@@ -344,9 +366,13 @@ export function VirtualTable({
         <span>{filteredSummary}</span>
         <div className="pager" aria-label={`${title} pages`}>
           {enableExport ? (
-            <a className="link-button compact-action" href={exportHref} download={exportFileName ?? safeDownloadName(title)}>
+            <button
+              type="button"
+              className="link-button compact-action"
+              onClick={() => downloadCsv(sortedRows, visibleColumns, exportFileName ?? safeDownloadName(title))}
+            >
               Export shown CSV
-            </a>
+            </button>
           ) : null}
           <label className="table-filter">
             <span className="sr-only">Filter {title} rows</span>

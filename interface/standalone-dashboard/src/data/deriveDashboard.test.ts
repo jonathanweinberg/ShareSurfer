@@ -33,6 +33,31 @@ describe("ShareSurfer dashboard data model", () => {
     expect(snapshot.schemaWarnings.some((warning) => warning.includes("PotentialServiceAccount"))).toBe(true);
   });
 
+  test("deduplicates missing-column warnings across large datasets", () => {
+    const snapshot = normalizeSnapshot({
+      datasets: {
+        identities: Array.from({ length: 500 }, (_, index) => ({
+          Identity: `CONTOSO\\User${index}`,
+          ObjectClass: "user",
+          EmployeeId: "",
+          EmployeeNumber: "",
+          ObsPath: ""
+        }))
+      }
+    });
+
+    const managerLevelWarnings = snapshot.schemaWarnings.filter((warning) =>
+      warning.includes("identities.csv is missing column ManagerLevel3;")
+    );
+    const potentialServiceAccountWarnings = snapshot.schemaWarnings.filter((warning) =>
+      warning.includes("identities.csv is missing column PotentialServiceAccount;")
+    );
+
+    expect(managerLevelWarnings).toHaveLength(1);
+    expect(potentialServiceAccountWarnings).toHaveLength(1);
+    expect(snapshot.schemaWarnings.length).toBeLessThan(60);
+  });
+
   test("derives novice-friendly dashboard signals from V1 exports", () => {
     const dashboard = deriveDashboard(normalizeSnapshot(demoSnapshot));
 

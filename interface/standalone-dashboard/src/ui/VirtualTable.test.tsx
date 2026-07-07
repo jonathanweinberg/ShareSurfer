@@ -1,7 +1,16 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { VirtualTable } from "./VirtualTable";
+
+function readBlobText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
 
 describe("VirtualTable", () => {
   test("renders a bounded page and paginates without mounting every row", async () => {
@@ -86,39 +95,64 @@ describe("VirtualTable", () => {
     expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
   });
 
-  test("combines independent field filters and exports the shown rows", async () => {
+  test("combines independent field filters and exports the shown rows on demand", async () => {
     const user = userEvent.setup();
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    const createdUrls: string[] = [];
+    const createObjectUrl = vi.fn((_blob: Blob) => {
+      const url = `blob:sharesurfer-${createdUrls.length + 1}`;
+      createdUrls.push(url);
+      return url;
+    });
+    const revokeObjectUrl = vi.fn();
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrl });
     const rows = [
       { Group: "Finance Readers", Path: "\\\\files01\\Finance", Rights: "Read" },
       { Group: "Finance Admins", Path: "\\\\files01\\Finance", Rights: "Full" },
       { Group: "HR Readers", Path: "\\\\files01\\HR", Rights: "Read" }
     ];
 
-    render(
-      <VirtualTable
-        rows={rows}
-        columns={["Group", "Path", "Rights"]}
-        pageSize={20}
-        title="Permissioned groups"
-        enableFieldFilters
-        enableExport
-      />
-    );
+    try {
+      render(
+        <VirtualTable
+          rows={rows}
+          columns={["Group", "Path", "Rights"]}
+          pageSize={20}
+          title="Permissioned groups"
+          enableFieldFilters
+          enableExport
+        />
+      );
 
-    await user.type(screen.getByLabelText(/Filter Permissioned groups by Path/i), "Finance");
-    await user.type(screen.getByLabelText(/Filter Permissioned groups by Group/i), "Readers");
+      await user.type(screen.getByLabelText(/Filter Permissioned groups by Path/i), "Finance");
+      await user.type(screen.getByLabelText(/Filter Permissioned groups by Group/i), "Readers");
 
-    expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
-    expect(screen.getByText("Finance Readers")).toBeInTheDocument();
-    expect(screen.queryByText("Finance Admins")).not.toBeInTheDocument();
-    expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
+      expect(screen.getByText("Showing 1-1 of 1 (filtered from 3)")).toBeInTheDocument();
+      expect(screen.getByText("Finance Readers")).toBeInTheDocument();
+      expect(screen.queryByText("Finance Admins")).not.toBeInTheDocument();
+      expect(screen.queryByText("HR Readers")).not.toBeInTheDocument();
 
-    const exportLink = screen.getByRole("link", { name: /Export shown CSV/i });
-    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
-    expect(exportLink).toHaveAttribute("download", "permissioned-groups-filtered.csv");
-    expect(href).toContain("Group,Path,Rights");
-    expect(href).toContain("Finance Readers");
-    expect(href).not.toContain("Finance Admins");
+      const exportButton = screen.getByRole("button", { name: /Export shown CSV/i });
+      expect(screen.queryByRole("link", { name: /Export shown CSV/i })).not.toBeInTheDocument();
+      expect(createObjectUrl).not.toHaveBeenCalled();
+
+      await user.click(exportButton);
+
+      expect(createObjectUrl).toHaveBeenCalledTimes(1);
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+      const blob = createObjectUrl.mock.calls[0][0] as Blob;
+      const csvText = await readBlobText(blob);
+      expect(csvText).toContain("Group,Path,Rights");
+      expect(csvText).toContain("Finance Readers");
+      expect(csvText).not.toContain("Finance Admins");
+    } finally {
+      Object.defineProperty(URL, "createObjectURL", { configurable: true, value: originalCreateObjectUrl });
+      Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectUrl });
+      anchorClick.mockRestore();
+    }
   });
 
   test("supports negative global and field filters", async () => {

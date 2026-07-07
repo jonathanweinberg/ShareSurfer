@@ -289,12 +289,22 @@ function inferPotentialServiceAccount(row: DataRow): string {
   return isUser && lacksOwnerSignals ? "True" : "False";
 }
 
+function addSchemaWarningOnce(warnings: Set<string>, warningKeys: Set<string>, key: string, message: string): void {
+  if (warningKeys.has(key)) {
+    return;
+  }
+
+  warningKeys.add(key);
+  warnings.add(message);
+}
+
 function statusMatches(row: DataRow, status: string): boolean {
   return row.MatchStatus.trim().toLowerCase() === status.toLowerCase();
 }
 
 function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warnings: Set<string>, isLazy = false): DataRow[] {
   const sourceRows = Array.isArray(rows) ? rows : [];
+  const defaultWarningKeys = new Set<string>();
   if (!Array.isArray(rows)) {
     const isOptional = (optionalDatasetKeys as readonly string[]).includes(datasetKey);
     if (!isOptional && !isLazy) {
@@ -302,7 +312,7 @@ function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warn
     }
   }
 
-  return sourceRows.map((row, rowIndex) => {
+  return sourceRows.map((row) => {
     const record: DataRow = {};
     for (const [key, value] of Object.entries(row ?? {})) {
       record[key.replace(/^\uFEFF/, "")] = normalizeText(value);
@@ -312,16 +322,45 @@ function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warn
       if (!(column in record)) {
         if (datasetKey === "identities" && column === "PotentialServiceAccount") {
           record[column] = inferPotentialServiceAccount(record);
+          addSchemaWarningOnce(
+            warnings,
+            defaultWarningKeys,
+            `${datasetKey}:${column}:inferred`,
+            `${datasetKey}.csv is missing column ${column}; values were inferred for dashboard review.`
+          );
         } else if (datasetKey === "org_chains" && column === "PotentialServiceAccount") {
           record[column] = "False";
+          addSchemaWarningOnce(
+            warnings,
+            defaultWarningKeys,
+            `${datasetKey}:${column}:defaulted`,
+            `${datasetKey}.csv is missing column ${column}; values were defaulted for dashboard review.`
+          );
         } else if (datasetKey === "scan_manifest" && column === "RequestedSmbCollectionProvider") {
           record[column] = record.CollectionProvider ?? "";
+          addSchemaWarningOnce(
+            warnings,
+            defaultWarningKeys,
+            `${datasetKey}:${column}:collectionProvider`,
+            `${datasetKey}.csv is missing column ${column}; values were defaulted from CollectionProvider for dashboard review.`
+          );
         } else if (datasetKey === "scan_manifest" && column === "EffectiveSmbCollectionProvider") {
           record[column] = record.CollectionProvider ?? "";
+          addSchemaWarningOnce(
+            warnings,
+            defaultWarningKeys,
+            `${datasetKey}:${column}:collectionProvider`,
+            `${datasetKey}.csv is missing column ${column}; values were defaulted from CollectionProvider for dashboard review.`
+          );
         } else {
           record[column] = "";
+          addSchemaWarningOnce(
+            warnings,
+            defaultWarningKeys,
+            `${datasetKey}:${column}:defaulted`,
+            `${datasetKey}.csv is missing column ${column}; values were defaulted for dashboard review.`
+          );
         }
-        warnings.add(`${datasetKey}.csv is missing column ${column}; defaulted row ${rowIndex + 1}.`);
       }
     }
 
