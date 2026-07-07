@@ -36,7 +36,7 @@ function Get-ShareSurferNativeViewerCsvColumns {
         return @($sampleRows[0].PSObject.Properties.Name)
     }
 
-    $reader = New-Object System.IO.StreamReader($Path, [System.Text.Encoding]::UTF8, $true)
+    $reader = New-Object System.IO.StreamReader -ArgumentList @($Path, [System.Text.Encoding]::UTF8, $true)
     try {
         $header = [string]$reader.ReadLine()
     }
@@ -184,12 +184,15 @@ function New-ShareSurferNativeViewerSummary {
         $manifest = @(Import-Csv -LiteralPath $manifestRows[0].Path | Select-Object -First 1)
     }
 
+    $rowSummary = @($Datasets) | Measure-Object -Property RowCount -Sum
+    $sourceByteSummary = @($Datasets) | Measure-Object -Property SourceBytes -Sum
+
     [pscustomobject]@{
         ViewerMode = $ViewerMode
         ExportPath = (Resolve-Path -LiteralPath $ExportPath).Path
         DatasetCount = @($Datasets).Count
-        TotalRows = [int](@($Datasets) | Measure-Object -Property RowCount -Sum).Sum
-        TotalSourceBytes = [Int64](@($Datasets) | Measure-Object -Property SourceBytes -Sum).Sum
+        TotalRows = [Int64]$rowSummary.Sum
+        TotalSourceBytes = [Int64]$sourceByteSummary.Sum
         ScanGeneratedAt = if ($manifest.Count -gt 0 -and $manifest[0].PSObject.Properties['GeneratedAt']) { [string]$manifest[0].GeneratedAt } else { '' }
         AclExportMode = if ($manifest.Count -gt 0 -and $manifest[0].PSObject.Properties['AclExportMode']) { [string]$manifest[0].AclExportMode } else { '' }
         Datasets = @($Datasets | Select-Object DatasetKey, FileName, RowCount, SourceBytes, Columns)
@@ -338,8 +341,8 @@ function Start-ShareSurferNativeViewerForm {
     [void]$form.ShowDialog()
 }
 
+$datasets = @(Get-ShareSurferNativeViewerDatasets -ExportPath $ExportPath)
 $resolvedExportPath = (Resolve-Path -LiteralPath $ExportPath).Path
-$datasets = @(Get-ShareSurferNativeViewerDatasets -ExportPath $resolvedExportPath)
 $summary = New-ShareSurferNativeViewerSummary -ExportPath $resolvedExportPath -Datasets $datasets -ViewerMode $(if ($ValidateOnly) { 'HeadlessValidation' } else { 'WinForms' })
 
 if ($ValidateOnly) {

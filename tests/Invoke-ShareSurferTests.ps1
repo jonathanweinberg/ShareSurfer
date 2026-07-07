@@ -6557,6 +6557,41 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurferNativeViewer handles header-only CSVs and missing export paths clearly'
+        Body = {
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeViewerEmptyCsv-' + [guid]::NewGuid().ToString('N'))
+            $viewerScript = Join-Path $repoRoot 'scripts/Start-ShareSurferNativeViewer.ps1'
+            New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
+
+            @(
+                [pscustomobject]@{
+                    ScanId = 'scan-empty-csv'
+                    GeneratedAt = '2026-07-07T00:00:00Z'
+                    AclExportMode = 'Compact'
+                }
+            ) | Export-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv') -NoTypeInformation
+            'HeaderOne,HeaderTwo' | Set-Content -LiteralPath (Join-Path $outputPath 'empty_dataset.csv') -Encoding UTF8
+
+            $result = & $viewerScript -ExportPath $outputPath -ValidateOnly -PassThru
+            $emptyDataset = @($result.Datasets | Where-Object { $_.DatasetKey -eq 'empty_dataset' })[0]
+
+            Assert-Equal ([Int64]$result.TotalRows) 1 'Native viewer summary should keep Int64 row totals.'
+            Assert-Equal ([int]$emptyDataset.RowCount) 0 'Header-only CSV should be reported as zero data rows.'
+            Assert-True (@($emptyDataset.Columns) -contains 'HeaderOne') 'Header-only CSV should still expose its first header column.'
+            Assert-True (@($emptyDataset.Columns) -contains 'HeaderTwo') 'Header-only CSV should still expose its second header column.'
+
+            $missingMessage = ''
+            try {
+                & $viewerScript -ExportPath (Join-Path $outputPath 'missing-export') -ValidateOnly | Out-Null
+            }
+            catch {
+                $missingMessage = [string]$_.Exception.Message
+            }
+
+            Assert-True ($missingMessage -like '*ShareSurfer export folder was not found*') 'Missing export paths should fail with friendly ShareSurfer guidance.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan discovers local shares by path during target path scans'
         Body = {
             Import-Module $moduleManifest -Force
