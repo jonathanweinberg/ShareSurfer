@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { App } from "./App";
 import { demoSnapshot } from "./data/fixtures";
@@ -166,6 +166,19 @@ describe("dashboard workbench interactions", () => {
 
     expect(screen.getByRole("heading", { name: /Permission Review Dashboard/i })).toBeInTheDocument();
     expect(screen.getByText(/Demo dataset/i)).toBeInTheDocument();
+  });
+
+  test("packaged runtime snapshot is released after the dashboard captures it", async () => {
+    const snapshot = JSON.parse(JSON.stringify(demoSnapshot)) as typeof demoSnapshot;
+    snapshot.snapshotKind = "export";
+    window.__SHARESURFER_SNAPSHOT__ = snapshot;
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /Permission Review Dashboard/i })).toBeInTheDocument();
+    expect(screen.getByText(/Export dataset/i)).toBeInTheDocument();
+    await waitFor(() => expect(window.__SHARESURFER_SNAPSHOT__).toBeUndefined());
+    expect(screen.getByRole("heading", { name: /Permission Review Dashboard/i })).toBeInTheDocument();
   });
 
   test("active filters scope overview KPI cards instead of leaving global totals", () => {
