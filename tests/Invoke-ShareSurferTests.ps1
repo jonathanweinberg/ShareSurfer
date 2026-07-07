@@ -1470,6 +1470,39 @@ $tests = @(
         }
     },
     @{
+        Name = 'Get-ShareSurferConflicts handles repeated inherited ACLs without per-row conflict blowup'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sharePermissions = @(
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Allow' },
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\OtherGroup'; Rights = 'Read'; AccessControlType = 'Allow' }
+            )
+            $aclEntries = for ($i = 0; $i -lt 20000; $i++) {
+                [pscustomobject]@{
+                    ShareId = 'share-001'
+                    ItemId = 'item-{0}' -f $i
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'Modify'
+                    AccessControlType = 'Allow'
+                }
+            }
+
+            $shareSurferModule = Get-Module ShareSurfer
+            $result = $null
+            $elapsed = Measure-Command {
+                $result = @(& $shareSurferModule {
+                    param($SharePermissions, $AclEntries)
+                    Get-ShareSurferConflicts -SharePermissions $SharePermissions -AclEntries $AclEntries -Quiet
+                } $sharePermissions $aclEntries)
+            }
+
+            Assert-True ($elapsed.TotalSeconds -lt 10) ('Conflict classification should stay bounded for repeated ACL rows. ElapsedSeconds={0:N2}' -f $elapsed.TotalSeconds)
+            Assert-Equal @($result | Where-Object { $_.ConflictType -eq 'ShareRightsRestrictNtfs' }).Count 1 'Repeated share-vs-NTFS restriction evidence should collapse to one representative conflict.'
+            Assert-Equal @($result | Where-Object { $_.ConflictType -eq 'ShareIdentityMissingNtfsEntry' }).Count 1 'Share identities missing from NTFS should still be reported once.'
+            Assert-True ($result.Count -lt 10) 'Repeated inherited ACL rows should not create one conflict per ACL row.'
+        }
+    },
+    @{
         Name = 'Normalize-ShareSurferItems keeps inheritance breaks on path boundaries'
         Body = {
             Import-Module $moduleManifest -Force

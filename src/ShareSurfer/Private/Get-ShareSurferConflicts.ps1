@@ -4,12 +4,39 @@ function Get-ShareSurferConflicts {
         $SharePermissions,
 
         [Parameter(Mandatory = $true)]
-        $AclEntries
+        $AclEntries,
+
+        [int] $StatusIntervalSeconds = 15,
+
+        [switch] $ShowProgress,
+
+        [switch] $Quiet
     )
 
     $conflicts = New-Object System.Collections.ArrayList
     $sharePermissionsList = @(ConvertTo-ShareSurferArray $SharePermissions)
     $aclEntriesList = @(ConvertTo-ShareSurferArray $AclEntries)
+    $statusClock = [System.Diagnostics.Stopwatch]::StartNew()
+    $statusState = @{ LastSeconds = -999.0 }
+    $showConflictProgress = [bool]$ShowProgress -and -not [bool]$Quiet
+
+    function Write-ShareSurferConflictProgress {
+        param(
+            [string] $Message,
+
+            [switch] $Force
+        )
+
+        if ($Quiet) {
+            return
+        }
+
+        $elapsed = [double]$statusClock.Elapsed.TotalSeconds
+        if ($Force -or $StatusIntervalSeconds -le 0 -or ($elapsed - $statusState.LastSeconds) -ge $StatusIntervalSeconds) {
+            $statusState.LastSeconds = $elapsed
+            Write-ShareSurferStatus -Phase 'Export' -Message $Message
+        }
+    }
 
     $sharePermissionsByShare = @{}
     $shareHasBroadAllowGate = @{}
@@ -19,61 +46,124 @@ function Get-ShareSurferConflicts {
         }
         $identityKey = ([string]$permission.Identity).ToUpperInvariant()
         if (-not $sharePermissionsByShare[$permission.ShareId].ContainsKey($identityKey)) {
-            $sharePermissionsByShare[$permission.ShareId][$identityKey] = @()
+            $sharePermissionsByShare[$permission.ShareId][$identityKey] = New-Object System.Collections.ArrayList
         }
-        $sharePermissionsByShare[$permission.ShareId][$identityKey] = @($sharePermissionsByShare[$permission.ShareId][$identityKey]) + $permission
+        [void]$sharePermissionsByShare[$permission.ShareId][$identityKey].Add($permission)
         if ((Get-ShareSurferAccessType $permission.AccessControlType) -eq 'Allow' -and (Test-ShareSurferBroadSharePrincipal -Identity $permission.Identity)) {
             $shareHasBroadAllowGate[$permission.ShareId] = $true
         }
     }
 
+    $shareAllowRankByShareIdentity = @{}
+    $shareRightsSummaryByShareIdentity = @{}
+    foreach ($shareId in $sharePermissionsByShare.Keys) {
+        foreach ($identityKey in $sharePermissionsByShare[$shareId].Keys) {
+            $cacheKey = '{0}|{1}' -f [string]$shareId, [string]$identityKey
+            $entries = $sharePermissionsByShare[$shareId][$identityKey]
+            $shareAllowRankByShareIdentity[$cacheKey] = Get-ShareSurferMaxRightsRank -Entries $entries -AccessType 'Allow'
+            $shareRightsSummaryByShareIdentity[$cacheKey] = Get-ShareSurferRightsSummary -Entries $entries
+        }
+    }
+
     $ntfsByShare = @{}
-    $ntfsByShareItemIdentity = @{}
+    $ntfsIdentityExamples = @{}
+    $ntfsAllowPatterns = @{}
+    $ntfsDenyItemIdentityKeys = @{}
+    $aclIndex = 0
+    $aclTotal = $aclEntriesList.Count
     foreach ($ace in $aclEntriesList) {
+        $aclIndex++
         if (-not $ntfsByShare.ContainsKey($ace.ShareId)) {
             $ntfsByShare[$ace.ShareId] = @{}
         }
-        if (-not $ntfsByShareItemIdentity.ContainsKey($ace.ShareId)) {
-            $ntfsByShareItemIdentity[$ace.ShareId] = @{}
-        }
 
         $identityKey = ([string]$ace.Identity).ToUpperInvariant()
-        if (-not $ntfsByShare[$ace.ShareId].ContainsKey($identityKey)) {
-            $ntfsByShare[$ace.ShareId][$identityKey] = @()
-        }
-        $ntfsByShare[$ace.ShareId][$identityKey] = @($ntfsByShare[$ace.ShareId][$identityKey]) + $ace
+        $ntfsByShare[$ace.ShareId][$identityKey] = $true
 
-        $itemKey = [string]$ace.ItemId
-        if (-not $ntfsByShareItemIdentity[$ace.ShareId].ContainsKey($itemKey)) {
-            $ntfsByShareItemIdentity[$ace.ShareId][$itemKey] = @{}
+        $shareIdentityKey = '{0}|{1}' -f [string]$ace.ShareId, $identityKey
+        if (-not $ntfsIdentityExamples.ContainsKey($shareIdentityKey)) {
+            $ntfsIdentityExamples[$shareIdentityKey] = @{
+                ShareId = [string]$ace.ShareId
+                IdentityKey = $identityKey
+                Ace = $ace
+            }
         }
-        if (-not $ntfsByShareItemIdentity[$ace.ShareId][$itemKey].ContainsKey($identityKey)) {
-            $ntfsByShareItemIdentity[$ace.ShareId][$itemKey][$identityKey] = @()
+
+        $accessType = Get-ShareSurferAccessType $ace.AccessControlType
+        if ($accessType -eq 'Allow') {
+            $allowPatternKey = '{0}|{1}|{2}' -f [string]$ace.ShareId, $identityKey, ([string]$ace.Rights).ToUpperInvariant()
+            if (-not $ntfsAllowPatterns.ContainsKey($allowPatternKey)) {
+                $ntfsAllowPatterns[$allowPatternKey] = @{
+                    ShareId = [string]$ace.ShareId
+                    IdentityKey = $identityKey
+                    Ace = $ace
+                    NtfsRank = Get-ShareSurferRightsRank -Rights $ace.Rights
+                }
+            }
         }
-        $ntfsByShareItemIdentity[$ace.ShareId][$itemKey][$identityKey] = @($ntfsByShareItemIdentity[$ace.ShareId][$itemKey][$identityKey]) + $ace
+        elseif ($accessType -eq 'Deny') {
+            $denyStateKey = '{0}|{1}|{2}' -f [string]$ace.ShareId, [string]$ace.ItemId, $identityKey
+            $ntfsDenyItemIdentityKeys[$denyStateKey] = $true
+        }
+
+        if ($showConflictProgress) {
+            Write-ShareSurferConflictProgress -Message ('Conflict classification progress: indexed {0}/{1} ACL row(s).' -f $aclIndex, $aclTotal)
+        }
     }
 
-    $missingShareGateKeys = @{}
-    foreach ($ace in $aclEntriesList) {
-        $identityKey = ([string]$ace.Identity).ToUpperInvariant()
+    $identityPatternIndex = 0
+    $identityPatternTotal = $ntfsIdentityExamples.Keys.Count
+    foreach ($shareIdentityKey in $ntfsIdentityExamples.Keys) {
+        $identityPatternIndex++
+        $state = $ntfsIdentityExamples[$shareIdentityKey]
+        $shareId = [string]$state['ShareId']
+        $identityKey = [string]$state['IdentityKey']
+        $ace = $state['Ace']
         $shareMap = @{}
-        if ($sharePermissionsByShare.ContainsKey($ace.ShareId)) {
-            $shareMap = $sharePermissionsByShare[$ace.ShareId]
+        if ($sharePermissionsByShare.ContainsKey($shareId)) {
+            $shareMap = $sharePermissionsByShare[$shareId]
         }
 
-        $hasBroadAllowGate = ($shareHasBroadAllowGate.ContainsKey($ace.ShareId) -and [bool]$shareHasBroadAllowGate[$ace.ShareId])
-        $missingShareGateKey = '{0}|{1}' -f [string]$ace.ShareId, $identityKey
-        if ($shareMap.Count -gt 0 -and -not $shareMap.ContainsKey($identityKey) -and -not $hasBroadAllowGate -and -not $missingShareGateKeys.ContainsKey($missingShareGateKey)) {
-            $missingShareGateKeys[$missingShareGateKey] = $true
-            [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsIdentityMissingShareGate' -ShareId $ace.ShareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights '' -NtfsRights $ace.Rights -Severity 'High' -Message 'NTFS grants rights to an identity that does not appear in the share-level permission gate.'))
+        $hasBroadAllowGate = ($shareHasBroadAllowGate.ContainsKey($shareId) -and [bool]$shareHasBroadAllowGate[$shareId])
+        if ($shareMap.Count -gt 0 -and -not $shareMap.ContainsKey($identityKey) -and -not $hasBroadAllowGate) {
+            [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsIdentityMissingShareGate' -ShareId $shareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights '' -NtfsRights $ace.Rights -Severity 'High' -Message 'NTFS grants rights to an identity that does not appear in the share-level permission gate.'))
         }
 
-        if ($shareMap.ContainsKey($identityKey) -and (Get-ShareSurferAccessType $ace.AccessControlType) -eq 'Allow') {
-            $shareAllowRank = Get-ShareSurferMaxRightsRank -Entries $shareMap[$identityKey] -AccessType 'Allow'
-            $ntfsRank = Get-ShareSurferRightsRank -Rights $ace.Rights
-            if ($shareAllowRank -gt 0 -and $ntfsRank -gt $shareAllowRank) {
-                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareRightsRestrictNtfs' -ShareId $ace.ShareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights (Get-ShareSurferRightsSummary -Entries $shareMap[$identityKey]) -NtfsRights $ace.Rights -Severity 'High' -Message 'Share-level rights are narrower than NTFS allow rights for the same identity, so the share gate may restrict access expected from NTFS ACLs.'))
+        if ($showConflictProgress) {
+            Write-ShareSurferConflictProgress -Message ('Conflict classification progress: checked {0}/{1} NTFS identity pattern(s); conflicts={2}.' -f $identityPatternIndex, $identityPatternTotal, $conflicts.Count)
+        }
+    }
+
+    $allowPatternIndex = 0
+    $allowPatternTotal = $ntfsAllowPatterns.Keys.Count
+    foreach ($allowPatternKey in $ntfsAllowPatterns.Keys) {
+        $allowPatternIndex++
+        $state = $ntfsAllowPatterns[$allowPatternKey]
+        $shareId = [string]$state['ShareId']
+        $identityKey = [string]$state['IdentityKey']
+        $ace = $state['Ace']
+        $shareMap = @{}
+        if ($sharePermissionsByShare.ContainsKey($shareId)) {
+            $shareMap = $sharePermissionsByShare[$shareId]
+        }
+
+        if ($shareMap.ContainsKey($identityKey)) {
+            $shareIdentityCacheKey = '{0}|{1}' -f $shareId, $identityKey
+            $shareAllowRank = 0
+            if ($shareAllowRankByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
+                $shareAllowRank = [int]$shareAllowRankByShareIdentity[$shareIdentityCacheKey]
             }
+            $ntfsRank = [int]$state['NtfsRank']
+            if ($shareAllowRank -gt 0 -and $ntfsRank -gt $shareAllowRank) {
+                $shareRightsSummary = ''
+                if ($shareRightsSummaryByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
+                    $shareRightsSummary = [string]$shareRightsSummaryByShareIdentity[$shareIdentityCacheKey]
+                }
+                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareRightsRestrictNtfs' -ShareId $shareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights $shareRightsSummary -NtfsRights $ace.Rights -Severity 'High' -Message 'Share-level rights are narrower than NTFS allow rights for the same identity, so the share gate may restrict access expected from NTFS ACLs.'))
+            }
+        }
+        if ($showConflictProgress) {
+            Write-ShareSurferConflictProgress -Message ('Conflict classification progress: checked {0}/{1} NTFS allow pattern(s); conflicts={2}.' -f $allowPatternIndex, $allowPatternTotal, $conflicts.Count)
         }
     }
 
@@ -89,24 +179,85 @@ function Get-ShareSurferConflicts {
         }
     }
 
-    foreach ($shareId in $ntfsByShareItemIdentity.Keys) {
-        foreach ($itemId in $ntfsByShareItemIdentity[$shareId].Keys) {
-            foreach ($identityKey in $ntfsByShareItemIdentity[$shareId][$itemId].Keys) {
-                $entries = @($ntfsByShareItemIdentity[$shareId][$itemId][$identityKey])
-                $allowEntries = @($entries | Where-Object { (Get-ShareSurferAccessType $_.AccessControlType) -eq 'Allow' })
-                $denyEntries = @($entries | Where-Object { (Get-ShareSurferAccessType $_.AccessControlType) -eq 'Deny' })
+    if ($ntfsDenyItemIdentityKeys.Count -gt 0) {
+        $denyStates = @{}
+        $aclIndex = 0
+        foreach ($ace in $aclEntriesList) {
+            $aclIndex++
+            $identityKey = ([string]$ace.Identity).ToUpperInvariant()
+            $denyStateKey = '{0}|{1}|{2}' -f [string]$ace.ShareId, [string]$ace.ItemId, $identityKey
+            if (-not $ntfsDenyItemIdentityKeys.ContainsKey($denyStateKey)) {
+                if ($showConflictProgress) {
+                    Write-ShareSurferConflictProgress -Message ('Conflict classification progress: checked {0}/{1} ACL row(s) for deny/collision evidence; conflicts={2}.' -f $aclIndex, $aclTotal, $conflicts.Count)
+                }
+                continue
+            }
 
-                if ($allowEntries.Count -gt 0 -and $denyEntries.Count -gt 0) {
-                    [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsDenyAllowCollision' -ShareId $shareId -ItemId $itemId -Identity $entries[0].Identity -ShareRights '' -NtfsRights (Get-ShareSurferRightsSummary -Entries $entries) -Severity 'High' -Message 'The same identity has both NTFS allow and deny entries on the same item. Review the deny entry before migration because it can override apparent allow access.'))
+            if (-not $denyStates.ContainsKey($denyStateKey)) {
+                $denyStates[$denyStateKey] = @{
+                    ShareId = [string]$ace.ShareId
+                    ItemId = [string]$ace.ItemId
+                    IdentityKey = $identityKey
+                    Identity = [string]$ace.Identity
+                    HasAllow = $false
+                    HasDeny = $false
+                    AllRightsParts = @{}
+                    DenyRightsParts = @{}
                 }
+            }
 
-                $shareMap = @{}
-                if ($sharePermissionsByShare.ContainsKey($shareId)) {
-                    $shareMap = $sharePermissionsByShare[$shareId]
+            $state = $denyStates[$denyStateKey]
+            $accessType = Get-ShareSurferAccessType $ace.AccessControlType
+            $rightsPart = '{0}: {1}' -f $accessType, [string]$ace.Rights
+            $state['AllRightsParts'][$rightsPart] = $true
+            if ($accessType -eq 'Deny') {
+                $state['HasDeny'] = $true
+                $state['DenyRightsParts'][$rightsPart] = $true
+            }
+            else {
+                $state['HasAllow'] = $true
+            }
+
+            if ($showConflictProgress) {
+                Write-ShareSurferConflictProgress -Message ('Conflict classification progress: checked {0}/{1} ACL row(s) for deny/collision evidence; conflicts={2}.' -f $aclIndex, $aclTotal, $conflicts.Count)
+            }
+        }
+
+        $denyStateIndex = 0
+        $denyStateTotal = $denyStates.Keys.Count
+        foreach ($denyStateKey in $denyStates.Keys) {
+            $denyStateIndex++
+            $state = $denyStates[$denyStateKey]
+            $shareId = [string]$state['ShareId']
+            $itemId = [string]$state['ItemId']
+            $identityKey = [string]$state['IdentityKey']
+            $identity = [string]$state['Identity']
+            $allRightsSummary = (@($state['AllRightsParts'].Keys) | Sort-Object) -join '; '
+            $denyRightsSummary = (@($state['DenyRightsParts'].Keys) | Sort-Object) -join '; '
+
+            if ([bool]$state['HasAllow'] -and [bool]$state['HasDeny']) {
+                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsDenyAllowCollision' -ShareId $shareId -ItemId $itemId -Identity $identity -ShareRights '' -NtfsRights $allRightsSummary -Severity 'High' -Message 'The same identity has both NTFS allow and deny entries on the same item. Review the deny entry before migration because it can override apparent allow access.'))
+            }
+
+            $shareMap = @{}
+            if ($sharePermissionsByShare.ContainsKey($shareId)) {
+                $shareMap = $sharePermissionsByShare[$shareId]
+            }
+            $shareIdentityCacheKey = '{0}|{1}' -f $shareId, $identityKey
+            $shareAllowRank = 0
+            if ($shareAllowRankByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
+                $shareAllowRank = [int]$shareAllowRankByShareIdentity[$shareIdentityCacheKey]
+            }
+            if ([bool]$state['HasDeny'] -and $shareMap.ContainsKey($identityKey) -and $shareAllowRank -gt 0) {
+                $shareRightsSummary = ''
+                if ($shareRightsSummaryByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
+                    $shareRightsSummary = [string]$shareRightsSummaryByShareIdentity[$shareIdentityCacheKey]
                 }
-                if ($denyEntries.Count -gt 0 -and $shareMap.ContainsKey($identityKey) -and (Get-ShareSurferMaxRightsRank -Entries $shareMap[$identityKey] -AccessType 'Allow') -gt 0) {
-                    [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareAllowsNtfsDenies' -ShareId $shareId -ItemId $itemId -Identity $entries[0].Identity -ShareRights (Get-ShareSurferRightsSummary -Entries $shareMap[$identityKey]) -NtfsRights (Get-ShareSurferRightsSummary -Entries $denyEntries) -Severity 'High' -Message 'Share-level permissions allow an identity that has an NTFS deny entry on the item. The two-gate access view should call out this denial explicitly.'))
-                }
+                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareAllowsNtfsDenies' -ShareId $shareId -ItemId $itemId -Identity $identity -ShareRights $shareRightsSummary -NtfsRights $denyRightsSummary -Severity 'High' -Message 'Share-level permissions allow an identity that has an NTFS deny entry on the item. The two-gate access view should call out this denial explicitly.'))
+            }
+
+            if ($showConflictProgress) {
+                Write-ShareSurferConflictProgress -Message ('Conflict classification progress: checked {0}/{1} deny/collision group(s); conflicts={2}.' -f $denyStateIndex, $denyStateTotal, $conflicts.Count)
             }
         }
     }
