@@ -1869,6 +1869,41 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan optionally collects multiple target paths in parallel'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $scanRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferParallelTargets-' + [guid]::NewGuid().ToString('N'))
+            $targetOne = Join-Path $scanRoot 'Finance'
+            $targetTwo = Join-Path $scanRoot 'Operations'
+            New-Item -ItemType Directory -Path (Join-Path $targetOne 'Reports') -Force | Out-Null
+            New-Item -ItemType Directory -Path (Join-Path $targetTwo 'Planning') -Force | Out-Null
+
+            try {
+                $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferParallelExport-' + [guid]::NewGuid().ToString('N'))
+                $statusText = (& {
+                    Invoke-ShareSurferScan -TargetPath @($targetOne, $targetTwo) -OutputPath $outputPath -IncludeFiles -SkipIdentityEnrichment -ParallelTargetCollection -TargetCollectionThrottle 2 -StatusIntervalSeconds 0
+                } *>&1 | Out-String)
+
+                $shares = @(Import-Csv -LiteralPath (Join-Path $outputPath 'shares.csv'))
+                $items = @(Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv'))
+                $events = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv'))
+
+                Assert-Equal $shares.Count 2 'Parallel target scan should export one share row per target.'
+                Assert-True ($shares.ShareId -contains 'target-1') 'Parallel target scan should preserve deterministic first target ShareId.'
+                Assert-True ($shares.ShareId -contains 'target-2') 'Parallel target scan should preserve deterministic second target ShareId.'
+                Assert-True (@($items | Where-Object { $_.FullPath -like "$targetOne*" }).Count -gt 0) 'Parallel target scan should export item evidence for first target.'
+                Assert-True (@($items | Where-Object { $_.FullPath -like "$targetTwo*" }).Count -gt 0) 'Parallel target scan should export item evidence for second target.'
+                Assert-True ($events.EventType -contains 'ParallelTargetCollectionStarted') 'Scan events should record the parallel collection start boundary.'
+                Assert-True ($events.EventType -contains 'ParallelTargetCollectionCompleted') 'Scan events should record the parallel collection completion boundary.'
+                Assert-True ($statusText -like '*Parallel target collection enabled*') 'Console status should clearly announce parallel target collection.'
+                Assert-True ($statusText -like '*Parallel target collection complete*') 'Console status should report parallel collection completion.'
+            }
+            finally {
+                Remove-Item -LiteralPath $scanRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan records share-permission collection gaps as collection errors'
         Body = {
             Import-Module $moduleManifest -Force

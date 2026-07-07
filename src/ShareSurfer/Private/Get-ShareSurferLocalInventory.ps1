@@ -37,6 +37,10 @@ function Get-ShareSurferLocalInventory {
 
         [switch] $SkipSharePermissionCollection,
 
+        [int] $StartingTargetIndex = 1,
+
+        [int] $TargetTotal = 0,
+
         [switch] $Quiet
     )
 
@@ -51,11 +55,12 @@ function Get-ShareSurferLocalInventory {
     if ($AclProvider -eq 'PowerShellGetAcl') {
         $getAcl = Get-Command Get-Acl -ErrorAction SilentlyContinue
     }
-    $index = 0
+    $index = $StartingTargetIndex - 1
+    $displayTargetTotal = if ($TargetTotal -gt 0) { $TargetTotal } else { @($TargetPath).Count }
     foreach ($target in $TargetPath) {
         $index++
         $shareId = 'target-{0}' -f $index
-        Write-ShareSurferStatus -Phase 'Collect' -Message ('Resolving target {0} of {1}: {2}' -f $index, @($TargetPath).Count, $target) -Quiet:$Quiet
+        Write-ShareSurferStatus -Phase 'Collect' -Message ('Resolving target {0} of {1}: {2}' -f $index, $displayTargetTotal, $target) -Quiet:$Quiet
         try {
             $targetItem = Get-Item -LiteralPath (ConvertTo-ShareSurferFilesystemPath -Path $target) -ErrorAction Stop
         }

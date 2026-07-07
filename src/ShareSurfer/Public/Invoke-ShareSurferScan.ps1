@@ -38,6 +38,9 @@ function Invoke-ShareSurferScan {
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
+        [switch] $ParallelTargetCollection,
+        [ValidateRange(1, 64)]
+        [int] $TargetCollectionThrottle = 4,
         [switch] $NoCreateMissingFolders,
         [int] $StatusIntervalSeconds = 15,
         [switch] $Quiet
@@ -69,8 +72,17 @@ function Invoke-ShareSurferScan {
             }
         }
         else {
-            Write-ShareSurferStatus -Phase 'Collect' -Message ('Scanning {0} target path(s).' -f @($TargetPath).Count) -Quiet:$Quiet
-            $inventory = Get-ShareSurferLocalInventory -TargetPath $TargetPath -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+            $targetPathList = @($TargetPath | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { [string]$_ })
+            Write-ShareSurferStatus -Phase 'Collect' -Message ('Scanning {0} target path(s).' -f $targetPathList.Count) -Quiet:$Quiet
+            if ($ParallelTargetCollection -and $targetPathList.Count -gt 1 -and $TargetCollectionThrottle -gt 1) {
+                $inventory = Get-ShareSurferParallelLocalInventory -TargetPath $targetPathList -IncludeFiles:$IncludeFiles -ThrottleLimit $TargetCollectionThrottle -StatusIntervalSeconds $StatusIntervalSeconds -Quiet:$Quiet
+            }
+            else {
+                if ($ParallelTargetCollection -and -not $Quiet) {
+                    Write-ShareSurferStatus -Phase 'Collect' -Message 'Parallel target collection was requested but not used because fewer than two targets or a throttle of 1 was supplied.'
+                }
+                $inventory = Get-ShareSurferLocalInventory -TargetPath $targetPathList -IncludeFiles:$IncludeFiles -Quiet:$Quiet
+            }
             $sourceMode = 'TargetPath'
             $collectionProvider = 'TargetPath'
         }

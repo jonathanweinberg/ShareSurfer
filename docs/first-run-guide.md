@@ -436,6 +436,20 @@ Invoke-ShareSurferScan `
 
 Some older SANs and SMB appliances return a server-local path in share metadata, such as `C:\Public\DepartmentShare`, even though the collector was given `\\server\DepartmentShare`. ShareSurfer diagnostics treat that as a path-selection signal: if the returned path is not present on the collector, ShareSurfer attempts the UNC path automatically and records both the returned path and the fallback decision in the diagnostic CSV/Markdown output.
 
+When you already know several independent folder or UNC roots and want ShareSurfer to collect them at the same time, add `-ParallelTargetCollection` and set a conservative `-TargetCollectionThrottle`. This is optional and only applies to `-TargetPath` scans with more than one target. Start with `2` or `3` workers on busy file servers so the collector does not create unnecessary load:
+
+```powershell
+Invoke-ShareSurferScan `
+  -TargetPath @('\\files01\Finance', '\\files02\Operations') `
+  -OutputPath $exportPath `
+  -ObsAttribute 'extensionAttribute10' `
+  -ManagerIdentityFormat MailTo `
+  -ParallelTargetCollection `
+  -TargetCollectionThrottle 2
+```
+
+The console will say when parallel target collection is enabled and when each group of targets completes. ShareSurfer still writes the same CSV export set; `scan_events.csv` records the parallel collection start and completion boundaries.
+
 Optional readiness check:
 
 ```powershell
