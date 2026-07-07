@@ -10,7 +10,11 @@ function Resolve-ShareSurferIdentityInventory {
         [string] $AdLookupMode = 'Auto',
 
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
-        [string] $ManagerIdentityFormat = 'MailTo'
+        [string] $ManagerIdentityFormat = 'MailTo',
+
+        [int] $StatusIntervalSeconds = 15,
+
+        [switch] $Quiet
     )
 
     $directoryByIdentity = @{}
@@ -41,6 +45,34 @@ function Resolve-ShareSurferIdentityInventory {
     $orgRows = [ordered]@{}
     $identityScanEvents = New-Object System.Collections.ArrayList
     $managerFallbackEventKeys = @{}
+    $progressStats = @{
+        RootIdentityCount = 0
+        ProcessedRootIdentities = 0
+        DirectoryLookupAttempts = 0
+        DirectoryLookupSuccesses = 0
+        DirectoryCacheHits = 0
+        PotentialServiceAccounts = 0
+    }
+    $statusClock = [System.Diagnostics.Stopwatch]::StartNew()
+    $statusState = @{ LastSeconds = -999.0 }
+
+    function Write-ShareSurferIdentityProgress {
+        param(
+            [string] $Message,
+
+            [switch] $Force
+        )
+
+        if ($Quiet) {
+            return
+        }
+
+        $elapsed = [double]$statusClock.Elapsed.TotalSeconds
+        if ($Force -or $StatusIntervalSeconds -le 0 -or ($elapsed - $statusState.LastSeconds) -ge $StatusIntervalSeconds) {
+            $statusState.LastSeconds = $elapsed
+            Write-ShareSurferStatus -Phase 'Identity' -Message $Message
+        }
+    }
 
     function Test-ShareSurferPotentialServiceAccount {
         param(
@@ -105,9 +137,11 @@ function Resolve-ShareSurferIdentityInventory {
 
         $key = $Reference.ToUpperInvariant()
         if ($directoryByIdentity.ContainsKey($key)) {
+            $progressStats.DirectoryCacheHits++
             return $directoryByIdentity[$key]
         }
         if ($directoryByDistinguishedName.ContainsKey($key)) {
+            $progressStats.DirectoryCacheHits++
             return $directoryByDistinguishedName[$key]
         }
 
@@ -122,6 +156,7 @@ function Resolve-ShareSurferIdentityInventory {
         }
 
         $resolved = $null
+        $progressStats.DirectoryLookupAttempts++
         if ($Reference -match '^\s*(CN|OU|DC)=') {
             $resolved = Resolve-ShareSurferDistinguishedNameIdentity -DistinguishedName $Reference -FallbackDomain $FallbackDomain -ObsAttribute $ObsAttribute
         }
@@ -134,6 +169,7 @@ function Resolve-ShareSurferIdentityInventory {
         }
 
         if ($null -ne $resolved) {
+            $progressStats.DirectoryLookupSuccesses++
             Add-ShareSurferDirectoryEntry -Entry $resolved
             return $resolved
         }
@@ -236,11 +272,14 @@ function Resolve-ShareSurferIdentityInventory {
 
         $entry = $null
         if ($directoryByIdentity.ContainsKey($key)) {
+            $progressStats.DirectoryCacheHits++
             $entry = $directoryByIdentity[$key]
         }
         elseif ($AdLookupMode -ne 'DirectoryOnly') {
+            $progressStats.DirectoryLookupAttempts++
             $entry = Get-ShareSurferDirectoryIdentity -Identity $Identity -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode
             if ($null -ne $entry) {
+                $progressStats.DirectoryLookupSuccesses++
                 $directoryByIdentity[$key] = $entry
             }
         }
@@ -333,6 +372,9 @@ function Resolve-ShareSurferIdentityInventory {
             DistinguishedName = $distinguishedName
         }
         $identityRows[$key] = $row
+        if ([bool]$row.PotentialServiceAccount) {
+            $progressStats.PotentialServiceAccounts++
+        }
 
         if ($managerLevel1 -ne '' -or $managerLevel2 -ne '' -or $managerLevel3 -ne '' -or $obsPath -ne '' -or $employeeId -ne '' -or $employeeNumber -ne '' -or [bool]$row.PotentialServiceAccount) {
             $orgRows[$key] = [pscustomobject]@{
@@ -405,6 +447,7 @@ function Resolve-ShareSurferIdentityInventory {
             if (-not $isCycle -and -not $isTruncated -and $childClass -eq 'group') {
                 Expand-Group -ParentGroup $memberText -Depth ($Depth + 1) -Seen @($Seen + $ParentGroup)
             }
+            Write-ShareSurferIdentityProgress -Message ('Group expansion progress: edges={0}; identities={1}; directory lookups={2}; cache hits={3}; potential service accounts={4}.' -f $groupEdges.Count, $identityRows.Count, $progressStats.DirectoryLookupAttempts, $progressStats.DirectoryCacheHits, $progressStats.PotentialServiceAccounts)
         }
     }
 
@@ -425,7 +468,12 @@ function Resolve-ShareSurferIdentityInventory {
         }
     }
 
-    foreach ($identity in @($rootIdentities | Select-Object -Unique)) {
+    $uniqueRootIdentities = @($rootIdentities | Select-Object -Unique)
+    $progressStats.RootIdentityCount = $uniqueRootIdentities.Count
+    Write-ShareSurferIdentityProgress -Message ('Identity enrichment roots: {0} unique permission-bearing/direct identity value(s).' -f $uniqueRootIdentities.Count) -Force
+
+    foreach ($identity in $uniqueRootIdentities) {
+        $progressStats.ProcessedRootIdentities++
         Add-IdentityRow -Identity $identity
         $key = $identity.ToUpperInvariant()
         $class = ''
@@ -433,9 +481,13 @@ function Resolve-ShareSurferIdentityInventory {
             $class = [string]$directoryByIdentity[$key].ObjectClass
         }
         if ($class -eq 'group') {
+            Write-ShareSurferIdentityProgress -Message ('Expanding group {0} ({1}/{2} root identities).' -f $identity, $progressStats.ProcessedRootIdentities, $progressStats.RootIdentityCount) -Force
             Expand-Group -ParentGroup $identity -Seen @()
         }
+        Write-ShareSurferIdentityProgress -Message ('Identity enrichment progress: processed {0}/{1} root identities; identities={2}; group edges={3}; directory lookups={4}; cache hits={5}; potential service accounts={6}.' -f $progressStats.ProcessedRootIdentities, $progressStats.RootIdentityCount, $identityRows.Count, $groupEdges.Count, $progressStats.DirectoryLookupAttempts, $progressStats.DirectoryCacheHits, $progressStats.PotentialServiceAccounts)
     }
+
+    Write-ShareSurferIdentityProgress -Message ('Identity enrichment complete: identities={0}; group edges={1}; org chains={2}; directory lookups={3}; lookup successes={4}; cache hits={5}; potential service accounts={6}.' -f $identityRows.Count, $groupEdges.Count, $orgRows.Count, $progressStats.DirectoryLookupAttempts, $progressStats.DirectoryLookupSuccesses, $progressStats.DirectoryCacheHits, $progressStats.PotentialServiceAccounts) -Force
 
     [pscustomobject]@{
         Identities = @($identityRows.Values)

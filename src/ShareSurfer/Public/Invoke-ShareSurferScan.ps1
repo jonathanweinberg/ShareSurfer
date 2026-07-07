@@ -39,6 +39,7 @@ function Invoke-ShareSurferScan {
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
         [switch] $NoCreateMissingFolders,
+        [int] $StatusIntervalSeconds = 15,
         [switch] $Quiet
     )
 
@@ -136,7 +137,7 @@ function Invoke-ShareSurferScan {
     }
 
     Write-ShareSurferStatus -Phase 'Export' -Message 'Normalizing findings, conflicts, identity context, and CSV output.' -Quiet:$Quiet
-    $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -SourceMode $sourceMode -CollectionProvider $collectionProvider -RequestedSmbCollectionProvider $requestedSmbCollectionProvider -EffectiveSmbCollectionProvider $effectiveSmbCollectionProvider -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -NoCreateMissingFolders:$NoCreateMissingFolders -Quiet:$Quiet
+    $result = Export-ShareSurferInventory -Inventory $inventory -OutputPath $OutputPath -ObsAttribute $ObsAttribute -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -SourceMode $sourceMode -CollectionProvider $collectionProvider -RequestedSmbCollectionProvider $requestedSmbCollectionProvider -EffectiveSmbCollectionProvider $effectiveSmbCollectionProvider -DiscountedPrincipalPath $DiscountedPrincipalPath -SkipIdentityEnrichment:$SkipIdentityEnrichment -IncludeFiles:$IncludeFiles -NoCreateMissingFolders:$NoCreateMissingFolders -StatusIntervalSeconds $StatusIntervalSeconds -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Summary' -Message 'Scan complete.' -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Summary' -Message ('Shares={0}; Items={1}; Findings={2}; Conflicts={3}; CollectionErrors={4}; PartialShares={5}' -f $result.Shares, $result.Items, $result.Findings, $result.Conflicts, $result.CollectionErrors, $result.PartialShares) -Quiet:$Quiet
     Write-ShareSurferStatus -Phase 'Summary' -Message ('OutputPath={0}' -f $OutputPath) -Quiet:$Quiet

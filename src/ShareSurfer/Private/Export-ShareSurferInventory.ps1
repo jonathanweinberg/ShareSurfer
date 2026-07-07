@@ -24,6 +24,7 @@ function Export-ShareSurferInventory {
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
         [switch] $NoCreateMissingFolders,
+        [int] $StatusIntervalSeconds = 15,
         [switch] $Quiet
     )
 
@@ -111,8 +112,9 @@ function Export-ShareSurferInventory {
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ScanStarted' -Source $SourceMode -Message ('ShareSurfer scan export started for {0}' -f $SourceMode)))
 
     if (-not $SkipIdentityEnrichment) {
+        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'IdentityEnrichmentStarted' -Source 'IdentityEnrichment' -Message 'Identity enrichment started.'))
         Write-ShareSurferStatus -Phase 'Identity' -Message ('Resolving identity context with OBS attribute {0}, AD lookup mode {1}, and manager format {2}.' -f $ObsAttribute, $AdLookupMode, $ManagerIdentityFormat) -Quiet:$Quiet
-        $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat
+        $identityInventory = Resolve-ShareSurferIdentityInventory -Inventory $Inventory -ObsAttribute $ObsAttribute -GroupExpansionMaxDepth $GroupExpansionMaxDepth -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -StatusIntervalSeconds $StatusIntervalSeconds -Quiet:$Quiet
         $identities = @(ConvertTo-ShareSurferArray $identityInventory.Identities)
         $groupEdges = @(ConvertTo-ShareSurferArray $identityInventory.GroupEdges)
         $orgChains = @(ConvertTo-ShareSurferArray $identityInventory.OrgChains)
@@ -121,6 +123,8 @@ function Export-ShareSurferInventory {
                 [void]$scanEvents.Add($event)
             }
         }
+        Write-ShareSurferStatus -Phase 'Identity' -Message ('Identity context ready: identities={0}; group edges={1}; org-chain rows={2}.' -f $identities.Count, $groupEdges.Count, $orgChains.Count) -Quiet:$Quiet
+        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'IdentityEnrichmentCompleted' -Source 'IdentityEnrichment' -Message 'Identity enrichment completed.' -Detail ('Identities={0}; GroupEdges={1}; OrgChains={2}' -f $identities.Count, $groupEdges.Count, $orgChains.Count)))
     }
     else {
         Write-ShareSurferStatus -Phase 'Identity' -Message 'Skipping identity enrichment because -SkipIdentityEnrichment was supplied.' -Quiet:$Quiet
@@ -162,13 +166,30 @@ function Export-ShareSurferInventory {
         }
     }
 
-    Write-ShareSurferStatus -Phase 'Export' -Message 'Classifying conflicts, findings, permissioned groups, owner pivots, and migration discovery rows.' -Quiet:$Quiet
+    [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportClassificationStarted' -Source 'Export' -Message 'Export classification started.'))
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Classifying conflicts from {0} share permission row(s) and {1} ACL row(s).' -f $sharePermissions.Count, $aclEntries.Count) -Quiet:$Quiet
     $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Conflicts classified: {0} row(s).' -f $conflicts.Count) -Quiet:$Quiet
+
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Classifying findings from {0} item(s), {1} ACL row(s), {2} share permission row(s), and {3} scan error(s).' -f $items.Count, $aclEntries.Count, $sharePermissions.Count, $scanErrors.Count) -Quiet:$Quiet
     $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -SharePermissions $sharePermissions -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Findings classified: {0} row(s).' -f $findings.Count) -Quiet:$Quiet
+
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Building permissioned group review rows from {0} share permission row(s), {1} ACL row(s), and {2} group edge row(s).' -f $sharePermissions.Count, $aclEntries.Count, $groupEdges.Count) -Quiet:$Quiet
     $permissionedGroups = @(Get-ShareSurferPermissionedGroups -SharePermissions $sharePermissions -AclEntries $aclEntries -Items $items -Identities $identities -GroupEdges $groupEdges -DiscountedPrincipals $discountedPrincipals)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Permissioned group review rows ready: {0} row(s).' -f $permissionedGroups.Count) -Quiet:$Quiet
+
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Building owner/business-unit pivots from {0} owner mapping row(s), {1} item(s), {2} finding(s), and {3} conflict(s).' -f $ownerMappings.Count, $items.Count, $findings.Count, $conflicts.Count) -Quiet:$Quiet
     $ownerRiskPivots = @(Get-ShareSurferOwnerRiskPivots -OwnerMappings $ownerMappings -Items $items -Shares $shares -SharePermissions $sharePermissions -AclEntries $aclEntries -Identities $identities -GroupEdges $groupEdges -Findings $findings -Conflicts $conflicts -DiscountedPrincipals $discountedPrincipals)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Owner/business-unit pivots ready: {0} row(s).' -f $ownerRiskPivots.Count) -Quiet:$Quiet
+
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Building migration discovery rows from {0} owner pivot row(s), {1} item(s), and {2} share(s).' -f $ownerRiskPivots.Count, $items.Count, $shares.Count) -Quiet:$Quiet
     $relatedDataAreas = @(Get-ShareSurferRelatedDataAreas -OwnerRiskPivots $ownerRiskPivots -Items $items -Shares $shares)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Migration discovery rows ready: {0} related data area(s).' -f $relatedDataAreas.Count) -Quiet:$Quiet
+
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Building owner review packets from {0} owner pivot row(s) and {1} related data area row(s).' -f $ownerRiskPivots.Count, $relatedDataAreas.Count) -Quiet:$Quiet
     $ownerReviewPackets = @(Get-ShareSurferOwnerReviewPackets -OwnerRiskPivots $ownerRiskPivots -RelatedDataAreas $relatedDataAreas)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Owner review packets ready: {0} row(s).' -f $ownerReviewPackets.Count) -Quiet:$Quiet
     $manifest = @(
         [pscustomobject]@{
             ScanId = [guid]::NewGuid().ToString('N')
@@ -189,7 +210,10 @@ function Export-ShareSurferInventory {
             IncludeFiles = [bool]$IncludeFiles
         }
     )
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Building evidence confidence rows from {0} share(s), {1} item(s), and {2} collection error(s).' -f $shares.Count, $items.Count, @($collectionErrors).Count) -Quiet:$Quiet
     $evidenceConfidence = @(Get-ShareSurferEvidenceConfidenceRows -Shares $shares -Items $items -CollectionErrors @($collectionErrors) -RequestedProvider $RequestedSmbCollectionProvider -EffectiveProvider $EffectiveSmbCollectionProvider)
+    Write-ShareSurferStatus -Phase 'Export' -Message ('Evidence confidence rows ready: {0} row(s).' -f $evidenceConfidence.Count) -Quiet:$Quiet
+    [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportClassificationCompleted' -Source 'Export' -Message 'Export classification completed.' -Detail ('Findings={0}; Conflicts={1}; PermissionedGroups={2}; OwnerPivots={3}; RelatedDataAreas={4}; OwnerReviewPackets={5}; EvidenceConfidence={6}' -f $findings.Count, $conflicts.Count, $permissionedGroups.Count, $ownerRiskPivots.Count, $relatedDataAreas.Count, $ownerReviewPackets.Count, $evidenceConfidence.Count)))
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportCompleted' -Source 'Export' -Message ('Export completed at {0}' -f $OutputPath) -Detail ('Findings={0}; Conflicts={1}' -f $findings.Count, $conflicts.Count)))
 
     $data = @{
@@ -220,7 +244,12 @@ function Export-ShareSurferInventory {
         'scan_manifest.csv' = $manifest
     }
 
+    $csvIndex = 0
+    $csvTotal = @($schema.Keys).Count
     foreach ($fileName in $schema.Keys) {
+        $csvIndex++
+        $rowCount = @(ConvertTo-ShareSurferArray $data[$fileName]).Count
+        Write-ShareSurferStatus -Phase 'Export' -Message ('Writing CSV {0}/{1}: {2} ({3} row(s)).' -f $csvIndex, $csvTotal, $fileName, $rowCount) -Quiet:$Quiet
         Export-ShareSurferCsv -Path (Join-Path $OutputPath $fileName) -Columns $schema[$fileName] -Rows $data[$fileName]
     }
     Write-ShareSurferStatus -Phase 'Export' -Message ('Wrote {0} normalized CSV export(s) to {1}.' -f @($schema.Keys).Count, $OutputPath) -Quiet:$Quiet

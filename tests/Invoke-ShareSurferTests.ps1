@@ -1961,6 +1961,57 @@ $tests = @(
         }
     },
     @{
+        Name = 'Invoke-ShareSurferScan prints identity and export heartbeat status'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferHeartbeat-' + [guid]::NewGuid().ToString('N'))
+
+            $statusText = (& {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -StatusIntervalSeconds 0
+            } *>&1 | Out-String)
+
+            Assert-True ($statusText -like '*Identity enrichment roots:*') 'Identity heartbeat should announce root identity count.'
+            Assert-True ($statusText -like '*Identity enrichment progress:*') 'Identity heartbeat should announce processed identity progress.'
+            Assert-True ($statusText -like '*Group expansion progress:*') 'Identity heartbeat should announce group expansion progress.'
+            Assert-True ($statusText -like '*directory lookups=*') 'Identity heartbeat should include directory lookup counters.'
+            Assert-True ($statusText -like '*potential service accounts=*') 'Identity heartbeat should include potential service-account counts.'
+            Assert-True ($statusText -like '*Conflicts classified:*') 'Export status should report conflict classification completion.'
+            Assert-True ($statusText -like '*Findings classified:*') 'Export status should report finding classification completion.'
+            Assert-True ($statusText -like '*Permissioned group review rows ready:*') 'Export status should report permissioned group row completion.'
+            Assert-True ($statusText -like '*Owner/business-unit pivots ready:*') 'Export status should report owner pivot completion.'
+            Assert-True ($statusText -like '*Migration discovery rows ready:*') 'Export status should report migration discovery completion.'
+            Assert-True ($statusText -like '*Owner review packets ready:*') 'Export status should report owner review packet completion.'
+            Assert-True ($statusText -like '*Evidence confidence rows ready:*') 'Export status should report evidence confidence completion.'
+            Assert-True ($statusText -like '*Writing CSV*') 'Export status should report CSV writing progress.'
+
+            $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'IdentityEnrichmentStarted' }).Count -eq 1) 'Scan events should include one durable identity start boundary.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'IdentityEnrichmentCompleted' }).Count -eq 1) 'Scan events should include one durable identity completion boundary.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'ExportClassificationStarted' }).Count -eq 1) 'Scan events should include one durable export classification start boundary.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'ExportClassificationCompleted' }).Count -eq 1) 'Scan events should include one durable export classification completion boundary.'
+            Assert-True (@($events | Where-Object { $_.EventType -like '*progress*' -or $_.Message -like '*progress*' }).Count -eq 0) 'High-frequency heartbeat progress should stay out of scan_events.csv.'
+        }
+    },
+    @{
+        Name = 'Invoke-ShareSurferScan suppresses heartbeat status under Quiet'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferHeartbeatQuiet-' + [guid]::NewGuid().ToString('N'))
+
+            $statusText = (& {
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -AdLookupMode DirectoryOnly -StatusIntervalSeconds 0 -Quiet
+            } *>&1 | Out-String)
+
+            Assert-True ($statusText -notlike '*Identity enrichment roots:*') 'Quiet mode should suppress identity heartbeat status.'
+            Assert-True ($statusText -notlike '*Writing CSV*') 'Quiet mode should suppress CSV writing heartbeat status.'
+            Assert-True ($statusText -notlike '*Conflicts classified:*') 'Quiet mode should suppress export classification heartbeat status.'
+
+            $events = Import-Csv -LiteralPath (Join-Path $outputPath 'scan_events.csv')
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'IdentityEnrichmentCompleted' }).Count -eq 1) 'Quiet mode should still keep durable identity completion events.'
+            Assert-True (@($events | Where-Object { $_.EventType -eq 'ExportClassificationCompleted' }).Count -eq 1) 'Quiet mode should still keep durable export classification completion events.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan logs manager identity format fallback without stopping export'
         Body = {
             Import-Module $moduleManifest -Force
