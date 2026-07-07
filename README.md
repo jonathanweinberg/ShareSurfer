@@ -83,7 +83,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Optional readiness and diagnostics | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic` |
 | Ownership import and mapping | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft`, `Test-ShareSurferOwnerMapping` |
 | Review decisions | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
-| Validation and reports | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `scripts\New-ShareSurferStandaloneDashboard.ps1` |
+| Validation and reports | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `scripts\New-ShareSurferStandaloneDashboard.ps1`, optional `scripts\Start-ShareSurferNativeViewer.ps1` |
 | Support and release packaging | `New-ShareSurferSupportBundle`, `scripts\New-ShareSurferRelease.ps1`, `scripts\Test-ShareSurferReleaseReadiness.ps1` |
 
 ## Basic Use Cases
@@ -97,7 +97,7 @@ Stop or document the gap before business-owner approval when any of these are tr
 | Port and protocol readiness | Add port/protocol assessment | `port_protocol_targets.csv`, `port_protocol_checks.csv` |
 | File-share collection capability troubleshooting | Add file-share connectivity assessment | `fileshare_connectivity_targets.csv`, `fileshare_connectivity_checks.csv`, redacted LLM-ready summary |
 | Evidence confidence review | Validate completeness before approval | `evidence_confidence.csv`, `collection_errors.csv` |
-| Nonpermissive collector workflow | Collect on a locked-down host, then transfer the export | Validated CSV folder, `report.html`, standalone dashboard |
+| Nonpermissive collector workflow | Collect on a locked-down host, then transfer the export | Validated CSV folder, `report.html`, standalone dashboard, optional native viewer |
 | Broad admin or HelpDesk access cleanup | Provide discounted principals | Visible access evidence that does not inflate migration relatedness |
 | Support or bug report | Create a redacted support bundle | Redacted CSVs, manifests, optional redacted report |
 
@@ -137,12 +137,12 @@ Many environments intentionally block internet access, npm, browser tooling, or 
 
 - **Collector host:** runs `Invoke-ShareSurferScan`, reads SMB/share/ACL/owner/inheritance data, enriches identities, and writes the export.
 - **Validation step:** runs `Test-ShareSurferExport` and reviews partial-data warnings.
-- **Dashboard host:** opens `report.html` or a packaged standalone dashboard from the transferred export.
+- **Dashboard host:** opens `report.html`, a packaged standalone dashboard, or the optional native viewer from the transferred export.
 - **Support path:** use `New-ShareSurferSupportBundle` when anything leaves trusted handling.
 
 ![Dataset transfer to dashboard host](docs/visuals/dataset-transfer-dashboard-workflow.svg)
 
-See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md) for the full walkthrough.
+See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-collection-dashboard-workflow.md) for the full walkthrough. For very large exports where browser-based review becomes the bottleneck, see the [optional native viewer](docs/native-viewer.md).
 
 ### Quick Start in a Nonpermissive Environment
 

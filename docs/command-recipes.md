@@ -30,7 +30,7 @@ If `v0.1.0-pre.40` is not visible yet on the [ShareSurfer Releases page](https:/
 | Optional owner/admin inputs | Recipe 2 | `owner-mapping.csv`, `discounted-principals.csv` |
 | Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft`, `Test-ShareSurferOwnerMapping` |
 | Core scan | Recipes 3-5 | `Invoke-ShareSurferScan`, optional `-SmbCollectionProvider NativeSmbRpc` |
-| Validation and dashboards | Recipe 6 | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `New-ShareSurferStandaloneDashboard.ps1` |
+| Validation and dashboards | Recipe 6 | `Test-ShareSurferExport`, `ConvertTo-ShareSurferReport`, `New-ShareSurferStandaloneDashboard.ps1`, optional `Start-ShareSurferNativeViewer.ps1` |
 | Review decisions | Recipe 7 | `New-ShareSurferReviewDecisionDraft`, `Import-ShareSurferReviewDecisions` |
 | Locked-down handoff | Recipe 8 | `Compress-Archive`, `Get-FileHash` |
 | Optional assessments and diagnostics | Recipes 5A, 9-10A | `Invoke-ShareSurferOpenFileAssessment`, `Invoke-ShareSurferPortProtocolAssessment`, `Invoke-ShareSurferFileShareConnectivityAssessment`, `Invoke-ShareSurferSharePermissionDiagnostic` |
@@ -430,6 +430,21 @@ Release users do not need Node, npm, Vite, a development server, or internet acc
 `ConvertTo-ShareSurferReport` creates a convenient single-file `report.html` by embedding the export data directly into the HTML. For very large exports, it may stop with an inline-data guardrail message before writing `report.html`; this protects the reviewer from opening a report that may freeze or crash a browser. Use the packaged standalone dashboard for large exports, because it can split large datasets into separate offline chunks. Use `-ForceLargeReport` only when you intentionally want the single large HTML file anyway.
 
 If the packager refuses a very large export with a data-size guardrail message, open `dashboard-manifest.json` in the output folder to see the largest dataset contributors and projected size. The guardrail protects the browser review experience; it does not mean the scan failed. Re-run with `-ForceLargeDashboard` only when you intentionally want to package a dashboard that may open slowly or crash.
+
+When browser-based review is the bottleneck, use the optional native viewer. It reads CSV files from the export folder by page and does not use HTML, JavaScript, WebView2, npm, a server, or internet access:
+
+```powershell
+powershell.exe -STA -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\Start-ShareSurferNativeViewer.ps1" `
+  -ExportPath $exportPath
+```
+
+To validate that the viewer can read an export without opening the GUI:
+
+```powershell
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\Start-ShareSurferNativeViewer.ps1" `
+  -ExportPath $exportPath `
+  -ValidateOnly
+```
 
 Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confidence panel. The score and label summarize evidence completeness only. Stop gates, partial data, collection errors, and provider fallback should be resolved, rerun, supplemented, or explicitly documented before approval.
 

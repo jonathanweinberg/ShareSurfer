@@ -6535,6 +6535,28 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurferNativeViewer validates export-shaped data without launching a browser UI'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferNativeViewer-' + [guid]::NewGuid().ToString('N'))
+            $viewerScript = Join-Path $repoRoot 'scripts/Start-ShareSurferNativeViewer.ps1'
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment -AclExportMode Compact -Quiet | Out-Null
+            $result = & $viewerScript -ExportPath $outputPath -ValidateOnly -PassThru
+            $scriptText = Get-Content -LiteralPath $viewerScript -Raw
+
+            Assert-Equal $result.ViewerMode 'HeadlessValidation' 'Native viewer validation mode should not launch WinForms.'
+            Assert-True ([int]$result.DatasetCount -gt 5) 'Native viewer should discover multiple ShareSurfer CSV datasets.'
+            Assert-True ([int]$result.TotalRows -gt 0) 'Native viewer should report export row counts.'
+            Assert-Equal $result.AclExportMode 'Compact' 'Native viewer should read scan manifest context without loading a dashboard payload.'
+            Assert-True (@($result.Datasets | Where-Object { $_.DatasetKey -eq 'owner_review_packets' }).Count -eq 1) 'Native viewer should expose owner review packets.'
+            Assert-True (@($result.Datasets | Where-Object { $_.DatasetKey -eq 'findings' }).Count -eq 1) 'Native viewer should expose findings.'
+            Assert-True ($scriptText -like '*System.Windows.Forms*') 'Native viewer should use Windows native forms for GUI mode.'
+            Assert-True ($scriptText -notlike '*sharesurfer-data.js*') 'Native viewer should not package export data into the standalone dashboard JavaScript payload.'
+            Assert-True ($scriptText -notlike '*Microsoft.Web.WebView2*') 'Native viewer should avoid WebView2 runtime dependencies by design.'
+        }
+    },
+    @{
         Name = 'Invoke-ShareSurferScan discovers local shares by path during target path scans'
         Body = {
             Import-Module $moduleManifest -Force
