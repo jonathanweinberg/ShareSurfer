@@ -362,6 +362,30 @@ if (Test-Path -LiteralPath (Join-Path $outputExportPath 'shares.csv')) {
 }
 if (Test-Path -LiteralPath (Join-Path $outputExportPath 'items.csv')) {
     $archivedItems = @(Import-Csv -LiteralPath (Join-Path $outputExportPath 'items.csv'))
+    if ($archivedItems.Count -gt 0 -and $null -eq $archivedItems[0].PSObject.Properties['InheritanceBreakType']) {
+        foreach ($item in $archivedItems) {
+            $inheritanceEnabled = $true
+            if ($null -ne $item.PSObject.Properties['InheritanceEnabled'] -and [string]$item.InheritanceEnabled -ne '') {
+                $inheritanceEnabled = [System.Convert]::ToBoolean($item.InheritanceEnabled)
+            }
+
+            $inheritanceBrokenAt = ''
+            if ($null -ne $item.PSObject.Properties['InheritanceBrokenAt']) {
+                $inheritanceBrokenAt = [string]$item.InheritanceBrokenAt
+            }
+
+            $inheritanceBreakType = 'None'
+            if (-not $inheritanceEnabled) {
+                $inheritanceBreakType = 'Direct'
+            } elseif ($inheritanceBrokenAt -ne '') {
+                $inheritanceBreakType = 'InheritedAncestor'
+            }
+
+            Add-Member -InputObject $item -NotePropertyName 'InheritanceBreakType' -NotePropertyValue $inheritanceBreakType -Force
+        }
+
+        $archivedItems | Export-Csv -LiteralPath (Join-Path $outputExportPath 'items.csv') -NoTypeInformation -Encoding UTF8
+    }
 }
 if (Test-Path -LiteralPath (Join-Path $outputExportPath 'collection_errors.csv')) {
     $archivedCollectionErrors = @(Import-Csv -LiteralPath (Join-Path $outputExportPath 'collection_errors.csv'))

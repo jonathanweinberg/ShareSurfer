@@ -201,7 +201,8 @@ export const demoSnapshot: RawSnapshot = {
         Depth: "0",
         Owner: "CONTOSO\\FinanceOwner",
         InheritanceEnabled: "True",
-        InheritanceBrokenAt: ""
+        InheritanceBrokenAt: "",
+        InheritanceBreakType: "None"
       },
       {
         ItemId: "item-payroll",
@@ -212,7 +213,8 @@ export const demoSnapshot: RawSnapshot = {
         Depth: "1",
         Owner: "CONTOSO\\FinanceOwner",
         InheritanceEnabled: "False",
-        InheritanceBrokenAt: "\\\\files01\\Finance\\Payroll"
+        InheritanceBrokenAt: "\\\\files01\\Finance\\Payroll",
+        InheritanceBreakType: "Direct"
       },
       {
         ItemId: "item-hr",
@@ -223,7 +225,8 @@ export const demoSnapshot: RawSnapshot = {
         Depth: "1",
         Owner: "CONTOSO\\HROwner",
         InheritanceEnabled: "True",
-        InheritanceBrokenAt: ""
+        InheritanceBrokenAt: "",
+        InheritanceBreakType: "None"
       }
     ],
     share_permissions: [

@@ -1571,12 +1571,18 @@ $tests = @(
                 Normalize-ShareSurferItems -Items $Items
             } $items)
             $finance = @($normalized | Where-Object { $_.ItemId -eq 'item-finance' })[0]
+            $fin = @($normalized | Where-Object { $_.ItemId -eq 'item-fin' })[0]
             $finChild = @($normalized | Where-Object { $_.ItemId -eq 'item-fin-child' })[0]
+            $driveRoot = @($normalized | Where-Object { $_.ItemId -eq 'item-drive-root' })[0]
             $driveChild = @($normalized | Where-Object { $_.ItemId -eq 'item-drive-child' })[0]
 
             Assert-Equal $finance.InheritanceBrokenAt '' 'Sibling paths that share a string prefix should not inherit another folder inheritance break.'
             Assert-Equal $finChild.InheritanceBrokenAt 'C:\Data\Fin' 'True descendants should inherit the nearest broken-inheritance ancestor.'
             Assert-Equal $driveChild.InheritanceBrokenAt 'E:\' 'Drive-root inheritance breaks should be reachable for descendants.'
+            Assert-Equal $fin.InheritanceBreakType 'Direct' 'Rows where inheritance is disabled should identify a direct inheritance break.'
+            Assert-Equal $driveRoot.InheritanceBreakType 'Direct' 'Drive-root inheritance breaks should identify the root row as direct.'
+            Assert-Equal $finChild.InheritanceBreakType 'InheritedAncestor' 'Descendants should identify inherited break context without looking like direct breaks.'
+            Assert-Equal $finance.InheritanceBreakType 'None' 'Unrelated sibling rows should identify no known inheritance break.'
         }
     },
     @{
@@ -2432,8 +2438,15 @@ $tests = @(
             Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment | Out-Null
             $items = Import-Csv -LiteralPath (Join-Path $outputPath 'items.csv')
             $child = @($items | Where-Object { $_.ItemId -eq 'item-child' })[0]
+            $direct = @($items | Where-Object { $_.ItemId -eq 'item-deep' })[0]
+            $findings = @(Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv'))
+            $brokenFindings = @($findings | Where-Object { $_.FindingType -eq 'BrokenInheritance' })
 
             Assert-Equal $child.InheritanceBrokenAt '\\files01\Finance\Delegated' 'Descendants should retain the ancestor where inheritance first broke.'
+            Assert-Equal $child.InheritanceBreakType 'InheritedAncestor' 'Descendants should carry inherited break context instead of being direct broken-inheritance rows.'
+            Assert-Equal $direct.InheritanceBreakType 'Direct' 'Rows with protected inheritance should export direct break context.'
+            Assert-Equal (@($brokenFindings | Where-Object { $_.ItemId -eq 'item-child' }).Count) 0 'Descendants under a break should not create duplicate broken-inheritance findings.'
+            Assert-Equal (@($brokenFindings | Where-Object { $_.ItemId -eq 'item-deep' }).Count) 1 'The direct inheritance break should remain a review finding.'
         }
     },
     @{

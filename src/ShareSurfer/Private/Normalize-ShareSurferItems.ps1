@@ -57,6 +57,13 @@ function Normalize-ShareSurferItems {
             $protectedByPath[$inheritanceBrokenAt] = $true
         }
 
+        $inheritanceBreakType = 'None'
+        if (-not $inheritanceEnabled) {
+            $inheritanceBreakType = 'Direct'
+        } elseif ($inheritanceBrokenAt -ne '') {
+            $inheritanceBreakType = 'InheritedAncestor'
+        }
+
         [void]$normalized.Add([pscustomobject]@{
             ItemId = $item.ItemId
             ShareId = $item.ShareId
@@ -67,6 +74,7 @@ function Normalize-ShareSurferItems {
             Owner = $item.Owner
             InheritanceEnabled = $inheritanceEnabled
             InheritanceBrokenAt = $inheritanceBrokenAt
+            InheritanceBreakType = $inheritanceBreakType
         })
     }
 

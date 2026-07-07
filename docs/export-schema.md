@@ -124,9 +124,9 @@ Use `PartialData=True` when ShareSurfer could identify the share but could not f
 
 ### `items.csv`
 
-Expected columns: `ItemId`, `ShareId`, `ItemType`, `FullPath`, `RelativePath`, `Depth`, `Owner`, `InheritanceEnabled`, `InheritanceBrokenAt`.
+Expected columns: `ItemId`, `ShareId`, `ItemType`, `FullPath`, `RelativePath`, `Depth`, `Owner`, `InheritanceEnabled`, `InheritanceBrokenAt`, `InheritanceBreakType`.
 
-`Depth` is relative to the share root. `InheritanceBrokenAt` should identify the nearest path where inheritance was broken when known.
+`Depth` is relative to the share root. `InheritanceEnabled=False` means inheritance is stopped directly on that item. `InheritanceBrokenAt` identifies the nearest path where inheritance was stopped when known. `InheritanceBreakType` is `None`, `Direct`, or `InheritedAncestor`; use it to tell the difference between the item that actually stops inheritance and child items that sit under that boundary. A direct break at the top of a hosted share or delegated folder can be intentional when admins are preventing parent/container ACLs from flowing into the shared data area.
 
 ### `share_permissions.csv`
 
@@ -291,12 +291,12 @@ Common V1 finding types include:
 
 - `LongPathOperationalPolicy`
 - `DeepExplicitAce`
-- `BrokenInheritance`
+- `BrokenInheritance` for direct rows where inheritance stops.
 - `BrokenOrMissingSid`
 - `OwnerMetadataUnavailable`
 - `CollectionError`
 
-`BrokenOrMissingSid` means a share or folder/file permission references a SID or account name ShareSurfer could not resolve. Treat it as a directory/file-share cleanup signal, not as proof of malicious access.
+`BrokenInheritance` findings are emitted for direct stop points. Child rows under that boundary keep `InheritanceBreakType=InheritedAncestor` in `items.csv` so reviewers can see the scope without turning every descendant into a separate finding. `BrokenOrMissingSid` means a share or folder/file permission references a SID or account name ShareSurfer could not resolve. Treat it as a directory/file-share cleanup signal, not as proof of malicious access.
 
 `OwnerMetadataUnavailable` means `items.csv` did not contain a usable NTFS owner value for the item. This can happen when owner reads are denied, the owner SID is unresolved, a path was partially collected, or the source did not return owner metadata.
 

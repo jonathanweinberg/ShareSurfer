@@ -1197,6 +1197,7 @@ function Test-ShareSurferRedactionAuditValue {
         'InheritanceFlags',
         'PropagationFlags',
         'InheritanceEnabled',
+        'InheritanceBreakType',
         'PartialData',
         'PartialReason',
         'AccountEnabled',
