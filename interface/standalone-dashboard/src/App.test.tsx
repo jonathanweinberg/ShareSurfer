@@ -4,6 +4,39 @@ import { App } from "./App";
 import { demoSnapshot } from "./data/fixtures";
 import type { DataRow } from "./data/schema";
 
+function readBlobText(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
+}
+
+function mockCsvDownloads() {
+  const originalCreateObjectUrl = URL.createObjectURL;
+  const originalRevokeObjectUrl = URL.revokeObjectURL;
+  const clickedDownloads: string[] = [];
+  const createObjectUrl = vi.fn((_blob: Blob) => `blob:sharesurfer-${createObjectUrl.mock.calls.length + 1}`);
+  const revokeObjectUrl = vi.fn();
+  const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function clickCsvAnchor(this: HTMLAnchorElement) {
+    clickedDownloads.push(this.download);
+  });
+
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrl });
+
+  return {
+    createObjectUrl,
+    clickedDownloads,
+    restore: () => {
+      Object.defineProperty(URL, "createObjectURL", { configurable: true, value: originalCreateObjectUrl });
+      Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectUrl });
+      anchorClick.mockRestore();
+    }
+  };
+}
+
 function renderWithDemoSnapshot() {
   window.__SHARESURFER_SNAPSHOT__ = demoSnapshot;
   return render(<App />);
@@ -481,20 +514,30 @@ describe("dashboard workbench interactions", () => {
     expect(within(table).getByText("CONTOSO\\HRReaders")).toBeInTheDocument();
   });
 
-  test("group folder and file assignments open a filtered exportable evidence pane", () => {
+  test("group folder and file assignments open a filtered exportable evidence pane", async () => {
+    const downloadMock = mockCsvDownloads();
     renderWithDemoSnapshot();
 
-    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
-    fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
-    fireEvent.click(screen.getByRole("button", { name: /Folder\/File Assignments 2/i }));
+    try {
+      const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+      fireEvent.click(within(nav).getByRole("button", { name: /Groups/i }));
+      fireEvent.click(screen.getByRole("button", { name: /Folder\/File Assignments 2/i }));
 
-    expect(screen.getByRole("heading", { name: /Folder\/File Assignments Evidence/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Back to permissioned group/i })).toBeInTheDocument();
-    const exportLink = screen.getByRole("link", { name: /Export shown CSV/i });
-    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
-    expect(exportLink).toHaveAttribute("download", "sharesurfer-folder-file-assignments-contoso-financereaders.csv");
-    expect(href).toContain("CONTOSO\\FinanceReaders");
-    expect(href).toContain("\\\\files01\\Finance");
+      expect(screen.getByRole("heading", { name: /Folder\/File Assignments Evidence/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Back to permissioned group/i })).toBeInTheDocument();
+      const table = screen.getByRole("table", { name: /Folder\/file assignments evidence/i });
+      const exportButton = within(table.closest(".table-shell") as HTMLElement).getByRole("button", { name: /Export shown CSV/i });
+      expect(downloadMock.createObjectUrl).not.toHaveBeenCalled();
+
+      fireEvent.click(exportButton);
+
+      expect(downloadMock.clickedDownloads).toContain("sharesurfer-folder-file-assignments-contoso-financereaders.csv");
+      const csvText = await readBlobText(downloadMock.createObjectUrl.mock.calls[0][0] as Blob);
+      expect(csvText).toContain("CONTOSO\\FinanceReaders");
+      expect(csvText).toContain("\\\\files01\\Finance");
+    } finally {
+      downloadMock.restore();
+    }
   });
 
   test("scoped search chips remove individual signals without duplicating search context", () => {
@@ -610,23 +653,31 @@ describe("dashboard workbench interactions", () => {
     expect(screen.getByText("owner-review-finance")).toBeInTheDocument();
   });
 
-  test("raw evidence combines field filters and exports the shown csv", () => {
+  test("raw evidence combines field filters and exports the shown csv", async () => {
+    const downloadMock = mockCsvDownloads();
     renderWithDemoSnapshot();
 
-    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
-    fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "share_permissions" } });
-    fireEvent.change(screen.getByLabelText(/Filter Share-level access by Share Id/i), { target: { value: "share-finance" } });
-    fireEvent.change(screen.getByLabelText(/Filter Share-level access by Identity/i), { target: { value: "FinanceReaders" } });
+    try {
+      fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+      fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "share_permissions" } });
+      fireEvent.change(screen.getByLabelText(/Filter Share-level access by Share Id/i), { target: { value: "share-finance" } });
+      fireEvent.change(screen.getByLabelText(/Filter Share-level access by Identity/i), { target: { value: "FinanceReaders" } });
 
-    const table = screen.getByRole("table", { name: /Share-level access/i });
-    expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
-    expect(within(table).queryByText("Everyone")).not.toBeInTheDocument();
+      const table = screen.getByRole("table", { name: /Share-level access/i });
+      expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
+      expect(within(table).queryByText("Everyone")).not.toBeInTheDocument();
+      const exportButton = within(table.closest(".table-shell") as HTMLElement).getByRole("button", { name: /Export shown CSV/i });
+      expect(downloadMock.createObjectUrl).not.toHaveBeenCalled();
 
-    const exportLink = screen.getByRole("link", { name: /Export shown CSV/i });
-    const href = decodeURIComponent(exportLink.getAttribute("href") ?? "");
-    expect(exportLink).toHaveAttribute("download", "sharesurfer-share_permissions-shown.csv");
-    expect(href).toContain("CONTOSO\\FinanceReaders");
-    expect(href).not.toContain("Everyone");
+      fireEvent.click(exportButton);
+
+      expect(downloadMock.clickedDownloads).toContain("sharesurfer-share_permissions-shown.csv");
+      const csvText = await readBlobText(downloadMock.createObjectUrl.mock.calls[0][0] as Blob);
+      expect(csvText).toContain("CONTOSO\\FinanceReaders");
+      expect(csvText).not.toContain("Everyone");
+    } finally {
+      downloadMock.restore();
+    }
   });
 
   test("raw evidence accepts negative field filters", () => {
@@ -717,24 +768,31 @@ describe("dashboard workbench interactions", () => {
     expect(within(checksTable).getByText("WinRM HTTP")).toBeInTheDocument();
   });
 
-  test("findings can be grouped and exported by employee identifier prefix", () => {
+  test("findings can be grouped and exported by employee identifier prefix", async () => {
+    const downloadMock = mockCsvDownloads();
     renderWithEmployeePrefixSnapshot();
 
-    const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
-    fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
-    fireEvent.change(screen.getByLabelText(/Employee ID or EmployeeNumber prefix/i), { target: { value: "1001" } });
+    try {
+      const nav = screen.getByRole("navigation", { name: /Dashboard views/i });
+      fireEvent.click(within(nav).getByRole("button", { name: /Findings/i }));
+      fireEvent.change(screen.getByLabelText(/Employee ID or EmployeeNumber prefix/i), { target: { value: "1001" } });
 
-    const table = screen.getByRole("table", { name: /Employee ID number prefix pivot/i });
-    expect(within(table).getAllByText("1001").length).toBeGreaterThan(0);
-    expect(within(table).getByText("CONTOSO\\Ava.Accounting")).toBeInTheDocument();
+      const table = screen.getByRole("table", { name: /Employee ID number prefix pivot/i });
+      expect(within(table).getAllByText("1001").length).toBeGreaterThan(0);
+      expect(within(table).getByText("CONTOSO\\Ava.Accounting")).toBeInTheDocument();
+      const exportButton = within(table.closest(".table-shell") as HTMLElement).getByRole("button", { name: /Export shown CSV/i });
+      expect(downloadMock.createObjectUrl).not.toHaveBeenCalled();
 
-    const exportLinks = screen.getAllByRole("link", { name: /Export shown CSV/i });
-    const pivotExport = exportLinks.find((link) => link.getAttribute("download") === "employee-prefix-findings-pivot.csv");
-    expect(pivotExport).toBeDefined();
-    const href = decodeURIComponent(pivotExport?.getAttribute("href") ?? "");
-    expect(href).toContain("EmployeePrefix,MatchPrefix,IdentifierField");
-    expect(href).toContain("1001");
-    expect(href).toContain("finding-employee-prefix");
+      fireEvent.click(exportButton);
+
+      expect(downloadMock.clickedDownloads).toContain("employee-prefix-findings-pivot.csv");
+      const csvText = await readBlobText(downloadMock.createObjectUrl.mock.calls[0][0] as Blob);
+      expect(csvText).toContain("EmployeePrefix,MatchPrefix,IdentifierField");
+      expect(csvText).toContain("1001");
+      expect(csvText).toContain("finding-employee-prefix");
+    } finally {
+      downloadMock.restore();
+    }
   });
 
   test("scoped search chips explain which signal is filtering raw evidence", () => {
