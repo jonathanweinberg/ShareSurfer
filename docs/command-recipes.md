@@ -427,6 +427,8 @@ Start-Process "$exportPath\standalone-dashboard\index.html"
 
 Release users do not need Node, npm, Vite, a development server, or internet access to package and open the standalone dashboard from a validated export folder.
 
+`ConvertTo-ShareSurferReport` creates a convenient single-file `report.html` by embedding the export data directly into the HTML. For very large exports, it may stop with an inline-data guardrail message before writing `report.html`; this protects the reviewer from opening a report that may freeze or crash a browser. Use the packaged standalone dashboard for large exports, because it can split large datasets into separate offline chunks. Use `-ForceLargeReport` only when you intentionally want the single large HTML file anyway.
+
 If the packager refuses a very large export with a data-size guardrail message, open `dashboard-manifest.json` in the output folder to see the largest dataset contributors and projected size. The guardrail protects the browser review experience; it does not mean the scan failed. Re-run with `-ForceLargeDashboard` only when you intentionally want to package a dashboard that may open slowly or crash.
 
 Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confidence panel. The score and label summarize evidence completeness only. Stop gates, partial data, collection errors, and provider fallback should be resolved, rerun, supplemented, or explicitly documented before approval.

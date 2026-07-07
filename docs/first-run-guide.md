@@ -637,6 +637,8 @@ ConvertTo-ShareSurferReport -ExportPath $exportPath -OutputPath "$exportPath\rep
 
 Open `report.html` from the export folder. It does not need a server or internet access.
 
+The legacy `report.html` is a single file, so ShareSurfer embeds the export data inside the HTML. If the export is very large, `ConvertTo-ShareSurferReport` may stop with an inline-data guardrail before writing the file. This is a browser safety warning, not a scan failure. For large exports, package the standalone dashboard from the validated export folder instead; it stays offline but can split large datasets into separate local files. Use `ConvertTo-ShareSurferReport -ForceLargeReport` only when you deliberately want one large HTML file and accept that it may open slowly or crash.
+
 Example dashboard overview:
 
 ![ShareSurfer dashboard overview](visuals/report-dashboard-overview.png)
@@ -730,7 +732,7 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the safest default report because it is generated directly by the PowerShell module. The v0.1.0-pre.40 release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
+The legacy `report.html` remains the simplest default report for small and moderate exports because it is generated directly by the PowerShell module as one file. For large exports, prefer the standalone dashboard package because it can split large datasets into local offline chunks. The v0.1.0-pre.40 release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
 If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 

@@ -1,3 +1,53 @@
+function Format-ShareSurferReportByteCount {
+    param(
+        [Int64] $Bytes = 0
+    )
+
+    if ($Bytes -ge 1GB) {
+        return ('{0:N1} GB' -f ([double]$Bytes / 1GB))
+    }
+
+    if ($Bytes -ge 1MB) {
+        return ('{0:N1} MB' -f ([double]$Bytes / 1MB))
+    }
+
+    if ($Bytes -ge 1KB) {
+        return ('{0:N1} KB' -f ([double]$Bytes / 1KB))
+    }
+
+    return ('{0} bytes' -f $Bytes)
+}
+
+function Get-ShareSurferReportSourceByteCount {
+    param(
+        [string] $Path = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return 0
+    }
+
+    [Int64](Get-Item -LiteralPath $Path).Length
+}
+
+function New-ShareSurferReportSizeMessage {
+    param(
+        [Int64] $InlineDataBytes,
+        [Int64] $MaximumBytes,
+        $LargestDatasets
+    )
+
+    $largestText = @($LargestDatasets | Select-Object -First 3 | ForEach-Object {
+            '{0} ({1} row(s), {2})' -f [string]$_.FileName, [int]$_.RowCount, (Format-ShareSurferReportByteCount -Bytes ([Int64]$_.SourceBytes))
+        }) -join '; '
+
+    if ([string]::IsNullOrWhiteSpace($largestText)) {
+        $largestText = 'no source CSV size telemetry was available'
+    }
+
+    'Legacy report inline data is {0}, above the configured guardrail of {1}. This is a browser/runtime safety guardrail, not a scan failure. Use the packaged standalone dashboard for large exports, rerun the scan with -AclExportMode Compact when inherited ACL rows dominate, or pass -ForceLargeReport only when you intentionally want a single large report.html that may open slowly or crash. Largest source CSVs: {2}.' -f (Format-ShareSurferReportByteCount -Bytes $InlineDataBytes), (Format-ShareSurferReportByteCount -Bytes $MaximumBytes), $largestText
+}
+
 function ConvertTo-ShareSurferReport {
     [CmdletBinding()]
     param(
@@ -5,26 +55,59 @@ function ConvertTo-ShareSurferReport {
         [string] $ExportPath,
 
         [Parameter(Mandatory = $true)]
-        [string] $OutputPath
+        [string] $OutputPath,
+
+        [Int64] $MaximumInlineDataBytes = 67108864,
+
+        [switch] $ForceLargeReport
     )
 
     $schema = Get-ShareSurferExportSchema
     $optionalSchema = Get-ShareSurferOpenFileExportSchema
     $data = [ordered]@{}
+    $datasetStats = New-Object System.Collections.ArrayList
     foreach ($fileName in $schema.Keys) {
         $key = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
-        $data[$key] = @(Read-ShareSurferCsv -Path (Join-Path $ExportPath $fileName))
+        $filePath = Join-Path $ExportPath $fileName
+        $data[$key] = @(Read-ShareSurferCsv -Path $filePath)
+        [void]$datasetStats.Add([pscustomobject]@{
+                DatasetKey = $key
+                FileName = $fileName
+                RowCount = @($data[$key]).Count
+                SourceBytes = Get-ShareSurferReportSourceByteCount -Path $filePath
+            })
     }
     foreach ($fileName in $optionalSchema.Keys) {
         $path = Join-Path $ExportPath $fileName
         if (Test-Path -LiteralPath $path) {
             $key = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
             $data[$key] = @(Read-ShareSurferCsv -Path $path)
+            [void]$datasetStats.Add([pscustomobject]@{
+                    DatasetKey = $key
+                    FileName = $fileName
+                    RowCount = @($data[$key]).Count
+                    SourceBytes = Get-ShareSurferReportSourceByteCount -Path $path
+                })
         }
     }
 
     $json = $data | ConvertTo-Json -Depth 6 -Compress
     $safeJson = $json.Replace('&', '\u0026').Replace('<', '\u003c').Replace('>', '\u003e')
+    $inlineDataBytes = [Int64][System.Text.Encoding]::UTF8.GetByteCount($safeJson)
+    $sourceDataBytes = [Int64](@($datasetStats) | Measure-Object -Property SourceBytes -Sum).Sum
+    $largestDatasets = @($datasetStats | Sort-Object -Property @{ Expression = { [Int64]$_.SourceBytes }; Descending = $true }, @{ Expression = { [Int64]$_.RowCount }; Descending = $true } | Select-Object -First 8)
+    $sizeGuardrailStatus = 'WithinLimit'
+    $sizeGuardrailMessage = ''
+    if ($MaximumInlineDataBytes -gt 0 -and $inlineDataBytes -gt [Int64]$MaximumInlineDataBytes) {
+        $sizeGuardrailMessage = New-ShareSurferReportSizeMessage -InlineDataBytes $inlineDataBytes -MaximumBytes ([Int64]$MaximumInlineDataBytes) -LargestDatasets $largestDatasets
+        if (-not $ForceLargeReport) {
+            throw $sizeGuardrailMessage
+        }
+
+        $sizeGuardrailStatus = 'InlineDataOverLimitAllowed'
+        Write-Warning ('{0} Report generation will continue because -ForceLargeReport was supplied.' -f $sizeGuardrailMessage)
+    }
+
     $htmlTemplate = @'
 <!doctype html>
 <html lang="en">
@@ -2464,5 +2547,11 @@ function ConvertTo-ShareSurferReport {
     [pscustomobject]@{
         ReportPath = $OutputPath
         ExportPath = $ExportPath
+        InlineDataBytes = $inlineDataBytes
+        SourceDataBytes = $sourceDataBytes
+        MaximumInlineDataBytes = [Int64]$MaximumInlineDataBytes
+        SizeGuardrailStatus = $sizeGuardrailStatus
+        SizeGuardrailMessage = $sizeGuardrailMessage
+        LargestDatasets = $largestDatasets
     }
 }

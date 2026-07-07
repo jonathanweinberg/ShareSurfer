@@ -273,6 +273,8 @@ The standalone dashboard folder is static. After packaging, it opens from disk a
 
 For very large transferred exports, `New-ShareSurferStandaloneDashboard.ps1` may stop before writing `sharesurfer-data.js` and tell you the projected dashboard data is too large for reliable browser review. Check the generated `dashboard-manifest.json` for the largest dataset contributors. This is a browser safety guardrail, not a collection failure. Use `-ForceLargeDashboard` only when your review host can tolerate a dashboard that may open slowly or crash.
 
+The legacy `report.html` is still useful for small and moderate transfers, but it is a single file with embedded data. If `ConvertTo-ShareSurferReport` refuses a large transferred export with an inline-data guardrail, package the standalone dashboard instead. Use `-ForceLargeReport` only when the receiving workstation can tolerate one large HTML file that may open slowly or crash.
+
 ## 5. What Reviewers Should Start With
 
 Start with:

@@ -6366,9 +6366,11 @@ $tests = @(
                 Remove-Variable -Name ShareSurferOpenFileProvider -Scope Global -ErrorAction SilentlyContinue
             }
 
-            ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath $reportPath | Out-Null
+            $reportResult = ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath $reportPath
             $report = Get-Content -LiteralPath $reportPath -Raw
 
+            Assert-True ([Int64]$reportResult.InlineDataBytes -gt 0) 'Report generation should return inline data size telemetry.'
+            Assert-Equal $reportResult.SizeGuardrailStatus 'WithinLimit' 'Small reports should remain within the default inline-data guardrail.'
             Assert-True ($report -like '*ShareSurfer*') 'Report should include ShareSurfer branding.'
             Assert-True ($report -like '*255-character path components*') 'Report should document Azure Files component limits.'
             Assert-True ($report -like '*2,048-character full paths*') 'Report should document Azure Files full path limit.'
@@ -6501,6 +6503,35 @@ $tests = @(
             Assert-True ($report -like '*open_file_samples*') 'Report data should embed optional open-file sample rows when present.'
             Assert-True ($report -like '*min-width: 760px*') 'Report tables should remain readable inside horizontal scroll containers on mobile.'
             Assert-True ($report -like '*.summary, .visual-grid { grid-template-columns: 1fr; }*') 'Report summary and visual grids should collapse cleanly on mobile.'
+        }
+    },
+    @{
+        Name = 'ConvertTo-ShareSurferReport refuses oversized inline reports unless explicitly forced'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferReportGuardrail-' + [guid]::NewGuid().ToString('N'))
+            $reportPath = Join-Path $outputPath 'report.html'
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $outputPath -SkipIdentityEnrichment -Quiet | Out-Null
+
+            $failedClosed = $false
+            $message = ''
+            try {
+                ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath $reportPath -MaximumInlineDataBytes 1 | Out-Null
+            }
+            catch {
+                $message = [string]$_.Exception.Message
+                $failedClosed = ($message -like '*Legacy report inline data*' -and $message -like '*packaged standalone dashboard*' -and $message -like '*-ForceLargeReport*')
+            }
+
+            Assert-True $failedClosed 'Legacy report guardrail should fail closed with guidance when inline data exceeds the configured limit.'
+            Assert-True (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) 'Refused oversized legacy report should not leave report.html behind.'
+
+            $forcedResult = ConvertTo-ShareSurferReport -ExportPath $outputPath -OutputPath $reportPath -MaximumInlineDataBytes 1 -ForceLargeReport
+            Assert-True (Test-Path -LiteralPath $reportPath -PathType Leaf) 'Explicitly forced legacy report should still write report.html.'
+            Assert-Equal $forcedResult.SizeGuardrailStatus 'InlineDataOverLimitAllowed' 'Forced oversized reports should record that the inline-data guardrail was overridden.'
+            Assert-True ([Int64]$forcedResult.InlineDataBytes -gt 1) 'Forced report result should return the measured inline data size.'
+            Assert-True (@($forcedResult.LargestDatasets).Count -gt 0) 'Forced report result should identify largest source datasets for troubleshooting.'
         }
     },
     @{
