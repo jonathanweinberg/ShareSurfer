@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.37",
-  "packageVersion": "0.1.0-pre.37",
-  "packageName": "ShareSurfer-0.1.0-pre.37",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.37.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.37",
+  "currentPrereleaseTag": "v0.1.0-pre.38",
+  "packageVersion": "0.1.0-pre.38",
+  "packageName": "ShareSurfer-0.1.0-pre.38",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.38.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.38",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 hotfix release for the Start Menu guided-startup handoff. v0.1.0-pre.37 includes the v0.1.0-pre.36 PowerShell 5.1 Start Menu usability and long-run status improvements, then hardens the release-root Start-ShareSurfer.ps1 launcher so it invokes Start-ShareSurfer and Start-ShareSurferStartup from the imported ShareSurfer module instance instead of relying on ambiguous command resolution. After guided startup writes the startup JSON, operator plan, and rerun script, the menu now exits cleanly with next-step guidance instead of immediately re-entering the menu loop, avoiding the repeated helper-resolution errors reported in v0.1.0-pre.35. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 hotfix release for the Start Menu saved workflow path. v0.1.0-pre.38 includes the v0.1.0-pre.37 launcher and guided-startup handoff hardening, then fixes the confusing TUI behavior where a saved startup config caused the Scan menu item to replay `Start-ShareSurferStartup -ConfigPath ... -Force` instead of running the actual generated workflow. When `sharesurfer-startup.config.json` and the generated `operator-assistant-rerun.ps1` are present, the Start Menu now labels the choice `Run saved scan workflow`, previews the rerun script, and executes it after confirmation. If the config exists but the rerun script is missing, the menu says it will regenerate saved setup and uses interactive startup replay. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
