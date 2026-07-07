@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.36",
-  "packageVersion": "0.1.0-pre.36",
-  "packageName": "ShareSurfer-0.1.0-pre.36",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.36.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.36",
+  "currentPrereleaseTag": "v0.1.0-pre.37",
+  "packageVersion": "0.1.0-pre.37",
+  "packageName": "ShareSurfer-0.1.0-pre.37",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.37.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.37",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with PowerShell 5.1 Start Menu usability improvements and long-run scan/export status feedback from #372 and #373. The release-root Start-ShareSurfer.ps1 launcher, Start-ShareSurfer menu, and startup wizard now support -ConsoleMode Auto|Enhanced|Plain so arrow-key prompts are preferred in real ConsoleHost sessions while older or redirected consoles can use plain numbered prompts. Menu-launched scan setup now preserves ObsAttribute, AdLookupMode, ManagerIdentityFormat, and console mode into command previews, Start-ShareSurferStartup, saved JSON, and generated rerun scripts. Startup ownership inputs now use a discovery screen to use found files and skip missing ones, build ownership enrichment, or enter advanced custom paths, followed by a final review/edit/cancel screen before writing files. Long identity enrichment and export classification phases now print clearer timestamped progress for root identities, group expansion, directory lookup/cache counters, potential service-account counts, conflicts, findings, permissioned groups, owner pivots, migration discovery, owner review packets, evidence confidence, and CSV writing while keeping high-frequency progress out of scan_events.csv. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 hotfix release for the Start Menu guided-startup handoff. v0.1.0-pre.37 includes the v0.1.0-pre.36 PowerShell 5.1 Start Menu usability and long-run status improvements, then hardens the release-root Start-ShareSurfer.ps1 launcher so it invokes Start-ShareSurfer and Start-ShareSurferStartup from the imported ShareSurfer module instance instead of relying on ambiguous command resolution. After guided startup writes the startup JSON, operator plan, and rerun script, the menu now exits cleanly with next-step guidance instead of immediately re-entering the menu loop, avoiding the repeated helper-resolution errors reported in v0.1.0-pre.35. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
