@@ -117,6 +117,7 @@ function Protect-ShareSurferValue {
         'Level',
         'EventType',
         'InheritanceEnabled',
+        'InheritanceBreakType',
         'PartialData',
         'PartialReason',
         'AccountEnabled',

@@ -196,9 +196,21 @@ function Get-ShareSurferFindings {
         if ($null -ne $item.PSObject.Properties['InheritanceBrokenAt']) {
             $inheritanceBrokenAt = [string]$item.InheritanceBrokenAt
         }
+        $inheritanceBreakType = 'None'
+        if ($null -ne $item.PSObject.Properties['InheritanceBreakType'] -and [string]$item.InheritanceBreakType -ne '') {
+            $inheritanceBreakType = [string]$item.InheritanceBreakType
+        } elseif (-not $inheritanceEnabled) {
+            $inheritanceBreakType = 'Direct'
+        } elseif ($inheritanceBrokenAt -ne '') {
+            $inheritanceBreakType = 'InheritedAncestor'
+        }
 
-        if (-not $inheritanceEnabled -or $inheritanceBrokenAt -ne '') {
-            [void]$findings.Add((New-ShareSurferFinding -FindingType 'BrokenInheritance' -Severity 'Warning' -ShareId $item.ShareId -ItemId $item.ItemId -FullPath $fullPath -ObservedValue $inheritanceBrokenAt -PolicyValue 'Inheritance enabled' -Message 'Inheritance is disabled or was recorded as broken for this item.'))
+        if (-not $inheritanceEnabled -or $inheritanceBreakType -eq 'Direct') {
+            if ($inheritanceBrokenAt -eq '') {
+                $inheritanceBrokenAt = $fullPath
+            }
+
+            [void]$findings.Add((New-ShareSurferFinding -FindingType 'BrokenInheritance' -Severity 'Warning' -ShareId $item.ShareId -ItemId $item.ItemId -FullPath $fullPath -ObservedValue $inheritanceBrokenAt -PolicyValue 'Inheritance enabled' -Message 'Inheritance is disabled directly on this item. If this is the top of a hosted share or delegated data area, confirm whether the local NTFS boundary is intentional before treating it as cleanup risk.'))
             $findingCounts['BrokenInheritance']++
         }
 

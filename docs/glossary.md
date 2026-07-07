@@ -14,7 +14,8 @@ ShareSurfer is read-only. These terms describe evidence and review signals, not 
 | Explicit ACE | A permission entry placed directly on a folder or file instead of inherited from a parent. | `acl_entries.csv`, deep explicit permission findings. |
 | Deep explicit permission | An explicit ACE found deeper than the configured depth threshold. ShareSurfer defaults to flagging explicit permissions deeper than level 2. | `findings.csv`, migration readiness warnings. |
 | Inherited permission | A permission that flows down from a parent folder. | `acl_entries.csv`, dashboard path details. |
-| Inheritance break | A folder or file where inherited permissions stop or are changed. | `items.csv`, `findings.csv`, dashboard inheritance views. |
+| Inheritance break | A folder or file where inherited permissions stop. This can be intentional, especially at the top of a hosted share or delegated folder where parent/container ACLs should not flow downward. | `items.csv`, `findings.csv`, dashboard inheritance views. |
+| Inheritance break type | The CSV value that explains whether a row is the direct boundary (`Direct`), only sits under a higher boundary (`InheritedAncestor`), or has no known break (`None`). | `items.csv`. |
 | Deny/allow collision | Evidence that deny and allow permissions may produce confusing or unexpected effective access. | `conflicts.csv`, Findings and Conflicts views. |
 
 ## Owner and Identity Terms

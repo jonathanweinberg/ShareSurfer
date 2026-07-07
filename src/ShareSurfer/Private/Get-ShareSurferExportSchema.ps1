@@ -20,7 +20,8 @@ function Get-ShareSurferExportSchema {
             'Depth',
             'Owner',
             'InheritanceEnabled',
-            'InheritanceBrokenAt'
+            'InheritanceBrokenAt',
+            'InheritanceBreakType'
         )
         'share_permissions.csv' = @(
             'ShareId',
