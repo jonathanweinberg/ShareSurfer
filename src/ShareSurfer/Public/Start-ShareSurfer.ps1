@@ -60,6 +60,51 @@ function Join-ShareSurferMenuCommand {
     ($parts.ToArray() -join ' ')
 }
 
+function Get-ShareSurferMenuStartupConfigPath {
+    param([string] $InputRoot = '')
+
+    if ([string]::IsNullOrWhiteSpace($InputRoot)) {
+        return ''
+    }
+
+    Join-ShareSurferAssistantPathText -Root $InputRoot -Child 'sharesurfer-startup.config.json'
+}
+
+function Get-ShareSurferMenuOperatorRerunPath {
+    param(
+        [string] $InputRoot = '',
+
+        [string] $ConfigPath = ''
+    )
+
+    $fallbackPath = ''
+    if (-not [string]::IsNullOrWhiteSpace($InputRoot)) {
+        $fallbackPath = Join-ShareSurferAssistantPathText -Root $InputRoot -Child 'operator-assistant-rerun.ps1'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ConfigPath) -or -not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
+        return $fallbackPath
+    }
+
+    try {
+        $definition = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+        if ($null -ne $definition.PSObject.Properties['generatedFiles'] -and
+            $null -ne $definition.generatedFiles.PSObject.Properties['operatorReusableCommandPath'] -and
+            -not [string]::IsNullOrWhiteSpace([string]$definition.generatedFiles.operatorReusableCommandPath)) {
+            return [string]$definition.generatedFiles.operatorReusableCommandPath
+        }
+        if ($null -ne $definition.PSObject.Properties['commands'] -and
+            $null -ne $definition.commands.PSObject.Properties['operatorRerun'] -and
+            -not [string]::IsNullOrWhiteSpace([string]$definition.commands.operatorRerun)) {
+            return [string]$definition.commands.operatorRerun
+        }
+    }
+    catch {
+    }
+
+    $fallbackPath
+}
+
 function Get-ShareSurferMenuEntries {
     param(
         [string] $InputRoot = '',
@@ -114,9 +159,32 @@ function Get-ShareSurferMenuEntries {
         Guidance = 'Set -InputRoot when starting the menu to run guided ownership setup from here.'
     })
 
+    $configPath = Get-ShareSurferMenuStartupConfigPath -InputRoot $InputRoot
     $configState = Get-ShareSurferMenuPathState -FolderPath $InputRoot -FileName 'sharesurfer-startup.config.json'
+    $rerunPath = if ($configState -eq 'found') { Get-ShareSurferMenuOperatorRerunPath -InputRoot $InputRoot -ConfigPath $configPath } else { '' }
+    $rerunFound = $false
+    if (-not [string]::IsNullOrWhiteSpace($rerunPath)) {
+        try {
+            $rerunFound = Test-Path -LiteralPath $rerunPath -PathType Leaf
+        }
+        catch {
+            $rerunFound = $false
+        }
+    }
+
+    $scanRunMode = 'GuidedStartup'
+    $scanLabel = 'Scan setup (guided startup)'
     $scanReadiness = if ($configState -eq 'found') {
-        'saved setup: sharesurfer-startup.config.json'
+        if ($rerunFound) {
+            $scanRunMode = 'SavedRerun'
+            $scanLabel = 'Run saved scan workflow'
+            'saved workflow: operator-assistant-rerun.ps1'
+        }
+        else {
+            $scanRunMode = 'ReplayStartupInteractive'
+            $scanLabel = 'Regenerate saved scan setup'
+            'saved setup found; rerun script missing'
+        }
     }
     elseif ($configState -eq 'missing') {
         'setup not recorded yet'
@@ -125,7 +193,12 @@ function Get-ShareSurferMenuEntries {
         'input folder not set'
     }
     $scanPreview = if ($configState -eq 'found') {
-        'Start-ShareSurferStartup -ConfigPath {0} -Force' -f (ConvertTo-ShareSurferPowerShellLiteral -Value (Join-ShareSurferAssistantPathText -Root $InputRoot -Child 'sharesurfer-startup.config.json'))
+        if ($rerunFound) {
+            '& {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $rerunPath)
+        }
+        else {
+            'Start-ShareSurferStartup -ConfigPath {0} -Force -Interactive' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $configPath)
+        }
     }
     else {
         $scanPreviewParts = New-Object System.Collections.Generic.List[string]
@@ -149,11 +222,14 @@ function Get-ShareSurferMenuEntries {
     }
     [void]$entries.Add([pscustomobject]@{
         Key = 'scan'
-        Label = 'Scan (guided startup)'
+        Label = $scanLabel
         Readiness = $scanReadiness
         CommandPreview = $scanPreview
         Runnable = $true
         Guidance = ''
+        RunMode = $scanRunMode
+        ConfigPath = $configPath
+        RerunPath = $rerunPath
     })
 
     $exportState = Get-ShareSurferMenuPathState -FolderPath $ExportPath -FileName 'shares.csv'
@@ -297,9 +373,21 @@ function Start-ShareSurfer {
                 break
             }
             'scan' {
-                $configPath = if ([string]::IsNullOrWhiteSpace($InputRoot)) { '' } else { Join-Path $InputRoot 'sharesurfer-startup.config.json' }
-                if (-not [string]::IsNullOrWhiteSpace($configPath) -and (Test-Path -LiteralPath $configPath -PathType Leaf)) {
-                    Start-ShareSurferStartup -ConfigPath $configPath -Force -ConsoleMode $ConsoleMode | Out-Host
+                $runMode = [string]$entry.RunMode
+                if ($runMode -eq 'SavedRerun') {
+                    $rerunPath = [string]$entry.RerunPath
+                    if ([string]::IsNullOrWhiteSpace($rerunPath) -or -not (Test-Path -LiteralPath $rerunPath -PathType Leaf)) {
+                        Write-ShareSurferConsoleLines -Lines @('The saved rerun script was not found. Reopen startup setup to regenerate it.')
+                        Wait-ShareSurferConsolePause -Prompt 'Press Enter to return to the menu.'
+                        continue
+                    }
+                    Write-Host ('Running saved ShareSurfer workflow: {0}' -f $rerunPath)
+                    & $rerunPath | Out-Host
+                    return
+                }
+                elseif ($runMode -eq 'ReplayStartupInteractive') {
+                    $configPath = [string]$entry.ConfigPath
+                    Start-ShareSurferStartup -ConfigPath $configPath -Force -Interactive -ConsoleMode $ConsoleMode | Out-Host
                 }
                 else {
                     $startupParameters = @{ Interactive = $true }
@@ -315,7 +403,7 @@ function Start-ShareSurfer {
                 }
                 Write-Host ''
                 Write-Host 'Guided startup is complete. ShareSurfer saved the startup config, operator plan, and rerun script shown above.'
-                Write-Host 'Run the generated rerun script when ready, or run Start-ShareSurfer.ps1 again to reopen the menu.'
+                Write-Host 'Run Start-ShareSurfer.ps1 again to choose Run saved scan workflow from the menu.'
                 return
             }
             'validate' {

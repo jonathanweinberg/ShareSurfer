@@ -2971,6 +2971,72 @@ $tests = @(
         }
     },
     @{
+        Name = 'Start-ShareSurfer scan menu runs saved rerun script when config exists'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuSavedRun-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'export'
+            $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            $sentinelPath = Join-Path $root 'rerun-executed.txt'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+
+            $config = [ordered]@{
+                generatedFiles = [ordered]@{
+                    operatorReusableCommandPath = $rerunPath
+                }
+                commands = [ordered]@{
+                    operatorRerun = $rerunPath
+                }
+            }
+            Set-Content -LiteralPath $configPath -Value ($config | ConvertTo-Json -Depth 5) -Encoding UTF8
+            Set-Content -LiteralPath $rerunPath -Value ("Set-Content -LiteralPath '{0}' -Value 'ran' -Encoding UTF8" -f $sentinelPath) -Encoding UTF8
+
+            $entries = @(& $module {
+                param($InputRoot, $ExportPath, $DashboardPath)
+                Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $DashboardPath -ConsoleMode Plain
+            } $inputRoot $exportPath $dashboardPath)
+            $scan = @($entries | Where-Object { $_.Key -eq 'scan' })[0]
+            Assert-Equal ([string]$scan.Label) 'Run saved scan workflow' 'Saved config plus rerun script should make the menu scan action run the saved workflow.'
+            Assert-True ([string]$scan.CommandPreview -like ('*{0}*' -f $rerunPath)) 'Saved workflow preview should point to the rerun script.'
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferSavedRunAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            foreach ($answer in @('3', 'Y')) {
+                $script:shareSurferSavedRunAnswers.Enqueue($answer)
+            }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferSavedRunAnswers.Count -eq 0) {
+                    throw ('Unexpected saved-run menu prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferSavedRunAnswers.Dequeue()
+            }
+
+            try {
+                Start-ShareSurfer `
+                    -ReleaseRoot $repoRoot `
+                    -InputRoot $inputRoot `
+                    -ExportPath $exportPath `
+                    -StandaloneDashboardPath $dashboardPath `
+                    -ConsoleMode Plain
+
+                Assert-True (Test-Path -LiteralPath $sentinelPath -PathType Leaf) 'Saved rerun script should execute from the menu.'
+                Assert-Equal (Get-Content -LiteralPath $sentinelPath -Raw).Trim() 'ran' 'Saved rerun script should write the expected sentinel content.'
+                Assert-Equal $script:shareSurferSavedRunAnswers.Count 0 'Saved-run menu simulation should consume selection and confirmation.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferSavedRunAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
         Name = 'Startup selections screen summarizes choices and missing optional inputs'
         Body = {
             Import-Module $moduleManifest -Force
