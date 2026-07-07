@@ -168,7 +168,7 @@ function Export-ShareSurferInventory {
 
     [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'ExportClassificationStarted' -Source 'Export' -Message 'Export classification started.'))
     Write-ShareSurferStatus -Phase 'Export' -Message ('Classifying conflicts from {0} share permission row(s) and {1} ACL row(s).' -f $sharePermissions.Count, $aclEntries.Count) -Quiet:$Quiet
-    $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries)
+    $conflicts = @(Get-ShareSurferConflicts -SharePermissions $sharePermissions -AclEntries $aclEntries -StatusIntervalSeconds $StatusIntervalSeconds -ShowProgress:(-not [bool]$Quiet) -Quiet:$Quiet)
     Write-ShareSurferStatus -Phase 'Export' -Message ('Conflicts classified: {0} row(s).' -f $conflicts.Count) -Quiet:$Quiet
 
     Write-ShareSurferStatus -Phase 'Export' -Message ('Classifying findings from {0} item(s), {1} ACL row(s), {2} share permission row(s), and {3} scan error(s).' -f $items.Count, $aclEntries.Count, $sharePermissions.Count, $scanErrors.Count) -Quiet:$Quiet
