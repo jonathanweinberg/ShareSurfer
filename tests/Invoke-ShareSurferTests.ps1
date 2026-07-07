@@ -1503,6 +1503,57 @@ $tests = @(
         }
     },
     @{
+        Name = 'Get-ShareSurferFindings handles large repeated ACLs with cached SID checks and progress'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $items = for ($i = 0; $i -lt 5000; $i++) {
+                [pscustomobject]@{
+                    ShareId = 'share-001'
+                    ItemId = 'item-{0}' -f $i
+                    FullPath = '\\files01\Finance\Folder{0}' -f $i
+                    Owner = 'CONTOSO\FinanceOwner'
+                    InheritanceEnabled = $true
+                    InheritanceBrokenAt = ''
+                }
+            }
+            $aclEntries = for ($i = 0; $i -lt 20000; $i++) {
+                [pscustomobject]@{
+                    ShareId = 'share-001'
+                    ItemId = 'item-{0}' -f ($i % 5000)
+                    FullPath = '\\files01\Finance\Folder{0}' -f ($i % 5000)
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'ReadAndExecute'
+                    AccessControlType = 'Allow'
+                    IsInherited = $true
+                    Depth = 1
+                }
+            }
+
+            $shareSurferModule = Get-Module ShareSurfer
+            $result = $null
+            $elapsed = Measure-Command {
+                $result = @(& $shareSurferModule {
+                    param($Items, $AclEntries)
+                    Get-ShareSurferFindings -Items $Items -AclEntries $AclEntries -SharePermissions @() -Shares @() -GroupEdges @() -Identities @() -ScanErrors @() -Quiet
+                } $items $aclEntries)
+            }
+
+            Assert-True ($elapsed.TotalSeconds -lt 10) ('Finding classification should stay bounded for repeated inherited ACL rows. ElapsedSeconds={0:N2}' -f $elapsed.TotalSeconds)
+            Assert-Equal @($result).Count 0 'Inherited repeated ACL rows with resolved identities and normal owners should not create findings.'
+
+            $smallItems = @($items | Select-Object -First 2)
+            $smallAclEntries = @($aclEntries | Select-Object -First 3)
+            $progressText = (& $shareSurferModule {
+                param($Items, $AclEntries)
+                Get-ShareSurferFindings -Items $Items -AclEntries $AclEntries -SharePermissions @() -Shares @() -GroupEdges @() -Identities @() -ScanErrors @() -StatusIntervalSeconds 0 -ShowProgress | Out-Null
+            } $smallItems $smallAclEntries *>&1 | Out-String)
+
+            Assert-True ($progressText -like '*Finding classification progress: checked*ACL row(s)*') 'Finding classification should print ACL progress when requested.'
+            Assert-True ($progressText -like '*SID cache=1*') 'Finding classification should cache repeated identity SID checks.'
+            Assert-True ($progressText -like '*Finding classification complete:*') 'Finding classification should print a completion summary.'
+        }
+    },
+    @{
         Name = 'Normalize-ShareSurferItems keeps inheritance breaks on path boundaries'
         Body = {
             Import-Module $moduleManifest -Force
@@ -2009,6 +2060,7 @@ $tests = @(
             Assert-True ($statusText -like '*directory lookups=*') 'Identity heartbeat should include directory lookup counters.'
             Assert-True ($statusText -like '*potential service accounts=*') 'Identity heartbeat should include potential service-account counts.'
             Assert-True ($statusText -like '*Conflicts classified:*') 'Export status should report conflict classification completion.'
+            Assert-True ($statusText -like '*Finding classification progress:*') 'Export status should report finding classification progress.'
             Assert-True ($statusText -like '*Findings classified:*') 'Export status should report finding classification completion.'
             Assert-True ($statusText -like '*Permissioned group review rows ready:*') 'Export status should report permissioned group row completion.'
             Assert-True ($statusText -like '*Owner/business-unit pivots ready:*') 'Export status should report owner pivot completion.'

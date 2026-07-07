@@ -172,7 +172,7 @@ function Export-ShareSurferInventory {
     Write-ShareSurferStatus -Phase 'Export' -Message ('Conflicts classified: {0} row(s).' -f $conflicts.Count) -Quiet:$Quiet
 
     Write-ShareSurferStatus -Phase 'Export' -Message ('Classifying findings from {0} item(s), {1} ACL row(s), {2} share permission row(s), and {3} scan error(s).' -f $items.Count, $aclEntries.Count, $sharePermissions.Count, $scanErrors.Count) -Quiet:$Quiet
-    $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -SharePermissions $sharePermissions -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold)
+    $findings = @(Get-ShareSurferFindings -Items $items -AclEntries $aclEntries -SharePermissions $sharePermissions -Shares $shares -GroupEdges $groupEdges -Identities $identities -ScanErrors $scanErrors -OperationalPathLengthThreshold $OperationalPathLengthThreshold -AzurePathComponentLimit $AzurePathComponentLimit -AzureFullPathLimit $AzureFullPathLimit -ExplicitAceDepthThreshold $ExplicitAceDepthThreshold -StatusIntervalSeconds $StatusIntervalSeconds -ShowProgress:(-not [bool]$Quiet) -Quiet:$Quiet)
     Write-ShareSurferStatus -Phase 'Export' -Message ('Findings classified: {0} row(s).' -f $findings.Count) -Quiet:$Quiet
 
     Write-ShareSurferStatus -Phase 'Export' -Message ('Building permissioned group review rows from {0} share permission row(s), {1} ACL row(s), and {2} group edge row(s).' -f $sharePermissions.Count, $aclEntries.Count, $groupEdges.Count) -Quiet:$Quiet
