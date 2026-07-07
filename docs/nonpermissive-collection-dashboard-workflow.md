@@ -271,6 +271,8 @@ Start-Process "$reviewRoot\standalone-dashboard\index.html"
 
 The standalone dashboard folder is static. After packaging, it opens from disk and does not need npm, Vite, a server, or internet access. The release's `interface\standalone-dashboard\dist\index.html` is only a template shell until you run `New-ShareSurferStandaloneDashboard.ps1` against a validated export.
 
+For very large transferred exports, `New-ShareSurferStandaloneDashboard.ps1` may stop before writing `sharesurfer-data.js` and tell you the projected dashboard data is too large for reliable browser review. Check the generated `dashboard-manifest.json` for the largest dataset contributors. This is a browser safety guardrail, not a collection failure. Use `-ForceLargeDashboard` only when your review host can tolerate a dashboard that may open slowly or crash.
+
 ## 5. What Reviewers Should Start With
 
 Start with:

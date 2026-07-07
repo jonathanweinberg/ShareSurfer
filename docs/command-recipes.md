@@ -425,6 +425,8 @@ Start-Process "$exportPath\standalone-dashboard\index.html"
 
 Release users do not need Node, npm, Vite, a development server, or internet access to package and open the standalone dashboard from a validated export folder.
 
+If the packager refuses a very large export with a data-size guardrail message, open `dashboard-manifest.json` in the output folder to see the largest dataset contributors and projected size. The guardrail protects the browser review experience; it does not mean the scan failed. Re-run with `-ForceLargeDashboard` only when you intentionally want to package a dashboard that may open slowly or crash.
+
 Before owner signoff, open `evidence_confidence.csv` or the dashboard Scan Confidence panel. The score and label summarize evidence completeness only. Stop gates, partial data, collection errors, and provider fallback should be resolved, rerun, supplemented, or explicitly documented before approval.
 
 ## Recipe 7: Record Owner and Migration Review Decisions

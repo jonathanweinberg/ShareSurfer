@@ -5681,6 +5681,12 @@ $tests = @(
             Assert-Equal $manifest.dashboardDataKind 'export' 'Dashboard manifest should identify generated export data.'
             Assert-True ([int]$manifest.rowCounts.shares -gt 0) 'Dashboard manifest should include export row counts.'
             Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
+            Assert-Equal $manifest.sizeGuardrailStatus 'WithinLimit' 'Small dashboard packages should stay within the default data-size guardrail.'
+            Assert-True ([int64]$manifest.sourceDataBytes -gt 0) 'Dashboard manifest should include source CSV byte telemetry.'
+            Assert-True ([int64]$manifest.projectedDataScriptBytes -gt 0) 'Dashboard manifest should include projected data-script byte telemetry.'
+            Assert-True ([int64]$manifest.actualDataScriptBytes -gt 0) 'Dashboard manifest should include actual data-script byte telemetry.'
+            Assert-True ([int64]$manifest.maximumDataScriptBytes -gt 0) 'Dashboard manifest should include the configured data-script guardrail.'
+            Assert-True (@($manifest.largestDatasets).Count -gt 0) 'Dashboard manifest should name largest dataset contributors.'
             Assert-True ([int]$manifest.rowCounts.open_file_samples -gt 0) 'Dashboard manifest should include imported open-file sample counts when present.'
             Assert-True ([int]$manifest.rowCounts.open_file_summary -gt 0) 'Dashboard manifest should include imported open-file summary counts when present.'
             Assert-True ([int]$manifest.rowCounts.port_protocol_checks -gt 0) 'Dashboard manifest should include imported port/protocol check counts when present.'
@@ -5688,6 +5694,62 @@ $tests = @(
             Assert-True ([string]::Join(';', @($manifest.schemaWarnings)) -notlike '*migration_cluster_decisions.csv*') 'Standalone dashboard packaging should not warn when optional migration decision CSVs are absent.'
             Assert-True ($dataScript -like '*"open_file_samples"*') 'Dashboard snapshot should carry open-file datasets for raw evidence review.'
             Assert-True ($dataScript -like '*"port_protocol_checks"*') 'Dashboard snapshot should carry port/protocol datasets for connectivity review.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferStandaloneDashboard refuses oversized package without explicit override'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $standalonePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStandaloneDashboard-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { snapshotKind: "template", datasets: {} };' -Encoding UTF8
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+
+            $thrown = $false
+            try {
+                & (Join-Path $repoRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -ExportPath $exportPath -DashboardBuildPath $buildPath -OutputPath $standalonePath -MaximumDataScriptBytes 1 -PassThru | Out-Null
+            }
+            catch {
+                $thrown = $true
+                Assert-True ($_.Exception.Message -like '*browser/runtime safety guardrail*') 'Large dashboard refusal should explain the browser/runtime safety guardrail.'
+                Assert-True ($_.Exception.Message -like '*-ForceLargeDashboard*') 'Large dashboard refusal should name the explicit override switch.'
+            }
+
+            Assert-True $thrown 'Packaging should refuse an above-threshold dashboard without -ForceLargeDashboard.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json')) 'Refused dashboard package should still write a manifest with guardrail evidence.'
+            Assert-True (-not (Test-Path -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js'))) 'Refused dashboard package should not leave the copied template data script behind.'
+            $manifest = Get-Content -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json') -Raw | ConvertFrom-Json
+            Assert-Equal $manifest.sizeGuardrailStatus 'RefusedProjectedOverLimit' 'Manifest should record projected-size refusal.'
+            Assert-True ([int64]$manifest.projectedDataScriptBytes -gt [int64]$manifest.maximumDataScriptBytes) 'Manifest should prove the projected size exceeded the guardrail.'
+            Assert-True (@($manifest.largestDatasets).Count -gt 0) 'Manifest should preserve largest dataset contributors for troubleshooting.'
+        }
+    },
+    @{
+        Name = 'New-ShareSurferStandaloneDashboard packages oversized data when explicitly overridden'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $exportPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferExport-' + [guid]::NewGuid().ToString('N'))
+            $buildPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferDashboardBuild-' + [guid]::NewGuid().ToString('N'))
+            $standalonePath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStandaloneDashboard-' + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $buildPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $buildPath 'index.html') -Value '<!doctype html><html><head><script src="./sharesurfer-data.js"></script></head><body><div id="root"></div></body></html>' -Encoding UTF8
+            Set-Content -LiteralPath (Join-Path $buildPath 'sharesurfer-data.js') -Value 'window.__SHARESURFER_SNAPSHOT__ = { snapshotKind: "template", datasets: {} };' -Encoding UTF8
+
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $exportPath -SkipIdentityEnrichment | Out-Null
+
+            $result = & (Join-Path $repoRoot 'scripts/New-ShareSurferStandaloneDashboard.ps1') -ExportPath $exportPath -DashboardBuildPath $buildPath -OutputPath $standalonePath -MaximumDataScriptBytes 1 -ForceLargeDashboard -PassThru
+            $manifest = Get-Content -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json') -Raw | ConvertFrom-Json
+
+            Assert-True $result.IsValid 'Explicitly overridden large dashboard should still package.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js')) 'Explicitly overridden large dashboard should write the snapshot script.'
+            Assert-Equal $manifest.sizeGuardrailStatus 'ActualOverLimitAllowed' 'Manifest should record that the package exceeded the actual limit but was explicitly allowed.'
+            Assert-True ([int64]$manifest.actualDataScriptBytes -gt [int64]$manifest.maximumDataScriptBytes) 'Manifest should prove the actual script exceeded the guardrail.'
+            Assert-True ([string]$manifest.sizeGuardrailMessage -like '*browser/runtime safety guardrail*') 'Manifest should preserve the guardrail explanation.'
+            Assert-Equal $result.SizeGuardrailStatus 'ActualOverLimitAllowed' 'PassThru result should expose the guardrail status.'
         }
     },
     @{
