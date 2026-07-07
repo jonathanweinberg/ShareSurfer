@@ -439,6 +439,12 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "Identity",
     "ShareRights",
     "NtfsRights",
+    "AffectedItemCount",
+    "ExamplePath",
+    "AffectedPathPrefix",
+    "FirstSeenPath",
+    "MaxDepth",
+    "EvidenceCompleteness",
     "Severity",
     "Message"
   ],

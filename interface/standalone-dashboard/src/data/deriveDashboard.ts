@@ -79,6 +79,8 @@ export interface IssueSummary {
   employeeIdentifier: string;
   employeeIdentifierField: string;
   employeePrefix: string;
+  affectedItemCount: number;
+  evidenceCompleteness: string;
   whatHappened: string;
   whyItMatters: string;
   nextAction: string;
@@ -602,9 +604,22 @@ interface IssueContextLookups {
 function resolveIssueContext(row: DataRow, snapshot: NormalizedSnapshot, lookups: IssueContextLookups): Pick<IssueSummary, "owner" | "businessUnit" | "path"> {
   const item = row.ItemId ? lookups.itemsById.get(row.ItemId) : undefined;
   const share = row.ShareId ? lookups.sharesById.get(row.ShareId) : undefined;
-  const path = row.FullPath || item?.FullPath || share?.UNCPath || row.ObservedValue || row.ItemId || row.ShareId || "";
+  const path =
+    row.FullPath ||
+    row.ExamplePath ||
+    row.FirstSeenPath ||
+    row.AffectedPathPrefix ||
+    item?.FullPath ||
+    share?.UNCPath ||
+    row.ObservedValue ||
+    row.ItemId ||
+    row.ShareId ||
+    "";
   const pathCandidates = unique([
     row.FullPath,
+    row.ExamplePath,
+    row.FirstSeenPath,
+    row.AffectedPathPrefix,
     item?.FullPath,
     item?.RelativePath,
     share?.UNCPath,
@@ -749,6 +764,8 @@ function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, Revi
       path: issueContext.path,
       identity: row.Identity || "",
       ...employeeSignal,
+      affectedItemCount: 1,
+      evidenceCompleteness: row.EvidenceCompleteness || "SinglePath",
       whatHappened: row.Message || `${category} was observed in the export.`,
       whyItMatters: issueWhyItMatters(category),
       nextAction: issueNextAction(category),
@@ -771,6 +788,8 @@ function buildIssues(snapshot: NormalizedSnapshot, ownerLookup: Map<string, Revi
       path: issueContext.path,
       identity: row.Identity || "",
       ...employeeSignal,
+      affectedItemCount: toNumber(row.AffectedItemCount),
+      evidenceCompleteness: row.EvidenceCompleteness || "",
       whatHappened: row.Message || "Share-level and folder/file permissions do not line up.",
       whyItMatters: issueWhyItMatters(category),
       nextAction: issueNextAction(category),

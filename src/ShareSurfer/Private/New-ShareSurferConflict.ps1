@@ -10,6 +10,12 @@ function New-ShareSurferConflict {
         [string] $Identity = '',
         [string] $ShareRights = '',
         [string] $NtfsRights = '',
+        [int] $AffectedItemCount = 0,
+        [string] $ExamplePath = '',
+        [string] $AffectedPathPrefix = '',
+        [string] $FirstSeenPath = '',
+        [int] $MaxDepth = 0,
+        [string] $EvidenceCompleteness = '',
 
         [Parameter(Mandatory = $true)]
         [string] $Severity,
@@ -26,6 +32,12 @@ function New-ShareSurferConflict {
         Identity = $Identity
         ShareRights = $ShareRights
         NtfsRights = $NtfsRights
+        AffectedItemCount = $AffectedItemCount
+        ExamplePath = $ExamplePath
+        AffectedPathPrefix = $AffectedPathPrefix
+        FirstSeenPath = $FirstSeenPath
+        MaxDepth = $MaxDepth
+        EvidenceCompleteness = $EvidenceCompleteness
         Severity = $Severity
         Message = $Message
     }

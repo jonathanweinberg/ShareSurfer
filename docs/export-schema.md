@@ -70,7 +70,7 @@ Optional assessment packages stay additive: baseline scan exports validate when 
 | `owner_review_packets.csv` | One row per owner review packet | Gives business owners a plain-language review queue with why review is needed, where to start, and suggested next action. |
 | `owner_review_decisions.csv` | One row per owner review packet decision | Records reviewer decisions for owner packets after a draft/export/import loop. |
 | `migration_cluster_decisions.csv` | One row per migration discovery decision | Records reviewer decisions for related-data-area migration candidates after a draft/export/import loop. |
-| `conflicts.csv` | One row per share/NTFS mismatch | Highlights access model conflicts. |
+| `conflicts.csv` | One row per share/NTFS mismatch pattern | Highlights access model conflicts with affected counts and example evidence when repeated inherited rows roll up. |
 | `findings.csv` | One row per policy or hygiene finding | Highlights migration and governance risks. |
 | `evidence_confidence.csv` | One scan row plus one row per share | Summarizes evidence completeness, score/label, provider fallback, stop/review gates, and recommended action. This is not permission approval. |
 | `collection_errors.csv` | One row per collection error | Preserves scanner error evidence for support, reruns, and partial-data review without forcing operators to infer errors from findings. |
@@ -273,7 +273,9 @@ Use this file to record decisions for Migration Discovery clusters from `related
 
 ### `conflicts.csv`
 
-Expected columns: `ConflictId`, `ConflictType`, `ShareId`, `ItemId`, `Identity`, `ShareRights`, `NtfsRights`, `Severity`, `Message`.
+Expected columns: `ConflictId`, `ConflictType`, `ShareId`, `ItemId`, `Identity`, `ShareRights`, `NtfsRights`, `AffectedItemCount`, `ExamplePath`, `AffectedPathPrefix`, `FirstSeenPath`, `MaxDepth`, `EvidenceCompleteness`, `Severity`, `Message`.
+
+`AffectedItemCount` tells you how many unique scanned items are represented by the row. `ExamplePath`, `FirstSeenPath`, and `AffectedPathPrefix` give a review starting point without expanding every repeated inherited path into the conflict table. Use `acl_entries.csv` for the full path-level evidence trail when an owner or administrator needs to inspect every underlying ACL row.
 
 Common V1 conflict types include:
 
