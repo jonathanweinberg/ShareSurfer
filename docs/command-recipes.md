@@ -91,7 +91,7 @@ $exportPath = 'C:\ShareSurfer\exports\finance-001'
 & "$releaseRoot\Start-ShareSurfer.ps1" -Force
 ```
 
-The menu shows readiness for ownership inputs, saved startup config, export validation, standalone dashboard packaging, and stop gates. Each menu entry previews the command it will run before asking for confirmation. If you want to replay an existing startup config without the menu, pass `-ConfigPath` to the same launcher.
+The menu shows readiness for ownership inputs, saved startup config, export validation, standalone dashboard packaging, and stop gates. Each menu entry previews the command it will run before asking for confirmation. A normal ConsoleHost uses arrow-key selection; add `-ConsoleMode Plain` when you want simple numbered prompts. If you want to replay an existing startup config without the menu, pass `-ConfigPath` to the same launcher.
 
 If you already know the answers and want to generate the same files without prompts, import the module and call the startup command directly:
 
@@ -125,7 +125,7 @@ Start-ShareSurferStartup `
   -Force
 ```
 
-Open `operator-assistant-rerun.ps1` and review it before running. The script imports the module, optionally runs `Invoke-ShareSurferSharePermissionDiagnostic`, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, optionally creates an owner mapping draft after validation, and packages the standalone dashboard from the validated export folder. If share permissions are missing or confusing, open `$exportPath\share-permission-diagnostics\share_permission_diagnostics.md` first. For SAN or appliance shares that return a remote server-local path such as `C:\Public\Share`, the diagnostic records the returned path, checks whether it exists on the collector, and falls back to the target UNC path automatically when needed.
+Open `operator-assistant-rerun.ps1` and review it before running. The startup wizard first offers to use discovered ownership files, build ownership enrichment now, or enter advanced custom paths; it then shows a final review screen before writing startup files. The rerun script imports the module, optionally runs `Invoke-ShareSurferSharePermissionDiagnostic`, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, optionally creates an owner mapping draft after validation, and packages the standalone dashboard from the validated export folder. If share permissions are missing or confusing, open `$exportPath\share-permission-diagnostics\share_permission_diagnostics.md` first. For SAN or appliance shares that return a remote server-local path such as `C:\Public\Share`, the diagnostic records the returned path, checks whether it exists on the collector, and falls back to the target UNC path automatically when needed.
 
 ## Recipe 2: Create Optional Input CSVs
 

@@ -43,6 +43,7 @@ foreach ($parseTarget in $parseTargets) {
 }
 
 Import-Module $moduleManifest -Force
+$module = Get-Module ShareSurfer
 $exportedCommands = @(Get-Command -Module ShareSurfer | Select-Object -ExpandProperty Name)
 $requiredCommands = @(
     'Invoke-ShareSurferScan',
@@ -58,6 +59,28 @@ $requiredCommands = @(
 foreach ($commandName in $requiredCommands) {
     Assert-True ($exportedCommands -contains $commandName) ('Expected exported command under Windows PowerShell 5.1: {0}' -f $commandName)
 }
+
+$consoleSmoke = & $module {
+    $state = New-ShareSurferConsoleChoiceState -Options @('One', 'Two') -DefaultValue 'One'
+    Invoke-ShareSurferConsoleChoiceCommand -State $state -Command 'Down' | Out-Null
+    $plainCapabilities = Get-ShareSurferConsoleCapabilities -ConsoleMode Plain
+    [pscustomobject]@{
+        SelectedIndex = [int]$state.SelectedIndex
+        EffectiveConsoleMode = [string]$plainCapabilities.EffectiveConsoleMode
+        RawKeys = [bool]$plainCapabilities.RawKeys
+    }
+}
+Assert-True ($consoleSmoke.SelectedIndex -eq 1) 'Windows PowerShell 5.1 console choice state should support deterministic Down navigation.'
+Assert-True ($consoleSmoke.EffectiveConsoleMode -eq 'Plain') 'Windows PowerShell 5.1 console capabilities should support forced plain mode.'
+Assert-True (-not [bool]$consoleSmoke.RawKeys) 'Forced plain mode should not require raw key input.'
+
+$menuSmoke = & $module {
+    Get-ShareSurferMenuEntries -InputRoot 'C:\ShareSurfer-0.1.0-pre.example\inputs' -ExportPath 'C:\ShareSurfer-0.1.0-pre.example\exports\startup-scan' -ObsAttribute 'info' -AdLookupMode DirectoryOnly -ManagerIdentityFormat Mail -ConsoleMode Plain
+}
+$scanMenuEntry = @($menuSmoke | Where-Object { $_.Key -eq 'scan' })[0]
+Assert-True ([string]$scanMenuEntry.CommandPreview -like '*-ObsAttribute ''info''*') 'Windows PowerShell 5.1 menu preview should preserve the OBS attribute.'
+Assert-True ([string]$scanMenuEntry.CommandPreview -like '*-AdLookupMode ''DirectoryOnly''*') 'Windows PowerShell 5.1 menu preview should preserve AD lookup mode.'
+Assert-True ([string]$scanMenuEntry.CommandPreview -like '*-ManagerIdentityFormat ''Mail''*') 'Windows PowerShell 5.1 menu preview should preserve manager format.'
 
 $inventory = [pscustomobject]@{
     Shares = @(

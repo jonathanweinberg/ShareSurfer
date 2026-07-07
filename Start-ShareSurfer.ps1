@@ -15,6 +15,12 @@ param(
     [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
     [string] $AdLookupMode = 'Auto',
 
+    [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
+    [string] $ManagerIdentityFormat = 'MailTo',
+
+    [ValidateSet('Auto', 'Enhanced', 'Plain')]
+    [string] $ConsoleMode = 'Auto',
+
     [switch] $Interactive,
 
     [switch] $StartupOnly,
@@ -124,7 +130,9 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath) -and [string]::IsNullOrWhiteSpace(
         -ExportPath $ExportPath `
         -StandaloneDashboardPath $StandaloneDashboardPath `
         -ObsAttribute $ObsAttribute `
-        -AdLookupMode $AdLookupMode
+        -AdLookupMode $AdLookupMode `
+        -ManagerIdentityFormat $ManagerIdentityFormat `
+        -ConsoleMode $ConsoleMode
     return
 }
 
@@ -135,6 +143,8 @@ $startupParams = @{
     StandaloneDashboardPath = $StandaloneDashboardPath
     ObsAttribute = $ObsAttribute
     AdLookupMode = $AdLookupMode
+    ManagerIdentityFormat = $ManagerIdentityFormat
+    ConsoleMode = $ConsoleMode
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ConfigPath)) {

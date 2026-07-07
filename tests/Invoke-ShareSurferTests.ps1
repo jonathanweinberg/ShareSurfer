@@ -2668,6 +2668,19 @@ $tests = @(
             $shimState = New-ShareSurferPromptChoiceState -Options @('One', 'Two') -DefaultValue 'One'
             Invoke-ShareSurferPromptChoiceCommand -State $shimState -Command '2' | Out-Null
             Assert-Equal $shimState.SelectedValue 'Two' 'Compatibility shims should keep the legacy prompt names working.'
+
+            $yesNoState = New-ShareSurferConsoleChoiceState -Options @(
+                (New-ShareSurferConsoleChoiceOption -Value 'Yes'),
+                (New-ShareSurferConsoleChoiceOption -Value 'No')
+            ) -DefaultValue 'No'
+            Invoke-ShareSurferConsoleChoiceCommand -State $yesNoState -Command 'Y' | Out-Null
+            Assert-Equal $yesNoState.SelectedValue 'Yes' 'Boolean choice prompts should preserve Y/N shortcuts.'
+
+            $plainCapabilities = Get-ShareSurferConsoleCapabilities -ConsoleMode Plain
+            Assert-Equal $plainCapabilities.EffectiveConsoleMode 'Plain' 'Plain console mode should force the numbered fallback.'
+            Assert-Equal $plainCapabilities.RawKeys $false 'Plain console mode should not require raw key support.'
+            $singleFrameBehavior = Get-ShareSurferConsoleChoiceRenderBehavior -Capabilities ([pscustomobject]@{ RedrawMode = 'SingleFrame' })
+            Assert-Equal $singleFrameBehavior.ClearBeforeRender $true 'Enhanced console rendering should use a single-frame redraw behavior.'
         }
     },
     @{
@@ -2742,7 +2755,7 @@ $tests = @(
         Name = 'Console layer owns all interactive Read-Host prompts'
         Body = {
             $allowedReadHostCounts = @{
-                'Private/ShareSurfer.Console.ps1' = 4
+                'Private/ShareSurfer.Console.ps1' = 5
                 'Public/Join-ShareSurferOwnershipSources.ps1' = 4
             }
             $moduleRoot = Join-Path $repoRoot 'src/ShareSurfer'
@@ -2773,7 +2786,7 @@ $tests = @(
             try {
                 $entries = @(& $module {
                     param($InputRoot, $ExportPath)
-                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ObsAttribute 'info' -AdLookupMode 'DirectoryOnly' -ManagerIdentityFormat 'SamAccountName' -ConsoleMode Plain
                 } $inputRoot $exportPath)
 
                 Assert-Equal $entries.Count 7 'Start menu should list the seven operator tasks.'
@@ -2790,6 +2803,10 @@ $tests = @(
                 Assert-True ($scan.CommandPreview.Contains('Start-ShareSurferStartup -Interactive')) 'Scan entry should preview interactive startup when no config is saved.'
                 Assert-True ($scan.CommandPreview.Contains($inputRoot)) 'Scan preview should include the input root passed to the menu.'
                 Assert-True ($scan.CommandPreview.Contains($exportPath)) 'Scan preview should include the export path passed to the menu.'
+                Assert-True ($scan.CommandPreview.Contains("-ObsAttribute 'info'")) 'Scan preview should preserve the menu OBS attribute.'
+                Assert-True ($scan.CommandPreview.Contains("-AdLookupMode 'DirectoryOnly'")) 'Scan preview should preserve the menu AD lookup mode.'
+                Assert-True ($scan.CommandPreview.Contains("-ManagerIdentityFormat 'SamAccountName'")) 'Scan preview should preserve the menu manager identity format.'
+                Assert-True ($scan.CommandPreview.Contains("-ConsoleMode 'Plain'")) 'Scan preview should preserve the menu console mode.'
 
                 $screen = @(& $module {
                     param($Entries, $InputRoot, $ExportPath)
@@ -2818,6 +2835,7 @@ $tests = @(
             $script:shareSurferMenuAnswers = New-Object 'System.Collections.Generic.Queue[string]'
             $script:shareSurferMenuAnswers.Enqueue('4')
             $script:shareSurferMenuAnswers.Enqueue('N')
+            $script:shareSurferMenuAnswers.Enqueue('')
             $script:shareSurferMenuAnswers.Enqueue('Q')
             function global:Read-Host {
                 param([string] $Prompt)
@@ -2829,12 +2847,75 @@ $tests = @(
 
             try {
                 Start-ShareSurfer -ExportPath $exportPath
-                Assert-Equal $script:shareSurferMenuAnswers.Count 0 'Menu should consume the selection, the declined confirmation, and the quit command.'
+                Assert-Equal $script:shareSurferMenuAnswers.Count 0 'Menu should consume the selection, declined confirmation, return pause, and quit command.'
             }
             finally {
                 Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferMenuAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurfer guided scan preserves menu defaults in startup config'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuStartup-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'export'
+            $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $inputRoot 'owner-mapping.csv') -Value 'Pattern,Owner,BusinessUnit' -Encoding UTF8
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferMenuStartupAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            foreach ($answer in @(
+                '3', 'Y',
+                '', '', '', '', '',
+                '\\files01\Finance',
+                '', '', '',
+                '',
+                '', '', '', 'Y',
+                '',
+                '',
+                'N', 'N',
+                'Q'
+            )) {
+                $script:shareSurferMenuStartupAnswers.Enqueue($answer)
+            }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferMenuStartupAnswers.Count -eq 0) {
+                    throw ('Unexpected startup menu prompt: {0}' -f $Prompt)
+                }
+                $script:shareSurferMenuStartupAnswers.Dequeue()
+            }
+
+            try {
+                Start-ShareSurfer `
+                    -ReleaseRoot $repoRoot `
+                    -InputRoot $inputRoot `
+                    -ExportPath $exportPath `
+                    -StandaloneDashboardPath $dashboardPath `
+                    -ObsAttribute 'info' `
+                    -AdLookupMode DirectoryOnly `
+                    -ManagerIdentityFormat SamAccountName `
+                    -ConsoleMode Plain
+
+                $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+                Assert-Equal $config.obsAttribute 'info' 'Menu-launched startup should preserve the menu OBS attribute.'
+                Assert-Equal $config.adLookupMode 'DirectoryOnly' 'Menu-launched startup should preserve the menu AD lookup mode.'
+                Assert-Equal $config.managerIdentityFormat 'SamAccountName' 'Menu-launched startup should preserve the menu manager identity format.'
+                Assert-Equal $config.consoleMode 'Plain' 'Menu-launched startup should preserve the menu console mode in saved config.'
+                Assert-Equal $config.targetPaths[0] '\\files01\Finance' 'Menu-launched startup should save the prompted target path.'
+                Assert-Equal $script:shareSurferMenuStartupAnswers.Count 0 'Menu startup simulation should consume only the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferMenuStartupAnswers -Scope Script -ErrorAction SilentlyContinue
                 Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
