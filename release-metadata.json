@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.40",
-  "packageVersion": "0.1.0-pre.40",
-  "packageName": "ShareSurfer-0.1.0-pre.40",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.40.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.40",
+  "currentPrereleaseTag": "v0.1.0-pre.41",
+  "packageVersion": "0.1.0-pre.41",
+  "packageName": "ShareSurfer-0.1.0-pre.41",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.41.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.41",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 performance and scan-throughput release. v0.1.0-pre.40 builds on the v0.1.0-pre.39 large-ACL conflict hotfix by adding findings-classification progress and hot-path optimization for scans with hundreds of thousands of item/ACL rows. Findings classification now caches repeated broken/missing SID checks, avoids expensive path splitting for path-component policy checks, preserves the same findings.csv schema, and prints throttled progress during item, ACL, SID, service-account, and completion phases. This release also adds opt-in target-level parallel collection for multi-target Invoke-ShareSurferScan -TargetPath runs through -ParallelTargetCollection and -TargetCollectionThrottle, using PowerShell 5.1-compatible runspaces while keeping default scans sequential. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 standalone dashboard performance release. v0.1.0-pre.41 builds on the v0.1.0-pre.40 scan-throughput release by reducing dashboard memory overhead for large or legacy exports. The standalone dashboard now deduplicates missing-column schema warnings by dataset/column instead of recording one warning per affected row, and export-enabled evidence tables now generate CSV downloads only when the operator clicks Export shown CSV instead of building large data URIs during render. CSV export remains fully offline and local. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
