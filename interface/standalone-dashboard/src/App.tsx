@@ -64,9 +64,10 @@ interface FilterState {
 
 interface RuntimeSnapshotState {
   status: "ready" | "missing";
-  snapshot?: RawSnapshot;
+  snapshot?: NormalizedSnapshot;
   datasetLabel: string;
   message: string;
+  releaseRuntimeGlobal?: boolean;
 }
 
 type SearchScope = "owner" | "share" | "identity" | "path" | "group";
@@ -894,13 +895,22 @@ function hasRuntimeDatasets(snapshot?: RawSnapshot): boolean {
   return datasetValues.some((rows) => Array.isArray(rows) && rows.length > 0);
 }
 
+function clearRuntimeSnapshotGlobal() {
+  try {
+    delete window.__SHARESURFER_SNAPSHOT__;
+  } catch {
+    window.__SHARESURFER_SNAPSHOT__ = undefined;
+  }
+}
+
 function getRuntimeSnapshotState(useDemoSnapshot: boolean): RuntimeSnapshotState {
   if (useDemoSnapshot) {
     return {
       status: "ready",
-      snapshot: demoSnapshot,
+      snapshot: normalizeSnapshot(demoSnapshot),
       datasetLabel: "Demo dataset",
-      message: "Demo data is loaded intentionally."
+      message: "Demo data is loaded intentionally.",
+      releaseRuntimeGlobal: false
     };
   }
 
@@ -909,7 +919,8 @@ function getRuntimeSnapshotState(useDemoSnapshot: boolean): RuntimeSnapshotState
     return {
       status: "missing",
       datasetLabel: "",
-      message: "No runtime snapshot was found on window.__SHARESURFER_SNAPSHOT__."
+      message: "No runtime snapshot was found on window.__SHARESURFER_SNAPSHOT__.",
+      releaseRuntimeGlobal: false
     };
   }
 
@@ -917,7 +928,8 @@ function getRuntimeSnapshotState(useDemoSnapshot: boolean): RuntimeSnapshotState
     return {
       status: "missing",
       datasetLabel: "",
-      message: "This folder contains template dashboard assets, not a packaged ShareSurfer export."
+      message: "This folder contains template dashboard assets, not a packaged ShareSurfer export.",
+      releaseRuntimeGlobal: false
     };
   }
 
@@ -925,15 +937,19 @@ function getRuntimeSnapshotState(useDemoSnapshot: boolean): RuntimeSnapshotState
     return {
       status: "missing",
       datasetLabel: "",
-      message: "The runtime snapshot did not include any export rows."
+      message: "The runtime snapshot did not include any export rows.",
+      releaseRuntimeGlobal: false
     };
   }
 
+  const normalized = normalizeSnapshot(runtime);
+
   return {
     status: "ready",
-    snapshot: runtime,
+    snapshot: normalized,
     datasetLabel: runtime.snapshotKind === "export" ? "Export dataset" : "Runtime dataset",
-    message: "ShareSurfer export data is loaded."
+    message: "ShareSurfer export data is loaded.",
+    releaseRuntimeGlobal: true
   };
 }
 
@@ -2635,12 +2651,11 @@ function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardM
   );
 }
 
-function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnapshot; datasetLabel: string }) {
+function DashboardApp({ snapshot, datasetLabel }: { snapshot: NormalizedSnapshot; datasetLabel: string }) {
   const initialState = useMemo(() => loadDashboardState(), []);
   const [activeView, setActiveView] = useState<ViewKey>(initialState.activeView ?? "overview");
   const [filters, setFilters] = useState<FilterState>(initialState.filters ?? defaultFilters);
   const deferredQuery = useDeferredValue(filters.query);
-  const snapshot = useMemo(() => normalizeSnapshot(snapshotInput), [snapshotInput]);
   const dashboard = useMemo(() => deriveDashboard(snapshot), [snapshot]);
   const brokenSidIndex = useMemo(() => buildBrokenSidEvidenceIndex(dashboard), [dashboard]);
   const [selectedIssueId, setSelectedIssueId] = useState<string>(initialState.selectedIssueId ?? "");
@@ -2884,12 +2899,17 @@ function DashboardApp({ snapshotInput, datasetLabel }: { snapshotInput: RawSnaps
 }
 
 export function App() {
-  const [useDemoSnapshot, setUseDemoSnapshot] = useState(false);
-  const runtimeState = useMemo(() => getRuntimeSnapshotState(useDemoSnapshot), [useDemoSnapshot]);
+  const [runtimeState, setRuntimeState] = useState<RuntimeSnapshotState>(() => getRuntimeSnapshotState(false));
+
+  useEffect(() => {
+    if (runtimeState.releaseRuntimeGlobal) {
+      clearRuntimeSnapshotGlobal();
+    }
+  }, [runtimeState.releaseRuntimeGlobal]);
 
   if (runtimeState.status !== "ready" || !runtimeState.snapshot) {
-    return <DatasetMissingScreen message={runtimeState.message} onOpenDemo={() => setUseDemoSnapshot(true)} />;
+    return <DatasetMissingScreen message={runtimeState.message} onOpenDemo={() => setRuntimeState(getRuntimeSnapshotState(true))} />;
   }
 
-  return <DashboardApp snapshotInput={runtimeState.snapshot} datasetLabel={runtimeState.datasetLabel} />;
+  return <DashboardApp snapshot={runtimeState.snapshot} datasetLabel={runtimeState.datasetLabel} />;
 }
