@@ -109,7 +109,31 @@ if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
     throw "ShareSurfer module manifest was not found: $modulePath"
 }
 
-Import-Module $modulePath -Force
+$shareSurferModule = @(Import-Module $modulePath -Force -PassThru)[0]
+if ($null -eq $shareSurferModule) {
+    throw "ShareSurfer module could not be imported from: $modulePath"
+}
+
+function Invoke-ShareSurferLauncherModuleCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PSModuleInfo] $Module,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+
+        [hashtable] $Parameters = @{}
+    )
+
+    $command = @(Get-Command -Name $Name -Module $Module.Name -ErrorAction Stop | Where-Object {
+        $null -ne $_.Module -and [string]::Equals([string]$_.Module.Path, [string]$Module.Path, [System.StringComparison]::OrdinalIgnoreCase)
+    })[0]
+    if ($null -eq $command) {
+        throw "ShareSurfer command '$Name' was not exported from the imported module: $($Module.Path)"
+    }
+
+    & $command @Parameters
+}
 
 if ([string]::IsNullOrWhiteSpace($InputRoot)) {
     $InputRoot = Join-Path $releaseRoot 'inputs'
@@ -124,15 +148,16 @@ if ([string]::IsNullOrWhiteSpace($StandaloneDashboardPath)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath) -and [string]::IsNullOrWhiteSpace($SaveConfigPath) -and -not $StartupOnly) {
-    Start-ShareSurfer `
-        -ReleaseRoot $releaseRoot `
-        -InputRoot $InputRoot `
-        -ExportPath $ExportPath `
-        -StandaloneDashboardPath $StandaloneDashboardPath `
-        -ObsAttribute $ObsAttribute `
-        -AdLookupMode $AdLookupMode `
-        -ManagerIdentityFormat $ManagerIdentityFormat `
-        -ConsoleMode $ConsoleMode
+    Invoke-ShareSurferLauncherModuleCommand -Module $shareSurferModule -Name 'Start-ShareSurfer' -Parameters @{
+        ReleaseRoot = $releaseRoot
+        InputRoot = $InputRoot
+        ExportPath = $ExportPath
+        StandaloneDashboardPath = $StandaloneDashboardPath
+        ObsAttribute = $ObsAttribute
+        AdLookupMode = $AdLookupMode
+        ManagerIdentityFormat = $ManagerIdentityFormat
+        ConsoleMode = $ConsoleMode
+    }
     return
 }
 
@@ -163,4 +188,4 @@ if ($Force) {
     $startupParams.Force = $true
 }
 
-Start-ShareSurferStartup @startupParams
+Invoke-ShareSurferLauncherModuleCommand -Module $shareSurferModule -Name 'Start-ShareSurferStartup' -Parameters $startupParams

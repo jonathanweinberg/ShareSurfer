@@ -2931,8 +2931,7 @@ $tests = @(
                 '', '', '', 'Y',
                 '',
                 '',
-                'N', 'N',
-                'Q'
+                'N', 'N'
             )) {
                 $script:shareSurferMenuStartupAnswers.Enqueue($answer)
             }
@@ -8044,8 +8043,9 @@ $tests = @(
             Assert-True ($startupLauncherText -like '*Remove-ShareSurferLauncherZoneIdentifierStream*') 'Release-root launcher should explicitly clear Zone.Identifier markers before module import.'
             Assert-True ($startupLauncherText -like '*Get-ChildItem -LiteralPath $Root -Recurse -File*') 'Release-root launcher should use literal recursive file enumeration for unblock.'
             Assert-True ($startupLauncherText -like '*explicitly cleared*downloaded-file marker*') 'Release-root launcher should report downloaded-file marker cleanup.'
-            Assert-True ($startupLauncherText -like '*Start-ShareSurfer*' -and $startupLauncherText -like '*-ReleaseRoot $releaseRoot*') 'Release-root launcher should enter the Start-ShareSurfer menu when no startup config path is supplied.'
-            Assert-True ($startupLauncherText -like '*Start-ShareSurferStartup @startupParams*') 'Release-root launcher should preserve startup config replay.'
+            Assert-True ($startupLauncherText -like '*Import-Module $modulePath -Force -PassThru*') 'Release-root launcher should retain the imported module instance.'
+            Assert-True ($startupLauncherText -like '*Invoke-ShareSurferLauncherModuleCommand*' -and $startupLauncherText -like '*Start-ShareSurfer*' -and $startupLauncherText -like '*ReleaseRoot = $releaseRoot*') 'Release-root launcher should enter the module-bound Start-ShareSurfer menu when no startup config path is supplied.'
+            Assert-True ($startupLauncherText -like '*Invoke-ShareSurferLauncherModuleCommand*' -and $startupLauncherText -like '*Start-ShareSurferStartup*' -and $startupLauncherText -like '*Parameters $startupParams*') 'Release-root launcher should preserve startup config replay through the imported module command.'
             $startupCommandText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Public/Start-ShareSurferStartup.ps1') -Raw
             Assert-True ($startupCommandText -like '*Invoke-ShareSurferStartupPostPlanHandoff*') 'Startup command should include an interactive post-plan handoff.'
             Assert-True ($startupCommandText -like '*Show generated startup JSON, scan plan, and rerun script now?*') 'Startup command should offer to review generated files after prompts.'
