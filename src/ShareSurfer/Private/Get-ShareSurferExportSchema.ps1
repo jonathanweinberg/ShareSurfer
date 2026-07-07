@@ -454,6 +454,10 @@ function Get-ShareSurferExportSchema {
             'GroupExpansionMaxDepth',
             'AdLookupMode',
             'ManagerIdentityFormat',
+            'AclExportMode',
+            'FullAclEntryCount',
+            'ExportedAclEntryCount',
+            'SuppressedInheritedAclEntryCount',
             'IncludeFiles'
         )
     }

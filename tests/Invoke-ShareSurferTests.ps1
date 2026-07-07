@@ -908,7 +908,7 @@ $tests = @(
                 [pscustomobject]@{ ReviewPacketId = 'owner-review-0001'; BusinessUnit = 'Finance'; Owner = 'Finance Operations'; Pattern = '\\files01\Share001*'; Source = 'unit-test'; RiskLevel = 'High'; ReviewStatus = 'High priority review'; WhyReview = 'high-priority access or migration risk; permission-bearing security groups'; WhatToReviewFirst = 'access conflicts; findings; permissioned groups'; SuggestedNextAction = 'Confirm ownership, review assigned groups, and document the remediation decision.'; MatchingItems = '2'; Directories = '0'; Files = '2'; FindingCount = '3'; ConflictCount = '1'; PartialShareCount = '0'; DirectIdentityCount = '3'; DirectGroupCount = '3'; ExpandedMemberCount = '1'; MigrationReadiness = 'Review'; RelatedDataAreaCount = '1'; RelatednessStrength = 'Strong'; RelationshipSignalCount = '3'; ReadinessSignals = 'broken inheritance; conflicts; deep explicit ACE; long path'; DiscountedPrincipal = 'False'; DiscountedPrincipalCount = '0'; DiscountedGroupCount = '0'; DiscountedPrincipals = ''; DiscountReason = '' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'owner_review_packets.csv') -NoTypeInformation -Encoding UTF8
             @(
-                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; ManagerIdentityFormat = 'MailTo'; AclExportMode = 'FullEffective'; FullAclEntryCount = '2'; ExportedAclEntryCount = '2'; SuppressedInheritedAclEntryCount = '0'; IncludeFiles = 'True' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
 
             $plan = [pscustomobject]@{
@@ -1075,7 +1075,7 @@ $tests = @(
             Assert-True ([string]$existingLabDiskCriterion.EvidenceDetail -like '*ActualBytes=*') 'Existing lab disk-budget evidence should include measured bytes.'
 
             @(
-                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'False' }
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; ManagerIdentityFormat = 'MailTo'; AclExportMode = 'FullEffective'; FullAclEntryCount = '0'; ExportedAclEntryCount = '0'; SuppressedInheritedAclEntryCount = '0'; IncludeFiles = 'False' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
             $mismatchedManifestCriteria = @(New-ShareSurferLabValidationCriteriaRows -Plan $plan -ExportPath $exportPath -LabRoot $labRoot -CreateLab -IncludeFiles)
             $mismatchedManifestFileCriterion = @($mismatchedManifestCriteria | Where-Object { $_.Name -eq 'EnterpriseRealFiles' })[0]
@@ -1083,7 +1083,7 @@ $tests = @(
             Assert-Equal $mismatchedManifestFileCriterion.EvidenceSource 'ScanExportMismatch:scan_manifest.csv' 'File validation should identify mismatched scan manifest evidence.'
             Assert-True ([string]$mismatchedManifestFileCriterion.EvidenceDetail -like '*ManifestIncludeFiles=False*') 'Mismatched file evidence should show the manifest IncludeFiles value.'
             @(
-                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; IncludeFiles = 'True' }
+                [pscustomobject]@{ ScanId = 'scan-001'; GeneratedAt = '2026-06-05T00:00:00Z'; ExportVersion = '1'; ObsAttribute = 'extensionAttribute10'; SourceMode = 'SmbShare'; CollectionProvider = 'Auto'; OperationalPathLengthThreshold = '256'; AzurePathComponentLimit = '255'; AzureFullPathLimit = '2048'; ExplicitAceDepthThreshold = '2'; GroupExpansionMaxDepth = '20'; AdLookupMode = 'DirectoryOnly'; ManagerIdentityFormat = 'MailTo'; AclExportMode = 'FullEffective'; FullAclEntryCount = '0'; ExportedAclEntryCount = '0'; SuppressedInheritedAclEntryCount = '0'; IncludeFiles = 'True' }
             ) | Export-Csv -LiteralPath (Join-Path $exportPath 'scan_manifest.csv') -NoTypeInformation -Encoding UTF8
 
             $liveEvidence = Test-ShareSurferLabValidationLiveEvidence -CriteriaRows $criteria
@@ -1440,11 +1440,126 @@ $tests = @(
             Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'ReviewGate') 'Evidence confidence should include review gates.'
             Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'RecommendedAction') 'Evidence confidence should include a recommended action.'
             Assert-True ($confidenceRows[0].PSObject.Properties.Name -contains 'Detail') 'Evidence confidence should include readable detail.'
+	        }
+	    },
+    @{
+        Name = 'Invoke-ShareSurferScan can compact repeated inherited ACL exports without changing analysis inputs'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $outputPath = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferCompactAcl-' + [guid]::NewGuid().ToString('N'))
+            $inventory = New-TestInventory
+            $inventory.Items += @(
+                [pscustomobject]@{
+                    ItemId = 'item-child'
+                    ShareId = 'share-finance'
+                    ItemType = 'Directory'
+                    FullPath = '\\files01\Finance\Reports'
+                    RelativePath = 'Reports'
+                    Depth = 1
+                    Owner = 'CONTOSO\FinanceOwner'
+                    InheritanceEnabled = $true
+                    InheritanceBrokenAt = ''
+                },
+                [pscustomobject]@{
+                    ItemId = 'item-deep-child'
+                    ShareId = 'share-finance'
+                    ItemType = 'File'
+                    FullPath = '\\files01\Finance\Delegated\Child\report.xlsx'
+                    RelativePath = 'Delegated\Child\report.xlsx'
+                    Depth = 4
+                    Owner = 'CONTOSO\FinanceOwner'
+                    InheritanceEnabled = $true
+                    InheritanceBrokenAt = ''
+                }
+            )
+            $inventory.AclEntries += @(
+                [pscustomobject]@{
+                    ItemId = 'item-root'
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance'
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'Read'
+                    AccessControlType = 'Allow'
+                    IsInherited = $true
+                    InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                    PropagationFlags = 'None'
+                    Depth = 0
+                },
+                [pscustomobject]@{
+                    ItemId = 'item-child'
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Reports'
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'Read'
+                    AccessControlType = 'Allow'
+                    IsInherited = $true
+                    InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                    PropagationFlags = 'None'
+                    Depth = 1
+                },
+                [pscustomobject]@{
+                    ItemId = 'item-child'
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Reports'
+                    Identity = 'CONTOSO\FinanceEditors'
+                    Rights = 'Modify'
+                    AccessControlType = 'Allow'
+                    IsInherited = $false
+                    InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                    PropagationFlags = 'None'
+                    Depth = 1
+                },
+                [pscustomobject]@{
+                    ItemId = 'item-deep'
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Delegated'
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'Read'
+                    AccessControlType = 'Allow'
+                    IsInherited = $true
+                    InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                    PropagationFlags = 'None'
+                    Depth = 3
+                },
+                [pscustomobject]@{
+                    ItemId = 'item-deep-child'
+                    ShareId = 'share-finance'
+                    FullPath = '\\files01\Finance\Delegated\Child\report.xlsx'
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'Read'
+                    AccessControlType = 'Allow'
+                    IsInherited = $true
+                    InheritanceFlags = 'ContainerInherit,ObjectInherit'
+                    PropagationFlags = 'None'
+                    Depth = 4
+                }
+            )
+
+            $summary = Invoke-ShareSurferScan -InputObject $inventory -OutputPath $outputPath -SkipIdentityEnrichment -AclExportMode Compact
+            $aclRows = @(Import-Csv -LiteralPath (Join-Path $outputPath 'acl_entries.csv'))
+            $manifest = @(Import-Csv -LiteralPath (Join-Path $outputPath 'scan_manifest.csv'))[0]
+            $findings = @(Import-Csv -LiteralPath (Join-Path $outputPath 'findings.csv'))
+            $validationResult = Test-ShareSurferExport -ExportPath $outputPath
+
+            Assert-Equal $manifest.AclExportMode 'Compact' 'Manifest should record compact ACL export mode.'
+            Assert-Equal ([int]$manifest.FullAclEntryCount) 8 'Manifest should preserve the full ACL row count used by analysis.'
+            Assert-Equal ([int]$manifest.ExportedAclEntryCount) 6 'Manifest should record the compact exported ACL row count.'
+            Assert-Equal ([int]$manifest.SuppressedInheritedAclEntryCount) 2 'Manifest should record suppressed inherited duplicate rows.'
+            Assert-Equal $summary.AclExportMode 'Compact' 'Command summary should expose the active ACL export mode.'
+            Assert-Equal ([int]$summary.FullAclEntries) 8 'Command summary should expose full ACL row count.'
+            Assert-Equal ([int]$summary.AclEntries) 6 'Command summary should expose compact exported ACL row count.'
+            Assert-Equal ([int]$summary.SuppressedInheritedAclEntries) 2 'Command summary should expose suppressed inherited duplicate count.'
+            Assert-True ([bool]$validationResult.IsValid) 'Compact ACL export should pass normal export validation.'
+            Assert-Equal (@($aclRows | Where-Object { $_.ItemId -eq 'item-child' -and $_.Identity -eq 'CONTOSO\FinanceReaders' }).Count) 0 'Repeated inherited descendant rows should be suppressed in compact mode.'
+            Assert-Equal (@($aclRows | Where-Object { $_.ItemId -eq 'item-child' -and $_.Identity -eq 'CONTOSO\FinanceEditors' -and $_.IsInherited -eq 'False' }).Count) 1 'Explicit ACEs must stay visible in compact mode.'
+            Assert-Equal (@($aclRows | Where-Object { $_.ItemId -eq 'item-root' -and $_.Identity -eq 'CONTOSO\FinanceReaders' }).Count) 1 'Root inherited baseline ACEs should remain visible in compact mode.'
+            Assert-Equal (@($aclRows | Where-Object { $_.ItemId -eq 'item-deep' -and $_.Identity -eq 'CONTOSO\FinanceReaders' }).Count) 1 'Inheritance-break boundary ACEs should remain visible in compact mode.'
+            Assert-True ($findings.FindingType -contains 'BrokenInheritance') 'Findings should still use full analysis inputs even when ACL export is compacted.'
         }
     },
-    @{
-        Name = 'Get-ShareSurferConflicts dedupes missing share gate noise and respects broad gates'
-        Body = {
+	    @{
+	        Name = 'Get-ShareSurferConflicts dedupes missing share gate noise and respects broad gates'
+	        Body = {
             Import-Module $moduleManifest -Force
             $sharePermissionsWithBroadGate = @(
                 [pscustomobject]@{ ShareId = 'share-001'; Identity = 'Everyone'; Rights = 'Full'; AccessControlType = 'Allow' }

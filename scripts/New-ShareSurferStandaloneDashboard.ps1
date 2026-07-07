@@ -70,7 +70,7 @@ function New-ShareSurferStandaloneSchema {
         'evidence_confidence.csv' = @('ConfidenceId', 'Scope', 'ScopeId', 'ScopeName', 'ConfidenceLabel', 'ConfidenceScore', 'StopGate', 'ReviewGate', 'SignalCount', 'Signals', 'PartialShareCount', 'CollectionErrorCount', 'HighSeverityErrorCount', 'TotalShares', 'TotalItems', 'RequestedProvider', 'EffectiveProvider', 'ProviderFallback', 'RecommendedAction', 'Detail')
         'collection_errors.csv' = @('ErrorId', 'ShareId', 'ItemId', 'FullPath', 'ErrorType', 'Severity', 'Source', 'Message', 'Detail')
         'scan_events.csv' = @('EventId', 'Timestamp', 'Level', 'EventType', 'Source', 'ShareId', 'ItemId', 'Message', 'Detail')
-        'scan_manifest.csv' = @('ScanId', 'GeneratedAt', 'ExportVersion', 'ObsAttribute', 'SourceMode', 'CollectionProvider', 'RequestedSmbCollectionProvider', 'EffectiveSmbCollectionProvider', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'ManagerIdentityFormat', 'IncludeFiles')
+        'scan_manifest.csv' = @('ScanId', 'GeneratedAt', 'ExportVersion', 'ObsAttribute', 'SourceMode', 'CollectionProvider', 'RequestedSmbCollectionProvider', 'EffectiveSmbCollectionProvider', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'ManagerIdentityFormat', 'AclExportMode', 'FullAclEntryCount', 'ExportedAclEntryCount', 'SuppressedInheritedAclEntryCount', 'IncludeFiles')
     }
 }
 

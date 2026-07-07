@@ -47,6 +47,8 @@ If `v0.1.0-pre.40` is not visible yet on the [ShareSurfer Releases page](https:/
 - `owner_review_packets.csv` and `owner_risk_pivots.csv` are blank, generic, or missing expected owner/business-unit mappings.
 - `port_protocol_targets.csv` or `port_protocol_checks.csv` shows protocol readiness blockers for the collection route you intended to trust.
 
+Large inherited ACL exports can make `acl_entries.csv` and packaged dashboards very large. Keep the default full evidence mode when an administrator needs every inherited ACE repeated on every path. Use `Invoke-ShareSurferScan -AclExportMode Compact` when the main need is a smaller dashboard/review package; ShareSurfer still classifies findings and conflicts from the full ACL evidence before writing the compacted CSV. Check `scan_manifest.csv` for `AclExportMode`, `FullAclEntryCount`, `ExportedAclEntryCount`, and `SuppressedInheritedAclEntryCount`.
+
 ## Recipe 1: Unpack and Import the Release
 
 Use this on the Windows collector host after downloading `ShareSurfer-0.1.0-pre.40.zip` from the GitHub release on an approved connected workstation. If that checkpoint ZIP is not published yet, download the latest published prerelease ZIP and update `$releaseZip` and `$releaseRoot` to match it.

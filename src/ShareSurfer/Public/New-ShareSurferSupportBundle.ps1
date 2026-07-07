@@ -739,7 +739,7 @@ function New-ShareSurferSupportBundleDiagnostics {
     }
 
     $scanSettings = [ordered]@{}
-    foreach ($column in @('ExportVersion', 'ObsAttribute', 'SourceMode', 'CollectionProvider', 'RequestedSmbCollectionProvider', 'EffectiveSmbCollectionProvider', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode')) {
+    foreach ($column in @('ExportVersion', 'ObsAttribute', 'SourceMode', 'CollectionProvider', 'RequestedSmbCollectionProvider', 'EffectiveSmbCollectionProvider', 'OperationalPathLengthThreshold', 'AzurePathComponentLimit', 'AzureFullPathLimit', 'ExplicitAceDepthThreshold', 'GroupExpansionMaxDepth', 'AdLookupMode', 'ManagerIdentityFormat', 'AclExportMode', 'FullAclEntryCount', 'ExportedAclEntryCount', 'SuppressedInheritedAclEntryCount')) {
         if ($null -ne $manifest -and $null -ne $manifest.PSObject.Properties[$column]) {
             $scanSettings[$column] = [string]$manifest.$column
         }
@@ -1258,6 +1258,10 @@ function Test-ShareSurferRedactionAuditValue {
         'GroupExpansionMaxDepth',
         'AdLookupMode',
         'ManagerIdentityFormat',
+        'AclExportMode',
+        'FullAclEntryCount',
+        'ExportedAclEntryCount',
+        'SuppressedInheritedAclEntryCount',
         'ObsAttribute',
         'PotentialServiceAccount',
         'GeneratedAt'

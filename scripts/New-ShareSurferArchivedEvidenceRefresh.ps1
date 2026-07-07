@@ -78,6 +78,9 @@ function Convert-ShareSurferArchivedCsvToSchema {
             elseif ($Path -like '*scan_manifest.csv' -and @('RequestedSmbCollectionProvider', 'EffectiveSmbCollectionProvider') -contains $column -and $row.PSObject.Properties['CollectionProvider']) {
                 $record[$column] = [string]$row.CollectionProvider
             }
+            elseif ($Path -like '*scan_manifest.csv' -and $column -eq 'AclExportMode') {
+                $record[$column] = 'FullEffective'
+            }
             else {
                 $record[$column] = ''
             }
@@ -174,6 +177,10 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'scan_
     'GroupExpansionMaxDepth',
     'AdLookupMode',
     'ManagerIdentityFormat',
+    'AclExportMode',
+    'FullAclEntryCount',
+    'ExportedAclEntryCount',
+    'SuppressedInheritedAclEntryCount',
     'IncludeFiles'
 )
 if (-not (Test-Path -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv'))) {
