@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -39,7 +39,7 @@ import {
   type ReviewQueueRow,
   type ScanSummary
 } from "./data/deriveDashboard";
-import type { RawSnapshot } from "./data/fixtures";
+import type { LazyDatasetInfo, RawSnapshot } from "./data/fixtures";
 import type { DataRow, DatasetKey } from "./data/schema";
 import { datasetLabels, expectedColumns, glossaryTerms, tooltipRegistry } from "./data/schema";
 import { KpiCard } from "./ui/KpiCard";
@@ -68,6 +68,14 @@ interface RuntimeSnapshotState {
   datasetLabel: string;
   message: string;
   releaseRuntimeGlobal?: boolean;
+}
+
+type LazyDatasetLoadStatus = "idle" | "loading" | "loaded" | "error";
+
+interface LazyDatasetLoadState {
+  status: LazyDatasetLoadStatus;
+  script?: string;
+  message?: string;
 }
 
 type SearchScope = "owner" | "share" | "identity" | "path" | "group";
@@ -901,6 +909,68 @@ function clearRuntimeSnapshotGlobal() {
   } catch {
     window.__SHARESURFER_SNAPSHOT__ = undefined;
   }
+}
+
+function describeLazyDatasetLoadError(error: unknown, datasetKey: DatasetKey, script: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return `Could not load dataset chunk ${script} for ${datasetLabels[datasetKey]}.`;
+}
+
+function loadLazyDatasetChunk(datasetKey: DatasetKey, info: LazyDatasetInfo): Promise<DataRow[]> {
+  return new Promise((resolve, reject) => {
+    const existingRows = window.__SHARESURFER_DATASET_CHUNKS__?.[datasetKey];
+    if (Array.isArray(existingRows)) {
+      resolve(existingRows);
+      return;
+    }
+
+    const scriptPath = info.script;
+    if (!scriptPath) {
+      reject(new Error(`Dataset ${datasetLabels[datasetKey]} was marked lazy, but no chunk script path was provided.`));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.async = false;
+    script.src = scriptPath;
+    script.dataset.sharesurferDataset = datasetKey;
+    script.onload = () => {
+      const rows = window.__SHARESURFER_DATASET_CHUNKS__?.[datasetKey];
+      if (Array.isArray(rows)) {
+        resolve(rows);
+        return;
+      }
+      reject(new Error(`Dataset chunk ${scriptPath} loaded, but it did not register rows for ${datasetLabels[datasetKey]}.`));
+    };
+    script.onerror = () => {
+      reject(new Error(`Could not load dataset chunk ${scriptPath} for ${datasetLabels[datasetKey]}. Keep the packaged dashboard folder together and open index.html from that folder.`));
+    };
+
+    document.head.appendChild(script);
+  });
+}
+
+function mergeLazyDatasetRows(snapshot: NormalizedSnapshot, datasetKey: DatasetKey, rows: DataRow[]): NormalizedSnapshot {
+  const datasets = {
+    ...snapshot.datasets,
+    [datasetKey]: rows
+  };
+  const lazyDatasets = { ...snapshot.lazyDatasets };
+  delete lazyDatasets[datasetKey];
+
+  const rawSnapshot: RawSnapshot = {
+    snapshotKind: "export",
+    generatedAt: snapshot.generatedAt,
+    rowCounts: snapshot.rowCounts,
+    schemaWarnings: snapshot.schemaWarnings,
+    lazyDatasets,
+    datasets
+  };
+
+  return normalizeSnapshot(rawSnapshot);
 }
 
 function getRuntimeSnapshotState(useDemoSnapshot: boolean): RuntimeSnapshotState {
@@ -2367,13 +2437,19 @@ function RawEvidenceView({
   query,
   filters,
   datasetKey,
-  onDatasetChange
+  onDatasetChange,
+  lazyState,
+  isDatasetLazy,
+  onRequestDatasetLoad
 }: {
   dashboard: DashboardModel;
   query: string;
   filters: FilterState;
   datasetKey: DatasetKey;
   onDatasetChange: (datasetKey: DatasetKey) => void;
+  lazyState?: LazyDatasetLoadState;
+  isDatasetLazy: boolean;
+  onRequestDatasetLoad: (datasetKey: DatasetKey, force?: boolean) => void;
 }) {
   const [showAllColumns, setShowAllColumns] = useState(false);
   const [selectedRow, setSelectedRow] = useState<DataRow | null>(null);
@@ -2412,6 +2488,24 @@ function RawEvidenceView({
       <p className="panel-copy">
         Showing {showAllColumns ? "every exported CSV column" : "the review-friendly column set"}. Use field filters to combine exact signals such as share path plus group name, then export the rows currently shown.
       </p>
+      {isDatasetLazy ? (
+        <div className={lazyState?.status === "error" ? "warning-banner" : "info-banner"} role={lazyState?.status === "error" ? "alert" : "status"}>
+          {lazyState?.status === "error" ? (
+            <>
+              <strong>Dataset chunk could not load.</strong>
+              <p>{lazyState.message}</p>
+              <button type="button" className="clear-button" onClick={() => onRequestDatasetLoad(dataset.key, true)}>
+                Retry loading {dataset.label}
+              </button>
+            </>
+          ) : (
+            <p>
+              Loading {formatNumber(dataset.totalRows)} {dataset.label.toLowerCase()} row(s) from packaged dataset chunk
+              {lazyState?.script ? ` ${lazyState.script}` : ""}. The rest of the report remains available while this raw table loads.
+            </p>
+          )}
+        </div>
+      ) : null}
       <VirtualTable
         rows={rows}
         columns={columns}
@@ -2652,11 +2746,13 @@ function PortProtocolView({ dashboard, query, filters }: { dashboard: DashboardM
 }
 
 function DashboardApp({ snapshot, datasetLabel }: { snapshot: NormalizedSnapshot; datasetLabel: string }) {
+  const [snapshotState, setSnapshotState] = useState<NormalizedSnapshot>(snapshot);
+  const [lazyDatasetStates, setLazyDatasetStates] = useState<Partial<Record<DatasetKey, LazyDatasetLoadState>>>({});
   const initialState = useMemo(() => loadDashboardState(), []);
   const [activeView, setActiveView] = useState<ViewKey>(initialState.activeView ?? "overview");
   const [filters, setFilters] = useState<FilterState>(initialState.filters ?? defaultFilters);
   const deferredQuery = useDeferredValue(filters.query);
-  const dashboard = useMemo(() => deriveDashboard(snapshot), [snapshot]);
+  const dashboard = useMemo(() => deriveDashboard(snapshotState), [snapshotState]);
   const brokenSidIndex = useMemo(() => buildBrokenSidEvidenceIndex(dashboard), [dashboard]);
   const [selectedIssueId, setSelectedIssueId] = useState<string>(initialState.selectedIssueId ?? "");
   const [selectedClusterId, setSelectedClusterId] = useState<string>(initialState.selectedClusterId ?? "");
@@ -2678,6 +2774,73 @@ function DashboardApp({ snapshot, datasetLabel }: { snapshot: NormalizedSnapshot
   const selectedIssue = filteredIssues.find((issue) => issue.id === selectedIssueId) ?? filteredIssues[0];
   const selectedCluster = filteredClusters.find((cluster) => cluster.id === selectedClusterId) ?? filteredClusters[0];
   const selectedGroup = filteredGroups.find((group) => group.group === selectedGroupName) ?? filteredGroups[0];
+
+  const requestLazyDatasetLoad = useCallback((datasetKey: DatasetKey, force = false) => {
+    const lazyInfo = snapshotState.lazyDatasets[datasetKey];
+    if (!lazyInfo) {
+      return;
+    }
+
+    const currentState = lazyDatasetStates[datasetKey];
+    if (currentState?.status === "loading" || currentState?.status === "loaded" || (currentState?.status === "error" && !force)) {
+      return;
+    }
+
+    setLazyDatasetStates((current) => ({
+      ...current,
+      [datasetKey]: {
+        status: "loading",
+        script: lazyInfo.script,
+        message: `Loading ${datasetLabels[datasetKey]} from ${lazyInfo.script}.`
+      }
+    }));
+
+    loadLazyDatasetChunk(datasetKey, lazyInfo)
+      .then((rows) => {
+        setSnapshotState((current) => {
+          if (!current.lazyDatasets[datasetKey]) {
+            return current;
+          }
+          return mergeLazyDatasetRows(current, datasetKey, rows);
+        });
+        setLazyDatasetStates((current) => ({
+          ...current,
+          [datasetKey]: {
+            status: "loaded",
+            script: lazyInfo.script,
+            message: `Loaded ${rows.length} ${datasetLabels[datasetKey]} row(s).`
+          }
+        }));
+      })
+      .catch((error: unknown) => {
+        setLazyDatasetStates((current) => ({
+          ...current,
+          [datasetKey]: {
+            status: "error",
+            script: lazyInfo.script,
+            message: describeLazyDatasetLoadError(error, datasetKey, lazyInfo.script)
+          }
+        }));
+      });
+  }, [lazyDatasetStates, snapshotState.lazyDatasets]);
+
+  useEffect(() => {
+    const neededDatasets: DatasetKey[] = [];
+    if (activeView === "raw") {
+      neededDatasets.push(rawDatasetKey);
+    }
+    if (activeView === "groups") {
+      neededDatasets.push("acl_entries");
+    }
+    if (activeView === "diagnostics") {
+      neededDatasets.push("scan_events");
+    }
+    if (activeView === "connectivity") {
+      neededDatasets.push("open_file_samples");
+    }
+
+    neededDatasets.forEach((datasetKey) => requestLazyDatasetLoad(datasetKey));
+  }, [activeView, rawDatasetKey, requestLazyDatasetLoad]);
 
   useEffect(() => {
     saveDashboardState({
@@ -2849,8 +3012,8 @@ function DashboardApp({ snapshot, datasetLabel }: { snapshot: NormalizedSnapshot
           </div>
           <div className="topbar-status">
             <StatusBadge value={dashboard.scanSummary.confidenceLabel} />
-            <span>{formatNumber(snapshot.rowCounts.acl_entries)} ACL rows</span>
-            <span>{formatNumber(snapshot.rowCounts.conflicts)} conflict rows</span>
+            <span>{formatNumber(snapshotState.rowCounts.acl_entries)} ACL rows</span>
+            <span>{formatNumber(snapshotState.rowCounts.conflicts)} conflict rows</span>
           </div>
         </header>
         <ReportContextStrip summary={dashboard.scanSummary} datasetLabel={datasetLabel} />
@@ -2890,8 +3053,19 @@ function DashboardApp({ snapshot, datasetLabel }: { snapshot: NormalizedSnapshot
           <GroupsView dashboard={dashboard} groups={filteredGroups} selectedGroup={selectedGroup} onGroupSelect={(group) => setSelectedGroupName(group.group)} />
         ) : null}
         {activeView === "identity" ? <IdentityView dashboard={dashboard} /> : null}
-        {activeView === "diagnostics" ? <DiagnosticsView snapshot={snapshot} dashboard={dashboard} /> : null}
-        {activeView === "raw" ? <RawEvidenceView dashboard={dashboard} query={deferredQuery} filters={filters} datasetKey={rawDatasetKey} onDatasetChange={setRawDatasetKey} /> : null}
+        {activeView === "diagnostics" ? <DiagnosticsView snapshot={snapshotState} dashboard={dashboard} /> : null}
+        {activeView === "raw" ? (
+          <RawEvidenceView
+            dashboard={dashboard}
+            query={deferredQuery}
+            filters={filters}
+            datasetKey={rawDatasetKey}
+            onDatasetChange={setRawDatasetKey}
+            lazyState={lazyDatasetStates[rawDatasetKey]}
+            isDatasetLazy={Boolean(snapshotState.lazyDatasets[rawDatasetKey])}
+            onRequestDatasetLoad={requestLazyDatasetLoad}
+          />
+        ) : null}
         {activeView === "connectivity" ? <PortProtocolView dashboard={dashboard} query={deferredQuery} filters={filters} /> : null}
       </main>
     </div>

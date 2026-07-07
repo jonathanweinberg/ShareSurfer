@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
 import { demoSnapshot } from "./data/fixtures";
+import type { DataRow } from "./data/schema";
 
 function renderWithDemoSnapshot() {
   window.__SHARESURFER_SNAPSHOT__ = demoSnapshot;
@@ -113,6 +114,43 @@ function renderWithUnmappedFindingSnapshot() {
   return render(<App />);
 }
 
+function createLazyAclSnapshot() {
+  const snapshot = JSON.parse(JSON.stringify(demoSnapshot)) as typeof demoSnapshot;
+  const aclRows: DataRow[] = [
+    {
+      ItemId: "lazy-item-1",
+      ShareId: "share-finance",
+      FullPath: "\\\\files01\\Finance\\LazyChunk",
+      Identity: "CONTOSO\\LazyReaders",
+      Rights: "Read",
+      AccessMask: "1179817",
+      AccessControlType: "Allow",
+      IsInherited: "False",
+      InheritanceFlags: "ContainerInherit,ObjectInherit",
+      PropagationFlags: "None",
+      Depth: "3"
+    }
+  ];
+  snapshot.rowCounts = {
+    ...(snapshot.rowCounts ?? {}),
+    acl_entries: aclRows.length
+  };
+  snapshot.lazyDatasets = {
+    acl_entries: {
+      script: "datasets/sharesurfer-dataset-acl_entries.js",
+      rowCount: aclRows.length,
+      sourceBytes: 512,
+      scriptBytes: 768
+    }
+  };
+  snapshot.datasets = {
+    ...(snapshot.datasets ?? {}),
+    acl_entries: []
+  };
+
+  return { snapshot, aclRows };
+}
+
 function ensureLocalStorage() {
   if (window.localStorage) {
     return;
@@ -141,6 +179,8 @@ describe("dashboard workbench interactions", () => {
   afterEach(() => {
     cleanup();
     delete window.__SHARESURFER_SNAPSHOT__;
+    delete window.__SHARESURFER_DATASET_CHUNKS__;
+    vi.restoreAllMocks();
   });
 
   test("missing runtime data shows an onboarding screen instead of silently rendering demo rows", () => {
@@ -599,6 +639,55 @@ describe("dashboard workbench interactions", () => {
     const table = screen.getByRole("table", { name: /Share-level access/i });
     expect(within(table).getByText("CONTOSO\\FinanceReaders")).toBeInTheDocument();
     expect(within(table).queryByText("Everyone")).not.toBeInTheDocument();
+  });
+
+  test("lazy raw evidence datasets load only when selected", async () => {
+    const { snapshot, aclRows } = createLazyAclSnapshot();
+    window.__SHARESURFER_SNAPSHOT__ = snapshot;
+    const appendScript = vi.spyOn(document.head, "appendChild").mockImplementation(<T extends Node>(node: T): T => {
+      const script = node as unknown as HTMLScriptElement;
+      expect(script.src).toContain("datasets/sharesurfer-dataset-acl_entries.js");
+      window.__SHARESURFER_DATASET_CHUNKS__ = {
+        ...(window.__SHARESURFER_DATASET_CHUNKS__ ?? {}),
+        acl_entries: aclRows
+      };
+      window.setTimeout(() => script.onload?.call(script, new Event("load")), 0);
+      return node;
+    });
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: /Permission Review Dashboard/i })).toBeInTheDocument();
+    expect(appendScript).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+    fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "acl_entries" } });
+
+    expect(screen.getByText(/Loading 1 folder\/file permissions row/i)).toBeInTheDocument();
+    await waitFor(() => expect(appendScript).toHaveBeenCalledTimes(1));
+
+    const table = await screen.findByRole("table", { name: /Folder\/file permissions/i });
+    expect(within(table).getByText("CONTOSO\\LazyReaders")).toBeInTheDocument();
+    expect(screen.queryByText(/Loading 1 folder\/file permissions row/i)).not.toBeInTheDocument();
+  });
+
+  test("missing lazy raw evidence chunks show a repairable dashboard error", async () => {
+    const { snapshot } = createLazyAclSnapshot();
+    window.__SHARESURFER_SNAPSHOT__ = snapshot;
+    vi.spyOn(document.head, "appendChild").mockImplementation(<T extends Node>(node: T): T => {
+      const script = node as unknown as HTMLScriptElement;
+      window.setTimeout(() => script.onerror?.call(script, new Event("error")), 0);
+      return node;
+    });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Raw Evidence/i }));
+    fireEvent.change(screen.getByLabelText(/Dataset/i), { target: { value: "acl_entries" } });
+
+    expect(await screen.findByText(/Dataset chunk could not load/i)).toBeInTheDocument();
+    expect(screen.getByText(/Keep the packaged dashboard folder together/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry loading Folder\/file permissions/i })).toBeInTheDocument();
   });
 
   test("ports and protocols view shows collector and target readiness evidence", () => {
