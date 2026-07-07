@@ -275,6 +275,15 @@ For very large transferred exports, `New-ShareSurferStandaloneDashboard.ps1` may
 
 The legacy `report.html` is still useful for small and moderate transfers, but it is a single file with embedded data. If `ConvertTo-ShareSurferReport` refuses a large transferred export with an inline-data guardrail, package the standalone dashboard instead. Use `-ForceLargeReport` only when the receiving workstation can tolerate one large HTML file that may open slowly or crash.
 
+If browser-based review is still the limiting factor, use the optional native viewer on a Windows review host:
+
+```powershell
+powershell.exe -STA -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$shareSurferRoot\scripts\Start-ShareSurferNativeViewer.ps1" `
+  -ExportPath $reviewRoot
+```
+
+The native viewer reads the transferred CSV files by page and does not use HTML, JavaScript, WebView2, npm, a server, or internet access.
+
 ## 5. What Reviewers Should Start With
 
 Start with:
