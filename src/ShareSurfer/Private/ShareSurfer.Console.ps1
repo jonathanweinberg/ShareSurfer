@@ -15,7 +15,12 @@ function Get-ShareSurferConsoleControlsLine {
 }
 
 function Test-ShareSurferConsoleRawKeyAvailable {
-    if (-not [string]::IsNullOrWhiteSpace([string]$env:SHARESURFER_PLAIN_CONSOLE)) {
+    param(
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Auto'
+    )
+
+    if ($ConsoleMode -eq 'Plain' -or -not [string]::IsNullOrWhiteSpace([string]$env:SHARESURFER_PLAIN_CONSOLE)) {
         return $false
     }
 
@@ -28,6 +33,11 @@ function Test-ShareSurferConsoleRawKeyAvailable {
 }
 
 function Get-ShareSurferConsoleCapabilities {
+    param(
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Auto'
+    )
+
     $plainForced = -not [string]::IsNullOrWhiteSpace([string]$env:SHARESURFER_PLAIN_CONSOLE)
     $noColor = -not [string]::IsNullOrWhiteSpace([string]$env:NO_COLOR)
 
@@ -56,13 +66,34 @@ function Get-ShareSurferConsoleCapabilities {
     catch {
     }
 
+    $rawKeysAvailable = Test-ShareSurferConsoleRawKeyAvailable -ConsoleMode $ConsoleMode
+    $effectiveMode = if ($plainForced -or $ConsoleMode -eq 'Plain' -or -not $rawKeysAvailable) { 'Plain' } else { 'Enhanced' }
+
     [pscustomobject]@{
-        RawKeys = (Test-ShareSurferConsoleRawKeyAvailable)
+        RequestedConsoleMode = $ConsoleMode
+        EffectiveConsoleMode = $effectiveMode
+        RawKeys = ($effectiveMode -eq 'Enhanced')
         InputRedirected = [bool]$inputRedirected
         OutputRedirected = [bool]$outputRedirected
         WindowWidth = [int]$width
         SupportsColor = (-not $noColor -and -not $outputRedirected -and -not $plainForced)
-        PlainMode = [bool]$plainForced
+        PlainMode = ($effectiveMode -eq 'Plain')
+        RedrawMode = $(if ($effectiveMode -eq 'Enhanced') { 'SingleFrame' } else { 'Append' })
+    }
+}
+
+function Get-ShareSurferConsoleChoiceRenderBehavior {
+    param(
+        $Capabilities = $null
+    )
+
+    if ($null -eq $Capabilities) {
+        $Capabilities = Get-ShareSurferConsoleCapabilities
+    }
+
+    [pscustomobject]@{
+        RedrawMode = [string]$Capabilities.RedrawMode
+        ClearBeforeRender = ([string]$Capabilities.RedrawMode -eq 'SingleFrame')
     }
 }
 
@@ -74,6 +105,18 @@ function Write-ShareSurferConsoleLines {
 
     foreach ($line in @($Lines)) {
         Write-Host $line
+    }
+}
+
+function Wait-ShareSurferConsolePause {
+    param(
+        [string] $Prompt = 'Press Enter to continue.'
+    )
+
+    try {
+        [void](Read-Host -Prompt $Prompt)
+    }
+    catch {
     }
 }
 
@@ -236,6 +279,20 @@ function Invoke-ShareSurferConsoleChoiceCommand {
         return $State
     }
 
+    if ($upper -in @('Y', 'YES', 'N', 'NO')) {
+        $booleanValue = if ($upper -in @('Y', 'YES')) { 'Yes' } else { 'No' }
+        for ($index = 0; $index -lt $optionCount; $index++) {
+            $option = @($State.Options)[$index]
+            if ([string]$option.Value -eq $booleanValue -or [string]$option.Label -eq $booleanValue) {
+                $State.SelectedIndex = $index
+                $State.Done = $true
+                $State.Action = 'Select'
+                $State.SelectedValue = [string]$option.Value
+                return $State
+            }
+        }
+    }
+
     if ($AllowCustom) {
         $State.Done = $true
         $State.Action = 'Custom'
@@ -326,8 +383,18 @@ function Show-ShareSurferConsoleChoice {
         [Parameter(Mandatory = $true)]
         [string] $Title,
 
-        [string] $HelpText = ''
+        [string] $HelpText = '',
+
+        [switch] $ClearBeforeRender
     )
+
+    if ($ClearBeforeRender) {
+        try {
+            Clear-Host
+        }
+        catch {
+        }
+    }
 
     Write-ShareSurferConsoleLines -Lines (Get-ShareSurferConsoleChoiceScreen -State $State -Title $Title -HelpText $HelpText)
 }
@@ -352,19 +419,25 @@ function Read-ShareSurferConsoleChoice {
 
         [switch] $AllowCustom,
 
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Auto',
+
         $Capabilities = $null
     )
 
     if ($null -eq $Capabilities) {
-        $Capabilities = Get-ShareSurferConsoleCapabilities
+        $Capabilities = Get-ShareSurferConsoleCapabilities -ConsoleMode $ConsoleMode
     }
 
     $state = New-ShareSurferConsoleChoiceState -Options $Options -DefaultValue $DefaultValue
     $useRawKeys = [bool]$Capabilities.RawKeys
+    $renderBehavior = Get-ShareSurferConsoleChoiceRenderBehavior -Capabilities $Capabilities
     $needsRender = $true
+    $renderedOnce = $false
     while (-not $state.Done) {
         if ($needsRender) {
-            Show-ShareSurferConsoleChoice -State $state -Title $Title -HelpText $HelpText
+            Show-ShareSurferConsoleChoice -State $state -Title $Title -HelpText $HelpText -ClearBeforeRender:([bool]$renderBehavior.ClearBeforeRender -and $renderedOnce)
+            $renderedOnce = $true
             $needsRender = $false
         }
 
@@ -531,19 +604,30 @@ function Read-ShareSurferConsoleBoolean {
 
         [switch] $AllowBack,
 
-        [switch] $AllowQuit
+        [switch] $AllowQuit,
+
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Auto'
     )
 
-    $defaultText = if ($Default) { 'Y' } else { 'N' }
-    $validate = {
-        param($text)
-        if (([string]$text).Trim().ToUpperInvariant() -in @('Y', 'YES', 'N', 'NO')) { '' } else { 'Answer Y or N.' }
-    }
-    $result = Read-ShareSurferConsoleText -Prompt ('{0} (Y/N)' -f $Prompt) -Default $defaultText -HelpText $HelpText -AllowBack:$AllowBack -AllowQuit:$AllowQuit -Validate $validate
+    $options = @(
+        New-ShareSurferConsoleChoiceOption -Value 'Yes' -Label 'Yes'
+        New-ShareSurferConsoleChoiceOption -Value 'No' -Label 'No'
+    )
+    $result = Read-ShareSurferConsoleChoice `
+        -Title $Prompt `
+        -Options $options `
+        -DefaultValue $(if ($Default) { 'Yes' } else { 'No' }) `
+        -HelpText $HelpText `
+        -AllowBack:$AllowBack `
+        -AllowQuit:$AllowQuit `
+        -ConsoleMode $ConsoleMode
 
-    $value = $Default
-    if ($result.Action -eq 'Accept') {
-        $value = (([string]$result.Value).Trim().ToUpperInvariant() -in @('Y', 'YES'))
+    $value = if ($result.Action -eq 'Select') {
+        ([string]$result.SelectedValue -eq 'Yes')
+    }
+    else {
+        $Default
     }
 
     [pscustomobject]@{

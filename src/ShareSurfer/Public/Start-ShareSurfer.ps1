@@ -73,7 +73,13 @@ function Get-ShareSurferMenuEntries {
         [string] $ObsAttribute = 'extensionAttribute10',
 
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
-        [string] $AdLookupMode = 'Auto'
+        [string] $AdLookupMode = 'Auto',
+
+        [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
+        [string] $ManagerIdentityFormat = 'MailTo',
+
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Auto'
     )
 
     $entries = New-Object System.Collections.Generic.List[object]
@@ -129,7 +135,11 @@ function Get-ShareSurferMenuEntries {
             [pscustomobject]@{ Name = 'InputRoot'; Value = (Format-ShareSurferMenuLiteral -Value $InputRoot) },
             [pscustomobject]@{ Name = 'ExportPath'; Value = (Format-ShareSurferMenuLiteral -Value $ExportPath) },
             [pscustomobject]@{ Name = 'StandaloneDashboardPath'; Value = (Format-ShareSurferMenuLiteral -Value $StandaloneDashboardPath) },
-            [pscustomobject]@{ Name = 'ReleaseRoot'; Value = (Format-ShareSurferMenuLiteral -Value $ReleaseRoot) }
+            [pscustomobject]@{ Name = 'ReleaseRoot'; Value = (Format-ShareSurferMenuLiteral -Value $ReleaseRoot) },
+            [pscustomobject]@{ Name = 'ObsAttribute'; Value = (Format-ShareSurferMenuLiteral -Value $ObsAttribute) },
+            [pscustomobject]@{ Name = 'AdLookupMode'; Value = (Format-ShareSurferMenuLiteral -Value $AdLookupMode) },
+            [pscustomobject]@{ Name = 'ManagerIdentityFormat'; Value = (Format-ShareSurferMenuLiteral -Value $ManagerIdentityFormat) },
+            [pscustomobject]@{ Name = 'ConsoleMode'; Value = (Format-ShareSurferMenuLiteral -Value $ConsoleMode) }
         )) {
             if (-not [string]::IsNullOrWhiteSpace([string]$parameter.Value)) {
                 $scanPreviewParts.Add(('-{0} {1}' -f [string]$parameter.Name, [string]$parameter.Value))
@@ -243,15 +253,21 @@ function Start-ShareSurfer {
         [string] $ObsAttribute = 'extensionAttribute10',
 
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
-        [string] $AdLookupMode = 'Auto'
+        [string] $AdLookupMode = 'Auto',
+
+        [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
+        [string] $ManagerIdentityFormat = 'MailTo',
+
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Auto'
     )
 
     while ($true) {
-        $entries = Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $StandaloneDashboardPath -ReleaseRoot $ReleaseRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode
+        $entries = Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $StandaloneDashboardPath -ReleaseRoot $ReleaseRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -ConsoleMode $ConsoleMode
         Write-ShareSurferConsoleLines -Lines (Get-ShareSurferMenuScreen -Entries $entries -InputRoot $InputRoot -ExportPath $ExportPath)
 
         $options = @($entries | ForEach-Object { New-ShareSurferConsoleChoiceOption -Value ([string]$_.Key) -Label ([string]$_.Label) })
-        $selection = Read-ShareSurferConsoleChoice -Title 'Choose a task' -Options $options -HelpText 'Enter or a number picks a task; the exact command is shown before anything runs. Q leaves the menu.' -AllowQuit
+        $selection = Read-ShareSurferConsoleChoice -Title 'Choose a task' -Options $options -HelpText 'Enter or a number picks a task; the exact command is shown before anything runs. Q leaves the menu.' -AllowQuit -ConsoleMode $ConsoleMode
         if ($selection.Action -eq 'Cancelled') {
             Write-ShareSurferConsoleLines -Lines @('Leaving the ShareSurfer start menu. Saved configs, plans, and rerun scripts keep your progress.')
             return
@@ -265,23 +281,25 @@ function Start-ShareSurfer {
 
         if (-not [bool]$entry.Runnable) {
             Write-ShareSurferConsoleLines -Lines @([string]$entry.Guidance)
+            Wait-ShareSurferConsolePause -Prompt 'Press Enter to return to the menu.'
             continue
         }
 
-        $confirm = Read-ShareSurferConsoleBoolean -Prompt 'Run this now?' -Default $false
+        $confirm = Read-ShareSurferConsoleBoolean -Prompt 'Run this now?' -Default $false -ConsoleMode $ConsoleMode
         if (-not [bool]$confirm.Value) {
+            Wait-ShareSurferConsolePause -Prompt 'Run declined. Press Enter to return to the menu.'
             continue
         }
 
         switch ([string]$entry.Key) {
             'ownership' {
-                Invoke-ShareSurferStartupOwnershipSetup -InputRoot $InputRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode | Out-Null
+                Invoke-ShareSurferStartupOwnershipSetup -InputRoot $InputRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ConsoleMode $ConsoleMode | Out-Null
                 break
             }
             'scan' {
                 $configPath = if ([string]::IsNullOrWhiteSpace($InputRoot)) { '' } else { Join-Path $InputRoot 'sharesurfer-startup.config.json' }
                 if (-not [string]::IsNullOrWhiteSpace($configPath) -and (Test-Path -LiteralPath $configPath -PathType Leaf)) {
-                    Start-ShareSurferStartup -ConfigPath $configPath -Force | Out-Host
+                    Start-ShareSurferStartup -ConfigPath $configPath -Force -ConsoleMode $ConsoleMode | Out-Host
                 }
                 else {
                     $startupParameters = @{ Interactive = $true }
@@ -289,6 +307,10 @@ function Start-ShareSurfer {
                     if (-not [string]::IsNullOrWhiteSpace($ExportPath)) { $startupParameters.ExportPath = $ExportPath }
                     if (-not [string]::IsNullOrWhiteSpace($StandaloneDashboardPath)) { $startupParameters.StandaloneDashboardPath = $StandaloneDashboardPath }
                     if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot)) { $startupParameters.ReleaseRoot = $ReleaseRoot }
+                    if (-not [string]::IsNullOrWhiteSpace($ObsAttribute)) { $startupParameters.ObsAttribute = $ObsAttribute }
+                    if (-not [string]::IsNullOrWhiteSpace($AdLookupMode)) { $startupParameters.AdLookupMode = $AdLookupMode }
+                    if (-not [string]::IsNullOrWhiteSpace($ManagerIdentityFormat)) { $startupParameters.ManagerIdentityFormat = $ManagerIdentityFormat }
+                    if (-not [string]::IsNullOrWhiteSpace($ConsoleMode)) { $startupParameters.ConsoleMode = $ConsoleMode }
                     Start-ShareSurferStartup @startupParameters | Out-Host
                 }
                 break
@@ -304,6 +326,7 @@ function Start-ShareSurfer {
             }
             default {
                 Write-ShareSurferConsoleLines -Lines @('This task is preview-only from the menu; copy the command above to run it.')
+                Wait-ShareSurferConsolePause -Prompt 'Press Enter to return to the menu.'
             }
         }
     }
