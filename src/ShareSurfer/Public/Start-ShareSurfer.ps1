@@ -313,7 +313,10 @@ function Start-ShareSurfer {
                     if (-not [string]::IsNullOrWhiteSpace($ConsoleMode)) { $startupParameters.ConsoleMode = $ConsoleMode }
                     Start-ShareSurferStartup @startupParameters | Out-Host
                 }
-                break
+                Write-Host ''
+                Write-Host 'Guided startup is complete. ShareSurfer saved the startup config, operator plan, and rerun script shown above.'
+                Write-Host 'Run the generated rerun script when ready, or run Start-ShareSurfer.ps1 again to reopen the menu.'
+                return
             }
             'validate' {
                 Test-ShareSurferExport -ExportPath $ExportPath | Out-Host
