@@ -762,6 +762,8 @@ pwsh -NoLogo -NoProfile -File scripts/New-ShareSurferStandaloneDashboard.ps1 `
 
 Open `standalone-dashboard\index.html` on Windows or `standalone-dashboard/index.html` on macOS. The folder is self-contained: it uses relative bundled assets, `sharesurfer-data.js`, and `dashboard-manifest.json`; it does not need npm, Vite, a server, internet access, or browser `fetch` permissions.
 
+For very large exports, the packager estimates whether `sharesurfer-data.js` may be too large for a normal browser tab to open safely. If it stops with a data-size guardrail message, review the largest dataset contributors in `dashboard-manifest.json`. This is a browser safety warning, not a scan failure. Use `-ForceLargeDashboard` only when you intentionally want to create the large package anyway and understand it may crash or open slowly.
+
 ## Step 8: Create a Redacted Support Bundle
 
 Only create a support bundle after the raw export validates.
