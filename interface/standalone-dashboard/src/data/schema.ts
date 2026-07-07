@@ -500,6 +500,10 @@ export const expectedColumns: Record<DatasetKey, string[]> = {
     "GroupExpansionMaxDepth",
     "AdLookupMode",
     "ManagerIdentityFormat",
+    "AclExportMode",
+    "FullAclEntryCount",
+    "ExportedAclEntryCount",
+    "SuppressedInheritedAclEntryCount",
     "IncludeFiles"
   ],
   open_file_manifest: [

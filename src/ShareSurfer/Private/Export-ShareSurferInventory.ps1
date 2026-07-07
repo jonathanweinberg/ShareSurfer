@@ -1,3 +1,117 @@
+function Get-ShareSurferAclExportText {
+    param(
+        $Row,
+        [string] $Name
+    )
+
+    if ($null -eq $Row -or $null -eq $Row.PSObject.Properties[$Name]) {
+        return ''
+    }
+
+    [string]$Row.PSObject.Properties[$Name].Value
+}
+
+function Test-ShareSurferAclExportTruthy {
+    param($Value)
+
+    $text = ([string]$Value).Trim().ToLowerInvariant()
+    $text -in @('true', '1', 'yes')
+}
+
+function Get-ShareSurferAclExportDepth {
+    param($Row)
+
+    $depthText = Get-ShareSurferAclExportText -Row $Row -Name 'Depth'
+    $depth = 0
+    if ([int]::TryParse($depthText, [ref]$depth)) {
+        return $depth
+    }
+
+    0
+}
+
+function Get-ShareSurferAclEntrySignature {
+    param(
+        $Ace,
+        [string] $Scope
+    )
+
+    @(
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'ShareId'),
+        $Scope,
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'Identity'),
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'Rights'),
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'AccessMask'),
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'AccessControlType'),
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'InheritanceFlags'),
+        (Get-ShareSurferAclExportText -Row $Ace -Name 'PropagationFlags')
+    ) -join ([char]31)
+}
+
+function ConvertTo-ShareSurferCompactAclEntries {
+    param(
+        $AclEntries,
+        $Items
+    )
+
+    $itemById = @{}
+    $itemByPath = @{}
+    foreach ($item in @(ConvertTo-ShareSurferArray $Items)) {
+        $itemId = Get-ShareSurferAclExportText -Row $item -Name 'ItemId'
+        if (-not [string]::IsNullOrWhiteSpace($itemId)) {
+            $itemById[$itemId] = $item
+        }
+
+        $fullPath = (Get-ShareSurferAclExportText -Row $item -Name 'FullPath').ToLowerInvariant()
+        if (-not [string]::IsNullOrWhiteSpace($fullPath)) {
+            $itemByPath[$fullPath] = $item
+        }
+    }
+
+    $seenInheritedSignatures = @{}
+    $output = New-Object System.Collections.ArrayList
+    $sortedAclEntries = @(ConvertTo-ShareSurferArray $AclEntries | Sort-Object `
+            @{ Expression = { Get-ShareSurferAclExportText -Row $_ -Name 'ShareId' } }, `
+            @{ Expression = { Get-ShareSurferAclExportDepth -Row $_ } }, `
+            @{ Expression = { Get-ShareSurferAclExportText -Row $_ -Name 'FullPath' } }, `
+            @{ Expression = { Get-ShareSurferAclExportText -Row $_ -Name 'Identity' } })
+
+    foreach ($ace in $sortedAclEntries) {
+        $isInherited = Test-ShareSurferAclExportTruthy -Value (Get-ShareSurferAclExportText -Row $ace -Name 'IsInherited')
+        if (-not $isInherited) {
+            [void]$output.Add($ace)
+            continue
+        }
+
+        $itemId = Get-ShareSurferAclExportText -Row $ace -Name 'ItemId'
+        $fullPath = (Get-ShareSurferAclExportText -Row $ace -Name 'FullPath').ToLowerInvariant()
+        $item = $null
+        if (-not [string]::IsNullOrWhiteSpace($itemId) -and $itemById.ContainsKey($itemId)) {
+            $item = $itemById[$itemId]
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($fullPath) -and $itemByPath.ContainsKey($fullPath)) {
+            $item = $itemByPath[$fullPath]
+        }
+
+        $depth = Get-ShareSurferAclExportDepth -Row $ace
+        $inheritanceBreakType = Get-ShareSurferAclExportText -Row $item -Name 'InheritanceBreakType'
+        $inheritanceEnabled = Get-ShareSurferAclExportText -Row $item -Name 'InheritanceEnabled'
+        $inheritanceBrokenAt = Get-ShareSurferAclExportText -Row $item -Name 'InheritanceBrokenAt'
+        $scope = if (-not [string]::IsNullOrWhiteSpace($inheritanceBrokenAt)) { $inheritanceBrokenAt } else { 'ShareRoot' }
+        $signature = Get-ShareSurferAclEntrySignature -Ace $ace -Scope $scope
+        $isBoundary = ($depth -le 0) -or
+            ($inheritanceBreakType -eq 'Direct') -or
+            (-not [string]::IsNullOrWhiteSpace($inheritanceEnabled) -and -not (Test-ShareSurferAclExportTruthy -Value $inheritanceEnabled))
+
+        if ($isBoundary -or -not $seenInheritedSignatures.ContainsKey($signature)) {
+            [void]$output.Add($ace)
+            $seenInheritedSignatures[$signature] = $true
+        }
+    }
+
+    @($output)
+}
+
 function Export-ShareSurferInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -20,6 +134,8 @@ function Export-ShareSurferInventory {
         [string] $CollectionProvider = '',
         [string] $RequestedSmbCollectionProvider = '',
         [string] $EffectiveSmbCollectionProvider = '',
+        [ValidateSet('FullEffective', 'Compact')]
+        [string] $AclExportMode = 'FullEffective',
         [string] $DiscountedPrincipalPath = '',
         [switch] $SkipIdentityEnrichment,
         [switch] $IncludeFiles,
@@ -190,6 +306,16 @@ function Export-ShareSurferInventory {
     Write-ShareSurferStatus -Phase 'Export' -Message ('Building owner review packets from {0} owner pivot row(s) and {1} related data area row(s).' -f $ownerRiskPivots.Count, $relatedDataAreas.Count) -Quiet:$Quiet
     $ownerReviewPackets = @(Get-ShareSurferOwnerReviewPackets -OwnerRiskPivots $ownerRiskPivots -RelatedDataAreas $relatedDataAreas)
     Write-ShareSurferStatus -Phase 'Export' -Message ('Owner review packets ready: {0} row(s).' -f $ownerReviewPackets.Count) -Quiet:$Quiet
+    $fullAclEntryCount = $aclEntries.Count
+    $exportAclEntries = $aclEntries
+    $suppressedAclEntryCount = 0
+    if ($AclExportMode -eq 'Compact') {
+        Write-ShareSurferStatus -Phase 'Export' -Message ('Compacting inherited ACL evidence for export from {0} full effective ACL row(s).' -f $fullAclEntryCount) -Quiet:$Quiet
+        $exportAclEntries = @(ConvertTo-ShareSurferCompactAclEntries -AclEntries $aclEntries -Items $items)
+        $suppressedAclEntryCount = [Math]::Max(0, $fullAclEntryCount - $exportAclEntries.Count)
+        Write-ShareSurferStatus -Phase 'Export' -Message ('Compact ACL export ready: exported={0}; suppressed inherited duplicates={1}.' -f $exportAclEntries.Count, $suppressedAclEntryCount) -Quiet:$Quiet
+        [void]$scanEvents.Add((New-ShareSurferEvent -EventType 'AclExportCompacted' -Source 'Export' -Message 'ACL export compacted inherited duplicate rows.' -Detail ('FullAclEntries={0}; ExportedAclEntries={1}; SuppressedInheritedAclEntries={2}' -f $fullAclEntryCount, $exportAclEntries.Count, $suppressedAclEntryCount)))
+    }
     $manifest = @(
         [pscustomobject]@{
             ScanId = [guid]::NewGuid().ToString('N')
@@ -207,6 +333,10 @@ function Export-ShareSurferInventory {
             GroupExpansionMaxDepth = $GroupExpansionMaxDepth
             AdLookupMode = $AdLookupMode
             ManagerIdentityFormat = $ManagerIdentityFormat
+            AclExportMode = $AclExportMode
+            FullAclEntryCount = $fullAclEntryCount
+            ExportedAclEntryCount = $exportAclEntries.Count
+            SuppressedInheritedAclEntryCount = $suppressedAclEntryCount
             IncludeFiles = [bool]$IncludeFiles
         }
     )
@@ -220,7 +350,7 @@ function Export-ShareSurferInventory {
         'shares.csv' = $shares
         'items.csv' = $items
         'share_permissions.csv' = $sharePermissions
-        'acl_entries.csv' = $aclEntries
+        'acl_entries.csv' = $exportAclEntries
         'identities.csv' = $identities
         'group_edges.csv' = $groupEdges
         'discounted_principals.csv' = $discountedPrincipals
@@ -267,7 +397,10 @@ function Export-ShareSurferInventory {
         Shares = $shares.Count
         Items = $items.Count
         SharePermissions = $sharePermissions.Count
-        AclEntries = $aclEntries.Count
+        AclExportMode = $AclExportMode
+        AclEntries = $exportAclEntries.Count
+        FullAclEntries = $fullAclEntryCount
+        SuppressedInheritedAclEntries = $suppressedAclEntryCount
         Findings = $findings.Count
         Conflicts = $conflicts.Count
         CollectionErrors = @($collectionErrors).Count

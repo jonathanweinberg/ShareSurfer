@@ -770,6 +770,10 @@ export const demoSnapshot: RawSnapshot = {
         GroupExpansionMaxDepth: "20",
         AdLookupMode: "DirectoryOnly",
         ManagerIdentityFormat: "MailTo",
+        AclExportMode: "FullEffective",
+        FullAclEntryCount: "3",
+        ExportedAclEntryCount: "3",
+        SuppressedInheritedAclEntryCount: "0",
         IncludeFiles: "True"
       }
     ]

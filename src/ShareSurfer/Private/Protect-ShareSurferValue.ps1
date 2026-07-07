@@ -182,6 +182,10 @@ function Protect-ShareSurferValue {
         'GroupExpansionMaxDepth',
         'AdLookupMode',
         'ManagerIdentityFormat',
+        'AclExportMode',
+        'FullAclEntryCount',
+        'ExportedAclEntryCount',
+        'SuppressedInheritedAclEntryCount',
         'ObsAttribute',
         'PotentialServiceAccount',
         'GeneratedAt'
