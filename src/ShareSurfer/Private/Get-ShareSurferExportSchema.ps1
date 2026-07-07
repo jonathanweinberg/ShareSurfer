@@ -373,6 +373,12 @@ function Get-ShareSurferExportSchema {
             'Identity',
             'ShareRights',
             'NtfsRights',
+            'AffectedItemCount',
+            'ExamplePath',
+            'AffectedPathPrefix',
+            'FirstSeenPath',
+            'MaxDepth',
+            'EvidenceCompleteness',
             'Severity',
             'Message'
         )

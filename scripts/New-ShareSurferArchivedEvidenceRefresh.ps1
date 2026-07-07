@@ -179,6 +179,23 @@ Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'scan_
 if (-not (Test-Path -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv'))) {
     Set-Content -LiteralPath (Join-Path $outputExportPath 'discounted_principals.csv') -Value '"Identity","Reason","Scope","MatchType"' -Encoding UTF8
 }
+Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'conflicts.csv') -Columns @(
+    'ConflictId',
+    'ConflictType',
+    'ShareId',
+    'ItemId',
+    'Identity',
+    'ShareRights',
+    'NtfsRights',
+    'AffectedItemCount',
+    'ExamplePath',
+    'AffectedPathPrefix',
+    'FirstSeenPath',
+    'MaxDepth',
+    'EvidenceCompleteness',
+    'Severity',
+    'Message'
+)
 Convert-ShareSurferArchivedCsvToSchema -Path (Join-Path $outputExportPath 'permissioned_groups.csv') -Columns @(
     'Group',
     'DisplayName',

@@ -1367,6 +1367,9 @@ $tests = @(
 
             $conflicts = Import-Csv -LiteralPath (Join-Path $outputPath 'conflicts.csv')
             Assert-True ($conflicts.ConflictType -contains 'NtfsIdentityMissingShareGate') 'Conflicts should show NTFS identities missing at the share gate.'
+            foreach ($columnName in @('AffectedItemCount', 'ExamplePath', 'AffectedPathPrefix', 'FirstSeenPath', 'MaxDepth', 'EvidenceCompleteness')) {
+                Assert-True ($conflicts[0].PSObject.Properties.Name -contains $columnName) ("Conflict export should include {0} for repeated conflict rollup review." -f $columnName)
+            }
 
             $ownerRiskPivots = Import-Csv -LiteralPath (Join-Path $outputPath 'owner_risk_pivots.csv')
             Assert-True ($ownerRiskPivots.BusinessUnit -contains 'Finance') 'Owner risk pivots should expose business-unit review rows as CSV.'
@@ -1467,6 +1470,8 @@ $tests = @(
             $missingGateConflicts = @($specificGateConflicts | Where-Object { $_.ConflictType -eq 'NtfsIdentityMissingShareGate' })
             Assert-Equal $missingGateConflicts.Count 1 'Repeated ACEs for the same missing identity should collapse to one share-level gate conflict.'
             Assert-Equal $missingGateConflicts[0].Identity 'CONTOSO\FinanceRW' 'The deduped conflict should still name the missing NTFS identity.'
+            Assert-Equal ([int]$missingGateConflicts[0].AffectedItemCount) 2 'Missing share-gate rollups should count affected items.'
+            Assert-Equal $missingGateConflicts[0].EvidenceCompleteness 'RolledUp' 'Repeated missing share-gate evidence should identify itself as a rollup.'
         }
     },
     @{
@@ -1481,9 +1486,11 @@ $tests = @(
                 [pscustomobject]@{
                     ShareId = 'share-001'
                     ItemId = 'item-{0}' -f $i
+                    FullPath = '\\files01\Finance\Inherited\Folder{0}' -f $i
                     Identity = 'CONTOSO\FinanceReaders'
                     Rights = 'Modify'
                     AccessControlType = 'Allow'
+                    Depth = 3
                 }
             }
 
@@ -1500,6 +1507,51 @@ $tests = @(
             Assert-Equal @($result | Where-Object { $_.ConflictType -eq 'ShareRightsRestrictNtfs' }).Count 1 'Repeated share-vs-NTFS restriction evidence should collapse to one representative conflict.'
             Assert-Equal @($result | Where-Object { $_.ConflictType -eq 'ShareIdentityMissingNtfsEntry' }).Count 1 'Share identities missing from NTFS should still be reported once.'
             Assert-True ($result.Count -lt 10) 'Repeated inherited ACL rows should not create one conflict per ACL row.'
+            $restriction = @($result | Where-Object { $_.ConflictType -eq 'ShareRightsRestrictNtfs' })[0]
+            Assert-Equal ([int]$restriction.AffectedItemCount) 20000 'Rolled-up restrictions should count unique affected items.'
+            Assert-True ([string]$restriction.ExamplePath -like '\\files01\Finance\Inherited*') 'Rolled-up restrictions should preserve an example path.'
+            Assert-True ([string]$restriction.AffectedPathPrefix -like '\\files01\Finance\Inherited*') 'Rolled-up restrictions should preserve a common affected path prefix.'
+            Assert-Equal ([int]$restriction.MaxDepth) 3 'Rolled-up restrictions should preserve max observed depth.'
+            Assert-Equal $restriction.EvidenceCompleteness 'RolledUp' 'Rolled-up restrictions should be labeled for dashboard review.'
+        }
+    },
+    @{
+        Name = 'Get-ShareSurferConflicts avoids false merges across identities shares rights and direct deny items'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sharePermissions = @(
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Allow' },
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\FinanceEditors'; Rights = 'Read'; AccessControlType = 'Allow' },
+                [pscustomobject]@{ ShareId = 'share-002'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Allow' }
+            )
+            $aclEntries = @(
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-001'; FullPath = '\\files01\Finance\AreaA'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Modify'; AccessControlType = 'Allow'; Depth = 2 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-002'; FullPath = '\\files01\Finance\AreaB'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Modify'; AccessControlType = 'Allow'; Depth = 2 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-003'; FullPath = '\\files01\Finance\AreaC'; Identity = 'CONTOSO\FinanceEditors'; Rights = 'Modify'; AccessControlType = 'Allow'; Depth = 2 },
+                [pscustomobject]@{ ShareId = 'share-002'; ItemId = 'item-004'; FullPath = '\\files02\Finance\AreaD'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Modify'; AccessControlType = 'Allow'; Depth = 2 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-005'; FullPath = '\\files01\Finance\AreaE'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'FullControl'; AccessControlType = 'Allow'; Depth = 2 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-deny-001'; FullPath = '\\files01\Finance\ProtectedA'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Allow'; Depth = 4 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-deny-001'; FullPath = '\\files01\Finance\ProtectedA'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Deny'; Depth = 4 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-deny-002'; FullPath = '\\files01\Finance\ProtectedB'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Allow'; Depth = 4 },
+                [pscustomobject]@{ ShareId = 'share-001'; ItemId = 'item-deny-002'; FullPath = '\\files01\Finance\ProtectedB'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Read'; AccessControlType = 'Deny'; Depth = 4 }
+            )
+
+            $shareSurferModule = Get-Module ShareSurfer
+            $result = @(& $shareSurferModule {
+                param($SharePermissions, $AclEntries)
+                Get-ShareSurferConflicts -SharePermissions $SharePermissions -AclEntries $AclEntries -Quiet
+            } $sharePermissions $aclEntries)
+
+            $restrictions = @($result | Where-Object { $_.ConflictType -eq 'ShareRightsRestrictNtfs' })
+            Assert-Equal $restrictions.Count 4 'Different identity, share, or rights evidence should not collapse into the same restriction rollup.'
+            $financeReaderModify = @($restrictions | Where-Object { $_.ShareId -eq 'share-001' -and $_.Identity -eq 'CONTOSO\FinanceReaders' -and $_.NtfsRights -eq 'Modify' })[0]
+            Assert-Equal ([int]$financeReaderModify.AffectedItemCount) 2 'Only matching repeated evidence should roll up together.'
+
+            $denyCollisions = @($result | Where-Object { $_.ConflictType -eq 'NtfsDenyAllowCollision' })
+            $shareAllowsDenies = @($result | Where-Object { $_.ConflictType -eq 'ShareAllowsNtfsDenies' })
+            Assert-Equal $denyCollisions.Count 2 'Direct item deny collisions should remain distinct by item.'
+            Assert-Equal $shareAllowsDenies.Count 2 'Share-allows/NTFS-denies conflicts should remain distinct by item.'
+            Assert-True (@($denyCollisions | Where-Object { [int]$_.AffectedItemCount -eq 1 }).Count -eq 2) 'Direct deny collision rows should describe one affected item each.'
         }
     },
     @{

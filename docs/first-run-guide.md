@@ -528,7 +528,7 @@ The most important CSVs for a first review are:
 | `share_permissions.csv` | The share-level access gate. |
 | `acl_entries.csv` | Folder and file permissions. |
 | `findings.csv` | Long-path warnings, broken inheritance, deep explicit ACEs, Broken/Missing SID rows, unavailable owner metadata, collection errors, and potential service account review flags. |
-| `conflicts.csv` | Share-vs-NTFS access mismatches. |
+| `conflicts.csv` | Share-vs-NTFS access mismatch patterns, including affected counts and example paths when repeated inherited evidence rolls up. |
 | `evidence_confidence.csv` | Scan/share evidence completeness, stop/review gates, requested/effective provider, provider fallback, counted partial shares, counted collection errors, and recommended action. This is not permission approval. |
 | `identities.csv` | Users, groups, manager fields, OBS values, potential service-account flags, and extra directory clues such as mail, department, title, company, office, account status, and distinguished name. |
 | `group_edges.csv` | Expanded group membership paths. |

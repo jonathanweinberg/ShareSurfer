@@ -79,6 +79,8 @@ function Protect-ShareSurferValue {
         'LocalPath',
         'FullPath',
         'ExamplePath',
+        'AffectedPathPrefix',
+        'FirstSeenPath',
         'RelativePath',
         'InheritanceBrokenAt',
         'ParentGroup',

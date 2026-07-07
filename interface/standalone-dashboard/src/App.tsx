@@ -184,7 +184,7 @@ const curatedColumns: Partial<Record<DatasetKey, string[]>> = {
   related_data_areas: ["RelatedDataArea", "Owner", "BusinessUnit", "RiskLevel", "MigrationReadiness", "RelatedBecause", "SuggestedNextAction"],
   owner_review_decisions: ["ReviewPacketId", "Owner", "BusinessUnit", "Decision", "DecisionStatus", "ConfirmedOwner", "Reviewer", "NextAction", "ImportWarnings"],
   migration_cluster_decisions: ["RelatedAreaId", "RelatedDataArea", "Decision", "DecisionStatus", "ConfirmedOwner", "Reviewer", "NextAction", "ImportWarnings"],
-  conflicts: ["Severity", "ConflictType", "ShareId", "Identity", "Message"],
+  conflicts: ["Severity", "ConflictType", "ShareId", "Identity", "AffectedItemCount", "ExamplePath", "EvidenceCompleteness", "Message"],
   findings: ["Severity", "FindingType", "ShareId", "Identity", "FullPath", "Message"],
   evidence_confidence: ["Scope", "ScopeName", "ConfidenceLabel", "ConfidenceScore", "StopGate", "ReviewGate", "Signals", "RequestedProvider", "EffectiveProvider", "ProviderFallback", "RecommendedAction"],
   collection_errors: ["ErrorType", "ShareId", "FullPath", "Message"],
@@ -1742,6 +1742,8 @@ function FindingsView({
     Identity: issue.identity,
     Owner: issue.owner || "Unmapped",
     "Business Unit": issue.businessUnit || "Unmapped",
+    "Affected Items": issue.affectedItemCount > 0 ? String(issue.affectedItemCount) : "",
+    Evidence: issue.evidenceCompleteness,
     Path: issue.path
   }));
 
@@ -1855,7 +1857,7 @@ function FindingsView({
         <VirtualTable
           title="Findings and conflicts"
           rows={rows}
-          columns={["Severity", "Source", "Category", "Title", "Identity", "Owner", "Business Unit", "Path"]}
+          columns={["Severity", "Source", "Category", "Title", "Identity", "Owner", "Business Unit", "Affected Items", "Evidence", "Path"]}
           pageSize={16}
           onRowSelect={(row) => {
             const nextIssue = visibleIssues.find((issue) => issue.id === row.IssueId);

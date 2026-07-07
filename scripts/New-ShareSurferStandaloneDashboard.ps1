@@ -63,7 +63,7 @@ function New-ShareSurferStandaloneSchema {
         'owner_risk_pivots.csv' = @('BusinessUnit', 'Owner', 'Pattern', 'Source', 'MatchingItems', 'Directories', 'Files', 'FindingCount', 'ConflictCount', 'PartialShareCount', 'DirectIdentityCount', 'DirectGroupCount', 'ExpandedMemberCount', 'RiskLevel', 'ReadinessSignals', 'DiscountedPrincipal', 'DiscountedPrincipalCount', 'DiscountedGroupCount', 'DiscountedPrincipals', 'DiscountReason')
         'related_data_areas.csv' = @('RelatedAreaId', 'RelatedDataArea', 'BusinessUnit', 'Owner', 'Pattern', 'Source', 'RelatednessStrength', 'RelationshipSignalCount', 'SupportingSignalCount', 'ReadinessSignalCount', 'RelationshipSignals', 'SupportingEvidence', 'ReadinessSignals', 'CoreFiveChips', 'EvidenceCompleteness', 'RiskLevel', 'MigrationReadiness', 'MatchingShares', 'MatchingItems', 'Directories', 'Files', 'FindingCount', 'ConflictCount', 'ReviewItemCount', 'PartialShareCount', 'DirectIdentityCount', 'DirectGroupCount', 'ExpandedMemberCount', 'RelatedBecauseShort', 'RelatedBecause', 'SuggestedNextAction', 'DiscountedPrincipal', 'DiscountedPrincipalCount', 'DiscountedGroupCount', 'DiscountedPrincipals', 'DiscountReason')
         'owner_review_packets.csv' = @('ReviewPacketId', 'BusinessUnit', 'Owner', 'Pattern', 'Source', 'RiskLevel', 'ReviewStatus', 'WhyReview', 'WhatToReviewFirst', 'SuggestedNextAction', 'MatchingItems', 'Directories', 'Files', 'FindingCount', 'ConflictCount', 'PartialShareCount', 'DirectIdentityCount', 'DirectGroupCount', 'ExpandedMemberCount', 'MigrationReadiness', 'RelatedDataAreaCount', 'RelatednessStrength', 'RelationshipSignalCount', 'ReadinessSignals', 'DiscountedPrincipal', 'DiscountedPrincipalCount', 'DiscountedGroupCount', 'DiscountedPrincipals', 'DiscountReason')
-        'conflicts.csv' = @('ConflictId', 'ConflictType', 'ShareId', 'ItemId', 'Identity', 'ShareRights', 'NtfsRights', 'Severity', 'Message')
+        'conflicts.csv' = @('ConflictId', 'ConflictType', 'ShareId', 'ItemId', 'Identity', 'ShareRights', 'NtfsRights', 'AffectedItemCount', 'ExamplePath', 'AffectedPathPrefix', 'FirstSeenPath', 'MaxDepth', 'EvidenceCompleteness', 'Severity', 'Message')
         'findings.csv' = @('FindingId', 'FindingType', 'Severity', 'ShareId', 'ItemId', 'FullPath', 'Identity', 'ObservedValue', 'PolicyValue', 'Message')
         'evidence_confidence.csv' = @('ConfidenceId', 'Scope', 'ScopeId', 'ScopeName', 'ConfidenceLabel', 'ConfidenceScore', 'StopGate', 'ReviewGate', 'SignalCount', 'Signals', 'PartialShareCount', 'CollectionErrorCount', 'HighSeverityErrorCount', 'TotalShares', 'TotalItems', 'RequestedProvider', 'EffectiveProvider', 'ProviderFallback', 'RecommendedAction', 'Detail')
         'collection_errors.csv' = @('ErrorId', 'ShareId', 'ItemId', 'FullPath', 'ErrorType', 'Severity', 'Source', 'Message', 'Detail')
@@ -224,6 +224,16 @@ function Read-ShareSurferStandaloneCsv {
             elseif ($FileName -eq 'scan_manifest.csv' -and $column -eq 'EffectiveSmbCollectionProvider') {
                 $record[$column] = if ($row.PSObject.Properties['CollectionProvider']) { [string]$row.CollectionProvider } else { '' }
                 Add-ShareSurferStandaloneWarning -WarningMap $WarningMap -Warning ('{0} is missing column {1}; values were defaulted from CollectionProvider for dashboard review.' -f $FileName, $column)
+            }
+            elseif ($FileName -eq 'conflicts.csv' -and $column -in @('AffectedItemCount', 'ExamplePath', 'AffectedPathPrefix', 'FirstSeenPath', 'MaxDepth', 'EvidenceCompleteness')) {
+                switch ($column) {
+                    'AffectedItemCount' { $record[$column] = if ($row.PSObject.Properties['ItemId'] -and -not [string]::IsNullOrWhiteSpace([string]$row.ItemId)) { '1' } else { '0' } }
+                    'ExamplePath' { $record[$column] = if ($row.PSObject.Properties['FullPath']) { [string]$row.FullPath } else { '' } }
+                    'AffectedPathPrefix' { $record[$column] = '' }
+                    'FirstSeenPath' { $record[$column] = if ($row.PSObject.Properties['FullPath']) { [string]$row.FullPath } else { '' } }
+                    'MaxDepth' { $record[$column] = if ($row.PSObject.Properties['Depth']) { [string]$row.Depth } else { '0' } }
+                    'EvidenceCompleteness' { $record[$column] = if ($row.PSObject.Properties['ItemId'] -and -not [string]::IsNullOrWhiteSpace([string]$row.ItemId)) { 'SinglePath' } else { 'LegacyNoRollupMetadata' } }
+                }
             }
             else {
                 $record[$column] = ''

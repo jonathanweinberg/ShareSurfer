@@ -1193,6 +1193,8 @@ function Test-ShareSurferRedactionAuditValue {
         'Sources',
         'ItemType',
         'Depth',
+        'MaxDepth',
+        'AffectedItemCount',
         'IsInherited',
         'InheritanceFlags',
         'PropagationFlags',

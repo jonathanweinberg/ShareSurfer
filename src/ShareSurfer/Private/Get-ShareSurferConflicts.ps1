@@ -86,8 +86,10 @@ function Get-ShareSurferConflicts {
                 ShareId = [string]$ace.ShareId
                 IdentityKey = $identityKey
                 Ace = $ace
+                EvidenceState = New-ShareSurferConflictEvidenceState
             }
         }
+        Add-ShareSurferConflictEvidence -State $ntfsIdentityExamples[$shareIdentityKey]['EvidenceState'] -Ace $ace
 
         $accessType = Get-ShareSurferAccessType $ace.AccessControlType
         if ($accessType -eq 'Allow') {
@@ -98,8 +100,10 @@ function Get-ShareSurferConflicts {
                     IdentityKey = $identityKey
                     Ace = $ace
                     NtfsRank = Get-ShareSurferRightsRank -Rights $ace.Rights
+                    EvidenceState = New-ShareSurferConflictEvidenceState
                 }
             }
+            Add-ShareSurferConflictEvidence -State $ntfsAllowPatterns[$allowPatternKey]['EvidenceState'] -Ace $ace
         }
         elseif ($accessType -eq 'Deny') {
             $denyStateKey = '{0}|{1}|{2}' -f [string]$ace.ShareId, [string]$ace.ItemId, $identityKey
@@ -126,7 +130,8 @@ function Get-ShareSurferConflicts {
 
         $hasBroadAllowGate = ($shareHasBroadAllowGate.ContainsKey($shareId) -and [bool]$shareHasBroadAllowGate[$shareId])
         if ($shareMap.Count -gt 0 -and -not $shareMap.ContainsKey($identityKey) -and -not $hasBroadAllowGate) {
-            [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsIdentityMissingShareGate' -ShareId $shareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights '' -NtfsRights $ace.Rights -Severity 'High' -Message 'NTFS grants rights to an identity that does not appear in the share-level permission gate.'))
+            $rollup = Get-ShareSurferConflictEvidenceMetadata -State $state['EvidenceState']
+            [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsIdentityMissingShareGate' -ShareId $shareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights '' -NtfsRights $ace.Rights -AffectedItemCount $rollup.AffectedItemCount -ExamplePath $rollup.ExamplePath -AffectedPathPrefix $rollup.AffectedPathPrefix -FirstSeenPath $rollup.FirstSeenPath -MaxDepth $rollup.MaxDepth -EvidenceCompleteness $rollup.EvidenceCompleteness -Severity 'High' -Message 'NTFS grants rights to an identity that does not appear in the share-level permission gate.'))
         }
 
         if ($showConflictProgress) {
@@ -159,7 +164,8 @@ function Get-ShareSurferConflicts {
                 if ($shareRightsSummaryByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
                     $shareRightsSummary = [string]$shareRightsSummaryByShareIdentity[$shareIdentityCacheKey]
                 }
-                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareRightsRestrictNtfs' -ShareId $shareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights $shareRightsSummary -NtfsRights $ace.Rights -Severity 'High' -Message 'Share-level rights are narrower than NTFS allow rights for the same identity, so the share gate may restrict access expected from NTFS ACLs.'))
+                $rollup = Get-ShareSurferConflictEvidenceMetadata -State $state['EvidenceState']
+                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareRightsRestrictNtfs' -ShareId $shareId -ItemId $ace.ItemId -Identity $ace.Identity -ShareRights $shareRightsSummary -NtfsRights $ace.Rights -AffectedItemCount $rollup.AffectedItemCount -ExamplePath $rollup.ExamplePath -AffectedPathPrefix $rollup.AffectedPathPrefix -FirstSeenPath $rollup.FirstSeenPath -MaxDepth $rollup.MaxDepth -EvidenceCompleteness $rollup.EvidenceCompleteness -Severity 'High' -Message 'Share-level rights are narrower than NTFS allow rights for the same identity, so the share gate may restrict access expected from NTFS ACLs.'))
             }
         }
         if ($showConflictProgress) {
@@ -175,7 +181,7 @@ function Get-ShareSurferConflicts {
         }
 
         if ($ntfsMap.Count -gt 0 -and -not $ntfsMap.ContainsKey($identityKey)) {
-            [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareIdentityMissingNtfsEntry' -ShareId $permission.ShareId -Identity $permission.Identity -ShareRights $permission.Rights -NtfsRights '' -Severity 'Info' -Message 'Share-level rights exist for an identity that was not observed in NTFS ACL entries for this share.'))
+            [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareIdentityMissingNtfsEntry' -ShareId $permission.ShareId -Identity $permission.Identity -ShareRights $permission.Rights -NtfsRights '' -AffectedItemCount 0 -EvidenceCompleteness 'ShareLevelOnly' -Severity 'Info' -Message 'Share-level rights exist for an identity that was not observed in NTFS ACL entries for this share.'))
         }
     }
 
@@ -203,10 +209,12 @@ function Get-ShareSurferConflicts {
                     HasDeny = $false
                     AllRightsParts = @{}
                     DenyRightsParts = @{}
+                    EvidenceState = New-ShareSurferConflictEvidenceState
                 }
             }
 
             $state = $denyStates[$denyStateKey]
+            Add-ShareSurferConflictEvidence -State $state['EvidenceState'] -Ace $ace
             $accessType = Get-ShareSurferAccessType $ace.AccessControlType
             $rightsPart = '{0}: {1}' -f $accessType, [string]$ace.Rights
             $state['AllRightsParts'][$rightsPart] = $true
@@ -236,7 +244,8 @@ function Get-ShareSurferConflicts {
             $denyRightsSummary = (@($state['DenyRightsParts'].Keys) | Sort-Object) -join '; '
 
             if ([bool]$state['HasAllow'] -and [bool]$state['HasDeny']) {
-                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsDenyAllowCollision' -ShareId $shareId -ItemId $itemId -Identity $identity -ShareRights '' -NtfsRights $allRightsSummary -Severity 'High' -Message 'The same identity has both NTFS allow and deny entries on the same item. Review the deny entry before migration because it can override apparent allow access.'))
+                $rollup = Get-ShareSurferConflictEvidenceMetadata -State $state['EvidenceState']
+                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'NtfsDenyAllowCollision' -ShareId $shareId -ItemId $itemId -Identity $identity -ShareRights '' -NtfsRights $allRightsSummary -AffectedItemCount $rollup.AffectedItemCount -ExamplePath $rollup.ExamplePath -AffectedPathPrefix $rollup.AffectedPathPrefix -FirstSeenPath $rollup.FirstSeenPath -MaxDepth $rollup.MaxDepth -EvidenceCompleteness $rollup.EvidenceCompleteness -Severity 'High' -Message 'The same identity has both NTFS allow and deny entries on the same item. Review the deny entry before migration because it can override apparent allow access.'))
             }
 
             $shareMap = @{}
@@ -253,7 +262,8 @@ function Get-ShareSurferConflicts {
                 if ($shareRightsSummaryByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
                     $shareRightsSummary = [string]$shareRightsSummaryByShareIdentity[$shareIdentityCacheKey]
                 }
-                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareAllowsNtfsDenies' -ShareId $shareId -ItemId $itemId -Identity $identity -ShareRights $shareRightsSummary -NtfsRights $denyRightsSummary -Severity 'High' -Message 'Share-level permissions allow an identity that has an NTFS deny entry on the item. The two-gate access view should call out this denial explicitly.'))
+                $rollup = Get-ShareSurferConflictEvidenceMetadata -State $state['EvidenceState']
+                [void]$conflicts.Add((New-ShareSurferConflict -ConflictType 'ShareAllowsNtfsDenies' -ShareId $shareId -ItemId $itemId -Identity $identity -ShareRights $shareRightsSummary -NtfsRights $denyRightsSummary -AffectedItemCount $rollup.AffectedItemCount -ExamplePath $rollup.ExamplePath -AffectedPathPrefix $rollup.AffectedPathPrefix -FirstSeenPath $rollup.FirstSeenPath -MaxDepth $rollup.MaxDepth -EvidenceCompleteness $rollup.EvidenceCompleteness -Severity 'High' -Message 'Share-level permissions allow an identity that has an NTFS deny entry on the item. The two-gate access view should call out this denial explicitly.'))
             }
 
             if ($showConflictProgress) {
@@ -263,6 +273,180 @@ function Get-ShareSurferConflicts {
     }
 
     @($conflicts)
+}
+
+function New-ShareSurferConflictEvidenceState {
+    @{
+        RowCount = 0
+        ItemIds = @{}
+        ExamplePath = ''
+        AffectedPathPrefix = ''
+        FirstSeenPath = ''
+        MaxDepth = 0
+    }
+}
+
+function Add-ShareSurferConflictEvidence {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable] $State,
+
+        $Ace
+    )
+
+    if ($null -eq $Ace) {
+        return
+    }
+
+    $State['RowCount'] = [int]$State['RowCount'] + 1
+
+    $itemId = Get-ShareSurferConflictRowValue -Row $Ace -Name 'ItemId'
+    if (-not [string]::IsNullOrWhiteSpace($itemId)) {
+        $State['ItemIds'][$itemId] = $true
+    }
+
+    $path = Get-ShareSurferConflictEvidencePath -Row $Ace
+    if (-not [string]::IsNullOrWhiteSpace($path)) {
+        if ([string]::IsNullOrWhiteSpace([string]$State['FirstSeenPath'])) {
+            $State['FirstSeenPath'] = $path
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$State['ExamplePath'])) {
+            $State['ExamplePath'] = $path
+        }
+        if ([string]::IsNullOrWhiteSpace([string]$State['AffectedPathPrefix'])) {
+            $State['AffectedPathPrefix'] = $path
+        }
+        else {
+            $State['AffectedPathPrefix'] = Get-ShareSurferCommonPathPrefix -Left ([string]$State['AffectedPathPrefix']) -Right $path
+        }
+    }
+
+    $depth = Get-ShareSurferConflictEvidenceDepth -Row $Ace
+    if ($depth -gt [int]$State['MaxDepth']) {
+        $State['MaxDepth'] = $depth
+    }
+}
+
+function Get-ShareSurferConflictEvidenceMetadata {
+    param(
+        [hashtable] $State
+    )
+
+    if ($null -eq $State) {
+        return [pscustomobject]@{
+            AffectedItemCount = 0
+            ExamplePath = ''
+            AffectedPathPrefix = ''
+            FirstSeenPath = ''
+            MaxDepth = 0
+            EvidenceCompleteness = 'Unavailable'
+        }
+    }
+
+    $affectedItemCount = [int]$State['ItemIds'].Count
+    $evidenceCompleteness = if ($affectedItemCount -gt 1) {
+        'RolledUp'
+    }
+    elseif ($affectedItemCount -eq 1) {
+        'SinglePath'
+    }
+    elseif ([int]$State['RowCount'] -gt 0) {
+        'ObservedRowsNoItemId'
+    }
+    else {
+        'Unavailable'
+    }
+
+    [pscustomobject]@{
+        AffectedItemCount = $affectedItemCount
+        ExamplePath = [string]$State['ExamplePath']
+        AffectedPathPrefix = [string]$State['AffectedPathPrefix']
+        FirstSeenPath = [string]$State['FirstSeenPath']
+        MaxDepth = [int]$State['MaxDepth']
+        EvidenceCompleteness = $evidenceCompleteness
+    }
+}
+
+function Get-ShareSurferConflictRowValue {
+    param(
+        $Row,
+
+        [string] $Name
+    )
+
+    if ($null -eq $Row -or $null -eq $Row.PSObject.Properties[$Name]) {
+        return ''
+    }
+
+    [string]$Row.PSObject.Properties[$Name].Value
+}
+
+function Get-ShareSurferConflictEvidencePath {
+    param(
+        $Row
+    )
+
+    foreach ($name in @('FullPath', 'ExamplePath', 'UNCPath', 'LocalPath', 'RelativePath')) {
+        $value = Get-ShareSurferConflictRowValue -Row $Row -Name $name
+        if (-not [string]::IsNullOrWhiteSpace($value)) {
+            return $value
+        }
+    }
+
+    ''
+}
+
+function Get-ShareSurferConflictEvidenceDepth {
+    param(
+        $Row
+    )
+
+    $depthText = Get-ShareSurferConflictRowValue -Row $Row -Name 'Depth'
+    $depth = 0
+    if ([int]::TryParse($depthText, [ref]$depth)) {
+        return $depth
+    }
+
+    $path = Get-ShareSurferConflictEvidencePath -Row $Row
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        return 0
+    }
+
+    @($path -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+}
+
+function Get-ShareSurferCommonPathPrefix {
+    param(
+        [string] $Left = '',
+
+        [string] $Right = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) {
+        return ''
+    }
+
+    $max = [Math]::Min($Left.Length, $Right.Length)
+    $index = 0
+    while ($index -lt $max -and [char]::ToUpperInvariant($Left[$index]) -eq [char]::ToUpperInvariant($Right[$index])) {
+        $index++
+    }
+
+    if ($index -le 0) {
+        return ''
+    }
+
+    $candidate = $Left.Substring(0, $index)
+    if ($index -eq $Left.Length -or $index -eq $Right.Length) {
+        return $candidate.TrimEnd('\', '/')
+    }
+
+    $lastSlash = [Math]::Max($candidate.LastIndexOf('\'), $candidate.LastIndexOf('/'))
+    if ($lastSlash -gt 1) {
+        return $candidate.Substring(0, $lastSlash)
+    }
+
+    $candidate.TrimEnd('\', '/')
 }
 
 function Test-ShareSurferBroadSharePrincipal {
