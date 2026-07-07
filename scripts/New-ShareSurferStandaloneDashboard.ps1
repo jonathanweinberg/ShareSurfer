@@ -8,6 +8,8 @@ param(
 
     [string] $DashboardBuildPath = '',
 
+    [string[]] $LazyDatasetKeys = @('acl_entries', 'scan_events', 'open_file_samples'),
+
     [Int64] $MaximumDataScriptBytes = 268435456,
 
     [switch] $Force,
@@ -165,6 +167,33 @@ function Write-ShareSurferStandaloneManifest {
     Set-Content -LiteralPath (Join-Path $OutputPath 'dashboard-manifest.json') -Value ($Manifest | ConvertTo-Json -Depth 10) -Encoding UTF8
 }
 
+function New-ShareSurferStandaloneDatasetChunkFileName {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $DatasetKey
+    )
+
+    $safeKey = ([string]$DatasetKey) -replace '[^A-Za-z0-9_\\-]', '_'
+    'datasets/sharesurfer-dataset-{0}.js' -f $safeKey
+}
+
+function ConvertTo-ShareSurferStandaloneDatasetChunkScript {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $DatasetKey,
+
+        $Rows
+    )
+
+    $keyJson = ConvertTo-Json -InputObject $DatasetKey -Compress
+    $rowsJson = ConvertTo-Json -InputObject @($Rows) -Depth 30 -Compress
+    if ([string]::IsNullOrWhiteSpace($rowsJson)) {
+        $rowsJson = '[]'
+    }
+
+    '(function(){{window.__SHARESURFER_DATASET_CHUNKS__=window.__SHARESURFER_DATASET_CHUNKS__||{{}};window.__SHARESURFER_DATASET_CHUNKS__[{0}]={1};}})();' -f $keyJson, $rowsJson
+}
+
 function Test-ShareSurferStandalonePotentialServiceAccount {
     param($Row)
 
@@ -290,6 +319,12 @@ $optionalSchema = New-ShareSurferStandaloneOptionalSchema
 $warningMap = @{}
 $datasets = [ordered]@{}
 $rowCounts = [ordered]@{}
+$lazyDatasetSet = @{}
+foreach ($lazyDatasetKey in @($LazyDatasetKeys)) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$lazyDatasetKey)) {
+        $lazyDatasetSet[[string]$lazyDatasetKey] = $true
+    }
+}
 $datasetStats = New-Object System.Collections.ArrayList
 foreach ($fileName in $schema.Keys) {
     $datasetKey = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
@@ -324,12 +359,18 @@ $generatedAt = if ($manifest.PSObject.Properties['GeneratedAt'] -and [string]$ma
 $schemaWarnings = @($warningMap.Keys | Sort-Object)
 $largestDatasets = @($datasetStats | Sort-Object -Property @{ Expression = { [Int64]$_.SourceBytes }; Descending = $true }, @{ Expression = { [Int64]$_.RowCount }; Descending = $true } | Select-Object -First 8)
 $sourceDataBytes = [Int64]0
+$bootstrapSourceDataBytes = [Int64]0
 foreach ($datasetStat in @($datasetStats)) {
     $sourceDataBytes += [Int64]$datasetStat.SourceBytes
+    if (-not $lazyDatasetSet.ContainsKey([string]$datasetStat.DatasetKey)) {
+        $bootstrapSourceDataBytes += [Int64]$datasetStat.SourceBytes
+    }
 }
 
-$projectedDataScriptBytes = [Int64][Math]::Ceiling(([double]$sourceDataBytes * 2.0) + 65536)
+$projectedDataScriptBytes = [Int64][Math]::Ceiling(([double]$bootstrapSourceDataBytes * 2.0) + 65536)
 $actualDataScriptBytes = [Int64]0
+$chunkDataScriptBytes = [Int64]0
+$largestDataScriptBytes = [Int64]0
 $sizeGuardrailStatus = 'WithinLimit'
 $sizeGuardrailMessage = 'Standalone dashboard data size is within the configured browser/runtime guardrail.'
 if ($MaximumDataScriptBytes -le 0) {
@@ -337,12 +378,51 @@ if ($MaximumDataScriptBytes -le 0) {
     $sizeGuardrailMessage = 'Standalone dashboard data-size guardrail was disabled by MaximumDataScriptBytes <= 0.'
 }
 
+$bootstrapDatasets = [ordered]@{}
+$lazyDatasetMetadata = [ordered]@{}
+$datasetChunkScripts = [ordered]@{}
+$chunkDirectoryRelativePath = 'datasets'
+$chunkDirectoryPath = Join-Path $OutputPath $chunkDirectoryRelativePath
+foreach ($datasetKey in @($datasets.Keys)) {
+    $rows = @($datasets[$datasetKey])
+    if ($lazyDatasetSet.ContainsKey([string]$datasetKey) -and $rows.Count -gt 0) {
+        $chunkFileName = New-ShareSurferStandaloneDatasetChunkFileName -DatasetKey ([string]$datasetKey)
+        $chunkScript = ConvertTo-ShareSurferStandaloneDatasetChunkScript -DatasetKey ([string]$datasetKey) -Rows $rows
+        $chunkScriptBytes = [Int64][System.Text.Encoding]::UTF8.GetByteCount($chunkScript)
+        $datasetChunkScripts[$datasetKey] = [pscustomobject]@{
+            FileName = $chunkFileName
+            Script = $chunkScript
+            ScriptBytes = $chunkScriptBytes
+        }
+        $chunkDataScriptBytes += $chunkScriptBytes
+        if ($chunkScriptBytes -gt $largestDataScriptBytes) {
+            $largestDataScriptBytes = $chunkScriptBytes
+        }
+
+        $sourceBytes = [Int64]0
+        $matchingStat = @($datasetStats | Where-Object { [string]$_.DatasetKey -eq [string]$datasetKey } | Select-Object -First 1)
+        if ($matchingStat.Count -gt 0) {
+            $sourceBytes = [Int64]$matchingStat[0].SourceBytes
+        }
+        $lazyDatasetMetadata[$datasetKey] = [ordered]@{
+            script = $chunkFileName
+            rowCount = $rows.Count
+            sourceBytes = $sourceBytes
+            scriptBytes = $chunkScriptBytes
+        }
+    }
+    else {
+        $bootstrapDatasets[$datasetKey] = $rows
+    }
+}
+
 $snapshot = [ordered]@{
     snapshotKind = 'export'
     generatedAt = $generatedAt
     rowCounts = $rowCounts
     schemaWarnings = $schemaWarnings
-    datasets = $datasets
+    lazyDatasets = $lazyDatasetMetadata
+    datasets = $bootstrapDatasets
 }
 
 $manifestOutput = [ordered]@{
@@ -353,11 +433,17 @@ $manifestOutput = [ordered]@{
     schemaWarningCount = $schemaWarnings.Count
     schemaWarnings = $schemaWarnings
     sourceDataBytes = $sourceDataBytes
+    bootstrapSourceDataBytes = $bootstrapSourceDataBytes
     projectedDataScriptBytes = $projectedDataScriptBytes
     actualDataScriptBytes = $actualDataScriptBytes
+    chunkDataScriptBytes = $chunkDataScriptBytes
+    largestDataScriptBytes = $largestDataScriptBytes
     maximumDataScriptBytes = [Int64]$MaximumDataScriptBytes
     sizeGuardrailStatus = $sizeGuardrailStatus
     sizeGuardrailMessage = $sizeGuardrailMessage
+    bootstrapDatasetKeys = @($bootstrapDatasets.Keys)
+    lazyDatasetCount = $lazyDatasetMetadata.Count
+    lazyDatasets = $lazyDatasetMetadata
     largestDatasets = $largestDatasets
 }
 
@@ -381,6 +467,10 @@ $snapshotJson = $snapshot | ConvertTo-Json -Depth 30 -Compress
 $snapshotScript = 'window.__SHARESURFER_SNAPSHOT__ = {0};' -f $snapshotJson
 $actualDataScriptBytes = [Int64][System.Text.Encoding]::UTF8.GetByteCount($snapshotScript)
 $manifestOutput['actualDataScriptBytes'] = $actualDataScriptBytes
+if ($actualDataScriptBytes -gt $largestDataScriptBytes) {
+    $largestDataScriptBytes = $actualDataScriptBytes
+    $manifestOutput['largestDataScriptBytes'] = $largestDataScriptBytes
+}
 
 if ($MaximumDataScriptBytes -gt 0 -and $actualDataScriptBytes -gt $MaximumDataScriptBytes) {
     $actualSizeMessage = 'Actual standalone dashboard data script is {0}, above the configured guardrail of {1}. This is a browser/runtime safety guardrail, not a scan failure. Re-run with -ForceLargeDashboard to package anyway, or reduce/package large evidence through the follow-up data-size work.' -f (Format-ShareSurferStandaloneByteCount -Bytes $actualDataScriptBytes), (Format-ShareSurferStandaloneByteCount -Bytes ([Int64]$MaximumDataScriptBytes))
@@ -398,7 +488,38 @@ if ($MaximumDataScriptBytes -gt 0 -and $actualDataScriptBytes -gt $MaximumDataSc
     Write-Warning ('{0} Packaging will continue because -ForceLargeDashboard was supplied.' -f $actualSizeMessage)
 }
 
+if ($MaximumDataScriptBytes -gt 0) {
+    foreach ($datasetKey in @($datasetChunkScripts.Keys)) {
+        $chunk = $datasetChunkScripts[$datasetKey]
+        if ([Int64]$chunk.ScriptBytes -le [Int64]$MaximumDataScriptBytes) {
+            continue
+        }
+
+        $chunkSizeMessage = 'Standalone dashboard dataset chunk {0} is {1}, above the configured guardrail of {2}. This is a browser/runtime safety guardrail, not a scan failure. Re-run with -ForceLargeDashboard to package anyway, or reduce/package large evidence through the follow-up data-size work.' -f [string]$datasetKey, (Format-ShareSurferStandaloneByteCount -Bytes ([Int64]$chunk.ScriptBytes)), (Format-ShareSurferStandaloneByteCount -Bytes ([Int64]$MaximumDataScriptBytes))
+        if (-not $ForceLargeDashboard) {
+            $sizeGuardrailStatus = 'RefusedChunkOverLimit'
+            $manifestOutput['sizeGuardrailStatus'] = $sizeGuardrailStatus
+            $manifestOutput['sizeGuardrailMessage'] = $chunkSizeMessage
+            Write-ShareSurferStandaloneManifest -OutputPath $OutputPath -Manifest $manifestOutput
+            throw $chunkSizeMessage
+        }
+
+        $sizeGuardrailStatus = 'ChunkOverLimitAllowed'
+        $manifestOutput['sizeGuardrailStatus'] = $sizeGuardrailStatus
+        $manifestOutput['sizeGuardrailMessage'] = $chunkSizeMessage
+        Write-Warning ('{0} Packaging will continue because -ForceLargeDashboard was supplied.' -f $chunkSizeMessage)
+    }
+}
+
 Set-Content -LiteralPath $dataScriptPath -Value $snapshotScript -Encoding UTF8
+if ($datasetChunkScripts.Count -gt 0) {
+    Ensure-ShareSurferStandaloneLocalDirectory -Path $chunkDirectoryPath -Purpose 'standalone dashboard dataset chunks' -NoCreateMissingFolders:$NoCreateMissingFolders
+    foreach ($datasetKey in @($datasetChunkScripts.Keys)) {
+        $chunk = $datasetChunkScripts[$datasetKey]
+        $chunkPath = Join-Path $OutputPath ([string]$chunk.FileName)
+        Set-Content -LiteralPath $chunkPath -Value ([string]$chunk.Script) -Encoding UTF8
+    }
+}
 Write-ShareSurferStandaloneManifest -OutputPath $OutputPath -Manifest $manifestOutput
 
 $result = [pscustomobject]@{
@@ -410,10 +531,15 @@ $result = [pscustomobject]@{
     SchemaWarningCount = $schemaWarnings.Count
     DashboardDataKind = 'export'
     SourceDataBytes = $sourceDataBytes
+    BootstrapSourceDataBytes = $bootstrapSourceDataBytes
     ProjectedDataScriptBytes = $projectedDataScriptBytes
     ActualDataScriptBytes = $actualDataScriptBytes
+    ChunkDataScriptBytes = $chunkDataScriptBytes
+    LargestDataScriptBytes = $largestDataScriptBytes
     MaximumDataScriptBytes = [Int64]$MaximumDataScriptBytes
     SizeGuardrailStatus = $sizeGuardrailStatus
+    LazyDatasetCount = $lazyDatasetMetadata.Count
+    LazyDatasets = $lazyDatasetMetadata
     LargestDatasets = $largestDatasets
     IsValid = (Test-Path -LiteralPath (Join-Path $OutputPath 'index.html')) -and (Test-Path -LiteralPath $dataScriptPath) -and ((Get-Item -LiteralPath $dataScriptPath).Length -gt 0)
 }

@@ -5720,31 +5720,46 @@ $tests = @(
             Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js')) 'Standalone dashboard should include snapshot script.'
             Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json')) 'Standalone dashboard should include a manifest.'
             Assert-True (Test-Path -LiteralPath (Join-Path (Join-Path $standalonePath 'assets') 'index-demo.js')) 'Standalone dashboard should copy relative assets.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'datasets/sharesurfer-dataset-acl_entries.js')) 'Standalone dashboard should write lazy ACL evidence chunks.'
+            Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'datasets/sharesurfer-dataset-open_file_samples.js')) 'Standalone dashboard should write lazy open-file sample chunks when present.'
 
             $index = Get-Content -LiteralPath (Join-Path $standalonePath 'index.html') -Raw
             $dataScript = Get-Content -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js') -Raw
+            $aclChunkScript = Get-Content -LiteralPath (Join-Path $standalonePath 'datasets/sharesurfer-dataset-acl_entries.js') -Raw
+            $openFileChunkScript = Get-Content -LiteralPath (Join-Path $standalonePath 'datasets/sharesurfer-dataset-open_file_samples.js') -Raw
             $manifest = Get-Content -LiteralPath (Join-Path $standalonePath 'dashboard-manifest.json') -Raw | ConvertFrom-Json
 
             Assert-True ($index -like '*src="./sharesurfer-data.js"*') 'Standalone dashboard index should load snapshot through a relative script tag.'
             Assert-True ($index -like '*src="./assets/index-demo.js"*') 'Standalone dashboard index should keep relative asset paths.'
             Assert-True ($dataScript -like 'window.__SHARESURFER_SNAPSHOT__ = *') 'Snapshot script should assign the dashboard data on window.'
             Assert-True ($dataScript -like '*"snapshotKind":"export"*') 'Snapshot script should identify generated export data.'
+            Assert-True ($dataScript -like '*"lazyDatasets"*') 'Snapshot script should advertise lazily packaged datasets.'
+            Assert-True (-not $dataScript.Contains('"acl_entries":[{')) 'Snapshot script should not inline lazy ACL evidence rows.'
             Assert-True ($dataScript -notlike '*fetch(*') 'Snapshot script should not require fetch or a local server.'
+            Assert-True ($aclChunkScript -like '*__SHARESURFER_DATASET_CHUNKS__*') 'ACL chunk should register itself through the offline script-chunk global.'
+            Assert-True ($aclChunkScript -like '*"acl_entries"*') 'ACL chunk should identify the dataset key it registers.'
+            Assert-True ($openFileChunkScript -like '*__SHARESURFER_DATASET_CHUNKS__*') 'Open-file sample chunk should register itself through the offline script-chunk global.'
             Assert-Equal $manifest.dashboardDataKind 'export' 'Dashboard manifest should identify generated export data.'
             Assert-True ([int]$manifest.rowCounts.shares -gt 0) 'Dashboard manifest should include export row counts.'
             Assert-True ([int]$manifest.rowCounts.acl_entries -gt 0) 'Dashboard manifest should include large raw-evidence dataset counts.'
             Assert-Equal $manifest.sizeGuardrailStatus 'WithinLimit' 'Small dashboard packages should stay within the default data-size guardrail.'
             Assert-True ([int64]$manifest.sourceDataBytes -gt 0) 'Dashboard manifest should include source CSV byte telemetry.'
+            Assert-True ([int64]$manifest.bootstrapSourceDataBytes -gt 0) 'Dashboard manifest should include bootstrap source byte telemetry.'
             Assert-True ([int64]$manifest.projectedDataScriptBytes -gt 0) 'Dashboard manifest should include projected data-script byte telemetry.'
             Assert-True ([int64]$manifest.actualDataScriptBytes -gt 0) 'Dashboard manifest should include actual data-script byte telemetry.'
+            Assert-True ([int64]$manifest.chunkDataScriptBytes -gt 0) 'Dashboard manifest should include lazy chunk byte telemetry.'
+            Assert-True ([int64]$manifest.largestDataScriptBytes -gt 0) 'Dashboard manifest should include largest script byte telemetry.'
             Assert-True ([int64]$manifest.maximumDataScriptBytes -gt 0) 'Dashboard manifest should include the configured data-script guardrail.'
+            Assert-True ([int]$manifest.lazyDatasetCount -gt 0) 'Dashboard manifest should count lazily packaged datasets.'
+            Assert-Equal $manifest.lazyDatasets.acl_entries.script 'datasets/sharesurfer-dataset-acl_entries.js' 'Dashboard manifest should map ACL rows to their chunk script.'
+            Assert-True ([string]::Join(';', @($manifest.bootstrapDatasetKeys)) -notlike '*acl_entries*') 'Dashboard bootstrap dataset list should not include lazy ACL rows.'
             Assert-True (@($manifest.largestDatasets).Count -gt 0) 'Dashboard manifest should name largest dataset contributors.'
             Assert-True ([int]$manifest.rowCounts.open_file_samples -gt 0) 'Dashboard manifest should include imported open-file sample counts when present.'
             Assert-True ([int]$manifest.rowCounts.open_file_summary -gt 0) 'Dashboard manifest should include imported open-file summary counts when present.'
             Assert-True ([int]$manifest.rowCounts.port_protocol_checks -gt 0) 'Dashboard manifest should include imported port/protocol check counts when present.'
             Assert-True ([string]::Join(';', @($manifest.schemaWarnings)) -notlike '*owner_review_decisions.csv*') 'Standalone dashboard packaging should not warn when optional owner decision CSVs are absent.'
             Assert-True ([string]::Join(';', @($manifest.schemaWarnings)) -notlike '*migration_cluster_decisions.csv*') 'Standalone dashboard packaging should not warn when optional migration decision CSVs are absent.'
-            Assert-True ($dataScript -like '*"open_file_samples"*') 'Dashboard snapshot should carry open-file datasets for raw evidence review.'
+            Assert-True ($dataScript -like '*"open_file_samples"*') 'Dashboard snapshot should advertise open-file sample chunks for raw evidence review.'
             Assert-True ($dataScript -like '*"port_protocol_checks"*') 'Dashboard snapshot should carry port/protocol datasets for connectivity review.'
         }
     },
@@ -5798,10 +5813,11 @@ $tests = @(
 
             Assert-True $result.IsValid 'Explicitly overridden large dashboard should still package.'
             Assert-True (Test-Path -LiteralPath (Join-Path $standalonePath 'sharesurfer-data.js')) 'Explicitly overridden large dashboard should write the snapshot script.'
-            Assert-Equal $manifest.sizeGuardrailStatus 'ActualOverLimitAllowed' 'Manifest should record that the package exceeded the actual limit but was explicitly allowed.'
+            Assert-Equal $manifest.sizeGuardrailStatus 'ChunkOverLimitAllowed' 'Manifest should record that at least one lazy chunk exceeded the configured limit but was explicitly allowed.'
             Assert-True ([int64]$manifest.actualDataScriptBytes -gt [int64]$manifest.maximumDataScriptBytes) 'Manifest should prove the actual script exceeded the guardrail.'
+            Assert-True ([int64]$manifest.chunkDataScriptBytes -gt [int64]$manifest.maximumDataScriptBytes) 'Manifest should prove a lazy chunk exceeded the guardrail.'
             Assert-True ([string]$manifest.sizeGuardrailMessage -like '*browser/runtime safety guardrail*') 'Manifest should preserve the guardrail explanation.'
-            Assert-Equal $result.SizeGuardrailStatus 'ActualOverLimitAllowed' 'PassThru result should expose the guardrail status.'
+            Assert-Equal $result.SizeGuardrailStatus 'ChunkOverLimitAllowed' 'PassThru result should expose the guardrail status.'
         }
     },
     @{

@@ -4,8 +4,16 @@ export interface RawSnapshot {
   snapshotKind?: "template" | "demo" | "export";
   generatedAt?: string;
   datasets?: Partial<Record<DatasetKey | string, DataRow[]>>;
+  lazyDatasets?: Partial<Record<DatasetKey | string, LazyDatasetInfo>>;
   schemaWarnings?: string[];
   rowCounts?: Partial<Record<DatasetKey, number>>;
+}
+
+export interface LazyDatasetInfo {
+  script: string;
+  rowCount?: number;
+  sourceBytes?: number;
+  scriptBytes?: number;
 }
 
 export const demoSnapshot: RawSnapshot = {

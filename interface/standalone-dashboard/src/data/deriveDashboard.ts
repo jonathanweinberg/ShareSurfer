@@ -7,11 +7,12 @@ import {
   type DatasetKey,
   type DatasetMap
 } from "./schema";
-import type { RawSnapshot } from "./fixtures";
+import type { LazyDatasetInfo, RawSnapshot } from "./fixtures";
 
 export interface NormalizedSnapshot {
   generatedAt: string;
   datasets: DatasetMap;
+  lazyDatasets: Partial<Record<DatasetKey, LazyDatasetInfo>>;
   manifest: DataRow;
   rowCounts: Record<DatasetKey, number>;
   schemaWarnings: string[];
@@ -292,11 +293,11 @@ function statusMatches(row: DataRow, status: string): boolean {
   return row.MatchStatus.trim().toLowerCase() === status.toLowerCase();
 }
 
-function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warnings: Set<string>): DataRow[] {
+function normalizeRows(datasetKey: DatasetKey, rows: DataRow[] | undefined, warnings: Set<string>, isLazy = false): DataRow[] {
   const sourceRows = Array.isArray(rows) ? rows : [];
   if (!Array.isArray(rows)) {
     const isOptional = (optionalDatasetKeys as readonly string[]).includes(datasetKey);
-    if (!isOptional) {
+    if (!isOptional && !isLazy) {
       warnings.add(`${datasetKey}.csv was not present in the snapshot. The view will show empty evidence for that dataset.`);
     }
   }
@@ -336,19 +337,29 @@ export function normalizeSnapshot(rawSnapshot: RawSnapshot | undefined): Normali
   const warnings = new Set(rawSnapshot?.schemaWarnings ?? []);
   const datasets = {} as DatasetMap;
   const sourceDatasets = rawSnapshot?.datasets ?? {};
+  const lazyDatasets = {} as Partial<Record<DatasetKey, LazyDatasetInfo>>;
+  const sourceLazyDatasets = rawSnapshot?.lazyDatasets ?? {};
+  for (const key of datasetKeys) {
+    const lazyInfo = sourceLazyDatasets[key];
+    if (lazyInfo) {
+      lazyDatasets[key] = lazyInfo;
+    }
+  }
 
   for (const key of datasetKeys) {
-    datasets[key] = normalizeRows(key, sourceDatasets[key], warnings);
+    datasets[key] = normalizeRows(key, sourceDatasets[key], warnings, Boolean(lazyDatasets[key]));
   }
 
   const rowCounts = {} as Record<DatasetKey, number>;
   for (const key of datasetKeys) {
-    rowCounts[key] = datasets[key].length;
+    const rawRowCount = rawSnapshot?.rowCounts?.[key];
+    rowCounts[key] = typeof rawRowCount === "number" ? rawRowCount : datasets[key].length;
   }
 
   return {
     generatedAt: rawSnapshot?.generatedAt ?? datasets.scan_manifest[0]?.GeneratedAt ?? "",
     datasets,
+    lazyDatasets,
     manifest: datasets.scan_manifest[0] ?? {},
     rowCounts,
     schemaWarnings: Array.from(warnings)
@@ -1180,7 +1191,7 @@ export function deriveDashboard(snapshot: NormalizedSnapshot): DashboardModel {
     label: datasetLabels[key],
     columns: expectedColumns[key],
     rows: snapshot.datasets[key],
-    totalRows: snapshot.datasets[key].length
+    totalRows: snapshot.rowCounts[key] ?? snapshot.datasets[key].length
   }));
 
   return {
