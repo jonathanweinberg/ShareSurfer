@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.38",
-  "packageVersion": "0.1.0-pre.38",
-  "packageName": "ShareSurfer-0.1.0-pre.38",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.38.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.38",
+  "currentPrereleaseTag": "v0.1.0-pre.39",
+  "packageVersion": "0.1.0-pre.39",
+  "packageName": "ShareSurfer-0.1.0-pre.39",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.39.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.39",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 hotfix release for the Start Menu saved workflow path. v0.1.0-pre.38 includes the v0.1.0-pre.37 launcher and guided-startup handoff hardening, then fixes the confusing TUI behavior where a saved startup config caused the Scan menu item to replay `Start-ShareSurferStartup -ConfigPath ... -Force` instead of running the actual generated workflow. When `sharesurfer-startup.config.json` and the generated `operator-assistant-rerun.ps1` are present, the Start Menu now labels the choice `Run saved scan workflow`, previews the rerun script, and executes it after confirmation. If the config exists but the rerun script is missing, the menu says it will regenerate saved setup and uses interactive startup replay. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 hotfix release for large ACL export runs. v0.1.0-pre.39 includes the v0.1.0-pre.38 Start Menu saved-workflow fix, then improves conflict classification for scans with hundreds of thousands of ACL rows. ShareSurfer now indexes compact NTFS identity and allow-rights patterns, collapses repeated share-vs-NTFS restriction evidence into representative conflict rows, avoids materializing deny/collision state unless deny ACEs exist, and prints conflict-classification progress during export runs so operators can see that the scan is still working. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
