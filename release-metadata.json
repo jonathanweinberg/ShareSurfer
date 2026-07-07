@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.35",
-  "packageVersion": "0.1.0-pre.35",
-  "packageName": "ShareSurfer-0.1.0-pre.35",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.35.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.35",
+  "currentPrereleaseTag": "v0.1.0-pre.36",
+  "packageVersion": "0.1.0-pre.36",
+  "packageName": "ShareSurfer-0.1.0-pre.36",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.36.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.36",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 release package with the staged ShareSurfer Start Menu and text-console wizard foundation from #367. The release-root Start-ShareSurfer.ps1 launcher now opens the Start-ShareSurfer menu by default, while -ConfigPath still replays saved startup configs. The menu shows readiness for ownership inputs, guided scan setup, export validation, standalone dashboard packaging, stop gates, and support bundle guidance; runnable entries preview the commands they execute before asking for confirmation. Ownership import prompts are safer for first-time admins: Enter accepts an existing suggestion, but when no suggestion exists ShareSurfer stays on that field and asks for a numbered/header choice or an explicit S skip. Command previews now quote Windows paths safely and avoid provider errors during non-Windows development checks. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 release package with PowerShell 5.1 Start Menu usability improvements and long-run scan/export status feedback from #372 and #373. The release-root Start-ShareSurfer.ps1 launcher, Start-ShareSurfer menu, and startup wizard now support -ConsoleMode Auto|Enhanced|Plain so arrow-key prompts are preferred in real ConsoleHost sessions while older or redirected consoles can use plain numbered prompts. Menu-launched scan setup now preserves ObsAttribute, AdLookupMode, ManagerIdentityFormat, and console mode into command previews, Start-ShareSurferStartup, saved JSON, and generated rerun scripts. Startup ownership inputs now use a discovery screen to use found files and skip missing ones, build ownership enrichment, or enter advanced custom paths, followed by a final review/edit/cancel screen before writing files. Long identity enrichment and export classification phases now print clearer timestamped progress for root identities, group expansion, directory lookup/cache counters, potential service-account counts, conflicts, findings, permissioned groups, owner pivots, migration discovery, owner review packets, evidence confidence, and CSV writing while keeping high-frequency progress out of scan_events.csv. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
