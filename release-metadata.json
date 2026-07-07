@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.39",
-  "packageVersion": "0.1.0-pre.39",
-  "packageName": "ShareSurfer-0.1.0-pre.39",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.39.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.39",
+  "currentPrereleaseTag": "v0.1.0-pre.40",
+  "packageVersion": "0.1.0-pre.40",
+  "packageName": "ShareSurfer-0.1.0-pre.40",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.40.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.40",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 hotfix release for large ACL export runs. v0.1.0-pre.39 includes the v0.1.0-pre.38 Start Menu saved-workflow fix, then improves conflict classification for scans with hundreds of thousands of ACL rows. ShareSurfer now indexes compact NTFS identity and allow-rights patterns, collapses repeated share-vs-NTFS restriction evidence into representative conflict rows, avoids materializing deny/collision state unless deny ACEs exist, and prints conflict-classification progress during export runs so operators can see that the scan is still working. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 performance and scan-throughput release. v0.1.0-pre.40 builds on the v0.1.0-pre.39 large-ACL conflict hotfix by adding findings-classification progress and hot-path optimization for scans with hundreds of thousands of item/ACL rows. Findings classification now caches repeated broken/missing SID checks, avoids expensive path splitting for path-component policy checks, preserves the same findings.csv schema, and prints throttled progress during item, ACL, SID, service-account, and completion phases. This release also adds opt-in target-level parallel collection for multi-target Invoke-ShareSurferScan -TargetPath runs through -ParallelTargetCollection and -TargetCollectionThrottle, using PowerShell 5.1-compatible runspaces while keeping default scans sequential. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
