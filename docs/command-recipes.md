@@ -93,7 +93,7 @@ $exportPath = 'C:\ShareSurfer\exports\finance-001'
 & "$releaseRoot\Start-ShareSurfer.ps1" -Force
 ```
 
-The menu shows readiness for ownership inputs, saved startup config, export validation, standalone dashboard packaging, and stop gates. Each menu entry previews the command it will run before asking for confirmation. A normal ConsoleHost uses arrow-key selection; add `-ConsoleMode Plain` when you want simple numbered prompts. If you want to replay an existing startup config without the menu, pass `-ConfigPath` to the same launcher.
+The menu shows readiness for ownership inputs, saved startup config, export validation, standalone dashboard packaging, and stop gates. Each menu entry previews the command it will run before asking for confirmation. The default menu uses simple numbered prompts for Windows PowerShell 5.1; add `-ConsoleMode Enhanced` only when you specifically want arrow-key selection in a console that handles it well. If you want to replay an existing startup config without the menu, pass `-ConfigPath` to the same launcher.
 
 If you already know the answers and want to generate the same files without prompts, import the module and call the startup command directly:
 

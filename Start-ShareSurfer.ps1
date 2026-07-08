@@ -22,7 +22,7 @@ param(
     [string] $AclExportMode = 'Compact',
 
     [ValidateSet('Auto', 'Enhanced', 'Plain')]
-    [string] $ConsoleMode = 'Auto',
+    [string] $ConsoleMode = 'Plain',
 
     [switch] $Interactive,
 

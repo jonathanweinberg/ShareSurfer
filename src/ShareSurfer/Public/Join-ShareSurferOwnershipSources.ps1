@@ -35,6 +35,10 @@ function Join-ShareSurferOwnershipSources {
         [ValidateSet('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly')]
         [string] $AdLookupMode = 'Auto',
 
+        # Compatibility shim for older ownership-import rerun scripts that
+        # accidentally included this scan-only setting. Ownership import ignores it.
+        [string] $AclExportMode = '',
+
         [string[]] $ForbiddenOu = @(),
 
         [switch] $Interactive,

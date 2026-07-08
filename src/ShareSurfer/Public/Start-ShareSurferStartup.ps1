@@ -30,7 +30,7 @@ function Start-ShareSurferStartup {
         [string] $AclExportMode = 'Compact',
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto',
+        [string] $ConsoleMode = 'Plain',
 
         [string] $OwnerMappingPath = '',
 
@@ -613,7 +613,7 @@ function Invoke-ShareSurferStartupOwnershipSetup {
         [switch] $Force,
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     $summary = New-ShareSurferStartupOwnershipSetupSummary `
@@ -733,7 +733,7 @@ function Invoke-ShareSurferStartupPostPlanHandoff {
         [string] $ReusableCommandPath,
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     Write-Host ''
@@ -879,7 +879,7 @@ function Read-ShareSurferStartupChoice {
         [object[]] $Options = @(),
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     $choiceOptions = @($Options)
@@ -908,7 +908,7 @@ function Read-ShareSurferStartupBoolean {
         [bool] $Value = $false,
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     $result = Read-ShareSurferConsoleBoolean -Prompt $Prompt -Default $Value -ConsoleMode $ConsoleMode

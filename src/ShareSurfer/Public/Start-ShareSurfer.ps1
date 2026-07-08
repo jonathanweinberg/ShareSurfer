@@ -127,7 +127,7 @@ function Get-ShareSurferMenuEntries {
         [string] $AclExportMode = 'Compact',
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     $entries = New-Object System.Collections.Generic.List[object]
@@ -273,7 +273,7 @@ function Get-ShareSurferMenuEntries {
     $errorState = Get-ShareSurferMenuPathState -FolderPath $ExportPath -FileName 'collection_errors.csv'
     [void]$entries.Add([pscustomobject]@{
         Key = 'stopgates'
-        Label = 'Review stop gates & handoff'
+        Label = 'Review stop gates & handoff guidance'
         Readiness = ('evidence confidence: {0} - collection errors: {1}' -f $confidenceState, $errorState)
         CommandPreview = ('Review evidence_confidence.csv, collection_errors.csv, and scan_manifest.csv in {0} before owner signoff.' -f $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>' } else { $ExportPath }))
         Runnable = $false
@@ -282,7 +282,7 @@ function Get-ShareSurferMenuEntries {
 
     [void]$entries.Add([pscustomobject]@{
         Key = 'support'
-        Label = 'Support bundle'
+        Label = 'Support bundle command preview'
         Readiness = ''
         CommandPreview = ('New-ShareSurferSupportBundle -ExportPath {0} -OutputPath {1}' -f (Format-ShareSurferMenuLiteral -Value $ExportPath -Placeholder '<export folder>'), $(if ([string]::IsNullOrWhiteSpace($ExportPath)) { '<export folder>\support-bundle' } else { ConvertTo-ShareSurferPowerShellLiteral -Value (Join-ShareSurferAssistantPathText -Root $ExportPath -Child 'support-bundle') }))
         Runnable = $false
@@ -342,7 +342,7 @@ function Start-ShareSurfer {
         [string] $AclExportMode = 'Compact',
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     while ($true) {
