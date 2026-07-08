@@ -123,6 +123,9 @@ function Get-ShareSurferMenuEntries {
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
         [string] $ManagerIdentityFormat = 'MailTo',
 
+        [ValidateSet('FullEffective', 'Compact')]
+        [string] $AclExportMode = 'Compact',
+
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
         [string] $ConsoleMode = 'Auto'
     )
@@ -212,6 +215,7 @@ function Get-ShareSurferMenuEntries {
             [pscustomobject]@{ Name = 'ObsAttribute'; Value = (Format-ShareSurferMenuLiteral -Value $ObsAttribute) },
             [pscustomobject]@{ Name = 'AdLookupMode'; Value = (Format-ShareSurferMenuLiteral -Value $AdLookupMode) },
             [pscustomobject]@{ Name = 'ManagerIdentityFormat'; Value = (Format-ShareSurferMenuLiteral -Value $ManagerIdentityFormat) },
+            [pscustomobject]@{ Name = 'AclExportMode'; Value = (Format-ShareSurferMenuLiteral -Value $AclExportMode) },
             [pscustomobject]@{ Name = 'ConsoleMode'; Value = (Format-ShareSurferMenuLiteral -Value $ConsoleMode) }
         )) {
             if (-not [string]::IsNullOrWhiteSpace([string]$parameter.Value)) {
@@ -334,12 +338,15 @@ function Start-ShareSurfer {
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
         [string] $ManagerIdentityFormat = 'MailTo',
 
+        [ValidateSet('FullEffective', 'Compact')]
+        [string] $AclExportMode = 'Compact',
+
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
         [string] $ConsoleMode = 'Auto'
     )
 
     while ($true) {
-        $entries = Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $StandaloneDashboardPath -ReleaseRoot $ReleaseRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -ConsoleMode $ConsoleMode
+        $entries = Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $StandaloneDashboardPath -ReleaseRoot $ReleaseRoot -ObsAttribute $ObsAttribute -AdLookupMode $AdLookupMode -ManagerIdentityFormat $ManagerIdentityFormat -AclExportMode $AclExportMode -ConsoleMode $ConsoleMode
         Write-ShareSurferConsoleLines -Lines (Get-ShareSurferMenuScreen -Entries $entries -InputRoot $InputRoot -ExportPath $ExportPath)
 
         $options = @($entries | ForEach-Object { New-ShareSurferConsoleChoiceOption -Value ([string]$_.Key) -Label ([string]$_.Label) })
@@ -398,6 +405,7 @@ function Start-ShareSurfer {
                     if (-not [string]::IsNullOrWhiteSpace($ObsAttribute)) { $startupParameters.ObsAttribute = $ObsAttribute }
                     if (-not [string]::IsNullOrWhiteSpace($AdLookupMode)) { $startupParameters.AdLookupMode = $AdLookupMode }
                     if (-not [string]::IsNullOrWhiteSpace($ManagerIdentityFormat)) { $startupParameters.ManagerIdentityFormat = $ManagerIdentityFormat }
+                    if (-not [string]::IsNullOrWhiteSpace($AclExportMode)) { $startupParameters.AclExportMode = $AclExportMode }
                     if (-not [string]::IsNullOrWhiteSpace($ConsoleMode)) { $startupParameters.ConsoleMode = $ConsoleMode }
                     Start-ShareSurferStartup @startupParameters | Out-Host
                 }

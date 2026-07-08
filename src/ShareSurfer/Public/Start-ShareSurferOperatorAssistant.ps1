@@ -19,6 +19,9 @@ function Start-ShareSurferOperatorAssistant {
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
         [string] $ManagerIdentityFormat = 'MailTo',
 
+        [ValidateSet('FullEffective', 'Compact')]
+        [string] $AclExportMode = 'Compact',
+
         [string] $OwnerMappingPath = '',
 
         [string] $OwnershipEnrichmentPath = '',
@@ -76,6 +79,10 @@ function Start-ShareSurferOperatorAssistant {
         $ObsAttribute = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute
         $AdLookupMode = Read-ShareSurferAssistantText -Prompt 'AD lookup mode' -Value $AdLookupMode
         $ManagerIdentityFormat = Read-ShareSurferAssistantText -Prompt 'Manager identity format' -Value $ManagerIdentityFormat
+        $AclExportMode = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
+            New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Compact' -Description 'Recommended for large reviews; suppresses repeated inherited rows in exported ACL evidence.'
+            New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'FullEffective' -Description 'Writes every effective ACL row at every path.'
+        )
         Write-ShareSurferOptionalInputDiscoverySummary -InputRoot $InputRoot
         $OwnerMappingPath = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
         $OwnershipEnrichmentPath = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
@@ -157,6 +164,7 @@ function Start-ShareSurferOperatorAssistant {
         -ObsAttribute $ObsAttribute `
         -AdLookupMode $AdLookupMode `
         -ManagerIdentityFormat $ManagerIdentityFormat `
+        -AclExportMode $AclExportMode `
         -OwnerMappingPath $OwnerMappingPath `
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
         -OwnershipContextPath $OwnershipContextPath `
@@ -183,6 +191,7 @@ function Start-ShareSurferOperatorAssistant {
         obsAttribute = $ObsAttribute
         adLookupMode = $AdLookupMode
         managerIdentityFormat = $ManagerIdentityFormat
+        aclExportMode = $AclExportMode
         includeFiles = [bool]$IncludeFiles
         includeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         skipIdentityEnrichment = [bool]$SkipIdentityEnrichment
@@ -242,6 +251,7 @@ function Start-ShareSurferOperatorAssistant {
         ObsAttribute = $ObsAttribute
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
+        AclExportMode = $AclExportMode
         OwnerMappingPath = $OwnerMappingPath
         OwnershipEnrichmentPath = $OwnershipEnrichmentPath
         OwnershipContextPath = $OwnershipContextPath
@@ -482,6 +492,9 @@ function New-ShareSurferOperatorAssistantCommandSet {
         [Parameter(Mandatory = $true)]
         [string] $ManagerIdentityFormat,
 
+        [ValidateSet('FullEffective', 'Compact')]
+        [string] $AclExportMode = 'Compact',
+
         [string] $OwnerMappingPath = '',
 
         [string] $OwnershipEnrichmentPath = '',
@@ -523,6 +536,7 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add(('$obsAttribute = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsAttribute)))
     $lines.Add(('$adLookupMode = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AdLookupMode)))
     $lines.Add(('$managerIdentityFormat = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ManagerIdentityFormat)))
+    $lines.Add(('$aclExportMode = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AclExportMode)))
     $lines.Add(('$ownerMappingPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnerMappingPath)))
     $lines.Add(('$ownershipEnrichmentPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipEnrichmentPath)))
     $lines.Add(('$ownershipContextPath = {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $OwnershipContextPath)))
@@ -550,6 +564,7 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $lines.Add('  ObsAttribute = $obsAttribute')
     $lines.Add('  AdLookupMode = $adLookupMode')
     $lines.Add('  ManagerIdentityFormat = $managerIdentityFormat')
+    $lines.Add('  AclExportMode = $aclExportMode')
     $lines.Add('}')
     if ($IncludeFiles) {
         $lines.Add('$scanParams.IncludeFiles = $true')
@@ -607,6 +622,7 @@ function New-ShareSurferOperatorAssistantCommandSet {
     $scanPreviewParts.Add(('-ObsAttribute {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ObsAttribute)))
     $scanPreviewParts.Add(('-AdLookupMode {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AdLookupMode)))
     $scanPreviewParts.Add(('-ManagerIdentityFormat {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $ManagerIdentityFormat)))
+    $scanPreviewParts.Add(('-AclExportMode {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value $AclExportMode)))
     if ($IncludeFiles) {
         $scanPreviewParts.Add('-IncludeFiles')
     }

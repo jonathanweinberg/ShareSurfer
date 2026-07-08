@@ -3189,7 +3189,7 @@ $tests = @(
             try {
                 $entries = @(& $module {
                     param($InputRoot, $ExportPath)
-                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ObsAttribute 'info' -AdLookupMode 'DirectoryOnly' -ManagerIdentityFormat 'SamAccountName' -ConsoleMode Plain
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ObsAttribute 'info' -AdLookupMode 'DirectoryOnly' -ManagerIdentityFormat 'SamAccountName' -AclExportMode Compact -ConsoleMode Plain
                 } $inputRoot $exportPath)
 
                 Assert-Equal $entries.Count 7 'Start menu should list the seven operator tasks.'
@@ -3209,6 +3209,7 @@ $tests = @(
                 Assert-True ($scan.CommandPreview.Contains("-ObsAttribute 'info'")) 'Scan preview should preserve the menu OBS attribute.'
                 Assert-True ($scan.CommandPreview.Contains("-AdLookupMode 'DirectoryOnly'")) 'Scan preview should preserve the menu AD lookup mode.'
                 Assert-True ($scan.CommandPreview.Contains("-ManagerIdentityFormat 'SamAccountName'")) 'Scan preview should preserve the menu manager identity format.'
+                Assert-True ($scan.CommandPreview.Contains("-AclExportMode 'Compact'")) 'Scan preview should preserve the menu ACL export mode.'
                 Assert-True ($scan.CommandPreview.Contains("-ConsoleMode 'Plain'")) 'Scan preview should preserve the menu console mode.'
 
                 $screen = @(& $module {
@@ -3280,6 +3281,7 @@ $tests = @(
                 '\\files01\Finance',
                 '', '', '',
                 '',
+                '',
                 '', '', '', 'Y',
                 '',
                 '',
@@ -3304,12 +3306,14 @@ $tests = @(
                     -ObsAttribute 'info' `
                     -AdLookupMode DirectoryOnly `
                     -ManagerIdentityFormat SamAccountName `
+                    -AclExportMode Compact `
                     -ConsoleMode Plain
 
                 $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
                 Assert-Equal $config.obsAttribute 'info' 'Menu-launched startup should preserve the menu OBS attribute.'
                 Assert-Equal $config.adLookupMode 'DirectoryOnly' 'Menu-launched startup should preserve the menu AD lookup mode.'
                 Assert-Equal $config.managerIdentityFormat 'SamAccountName' 'Menu-launched startup should preserve the menu manager identity format.'
+                Assert-Equal $config.aclExportMode 'Compact' 'Menu-launched startup should preserve the menu ACL export mode.'
                 Assert-Equal $config.consoleMode 'Plain' 'Menu-launched startup should preserve the menu console mode in saved config.'
                 Assert-Equal $config.targetPaths[0] '\\files01\Finance' 'Menu-launched startup should save the prompted target path.'
                 Assert-Equal $script:shareSurferMenuStartupAnswers.Count 0 'Menu startup simulation should consume only the expected prompts.'
@@ -3402,6 +3406,7 @@ $tests = @(
                     -ObsAttribute 'extensionAttribute10' `
                     -AdLookupMode 'Auto' `
                     -ManagerIdentityFormat 'MailTo' `
+                    -AclExportMode 'Compact' `
                     -OwnerMappingPath '' `
                     -OwnershipEnrichmentPath 'C:\missing\ownership-enrichment.csv' `
                     -DiscountedPrincipalPath '' `
@@ -3412,6 +3417,7 @@ $tests = @(
             Assert-True ($screen.Contains('Startup path: Permissive')) 'Selections screen should show the chosen startup path.'
             Assert-True ($screen.Contains('\\filer01\finance')) 'Selections screen should show scan targets.'
             Assert-True ($screen.Contains('Owner mapping CSV: (none - the scan runs without it)')) 'Selections screen should mark skipped optional inputs.'
+            Assert-True ($screen.Contains('ACL export mode: Compact')) 'Selections screen should show the selected ACL export mode.'
             Assert-True ($screen.Contains('(not found yet)')) 'Selections screen should mark optional paths that do not exist yet.'
             Assert-True ($screen.Contains('sharesurfer-startup.config.json')) 'Selections screen should show where the config will be saved.'
         }
@@ -4382,6 +4388,7 @@ $tests = @(
                 -ObsAttribute 'info' `
                 -AdLookupMode DirectoryOnly `
                 -ManagerIdentityFormat MailTo `
+                -AclExportMode Compact `
                 -OwnerMappingPath $ownerMappingPath `
                 -OwnershipEnrichmentPath $ownershipEnrichmentPath `
                 -OwnershipContextPath $ownershipContextPath `
@@ -4403,6 +4410,7 @@ $tests = @(
             Assert-Equal $plan.exportPath $exportPath 'Assistant plan should preserve export path.'
             Assert-Equal $plan.obsAttribute 'info' 'Assistant plan should preserve OBS attribute.'
             Assert-Equal $plan.adLookupMode 'DirectoryOnly' 'Assistant plan should preserve AD lookup mode.'
+            Assert-Equal $plan.aclExportMode 'Compact' 'Assistant plan should preserve ACL export mode.'
             Assert-Equal $plan.includeSharePermissionDiagnostics $true 'Assistant plan should enable share-permission diagnostics by default.'
             Assert-Equal $plan.optionalInputs.ownerMappingPath $ownerMappingPath 'Assistant plan should preserve owner mapping path.'
             Assert-Equal $plan.optionalInputs.ownershipEnrichmentPath $ownershipEnrichmentPath 'Assistant plan should preserve ownership enrichment path.'
@@ -4414,6 +4422,7 @@ $tests = @(
             Assert-True ([string]$plan.commands.portProtocolAssessment -like '*Invoke-ShareSurferPortProtocolAssessment*') 'Assistant plan should include a port/protocol assessment command preview.'
             Assert-True ([string]$plan.commands.portProtocolAssessment -like '*-OutputPath*') 'Port/protocol assessment command preview should write beside the export.'
             Assert-True ([string]$plan.commands.scan -like '*Invoke-ShareSurferScan*') 'Assistant plan should include a scan command preview.'
+            Assert-True ([string]$plan.commands.scan -like '*-AclExportMode*Compact*') 'Scan command preview should include ACL export mode.'
             Assert-True ([string]$plan.commands.scan -like '*-OwnershipEnrichmentPath*') 'Scan command preview should show ownership enrichment when provided.'
             Assert-True ([string]$plan.commands.scan -like '*-OwnershipContextPath*') 'Scan command preview should show ownership context when provided.'
             Assert-True ([string]$plan.commands.scan -like '*-OwnershipRelationshipPath*') 'Scan command preview should show ownership relationships when provided.'
@@ -4425,11 +4434,13 @@ $tests = @(
             Assert-True (@($plan.stopGates | Where-Object { [string]$_ -like '*share-permission-diagnostics*' }).Count -eq 1) 'Assistant plan should include share-permission diagnostic stop gate guidance.'
             Assert-True ($scriptText -like '*Import-Module $modulePath -Force*') 'Reusable script should import the module.'
             Assert-True ($scriptText -like '*$sharePermissionDiagnosticPath = Join-Path $exportPath*share-permission-diagnostics*') 'Reusable script should define the share-permission diagnostic output path.'
+            Assert-True ($scriptText -like '*$aclExportMode = ''Compact''*') 'Reusable script should record the ACL export mode.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic -TargetPath $targetPaths -OutputPath $sharePermissionDiagnosticPath -Force*') 'Reusable script should run intensive share-permission diagnostics before scanning.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force*') 'Reusable script should write port/protocol assessment CSVs beside the export before dashboard packaging.'
             Assert-True ($scriptText.IndexOf('Invoke-ShareSurferSharePermissionDiagnostic') -lt $scriptText.IndexOf('Invoke-ShareSurferScan @scanParams')) 'Reusable script should run share-permission diagnostics before the scan.'
             Assert-True ($scriptText.IndexOf('Invoke-ShareSurferPortProtocolAssessment') -lt $scriptText.IndexOf('& $standaloneDashboardScript')) 'Reusable script should run port/protocol assessment before dashboard packaging.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Reusable script should run the scan through a splatted command.'
+            Assert-True ($scriptText -like '*AclExportMode = $aclExportMode*') 'Reusable script should pass ACL export mode into Invoke-ShareSurferScan.'
             Assert-True ($scriptText -like '*$validation = Test-ShareSurferExport -ExportPath $exportPath*') 'Reusable script should validate the export.'
             Assert-True ($scriptText -like '*ShareSurfer export validation failed*') 'Reusable script should stop when export validation fails.'
             Assert-True ($scriptText -like '*New-ShareSurferStandaloneDashboard.ps1*') 'Reusable script should package the standalone dashboard.'
@@ -4596,10 +4607,12 @@ $tests = @(
             Assert-Equal $summary.PostStartupRerunLaunched $false 'Non-interactive startup should not launch the rerun script.'
             Assert-Equal $summary.OperatorPlanPath $planPath 'Startup summary should report operator plan path.'
             Assert-Equal $summary.OperatorReusableCommandPath $rerunPath 'Startup summary should report operator rerun path.'
+            Assert-Equal $summary.AclExportMode 'Compact' 'Startup summary should preserve ACL export mode.'
             Assert-Equal $config.version 1 'Startup config should have a stable version.'
             Assert-Equal $config.environmentMode 'Nonpermissive' 'Startup config should preserve environment mode.'
             Assert-Equal $config.releaseRoot $releaseRoot 'Startup config should preserve release root.'
             Assert-Equal $config.obsAttribute 'info' 'Startup config should preserve OBS attribute.'
+            Assert-Equal $config.aclExportMode 'Compact' 'Startup config should preserve ACL export mode.'
             Assert-Equal $config.includeSharePermissionDiagnostics $true 'Startup config should preserve the share-permission diagnostic choice.'
             Assert-Equal $config.optionalInputs.ownerMappingPath $ownerMappingPath 'Startup config should preserve owner mapping path.'
             Assert-Equal $config.optionalInputs.ownershipEnrichmentPath $ownershipEnrichmentPath 'Startup config should preserve ownership enrichment path.'
@@ -4617,6 +4630,7 @@ $tests = @(
             Assert-True (@($config.stopGates | Where-Object { [string]$_ -like '*ObsAttribute*' }).Count -eq 1) 'Startup config should include OBS stop gate guidance.'
             Assert-True (@($config.stopGates | Where-Object { [string]$_ -like '*share-permission-diagnostics*' }).Count -eq 1) 'Startup config should include share-permission diagnostic stop gate guidance.'
             Assert-Equal $operatorPlan.obsAttribute 'info' 'Startup should delegate selected OBS attribute into operator assistant plan.'
+            Assert-Equal $operatorPlan.aclExportMode 'Compact' 'Startup should delegate selected ACL export mode into operator assistant plan.'
             Assert-Equal $operatorPlan.includeSharePermissionDiagnostics $true 'Startup should delegate share-permission diagnostic choice into operator assistant plan.'
             Assert-Equal $operatorPlan.optionalInputs.ownershipContextPath $ownershipContextPath 'Startup should delegate ownership context path into operator assistant plan.'
             Assert-Equal $operatorPlan.optionalInputs.ownershipRelationshipPath $ownershipRelationshipPath 'Startup should delegate ownership relationship path into operator assistant plan.'
@@ -4627,6 +4641,7 @@ $tests = @(
             Assert-Equal $summary.OwnershipImportManifestPath $ownershipImportManifestPath 'Startup summary should report ownership import manifest path.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferSharePermissionDiagnostic*') 'Startup-generated operator rerun script should run share-permission diagnostics by default.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferPortProtocolAssessment -TargetPath $targetPaths -OutputPath $exportPath -Force*') 'Startup-generated operator rerun script should generate port/protocol readiness CSVs by default.'
+            Assert-True ($scriptText -like '*AclExportMode = $aclExportMode*') 'Startup-generated operator rerun script should pass ACL export mode to the scan.'
             Assert-True ($scriptText -like '*Invoke-ShareSurferScan @scanParams*') 'Startup-generated operator rerun script should run the scan.'
             Assert-True ($scriptText -like '*Test-ShareSurferExport -ExportPath $exportPath*') 'Startup-generated operator rerun script should validate the export.'
 
@@ -4634,6 +4649,7 @@ $tests = @(
             Assert-Equal $replaySummary.EnvironmentMode 'Nonpermissive' 'Replay should load environment mode from startup config.'
             Assert-Equal $replaySummary.ExportPath $exportPath 'Replay should load export path from startup config.'
             Assert-Equal $replaySummary.TargetPath[0] '\\files01\Finance' 'Replay should load target path from startup config.'
+            Assert-Equal $replaySummary.AclExportMode 'Compact' 'Replay should load ACL export mode from startup config.'
             Assert-Equal $replaySummary.IncludeSharePermissionDiagnostics $true 'Replay should load share-permission diagnostic choice from startup config.'
             Assert-Equal $replaySummary.SkipUnblock $true 'Replay should preserve skipped unblock setting from startup config.'
             Assert-Equal $replaySummary.OwnershipContextPath $ownershipContextPath 'Replay should load ownership context path from startup config.'

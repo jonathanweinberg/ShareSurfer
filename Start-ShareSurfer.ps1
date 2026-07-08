@@ -18,6 +18,9 @@ param(
     [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
     [string] $ManagerIdentityFormat = 'MailTo',
 
+    [ValidateSet('FullEffective', 'Compact')]
+    [string] $AclExportMode = 'Compact',
+
     [ValidateSet('Auto', 'Enhanced', 'Plain')]
     [string] $ConsoleMode = 'Auto',
 
@@ -156,6 +159,7 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath) -and [string]::IsNullOrWhiteSpace(
         ObsAttribute = $ObsAttribute
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
+        AclExportMode = $AclExportMode
         ConsoleMode = $ConsoleMode
     }
     return
@@ -169,6 +173,7 @@ $startupParams = @{
     ObsAttribute = $ObsAttribute
     AdLookupMode = $AdLookupMode
     ManagerIdentityFormat = $ManagerIdentityFormat
+    AclExportMode = $AclExportMode
     ConsoleMode = $ConsoleMode
 }
 
