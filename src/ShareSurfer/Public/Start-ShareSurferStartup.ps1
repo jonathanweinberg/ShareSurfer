@@ -26,6 +26,9 @@ function Start-ShareSurferStartup {
         [ValidateSet('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName')]
         [string] $ManagerIdentityFormat = 'MailTo',
 
+        [ValidateSet('FullEffective', 'Compact')]
+        [string] $AclExportMode = 'Compact',
+
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
         [string] $ConsoleMode = 'Auto',
 
@@ -85,6 +88,7 @@ function Start-ShareSurferStartup {
         if ($null -ne $definition.PSObject.Properties['obsAttribute'] -and -not $boundParameters.ContainsKey('ObsAttribute')) { $ObsAttribute = [string]$definition.obsAttribute }
         if ($null -ne $definition.PSObject.Properties['adLookupMode'] -and -not $boundParameters.ContainsKey('AdLookupMode')) { $AdLookupMode = [string]$definition.adLookupMode }
         if ($null -ne $definition.PSObject.Properties['managerIdentityFormat'] -and -not $boundParameters.ContainsKey('ManagerIdentityFormat')) { $ManagerIdentityFormat = [string]$definition.managerIdentityFormat }
+        if ($null -ne $definition.PSObject.Properties['aclExportMode'] -and -not $boundParameters.ContainsKey('AclExportMode')) { $AclExportMode = [string]$definition.aclExportMode }
         if ($null -ne $definition.PSObject.Properties['consoleMode'] -and -not $boundParameters.ContainsKey('ConsoleMode')) { $ConsoleMode = [string]$definition.consoleMode }
         if ($null -ne $definition.PSObject.Properties['includeFiles'] -and -not $boundParameters.ContainsKey('IncludeFiles')) { $IncludeFiles = [bool]$definition.includeFiles }
         if ($null -ne $definition.PSObject.Properties['includeSharePermissionDiagnostics'] -and -not $boundParameters.ContainsKey('IncludeSharePermissionDiagnostics')) { $IncludeSharePermissionDiagnostics = [bool]$definition.includeSharePermissionDiagnostics }
@@ -259,6 +263,10 @@ function Start-ShareSurferStartup {
             $HandoffPath = Read-ShareSurferAssistantText -Prompt 'Validated export handoff ZIP path' -Value $HandoffPath
         }
         Write-ShareSurferStartupStepHeader -Step 4 -Total 4 -Title 'Scan options and config save'
+        $AclExportMode = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
+            New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Compact' -Description 'Recommended for large reviews; keeps explicit and boundary ACEs while suppressing repeated inherited export rows.'
+            New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'FullEffective' -Description 'Writes every effective ACL row at every path for deep forensic review.'
+        ) -ConsoleMode $ConsoleMode
         $IncludeFiles = Read-ShareSurferStartupBoolean -Prompt 'Include file rows as well as folders?' -Value ([bool]$IncludeFiles) -ConsoleMode $ConsoleMode
         $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics) -ConsoleMode $ConsoleMode
         $SkipIdentityEnrichment = Read-ShareSurferStartupBoolean -Prompt 'Skip identity enrichment?' -Value ([bool]$SkipIdentityEnrichment) -ConsoleMode $ConsoleMode
@@ -273,6 +281,7 @@ function Start-ShareSurferStartup {
                 -ObsAttribute $ObsAttribute `
                 -AdLookupMode $AdLookupMode `
                 -ManagerIdentityFormat $ManagerIdentityFormat `
+                -AclExportMode $AclExportMode `
                 -OwnerMappingPath $OwnerMappingPath `
                 -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
                 -DiscountedPrincipalPath $DiscountedPrincipalPath `
@@ -301,6 +310,7 @@ function Start-ShareSurferStartup {
                     ObsAttribute = $ObsAttribute
                     AdLookupMode = $AdLookupMode
                     ManagerIdentityFormat = $ManagerIdentityFormat
+                    AclExportMode = $AclExportMode
                 }
             }
             if ($reviewAction -eq 'EditCore') {
@@ -325,6 +335,10 @@ function Start-ShareSurferStartup {
             }
             if ($reviewAction -eq 'EditScanOptions') {
                 Write-ShareSurferStartupStepHeader -Step 4 -Total 4 -Title 'Edit scan options and config save'
+                $AclExportMode = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
+                    New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Compact' -Description 'Recommended for large reviews; keeps explicit and boundary ACEs while suppressing repeated inherited export rows.'
+                    New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'FullEffective' -Description 'Writes every effective ACL row at every path for deep forensic review.'
+                ) -ConsoleMode $ConsoleMode
                 $IncludeFiles = Read-ShareSurferStartupBoolean -Prompt 'Include file rows as well as folders?' -Value ([bool]$IncludeFiles) -ConsoleMode $ConsoleMode
                 $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics) -ConsoleMode $ConsoleMode
                 $SkipIdentityEnrichment = Read-ShareSurferStartupBoolean -Prompt 'Skip identity enrichment?' -Value ([bool]$SkipIdentityEnrichment) -ConsoleMode $ConsoleMode
@@ -388,6 +402,7 @@ function Start-ShareSurferStartup {
         -ObsAttribute $ObsAttribute `
         -AdLookupMode $AdLookupMode `
         -ManagerIdentityFormat $ManagerIdentityFormat `
+        -AclExportMode $AclExportMode `
         -OwnerMappingPath $OwnerMappingPath `
         -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
         -OwnershipContextPath $OwnershipContextPath `
@@ -430,6 +445,7 @@ function Start-ShareSurferStartup {
         obsAttribute = $ObsAttribute
         adLookupMode = $AdLookupMode
         managerIdentityFormat = $ManagerIdentityFormat
+        aclExportMode = $AclExportMode
         consoleMode = $ConsoleMode
         includeFiles = [bool]$IncludeFiles
         includeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
@@ -498,6 +514,7 @@ function Start-ShareSurferStartup {
         ObsAttribute = $ObsAttribute
         AdLookupMode = $AdLookupMode
         ManagerIdentityFormat = $ManagerIdentityFormat
+        AclExportMode = $AclExportMode
         ConsoleMode = $ConsoleMode
         OwnerMappingPath = $OwnerMappingPath
         OwnershipEnrichmentPath = $OwnershipEnrichmentPath
@@ -929,6 +946,8 @@ function Get-ShareSurferStartupSelectionsScreen {
 
         [string] $ManagerIdentityFormat = '',
 
+        [string] $AclExportMode = '',
+
         [string] $OwnerMappingPath = '',
 
         [string] $OwnershipEnrichmentPath = '',
@@ -961,6 +980,7 @@ function Get-ShareSurferStartupSelectionsScreen {
     $lines.Add(('  Export folder: {0}' -f $ExportPath))
     $lines.Add(('  Dashboard folder: {0}' -f $StandaloneDashboardPath))
     $lines.Add(('  OBS attribute: {0}; AD lookup: {1}; manager format: {2}' -f $ObsAttribute, $AdLookupMode, $ManagerIdentityFormat))
+    $lines.Add(('  ACL export mode: {0}' -f $(if ([string]::IsNullOrWhiteSpace($AclExportMode)) { '(default)' } else { $AclExportMode })))
     $lines.Add(('  Owner mapping CSV: {0}' -f (& $optionalLabel $OwnerMappingPath)))
     $lines.Add(('  Ownership enrichment CSV: {0}' -f (& $optionalLabel $OwnershipEnrichmentPath)))
     $lines.Add(('  Discounted principals CSV: {0}' -f (& $optionalLabel $DiscountedPrincipalPath)))
