@@ -16,6 +16,8 @@ function Get-ShareSurferConflicts {
     $conflicts = New-Object System.Collections.ArrayList
     $sharePermissionsList = @(ConvertTo-ShareSurferArray $SharePermissions)
     $aclEntriesList = @(ConvertTo-ShareSurferArray $AclEntries)
+    $aclTotal = $aclEntriesList.Count
+    $conflictStatusIntervalSeconds = Get-ShareSurferConflictStatusIntervalSeconds -RequestedSeconds $StatusIntervalSeconds -AclRowCount $aclTotal
     $statusClock = [System.Diagnostics.Stopwatch]::StartNew()
     $statusState = @{ LastSeconds = -999.0 }
     $showConflictProgress = [bool]$ShowProgress -and -not [bool]$Quiet
@@ -32,7 +34,7 @@ function Get-ShareSurferConflicts {
         }
 
         $elapsed = [double]$statusClock.Elapsed.TotalSeconds
-        if ($Force -or $StatusIntervalSeconds -le 0 -or ($elapsed - $statusState.LastSeconds) -ge $StatusIntervalSeconds) {
+        if ($Force -or $conflictStatusIntervalSeconds -le 0 -or ($elapsed - $statusState.LastSeconds) -ge $conflictStatusIntervalSeconds) {
             $statusState.LastSeconds = $elapsed
             Write-ShareSurferStatus -Phase 'Export' -Message $Message
         }
@@ -70,43 +72,63 @@ function Get-ShareSurferConflicts {
     $ntfsAllowPatterns = @{}
     $ntfsDenyItemIdentityKeys = @{}
     $aclIndex = 0
-    $aclTotal = $aclEntriesList.Count
     foreach ($ace in $aclEntriesList) {
         $aclIndex++
-        if (-not $ntfsByShare.ContainsKey($ace.ShareId)) {
-            $ntfsByShare[$ace.ShareId] = @{}
+        $shareId = [string]$ace.ShareId
+        if (-not $ntfsByShare.ContainsKey($shareId)) {
+            $ntfsByShare[$shareId] = @{}
         }
 
         $identityKey = ([string]$ace.Identity).ToUpperInvariant()
-        $ntfsByShare[$ace.ShareId][$identityKey] = $true
+        $ntfsByShare[$shareId][$identityKey] = $true
 
-        $shareIdentityKey = '{0}|{1}' -f [string]$ace.ShareId, $identityKey
-        if (-not $ntfsIdentityExamples.ContainsKey($shareIdentityKey)) {
-            $ntfsIdentityExamples[$shareIdentityKey] = @{
-                ShareId = [string]$ace.ShareId
-                IdentityKey = $identityKey
-                Ace = $ace
-                EvidenceState = New-ShareSurferConflictEvidenceState
-            }
+        $shareMap = @{}
+        if ($sharePermissionsByShare.ContainsKey($shareId)) {
+            $shareMap = $sharePermissionsByShare[$shareId]
         }
-        Add-ShareSurferConflictEvidence -State $ntfsIdentityExamples[$shareIdentityKey]['EvidenceState'] -Ace $ace
+        $shareMapHasIdentity = $shareMap.ContainsKey($identityKey)
+        $hasBroadAllowGate = ($shareHasBroadAllowGate.ContainsKey($shareId) -and [bool]$shareHasBroadAllowGate[$shareId])
 
-        $accessType = Get-ShareSurferAccessType $ace.AccessControlType
-        if ($accessType -eq 'Allow') {
-            $allowPatternKey = '{0}|{1}|{2}' -f [string]$ace.ShareId, $identityKey, ([string]$ace.Rights).ToUpperInvariant()
-            if (-not $ntfsAllowPatterns.ContainsKey($allowPatternKey)) {
-                $ntfsAllowPatterns[$allowPatternKey] = @{
-                    ShareId = [string]$ace.ShareId
+        if ($shareMap.Count -gt 0 -and -not $shareMapHasIdentity -and -not $hasBroadAllowGate) {
+            $shareIdentityKey = '{0}|{1}' -f $shareId, $identityKey
+            if (-not $ntfsIdentityExamples.ContainsKey($shareIdentityKey)) {
+                $ntfsIdentityExamples[$shareIdentityKey] = @{
+                    ShareId = $shareId
                     IdentityKey = $identityKey
                     Ace = $ace
-                    NtfsRank = Get-ShareSurferRightsRank -Rights $ace.Rights
                     EvidenceState = New-ShareSurferConflictEvidenceState
                 }
             }
-            Add-ShareSurferConflictEvidence -State $ntfsAllowPatterns[$allowPatternKey]['EvidenceState'] -Ace $ace
+            Add-ShareSurferConflictEvidence -State $ntfsIdentityExamples[$shareIdentityKey]['EvidenceState'] -Ace $ace
+        }
+
+        $accessType = Get-ShareSurferAccessType $ace.AccessControlType
+        if ($accessType -eq 'Allow') {
+            if ($shareMapHasIdentity) {
+                $shareIdentityCacheKey = '{0}|{1}' -f $shareId, $identityKey
+                $shareAllowRank = 0
+                if ($shareAllowRankByShareIdentity.ContainsKey($shareIdentityCacheKey)) {
+                    $shareAllowRank = [int]$shareAllowRankByShareIdentity[$shareIdentityCacheKey]
+                }
+
+                $ntfsRank = Get-ShareSurferRightsRank -Rights $ace.Rights
+                if ($shareAllowRank -gt 0 -and $ntfsRank -gt $shareAllowRank) {
+                    $allowPatternKey = '{0}|{1}|{2}' -f $shareId, $identityKey, ([string]$ace.Rights).ToUpperInvariant()
+                    if (-not $ntfsAllowPatterns.ContainsKey($allowPatternKey)) {
+                        $ntfsAllowPatterns[$allowPatternKey] = @{
+                            ShareId = $shareId
+                            IdentityKey = $identityKey
+                            Ace = $ace
+                            NtfsRank = $ntfsRank
+                            EvidenceState = New-ShareSurferConflictEvidenceState
+                        }
+                    }
+                    Add-ShareSurferConflictEvidence -State $ntfsAllowPatterns[$allowPatternKey]['EvidenceState'] -Ace $ace
+                }
+            }
         }
         elseif ($accessType -eq 'Deny') {
-            $denyStateKey = '{0}|{1}|{2}' -f [string]$ace.ShareId, [string]$ace.ItemId, $identityKey
+            $denyStateKey = '{0}|{1}|{2}' -f $shareId, [string]$ace.ItemId, $identityKey
             $ntfsDenyItemIdentityKeys[$denyStateKey] = $true
         }
 
@@ -282,6 +304,7 @@ function New-ShareSurferConflictEvidenceState {
         ExamplePath = ''
         AffectedPathPrefix = ''
         FirstSeenPath = ''
+        PrefixSampleCount = 0
         MaxDepth = 0
     }
 }
@@ -300,12 +323,25 @@ function Add-ShareSurferConflictEvidence {
 
     $State['RowCount'] = [int]$State['RowCount'] + 1
 
-    $itemId = Get-ShareSurferConflictRowValue -Row $Ace -Name 'ItemId'
+    $itemId = ''
+    if ($null -ne $Ace.PSObject.Properties['ItemId']) {
+        $itemId = [string]$Ace.PSObject.Properties['ItemId'].Value
+    }
     if (-not [string]::IsNullOrWhiteSpace($itemId)) {
         $State['ItemIds'][$itemId] = $true
     }
 
-    $path = Get-ShareSurferConflictEvidencePath -Row $Ace
+    $path = ''
+    foreach ($name in @('FullPath', 'ExamplePath', 'UNCPath', 'LocalPath', 'RelativePath')) {
+        if ($null -ne $Ace.PSObject.Properties[$name]) {
+            $value = [string]$Ace.PSObject.Properties[$name].Value
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                $path = $value
+                break
+            }
+        }
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($path)) {
         if ([string]::IsNullOrWhiteSpace([string]$State['FirstSeenPath'])) {
             $State['FirstSeenPath'] = $path
@@ -313,15 +349,27 @@ function Add-ShareSurferConflictEvidence {
         if ([string]::IsNullOrWhiteSpace([string]$State['ExamplePath'])) {
             $State['ExamplePath'] = $path
         }
-        if ([string]::IsNullOrWhiteSpace([string]$State['AffectedPathPrefix'])) {
-            $State['AffectedPathPrefix'] = $path
-        }
-        else {
-            $State['AffectedPathPrefix'] = Get-ShareSurferCommonPathPrefix -Left ([string]$State['AffectedPathPrefix']) -Right $path
+
+        $prefixSampleCount = [int]$State['PrefixSampleCount']
+        if ($prefixSampleCount -lt 64 -or [string]::IsNullOrWhiteSpace([string]$State['AffectedPathPrefix'])) {
+            if ([string]::IsNullOrWhiteSpace([string]$State['AffectedPathPrefix'])) {
+                $State['AffectedPathPrefix'] = $path
+            }
+            else {
+                $State['AffectedPathPrefix'] = Get-ShareSurferCommonPathPrefix -Left ([string]$State['AffectedPathPrefix']) -Right $path
+            }
+            $State['PrefixSampleCount'] = $prefixSampleCount + 1
         }
     }
 
-    $depth = Get-ShareSurferConflictEvidenceDepth -Row $Ace
+    $depth = 0
+    if ($null -ne $Ace.PSObject.Properties['Depth']) {
+        $depthText = [string]$Ace.PSObject.Properties['Depth'].Value
+        [void][int]::TryParse($depthText, [ref]$depth)
+    }
+    if ($depth -le 0 -and -not [string]::IsNullOrWhiteSpace($path)) {
+        $depth = @($path -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+    }
     if ($depth -gt [int]$State['MaxDepth']) {
         $State['MaxDepth'] = $depth
     }
@@ -413,6 +461,28 @@ function Get-ShareSurferConflictEvidenceDepth {
     }
 
     @($path -split '[\\/]' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+}
+
+function Get-ShareSurferConflictStatusIntervalSeconds {
+    param(
+        [int] $RequestedSeconds = 15,
+
+        [int] $AclRowCount = 0
+    )
+
+    if ($RequestedSeconds -le 0) {
+        return $RequestedSeconds
+    }
+
+    if ($AclRowCount -ge 100000 -and $RequestedSeconds -lt 60) {
+        return 60
+    }
+
+    if ($AclRowCount -ge 25000 -and $RequestedSeconds -lt 30) {
+        return 30
+    }
+
+    $RequestedSeconds
 }
 
 function Get-ShareSurferCommonPathPrefix {

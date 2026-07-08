@@ -1631,6 +1631,58 @@ $tests = @(
         }
     },
     @{
+        Name = 'Get-ShareSurferConflicts prunes share-covered nonrestrictive ACL evidence at scale'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $sharePermissions = @(
+                [pscustomobject]@{ ShareId = 'share-001'; Identity = 'CONTOSO\FinanceReaders'; Rights = 'Full'; AccessControlType = 'Allow' }
+            )
+            $aclEntries = for ($i = 0; $i -lt 50000; $i++) {
+                [pscustomobject]@{
+                    ShareId = 'share-001'
+                    ItemId = 'item-{0}' -f $i
+                    FullPath = '\\files01\Finance\Inherited\Department\Team\Folder{0}' -f $i
+                    Identity = 'CONTOSO\FinanceReaders'
+                    Rights = 'ReadAndExecute'
+                    AccessControlType = 'Allow'
+                    Depth = 5
+                }
+            }
+
+            $shareSurferModule = Get-Module ShareSurfer
+            $result = $null
+            $elapsed = Measure-Command {
+                $result = @(& $shareSurferModule {
+                    param($SharePermissions, $AclEntries)
+                    Get-ShareSurferConflicts -SharePermissions $SharePermissions -AclEntries $AclEntries -Quiet
+                } $sharePermissions $aclEntries)
+            }
+
+            Assert-Equal @($result).Count 0 'Share-covered NTFS rows that are not broader than the share gate should not produce conflicts.'
+            Assert-True ($elapsed.TotalSeconds -lt 15) ('Conflict classification should prune non-conflict ACL rows before building rollup evidence. ElapsedSeconds={0:N2}' -f $elapsed.TotalSeconds)
+        }
+    },
+    @{
+        Name = 'Get-ShareSurferConflicts slows high-volume progress heartbeat without disabling forced progress'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $shareSurferModule = Get-Module ShareSurfer
+            $intervals = & $shareSurferModule {
+                [pscustomobject]@{
+                    SmallDefault = Get-ShareSurferConflictStatusIntervalSeconds -RequestedSeconds 15 -AclRowCount 1000
+                    MediumDefault = Get-ShareSurferConflictStatusIntervalSeconds -RequestedSeconds 15 -AclRowCount 25000
+                    LargeDefault = Get-ShareSurferConflictStatusIntervalSeconds -RequestedSeconds 15 -AclRowCount 543220
+                    Forced = Get-ShareSurferConflictStatusIntervalSeconds -RequestedSeconds 0 -AclRowCount 543220
+                }
+            }
+
+            Assert-Equal ([int]$intervals.SmallDefault) 15 'Small conflict runs should keep the requested heartbeat interval.'
+            Assert-Equal ([int]$intervals.MediumDefault) 30 'Medium conflict runs should avoid overly chatty progress lines.'
+            Assert-Equal ([int]$intervals.LargeDefault) 60 'Large conflict runs should avoid every-15-second scrollback during long ACL indexing.'
+            Assert-Equal ([int]$intervals.Forced) 0 'A forced zero-second interval should remain available for deterministic tests and explicit diagnostics.'
+        }
+    },
+    @{
         Name = 'Get-ShareSurferConflicts avoids false merges across identities shares rights and direct deny items'
         Body = {
             Import-Module $moduleManifest -Force
