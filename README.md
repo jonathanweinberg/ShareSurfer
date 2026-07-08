@@ -31,12 +31,12 @@ For the fuller explanation, use the [visual field guide](docs/visual-field-guide
 
 For the first real run:
 
-1. Download `ShareSurfer-0.1.0-pre.42.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.42). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
-2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.42\`.
+1. Download `ShareSurfer-0.1.0-pre.43.zip` and its SHA256 file from the [current prerelease](https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.43). If that tag is not visible, use the latest published prerelease and substitute its version in the paths below.
+2. Extract to `C:\` so the release root is `C:\ShareSurfer-0.1.0-pre.43\`.
 3. Recursively unblock extracted PowerShell files:
 
    ```powershell
-   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.42'
+   $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.43'
    Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
      Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' } |
      Unblock-File
@@ -50,7 +50,7 @@ For the first real run:
    powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\Start-ShareSurfer.ps1" -Force
    ```
 
-   It recursively unblocks ShareSurfer PowerShell files, imports the module, and opens the **ShareSurfer Start Menu**. In a normal PowerShell ConsoleHost it uses arrow-key selection; redirected or locked-down consoles automatically fall back to numbered prompts, and you can force that behavior with `-ConsoleMode Plain`. From the menu you can review readiness, build ownership inputs, start the guided scan setup, validate exports, package the standalone dashboard, and review stop gates. The scan setup asks the first-run questions, asks whether to run intensive share-permission diagnostics before the scan, checks the `inputs` folder for ownership files, offers one ownership-input decision screen, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then shows a final review screen, offers to show the generated files, and asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to No.
+   It recursively unblocks ShareSurfer PowerShell files, imports the module, and opens the **ShareSurfer Start Menu**. The default menu uses reliable numbered prompts for Windows PowerShell 5.1; operators who want arrow-key selection can opt in with `-ConsoleMode Enhanced`, and redirected or locked-down consoles can still use `-ConsoleMode Plain`. From the menu you can review readiness, build ownership inputs, start the guided scan setup, validate exports, package the standalone dashboard, and review stop gates. The scan setup asks the first-run questions, asks whether to run intensive share-permission diagnostics before the scan, checks the `inputs` folder for ownership files, offers one ownership-input decision screen, saves `sharesurfer-startup.config.json`, and writes `operator-assistant.plan.json` plus `operator-assistant-rerun.ps1`. In the interactive path it then shows a final review screen, offers to show the generated files, and asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to No.
 
 5. Choose the scan route: UNC path, `-ComputerName` and `-ShareName`, or `-SmbCollectionProvider NativeSmbRpc` when WinRM/CIM is blocked. The startup diagnostic path automatically checks whether a server-returned local path such as `C:\Public\Share` really exists on the collector; when it does not, ShareSurfer attempts the target UNC path instead and records that decision in `share-permission-diagnostics\share_permission_diagnostics.md` and `.csv`.
 6. Pick `-ObsAttribute`. The default is `extensionAttribute10`; some labs or smaller AD schemas may need another attribute such as `info`.
@@ -58,7 +58,7 @@ For the first real run:
 8. Open `report.html`, or package a real export with `scripts\New-ShareSurferStandaloneDashboard.ps1`.
 9. Review the stop gates before owner signoff or migration planning.
 
-New operators should start with the [first-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby. For a guided console starting point, run `Start-ShareSurfer.ps1` from the release root; it opens the ShareSurfer Start Menu unless you supply `-ConfigPath` for startup replay. After importing the module, advanced operators can run `Start-ShareSurfer` for the same menu or `Start-ShareSurferStartup` to jump directly into startup config generation. The startup flow writes a reusable JSON config and delegates to `Start-ShareSurferOperatorAssistant`; it does not collect data or change permissions until you review and run the generated rerun script. If the arrow-key menu feels rough in an older host, rerun with `-ConsoleMode Plain`. If `owner-mapping.csv` or `ownership-enrichment.csv` is missing, interactive startup first offers to use discovered files and skip missing ones, offers to build missing `ownership-enrichment.csv` from candidate CSVs, or lets you enter advanced custom paths. It can also queue a post-scan `owner-mapping-draft.csv` for the first rerun.
+New operators should start with the [first-run guide](docs/first-run-guide.md) and keep the [command recipes](docs/command-recipes.md) nearby. For a guided console starting point, run `Start-ShareSurfer.ps1` from the release root; it opens the ShareSurfer Start Menu unless you supply `-ConfigPath` for startup replay. After importing the module, advanced operators can run `Start-ShareSurfer` for the same menu or `Start-ShareSurferStartup` to jump directly into startup config generation. The startup flow writes a reusable JSON config and delegates to `Start-ShareSurferOperatorAssistant`; it does not collect data or change permissions until you review and run the generated rerun script. The default menu uses numbered prompts; use `-ConsoleMode Enhanced` only when you specifically want arrow-key selection in a console that handles it well. If `owner-mapping.csv` or `ownership-enrichment.csv` is missing, interactive startup first offers to use discovered files and skip missing ones, offers to build missing `ownership-enrichment.csv` from candidate CSVs, or lets you enter advanced custom paths. It can also queue a post-scan `owner-mapping-draft.csv` for the first rerun.
 
 ## Pause Before Owner Signoff
 
@@ -149,7 +149,7 @@ See the [nonpermissive collector to dashboard host workflow](docs/nonpermissive-
 Use this compact pattern when the release folder has been copied to a locked-down Windows collector host:
 
 ```powershell
-$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.42'
+$shareSurferRoot = 'C:\ShareSurfer-0.1.0-pre.43'
 $exportPath = 'C:\ShareSurfer\exports\scan-001'
 $handoffPath = 'C:\ShareSurfer\handoff\scan-001.zip'
 $inputRoot = 'C:\ShareSurfer\inputs'
@@ -232,7 +232,7 @@ Current screenshots are under [docs/visuals/dashboard-screenshots/2026-06-09-cur
 
 ## Pre-1.0 Release Packaging
 
-The first packages are unsigned but fully built. `v0.1.0-pre.42` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
+The first packages are unsigned but fully built. `v0.1.0-pre.43` includes the module, scripts, docs, SHA256 files, release manifest, dependency-age report, and prebuilt dashboard template assets. The manifest records `UnsignedPre1.0`.
 
 Release identity lives in [release-metadata.json](release-metadata.json). Update that file first when preparing a prerelease; packaging fails closed when the manual version or tag does not match.
 

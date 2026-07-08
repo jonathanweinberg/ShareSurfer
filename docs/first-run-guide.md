@@ -8,8 +8,8 @@ If report or command terms are unfamiliar, keep the [glossary](glossary.md) open
 
 For a first useful scan:
 
-1. Extract the current `v0.1.0-pre.42` release ZIP to `C:\`. If that checkpoint tag is not visible on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) yet, use the latest published prerelease and substitute that version in the paths below.
-2. Use `C:\ShareSurfer-0.1.0-pre.42\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
+1. Extract the current `v0.1.0-pre.43` release ZIP to `C:\`. If that checkpoint tag is not visible on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases) yet, use the latest published prerelease and substitute that version in the paths below.
+2. Use `C:\ShareSurfer-0.1.0-pre.43\` as `$releaseRoot`, or replace the version folder with the published prerelease you actually extracted.
 3. Run the recursive `Unblock-File` command in Step 1 before importing the module.
 4. Pick one known share and the correct `-ObsAttribute`.
 5. Recommended: run `Start-ShareSurfer.ps1` to open the ShareSurfer Start Menu, then choose the guided scan setup when you are ready to generate a reusable first-run JSON config, plan, and rerun script. If you already know the startup command you want, you can still import the module and run `Start-ShareSurferStartup` directly.
@@ -92,17 +92,17 @@ $PSVersionTable.PSVersion
 
 The major version should be `5`.
 
-If you are using the `v0.1.0-pre.42` release ZIP, extract it to `C:\`. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below. The extracted release root should be:
+If you are using the `v0.1.0-pre.43` release ZIP, extract it to `C:\`. If that checkpoint tag is not visible yet, use the latest published prerelease and substitute that version in the paths below. The extracted release root should be:
 
 ```text
-C:\ShareSurfer-0.1.0-pre.42\
+C:\ShareSurfer-0.1.0-pre.43\
 ```
 
-If Windows Explorer suggests extracting to `C:\ShareSurfer-0.1.0-pre.42`, change the destination to `C:\` so you do not end up with a doubled nested folder. From PowerShell:
+If Windows Explorer suggests extracting to `C:\ShareSurfer-0.1.0-pre.43`, change the destination to `C:\` so you do not end up with a doubled nested folder. From PowerShell:
 
 ```powershell
-$releaseZip = 'C:\Downloads\ShareSurfer-0.1.0-pre.42.zip'
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.42'
+$releaseZip = 'C:\Downloads\ShareSurfer-0.1.0-pre.43.zip'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.43'
 
 Expand-Archive -LiteralPath $releaseZip -DestinationPath 'C:\' -Force
 Get-ChildItem -LiteralPath $releaseRoot -Recurse -File |
@@ -136,7 +136,7 @@ Confirm the commands are available:
 Get-Command -Module ShareSurfer
 ```
 
-Recommended: generate a guided startup plan before scanning. This does not collect data or change permissions. It recursively unblocks local ShareSurfer PowerShell files, asks the first-run questions when run interactively, asks whether to run intensive share-permission diagnostics before the scan, checks for optional ownership files in the input folder, writes a reusable startup JSON config, then writes a JSON plan and a rerun script so you can review the requested diagnostic, scan, validation, and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist. The menu uses arrow-key prompts in a normal ConsoleHost and falls back to numbered prompts when the console does not support raw keys; use `-ConsoleMode Plain` if an older PowerShell 5.1 host feels clunky.
+Recommended: generate a guided startup plan before scanning. This does not collect data or change permissions. It recursively unblocks local ShareSurfer PowerShell files, asks the first-run questions when run interactively, asks whether to run intensive share-permission diagnostics before the scan, checks for optional ownership files in the input folder, writes a reusable startup JSON config, then writes a JSON plan and a rerun script so you can review the requested diagnostic, scan, validation, and standalone dashboard packaging steps first. Optional CSV paths are only used by the rerun script when those files exist. The menu defaults to reliable numbered prompts for Windows PowerShell 5.1; use `-ConsoleMode Enhanced` only when you specifically want arrow-key selection in a console that handles it well.
 
 When startup reaches ownership inputs, choose **Use discovered files and skip missing files** for the safest first run. If `ownership-enrichment.csv` is missing, choose **Build ownership enrichment now** to open the multi-CSV ownership import picker when you have HR, employee, OBS, project, application, or owner CSVs that should enrich identities before the scan. Choose **Enter advanced custom paths** only when your CSVs are outside the `inputs` folder. The ownership import writes `ownership-enrichment.csv`, `ownership_context.csv`, `ownership_relationships.csv`, `ownership_import_manifest.csv`, `ownership-import.definition.json`, and `ownership-import-rerun.ps1`, then returns to the normal startup flow.
 
@@ -732,12 +732,12 @@ For the longer version, see the [nonpermissive collector to dashboard host workf
 
 ## Optional: Generate the Standalone Dashboard
 
-The legacy `report.html` remains the simplest default report for small and moderate exports because it is generated directly by the PowerShell module as one file. For large exports, prefer the standalone dashboard package because it can split large datasets into local offline chunks. The v0.1.0-pre.42 release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
+The legacy `report.html` remains the simplest default report for small and moderate exports because it is generated directly by the PowerShell module as one file. For large exports, prefer the standalone dashboard package because it can split large datasets into local offline chunks. The v0.1.0-pre.43 release package from the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), or the latest published prerelease while waiting for that checkpoint tag to appear, also includes prebuilt standalone dashboard template assets for richer novice-admin and business-owner review.
 
 If you are using the release ZIP, you do not need Node, npm, Vite, a development server, or internet access to package the dashboard. Run the packager from Windows PowerShell 5.1 and point it at the extracted release root:
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.42'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.43'
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$releaseRoot\scripts\New-ShareSurferStandaloneDashboard.ps1" `
   -ExportPath $exportPath `

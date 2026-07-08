@@ -4,14 +4,42 @@
 # shares one controls contract, renders through one sink, and can be tested
 # headlessly by driving the state machines with scripted commands.
 #
-# Controls contract (docs/superpowers/specs/2026-07-06-staged-sharesurfer-tui-design.md):
-#   Enter=accept | arrows/numbers=choose | S=skip | B=back | ?=help | Q=quit
+# Controls contract: prompts only advertise the actions enabled by that caller.
 #
 # Cancellation contract: prompts and wizards return results whose Action is
 # 'Cancelled'; they never throw. Flow entry points decide what cancel means.
 
 function Get-ShareSurferConsoleControlsLine {
-    'Controls: Enter=accept | arrows/numbers=choose | S=skip | B=back | ?=help | Q=quit'
+    param(
+        [switch] $AllowSkip,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit,
+
+        [switch] $AllowCustom,
+
+        [switch] $UseArrowKeys
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $parts.Add('Enter=select')
+    $parts.Add($(if ($UseArrowKeys) { 'arrows/numbers=choose' } else { 'numbers=choose' }))
+    if ($AllowCustom) {
+        $parts.Add('type=value')
+    }
+    if ($AllowSkip) {
+        $parts.Add('S=skip')
+    }
+    if ($AllowBack) {
+        $parts.Add('B=back')
+    }
+    $parts.Add('?=help')
+    if ($AllowQuit) {
+        $parts.Add('Q=quit')
+    }
+
+    'Controls: {0}' -f ($parts -join ' | ')
 }
 
 function Test-ShareSurferConsoleRawKeyAvailable {
@@ -242,7 +270,14 @@ function Invoke-ShareSurferConsoleChoiceCommand {
 
     if ($upper -eq '?' -or $upper -eq 'HELP') {
         $State.Action = 'Help'
-        $State.Message = 'Use Up/Down or a number to choose. Enter selects. S skips when available. B goes back when available. Q cancels when available.'
+        $helpParts = New-Object System.Collections.Generic.List[string]
+        $helpParts.Add('Use a number to choose. In enhanced console mode, Up/Down also navigates.')
+        $helpParts.Add('Enter selects.')
+        if ($AllowCustom) { $helpParts.Add('Type a custom value when the listed choices do not fit.') }
+        if ($AllowSkip) { $helpParts.Add('S skips this prompt.') }
+        if ($AllowBack) { $helpParts.Add('B returns to the previous prompt.') }
+        if ($AllowQuit) { $helpParts.Add('Q cancels this flow.') }
+        $State.Message = ($helpParts -join ' ')
         return $State
     }
 
@@ -251,16 +286,28 @@ function Invoke-ShareSurferConsoleChoiceCommand {
         $State.Action = 'Skip'
         return $State
     }
+    elseif ($upper -in @('S', 'SKIP')) {
+        $State.Message = 'Skip is not available on this prompt. Type ? for the available controls.'
+        return $State
+    }
 
     if ($upper -in @('B', 'BACK', 'BACKSPACE') -and $AllowBack) {
         $State.Done = $true
         $State.Action = 'Back'
         return $State
     }
+    elseif ($upper -in @('B', 'BACK', 'BACKSPACE')) {
+        $State.Message = 'Back is not available on this prompt. Use the review/edit choices when this flow offers them.'
+        return $State
+    }
 
     if ($upper -in @('Q', 'QUIT', 'ESC', 'ESCAPE') -and $AllowQuit) {
         $State.Done = $true
         $State.Action = 'Cancelled'
+        return $State
+    }
+    elseif ($upper -in @('Q', 'QUIT', 'ESC', 'ESCAPE')) {
+        $State.Message = 'Quit is not available on this prompt. Type ? for the available controls.'
         return $State
     }
 
@@ -350,7 +397,17 @@ function Get-ShareSurferConsoleChoiceScreen {
         [Parameter(Mandatory = $true)]
         [string] $Title,
 
-        [string] $HelpText = ''
+        [string] $HelpText = '',
+
+        [switch] $AllowSkip,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit,
+
+        [switch] $AllowCustom,
+
+        [switch] $UseArrowKeys
     )
 
     $lines = New-Object System.Collections.Generic.List[string]
@@ -359,7 +416,7 @@ function Get-ShareSurferConsoleChoiceScreen {
     if (-not [string]::IsNullOrWhiteSpace($HelpText)) {
         $lines.Add($HelpText)
     }
-    $lines.Add((Get-ShareSurferConsoleControlsLine))
+    $lines.Add((Get-ShareSurferConsoleControlsLine -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$UseArrowKeys))
     $lines.Add('')
     for ($index = 0; $index -lt @($State.Options).Count; $index++) {
         $option = @($State.Options)[$index]
@@ -385,6 +442,16 @@ function Show-ShareSurferConsoleChoice {
 
         [string] $HelpText = '',
 
+        [switch] $AllowSkip,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit,
+
+        [switch] $AllowCustom,
+
+        [switch] $UseArrowKeys,
+
         [switch] $ClearBeforeRender
     )
 
@@ -396,7 +463,7 @@ function Show-ShareSurferConsoleChoice {
         }
     }
 
-    Write-ShareSurferConsoleLines -Lines (Get-ShareSurferConsoleChoiceScreen -State $State -Title $Title -HelpText $HelpText)
+    Write-ShareSurferConsoleLines -Lines (Get-ShareSurferConsoleChoiceScreen -State $State -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$UseArrowKeys)
 }
 
 function Read-ShareSurferConsoleChoice {
@@ -420,7 +487,7 @@ function Read-ShareSurferConsoleChoice {
         [switch] $AllowCustom,
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto',
+        [string] $ConsoleMode = 'Plain',
 
         $Capabilities = $null
     )
@@ -436,7 +503,7 @@ function Read-ShareSurferConsoleChoice {
     $renderedOnce = $false
     while (-not $state.Done) {
         if ($needsRender) {
-            Show-ShareSurferConsoleChoice -State $state -Title $Title -HelpText $HelpText -ClearBeforeRender:([bool]$renderBehavior.ClearBeforeRender -and $renderedOnce)
+            Show-ShareSurferConsoleChoice -State $state -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$useRawKeys -ClearBeforeRender:([bool]$renderBehavior.ClearBeforeRender -and $renderedOnce)
             $renderedOnce = $true
             $needsRender = $false
         }
@@ -524,7 +591,12 @@ function Invoke-ShareSurferConsoleTextCommand {
             [string]$State.HelpText
         }
         else {
-            'Type a value and press Enter, or press Enter alone to accept the default. S skips when available. B goes back when available. Q cancels when available.'
+            $textHelpParts = New-Object System.Collections.Generic.List[string]
+            $textHelpParts.Add('Type a value and press Enter, or press Enter alone to accept the default.')
+            if ($AllowSkip) { $textHelpParts.Add('S skips this prompt.') }
+            if ($AllowBack) { $textHelpParts.Add('B returns to the previous prompt.') }
+            if ($AllowQuit) { $textHelpParts.Add('Q cancels this flow.') }
+            ($textHelpParts -join ' ')
         }
         return $State
     }
@@ -607,7 +679,7 @@ function Read-ShareSurferConsoleBoolean {
         [switch] $AllowQuit,
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Auto'
+        [string] $ConsoleMode = 'Plain'
     )
 
     $options = @(
@@ -899,7 +971,7 @@ function Show-ShareSurferPromptChoice {
         [switch] $AllowQuit
     )
 
-    Show-ShareSurferConsoleChoice -State $State -Title $Title -HelpText $HelpText
+    Show-ShareSurferConsoleChoice -State $State -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit
 }
 
 function Read-ShareSurferPromptChoice {

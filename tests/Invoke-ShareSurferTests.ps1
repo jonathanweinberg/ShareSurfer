@@ -3068,6 +3068,20 @@ $tests = @(
             Invoke-ShareSurferConsoleChoiceCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
             Assert-Equal $cancelState.Action 'Cancelled' 'Q should report a Cancelled action under the cancellation contract.'
 
+            $noBackState = New-ShareSurferConsoleChoiceState -Options @('One', 'Two') -DefaultValue 'One'
+            Invoke-ShareSurferConsoleChoiceCommand -State $noBackState -Command 'B' | Out-Null
+            Assert-Equal $noBackState.Done $false 'B should not finish a prompt when back navigation is not enabled.'
+            Assert-True ([string]$noBackState.Message -like '*Back is not available*') 'Disabled back navigation should explain why B did not work.'
+
+            $plainScreen = @(Get-ShareSurferConsoleChoiceScreen -State (New-ShareSurferConsoleChoiceState -Options @('One', 'Two')) -Title 'Pick one' -AllowQuit) -join [Environment]::NewLine
+            Assert-True ($plainScreen -like '*Q=quit*') 'Choice screen should show quit when cancellation is enabled.'
+            Assert-True (-not ($plainScreen -like '*B=back*')) 'Choice screen should not advertise back when the prompt cannot go back.'
+            Assert-True (-not ($plainScreen -like '*S=skip*')) 'Choice screen should not advertise skip when the prompt cannot skip.'
+
+            $backSkipScreen = @(Get-ShareSurferConsoleChoiceScreen -State (New-ShareSurferConsoleChoiceState -Options @('One', 'Two')) -Title 'Pick one' -AllowSkip -AllowBack -AllowQuit) -join [Environment]::NewLine
+            Assert-True ($backSkipScreen -like '*B=back*') 'Choice screen should advertise back when enabled.'
+            Assert-True ($backSkipScreen -like '*S=skip*') 'Choice screen should advertise skip when enabled.'
+
             $shimState = New-ShareSurferPromptChoiceState -Options @('One', 'Two') -DefaultValue 'One'
             Invoke-ShareSurferPromptChoiceCommand -State $shimState -Command '2' | Out-Null
             Assert-Equal $shimState.SelectedValue 'Two' 'Compatibility shims should keep the legacy prompt names working.'
@@ -3082,6 +3096,8 @@ $tests = @(
             $plainCapabilities = Get-ShareSurferConsoleCapabilities -ConsoleMode Plain
             Assert-Equal $plainCapabilities.EffectiveConsoleMode 'Plain' 'Plain console mode should force the numbered fallback.'
             Assert-Equal $plainCapabilities.RawKeys $false 'Plain console mode should not require raw key support.'
+            $launcherText = Get-Content -LiteralPath (Join-Path $repoRoot 'Start-ShareSurfer.ps1') -Raw
+            Assert-True ($launcherText -like "*`$ConsoleMode = 'Plain'*") 'Release-root launcher should default to the reliable plain console mode.'
             $singleFrameBehavior = Get-ShareSurferConsoleChoiceRenderBehavior -Capabilities ([pscustomobject]@{ RedrawMode = 'SingleFrame' })
             Assert-Equal $singleFrameBehavior.ClearBeforeRender $true 'Enhanced console rendering should use a single-frame redraw behavior.'
         }
@@ -4067,7 +4083,7 @@ $tests = @(
                 -AdLookupMode 'DirectoryOnly' `
                 -Force | Out-Null
 
-            $summary = Join-ShareSurferOwnershipSources -DefinitionPath $definitionPath -OutputPath $outputPath -ReusableCommandPath $commandPath -Force
+            $summary = Join-ShareSurferOwnershipSources -DefinitionPath $definitionPath -OutputPath $outputPath -ReusableCommandPath $commandPath -Force -AclExportMode Compact
             $rows = @(Import-Csv -LiteralPath $outputPath)
             $commandText = Get-Content -LiteralPath $commandPath -Raw
             Assert-Equal $summary.SourceCount 1 'Definition rerun should use one source path.'
@@ -4075,6 +4091,7 @@ $tests = @(
             Assert-Equal $rows[0].EmployeeId 'E1001' 'Definition rerun should import selected CSV rows.'
             Assert-True ($commandText -like '*DefinitionPath*') 'Reusable command should prefer the definition path.'
             Assert-True ($commandText -like '*Join-ShareSurferOwnershipSources -DefinitionPath*') 'Reusable command should rerun from the definition.'
+            Assert-True ($commandText -notlike '*AclExportMode*') 'Reusable ownership import command should not emit scan-only ACL export parameters.'
         }
     },
     @{
