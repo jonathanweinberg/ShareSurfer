@@ -133,10 +133,10 @@ Enriched rows can add these review fields:
 
 ## Step 1: Test The CSV
 
-If `v0.1.0-pre.41` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
+If `v0.1.0-pre.42` is not visible yet on the [ShareSurfer Releases page](https://github.com/jonathanweinberg/ShareSurfer/releases), use the latest published prerelease and substitute that version in `$releaseRoot`.
 
 ```powershell
-$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.41'
+$releaseRoot = 'C:\ShareSurfer-0.1.0-pre.42'
 $sourcePath = 'C:\ShareSurfer\inputs\hr-obs.csv'
 
 Import-Module "$releaseRoot\src\ShareSurfer\ShareSurfer.psd1" -Force
