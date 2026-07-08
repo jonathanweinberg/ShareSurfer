@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.41",
-  "packageVersion": "0.1.0-pre.41",
-  "packageName": "ShareSurfer-0.1.0-pre.41",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.41.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.41",
+  "currentPrereleaseTag": "v0.1.0-pre.42",
+  "packageVersion": "0.1.0-pre.42",
+  "packageName": "ShareSurfer-0.1.0-pre.42",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.42.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.42",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 standalone dashboard performance release. v0.1.0-pre.41 builds on the v0.1.0-pre.40 scan-throughput release by reducing dashboard memory overhead for large or legacy exports. The standalone dashboard now deduplicates missing-column schema warnings by dataset/column instead of recording one warning per affected row, and export-enabled evidence tables now generate CSV downloads only when the operator clicks Export shown CSV instead of building large data URIs during render. CSV export remains fully offline and local. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 export-classification performance release. v0.1.0-pre.42 builds on the v0.1.0-pre.41 dashboard performance release by pruning unnecessary share-vs-NTFS conflict-classification work for large ACL sets. Conflict classification now avoids building missing-share-gate evidence for identities already covered by the share gate, avoids building share-rights-restriction evidence for identities that cannot produce that conflict, uses cheaper hot-loop evidence updates, and slows high-volume progress heartbeats so long scans do not flood the console every 15 seconds. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
