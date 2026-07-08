@@ -1,11 +1,11 @@
 {
-  "currentPrereleaseTag": "v0.1.0-pre.42",
-  "packageVersion": "0.1.0-pre.42",
-  "packageName": "ShareSurfer-0.1.0-pre.42",
-  "zipAssetName": "ShareSurfer-0.1.0-pre.42.zip",
-  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.42",
+  "currentPrereleaseTag": "v0.1.0-pre.43",
+  "packageVersion": "0.1.0-pre.43",
+  "packageName": "ShareSurfer-0.1.0-pre.43",
+  "zipAssetName": "ShareSurfer-0.1.0-pre.43.zip",
+  "releaseUrl": "https://github.com/jonathanweinberg/ShareSurfer/releases/tag/v0.1.0-pre.43",
   "minimumDependencyAgeDays": 7,
-  "releaseNotesSummary": "Unsigned pre-1.0 export-classification performance release. v0.1.0-pre.42 builds on the v0.1.0-pre.41 dashboard performance release by pruning unnecessary share-vs-NTFS conflict-classification work for large ACL sets. Conflict classification now avoids building missing-share-gate evidence for identities already covered by the share gate, avoids building share-rights-restriction evidence for identities that cannot produce that conflict, uses cheaper hot-loop evidence updates, and slows high-volume progress heartbeats so long scans do not flood the console every 15 seconds. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
+  "releaseNotesSummary": "Unsigned pre-1.0 startup ACL export mode fix release. v0.1.0-pre.43 includes the v0.1.0-pre.42 export-classification performance work plus a startup/menu fix so guided runs preserve AclExportMode instead of silently falling back to FullEffective. The release-root launcher, Start Menu preview, startup JSON config, operator assistant plan, and generated rerun script now carry Compact or FullEffective consistently into Invoke-ShareSurferScan. Guided startup defaults to Compact for large operator reviews; direct Invoke-ShareSurferScan still uses its own parameter behavior and can be run with -AclExportMode Compact when desired. The package includes the built PowerShell module files, startup launcher, diagnostic scripts, documentation, hashes, release manifest, dependency-age report, and prebuilt standalone dashboard template assets.",
   "docsReferencePaths": [
     "README.md",
     "docs/first-run-guide.md",
