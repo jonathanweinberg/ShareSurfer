@@ -13,7 +13,7 @@ If `v0.1.0-pre.43` is not visible yet on the [ShareSurfer Releases page](https:/
 ## Start Here
 
 1. Unpack and unblock the release.
-2. Optional: generate an operator assistant plan and rerun script before scanning.
+2. Recommended: start a guided first scan, or save its plan and rerun script for review.
 3. Create optional input CSVs only when you have the data.
 4. Run one scan shape: quick UNC path, Windows SMB computer/share, or NativeSmbRpc fallback.
 5. Validate the export and build `report.html`.
@@ -25,7 +25,7 @@ If `v0.1.0-pre.43` is not visible yet on the [ShareSurfer Releases page](https:/
 | Workflow | Copy/paste recipe | Commands and scripts |
 | --- | --- | --- |
 | Release setup | Recipe 1 | `Expand-Archive`, `Unblock-File`, `Import-Module` |
-| Guided first-run planning | Recipe 1A | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
+| Goal-based first scan | Recipe 1A | `Start-ShareSurfer.ps1`, `Start-ShareSurferStartup`, `Start-ShareSurferOperatorAssistant` |
 | Lab and fixture planning | README Lab Fixture section | `New-ShareSurferLabFixture` |
 | Optional owner/admin inputs | Recipe 2 | `owner-mapping.csv`, `discounted-principals.csv` |
 | Flexible ownership import | Recipe 2A | `Test-ShareSurferOwnershipSource`, `New-ShareSurferOwnershipMappingProfile`, `Import-ShareSurferOwnershipSource`, `Join-ShareSurferOwnershipSources`, `New-ShareSurferOwnerMappingDraft`, `Test-ShareSurferOwnerMapping` |
@@ -75,25 +75,23 @@ Run that manual unblock first for the no-prompt path. If you start `Start-ShareS
 
 Both `Test-Path` commands should return `True`. If either returns `False`, check for a doubled folder such as `C:\ShareSurfer-0.1.0-pre.43\ShareSurfer-0.1.0-pre.43`.
 
-## Recipe 1A: Generate a Guided Startup Plan
+## Recipe 1A: Start a Guided First Scan or Save Its Plan
 
-Use this when you want ShareSurfer to ask the first-run questions, unblock local PowerShell files, check for optional ownership files, save the startup choices as JSON, and write the operator plan and rerun script before you collect data. The startup script does not scan shares or change permissions. It writes `sharesurfer-startup.config.json`, `operator-assistant.plan.json`, and `operator-assistant-rerun.ps1` so you can review the requested command preview and the authoritative rerun script first. By default the rerun script also runs intensive share-permission diagnostics before the scan and writes the package under `$exportPath\share-permission-diagnostics`. Optional CSV paths are only used by the rerun script when those files exist.
+Use the release-root launcher when you want ShareSurfer to guide the first scan. It opens one goal-based home screen; press Enter on **Start a first scan (recommended)**. The flow asks for the target, where results will be reviewed, and one recommended-settings decision before showing a plain-language review.
 
-When run interactively, the startup script offers to show the generated JSON/plan/rerun files and then asks whether to run the generated diagnostic/scan/validate/dashboard script now. The run prompt defaults to `No`.
+Choose **Run now** to continue or **Save plan and return home** to write `sharesurfer-startup.config.json`, `operator-assistant.plan.json`, and `operator-assistant-rerun.ps1` for inspection. Ownership and HR inputs are deferred by default. Use **Add ownership or HR data** from the home screen, or **Customize technical settings** during first-scan setup, when those files are available. A validated first scan can produce `owner-mapping-draft.csv` for an administrator to complete and save as `owner-mapping.csv`.
 
-If `ownership-enrichment.csv` is missing, interactive startup can offer to launch the same `Join-ShareSurferOwnershipSources -Interactive -BrowseForCsv -IncludeContextGraph` workflow shown in Recipe 2A. That creates the enrichment, context graph, manifest, definition JSON, and reusable ownership import rerun script before startup continues. If `owner-mapping.csv` is missing, startup can add a post-scan `New-ShareSurferOwnerMappingDraft` step to the generated rerun script so the first scan can produce `owner-mapping-draft.csv` for an admin to fill and save as `owner-mapping.csv`.
+If those startup files already exist, the guided flow asks before replacing them and defaults to **No**. **Show technical command** reproduces the reviewed settings without adding overwrite authorization; add `-Force` yourself only when you deliberately want a copied non-interactive command to replace existing files.
 
-The easiest release-root launcher opens the ShareSurfer Start Menu:
+The easiest release-root launcher is:
 
 ```powershell
 $releaseRoot = 'C:\ShareSurfer-0.1.0-pre.43'
-$inputRoot = 'C:\ShareSurfer\inputs'
-$exportPath = 'C:\ShareSurfer\exports\finance-001'
 
-& "$releaseRoot\Start-ShareSurfer.ps1" -Force
+& "$releaseRoot\Start-ShareSurfer.ps1"
 ```
 
-The menu shows readiness for ownership inputs, saved startup config, export validation, standalone dashboard packaging, and stop gates. Each menu entry previews the command it will run before asking for confirmation. The default menu uses simple numbered prompts for Windows PowerShell 5.1; add `-ConsoleMode Enhanced` only when you specifically want arrow-key selection in a console that handles it well. If you want to replay an existing startup config without the menu, pass `-ConfigPath` to the same launcher.
+The home screen also offers **Run a saved scan**, **Review existing results**, **Add ownership or HR data**, **Advanced tools**, and **Exit**. An action that is not ready stays visible with a short reason but cannot be selected. The default interface uses simple numbered prompts for Windows PowerShell 5.1; add `-ConsoleMode Enhanced` only when you specifically want arrow-key selection in a console that handles it well. To replay an existing startup config without the home screen, pass `-ConfigPath` to the same launcher.
 
 If you already know the answers and want to generate the same files without prompts, import the module and call the startup command directly:
 
@@ -127,7 +125,7 @@ Start-ShareSurferStartup `
   -Force
 ```
 
-Open `operator-assistant-rerun.ps1` and review it before running. The startup wizard first offers to use discovered ownership files, build ownership enrichment now, or enter advanced custom paths; it then shows a final review screen before writing startup files. The rerun script imports the module, optionally runs `Invoke-ShareSurferSharePermissionDiagnostic`, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, optionally creates an owner mapping draft after validation, and packages the standalone dashboard from the validated export folder. If share permissions are missing or confusing, open `$exportPath\share-permission-diagnostics\share_permission_diagnostics.md` first. For SAN or appliance shares that return a remote server-local path such as `C:\Public\Share`, the diagnostic records the returned path, checks whether it exists on the collector, and falls back to the target UNC path automatically when needed.
+Open `operator-assistant-rerun.ps1` and review it before running a saved plan. The final review offers **Run now**, **Save plan and return home**, and **Show technical command**; Back and Cancel remain available, while ownership input and technical paths appear only under customization. The rerun script imports the module, optionally runs `Invoke-ShareSurferSharePermissionDiagnostic`, builds the scan parameters, only passes optional CSV paths when those files exist, runs `Invoke-ShareSurferScan`, validates with `Test-ShareSurferExport`, optionally creates an owner mapping draft after validation, and packages the standalone dashboard from the validated export folder. If share permissions are missing or confusing, open `$exportPath\share-permission-diagnostics\share_permission_diagnostics.md` first. For SAN or appliance shares that return a remote server-local path such as `C:\Public\Share`, the diagnostic records the returned path, checks whether it exists on the collector, and falls back to the target UNC path automatically when needed.
 
 ## Recipe 2: Create Optional Input CSVs
 

@@ -827,7 +827,7 @@ function Select-ShareSurferForbiddenOus {
         -Options $ouOptions `
         -SelectedValues @($selected) `
         -AllowQuit
-    if ($selection.Action -eq 'Cancelled') {
+    if ($selection.Action -eq 'Cancel') {
         return @($selected)
     }
 
@@ -1307,7 +1307,7 @@ function Read-ShareSurferOwnershipSourceProfile {
                 Write-ShareSurferConsoleLines -Lines @('Already at the first source-classification prompt.')
                 continue
             }
-            if ($sourceSelection.Action -eq 'Cancelled') {
+            if ($sourceSelection.Action -eq 'Cancel') {
                 return $cancelledResult
             }
         }
@@ -1322,7 +1322,7 @@ function Read-ShareSurferOwnershipSourceProfile {
                 $profileStep--
                 continue
             }
-            if ($authoritySelection.Action -eq 'Cancelled') {
+            if ($authoritySelection.Action -eq 'Cancel') {
                 return $cancelledResult
             }
         }
@@ -1347,7 +1347,7 @@ function Read-ShareSurferOwnershipSourceProfile {
                 $profileStep--
                 continue
             }
-            if ($anchorSelection.Action -eq 'Cancelled') {
+            if ($anchorSelection.Action -eq 'Cancel') {
                 return $cancelledResult
             }
         }

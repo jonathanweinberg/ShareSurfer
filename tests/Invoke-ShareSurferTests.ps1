@@ -1,3 +1,7 @@
+param(
+    [string] $Name = ''
+)
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -3066,7 +3070,20 @@ $tests = @(
             $cancelState = New-ShareSurferConsoleChoiceState -Options @('One', 'Two') -DefaultValue 'Two'
             Assert-Equal $cancelState.SelectedIndex 1 'Default value should seed the selected index.'
             Invoke-ShareSurferConsoleChoiceCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
-            Assert-Equal $cancelState.Action 'Cancelled' 'Q should report a Cancelled action under the cancellation contract.'
+            Assert-Equal $cancelState.Action 'Cancel' 'Q should report a Cancel action under the cancellation contract.'
+            Assert-Equal $cancelState.SelectedValue '' 'Cancellation must not return a normal field value.'
+
+            $disabledState = New-ShareSurferConsoleChoiceState -Options @(
+                (New-ShareSurferConsoleChoiceOption -Value 'Disabled' -Enabled $false -UnavailableReason 'Finish setup first.'),
+                (New-ShareSurferConsoleChoiceOption -Value 'Ready'),
+                (New-ShareSurferConsoleChoiceOption -Value 'AlsoDisabled' -Enabled $false -UnavailableReason 'No export yet.')
+            ) -DefaultValue 'Disabled'
+            Assert-Equal $disabledState.SelectedIndex 1 'Default selection should move to the first enabled choice.'
+            Invoke-ShareSurferConsoleChoiceCommand -State $disabledState -Command '1' | Out-Null
+            Assert-Equal $disabledState.Done $false 'A disabled numbered choice must not complete selection.'
+            Assert-True ([string]$disabledState.Message -like '*Finish setup first*') 'A disabled choice should explain its prerequisite.'
+            Invoke-ShareSurferConsoleChoiceCommand -State $disabledState -Command 'Down' | Out-Null
+            Assert-Equal $disabledState.SelectedIndex 1 'Arrow navigation should skip disabled choices and remain on the only enabled choice.'
 
             $noBackState = New-ShareSurferConsoleChoiceState -Options @('One', 'Two') -DefaultValue 'One'
             Invoke-ShareSurferConsoleChoiceCommand -State $noBackState -Command 'B' | Out-Null
@@ -3143,7 +3160,7 @@ $tests = @(
 
             $cancelState = New-ShareSurferConsoleMultiSelectState -Options @('a.csv')
             Invoke-ShareSurferConsoleMultiSelectCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
-            Assert-Equal $cancelState.Action 'Cancelled' 'Q should cancel the multi-select when allowed.'
+            Assert-Equal $cancelState.Action 'Cancel' 'Q should cancel the multi-select when allowed.'
         }
     },
     @{
@@ -3158,6 +3175,9 @@ $tests = @(
 
             $validateState = New-ShareSurferConsoleTextState
             $validator = { param($text) if ($text -ne 'good') { 'Only good is allowed.' } else { '' } }
+            Invoke-ShareSurferConsoleTextCommand -State $validateState -Command '' -Validate $validator | Out-Null
+            Assert-True (-not $validateState.Done) 'An empty default should still be validated before Enter is accepted.'
+            Assert-True ($validateState.Message -like 'Only good*') 'An invalid empty default should explain why the operator must enter a value.'
             Invoke-ShareSurferConsoleTextCommand -State $validateState -Command 'bad' -Validate $validator | Out-Null
             Assert-True (-not $validateState.Done) 'Validation failure should keep the prompt open.'
             Assert-True ($validateState.Message -like 'Only good*') 'Validation failure should explain the problem.'
@@ -3167,7 +3187,19 @@ $tests = @(
 
             $cancelState = New-ShareSurferConsoleTextState
             Invoke-ShareSurferConsoleTextCommand -State $cancelState -Command 'Q' -AllowQuit | Out-Null
-            Assert-Equal $cancelState.Action 'Cancelled' 'Q should cancel the text prompt when allowed.'
+            Assert-Equal $cancelState.Action 'Cancel' 'Q should cancel the text prompt when allowed.'
+            Assert-Equal $cancelState.Value '' 'Cancelled text input must not return Q as field data.'
+
+            $backState = New-ShareSurferConsoleTextState -Default 'keep-me'
+            Invoke-ShareSurferConsoleTextCommand -State $backState -Command 'B' -AllowBack | Out-Null
+            Assert-Equal $backState.Action 'Back' 'B should return from a text prompt when enabled.'
+            Assert-Equal $backState.Value '' 'Back navigation must not overwrite the retained default.'
+
+            $noBackState = New-ShareSurferConsoleTextState -Default 'keep-me'
+            Invoke-ShareSurferConsoleTextCommand -State $noBackState -Command 'B' | Out-Null
+            Assert-True (-not $noBackState.Done) 'B should not be accepted as field data when Back is unavailable.'
+            Assert-True ($noBackState.Message -like '*Back is not available*') 'A prompt without Back should explain the available-control boundary.'
+            Assert-Equal $noBackState.Value '' 'Unavailable Back input must not overwrite the field value.'
         }
     },
     @{
@@ -3190,7 +3222,7 @@ $tests = @(
         }
     },
     @{
-        Name = 'Start menu entries report readiness from inputs and exports'
+        Name = 'Goal-based home shows one task list with unavailable reasons and wrapped output'
         Body = {
             Import-Module $moduleManifest -Force
             $module = Get-Module ShareSurfer
@@ -3199,42 +3231,61 @@ $tests = @(
             $exportPath = Join-Path $root 'export'
             New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
             New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
-            Set-Content -LiteralPath (Join-Path $inputRoot 'owner-mapping.csv') -Value 'Pattern,Owner,BusinessUnit' -Encoding UTF8
-            Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value 'ShareId' -Encoding UTF8
 
             try {
                 $entries = @(& $module {
                     param($InputRoot, $ExportPath)
-                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ObsAttribute 'info' -AdLookupMode 'DirectoryOnly' -ManagerIdentityFormat 'SamAccountName' -AclExportMode Compact -ConsoleMode Plain
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ConsoleMode Plain
                 } $inputRoot $exportPath)
 
-                Assert-Equal $entries.Count 7 'Start menu should list the seven operator tasks.'
-                $ownership = @($entries | Where-Object { $_.Key -eq 'ownership' })[0]
-                Assert-Equal $ownership.Readiness 'owner mapping: found - enrichment: missing' 'Ownership readiness should reflect which input files exist.'
-                Assert-True ($ownership.CommandPreview.Contains('Invoke-ShareSurferStartupOwnershipSetup')) 'Ownership entry should preview the exact startup ownership setup command it runs.'
-                Assert-True ($ownership.CommandPreview.Contains($inputRoot)) 'Ownership preview should include the selected input root.'
-                $validate = @($entries | Where-Object { $_.Key -eq 'validate' })[0]
-                Assert-Equal $validate.Readiness 'export: found' 'Validate readiness should reflect the export folder.'
-                Assert-True ([bool]$validate.Runnable) 'Validate should be runnable when shares.csv exists.'
-                Assert-True ($validate.CommandPreview.Contains('Test-ShareSurferExport')) 'Validate entry should preview the exact command.'
-                $scan = @($entries | Where-Object { $_.Key -eq 'scan' })[0]
-                Assert-Equal $scan.Readiness 'setup not recorded yet' 'Scan readiness should say when no saved config exists.'
-                Assert-True ($scan.CommandPreview.Contains('Start-ShareSurferStartup -Interactive')) 'Scan entry should preview interactive startup when no config is saved.'
-                Assert-True ($scan.CommandPreview.Contains($inputRoot)) 'Scan preview should include the input root passed to the menu.'
-                Assert-True ($scan.CommandPreview.Contains($exportPath)) 'Scan preview should include the export path passed to the menu.'
-                Assert-True ($scan.CommandPreview.Contains("-ObsAttribute 'info'")) 'Scan preview should preserve the menu OBS attribute.'
-                Assert-True ($scan.CommandPreview.Contains("-AdLookupMode 'DirectoryOnly'")) 'Scan preview should preserve the menu AD lookup mode.'
-                Assert-True ($scan.CommandPreview.Contains("-ManagerIdentityFormat 'SamAccountName'")) 'Scan preview should preserve the menu manager identity format.'
-                Assert-True ($scan.CommandPreview.Contains("-AclExportMode 'Compact'")) 'Scan preview should preserve the menu ACL export mode.'
-                Assert-True ($scan.CommandPreview.Contains("-ConsoleMode 'Plain'")) 'Scan preview should preserve the menu console mode.'
+                Assert-Equal $entries.Count 6 'The goal-based home should list six operator choices.'
+                Assert-Equal (@($entries | ForEach-Object { [string]$_.Key }) -join ',') 'first_scan,saved_scan,review_results,ownership,advanced,exit' 'Home choices should follow the approved goal order.'
+                Assert-True ([bool]$entries[0].Available) 'Start a first scan should be available in fresh state.'
+                Assert-True ([bool]$entries[0].Recommended) 'Start a first scan should be the recommended choice.'
+                Assert-True (-not [bool]$entries[1].Available) 'Saved scan should be unavailable before setup exists.'
+                Assert-True ([string]$entries[1].UnavailableReason -like '*Finish first-scan setup*') 'Saved scan should explain how to unlock it.'
+                Assert-True (-not [bool]$entries[2].Available) 'Results review should be unavailable before an export exists.'
 
-                $screen = @(& $module {
-                    param($Entries, $InputRoot, $ExportPath)
-                    Get-ShareSurferMenuScreen -Entries $Entries -InputRoot $InputRoot -ExportPath $ExportPath
-                } $entries $inputRoot $exportPath) -join [Environment]::NewLine
-                Assert-True ($screen.Contains('ShareSurfer Start Menu')) 'Menu screen should render its title.'
-                Assert-True ($screen.Contains('1. Preflight & connectivity')) 'Menu screen should number the tasks.'
-                Assert-True ($screen.Contains('owner mapping: found')) 'Menu screen should show readiness beside tasks.'
+                foreach ($width in @(80, 120)) {
+                    $screenLines = @(& $module {
+                        param($Entries, $InputRoot, $ExportPath, $Width)
+                        Get-ShareSurferMenuScreen -Entries $Entries -InputRoot $InputRoot -ExportPath $ExportPath -Width $Width
+                    } $entries $inputRoot $exportPath $width)
+                    $screen = $screenLines -join [Environment]::NewLine
+                    foreach ($entry in $entries) {
+                        Assert-Equal ([regex]::Matches($screen, [regex]::Escape([string]$entry.Label))).Count 1 ('Home should render {0} exactly once.' -f [string]$entry.Label)
+                    }
+                    Assert-True (@($screenLines | Where-Object { $_.Length -gt $width }).Count -eq 0) ('Home output should wrap to {0} columns.' -f $width)
+                }
+
+                Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value 'ShareId' -Encoding UTF8
+                $withExport = @(& $module {
+                    param($InputRoot, $ExportPath)
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ConsoleMode Plain
+                } $inputRoot $exportPath)
+                $review = @($withExport | Where-Object { $_.Key -eq 'review_results' })[0]
+                Assert-True ([bool]$review.Available) 'An existing shares.csv should unlock results validation and review.'
+                Assert-True ([string]$review.Description -like '*validate it before review*') 'File presence should say validation is required instead of claiming success.'
+
+                $validatedEntries = @(& $module {
+                    param($InputRoot, $ExportPath)
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ConsoleMode Plain -SessionValidationPassed $true
+                } $inputRoot $exportPath)
+                $validatedHelp = & $module {
+                    param($Entries)
+                    Get-ShareSurferMenuHelpText -Entries $Entries
+                } $validatedEntries
+                Assert-True ([string]$validatedHelp -like '*Results: validated in this session*') 'Home help should agree with the validated results row.'
+                Assert-True ([string]$validatedHelp -notlike '*validation is required*') 'Home help must not ask for validation again after current-session success.'
+
+                Set-Content -LiteralPath (Join-Path $inputRoot 'sharesurfer-startup.config.json') -Value '{not-json' -Encoding UTF8
+                $withCorruptConfig = @(& $module {
+                    param($InputRoot, $ExportPath)
+                    Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -ConsoleMode Plain
+                } $inputRoot $exportPath)
+                $saved = @($withCorruptConfig | Where-Object { $_.Key -eq 'saved_scan' })[0]
+                Assert-True (-not [bool]$saved.Available) 'A corrupt saved config must not unlock saved scan.'
+                Assert-True ([string]$saved.UnavailableReason -like '*could not be read*') 'A corrupt saved config should provide a repair path.'
             }
             finally {
                 Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -3242,20 +3293,83 @@ $tests = @(
         }
     },
     @{
-        Name = 'Start-ShareSurfer previews commands and exits on Q without running anything'
+        Name = 'Goal-based home restores saved custom export paths without overriding explicit paths'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuSavedPaths-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $defaultExport = Join-Path (Join-Path $root 'exports') 'startup-scan'
+            $defaultDashboard = Join-Path $defaultExport 'standalone-dashboard'
+            $savedExport = Join-Path $root 'custom-export'
+            $savedDashboard = Join-Path $root 'custom-dashboard'
+            $explicitExport = Join-Path $root 'explicit-export'
+            $explicitDashboard = Join-Path $root 'explicit-dashboard'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            Set-Content -LiteralPath $rerunPath -Value "Write-Host 'saved path test'" -Encoding UTF8
+            Set-Content -LiteralPath $configPath -Value (([ordered]@{
+                exportPath = $savedExport
+                standaloneDashboardPath = $savedDashboard
+                targetPaths = @('\\files01\Finance')
+                obsAttribute = 'info'
+                adLookupMode = 'DirectoryOnly'
+                managerIdentityFormat = 'SamAccountName'
+                aclExportMode = 'FullEffective'
+                consoleMode = 'Enhanced'
+                generatedFiles = [ordered]@{ operatorReusableCommandPath = $rerunPath }
+            }) | ConvertTo-Json -Depth 5) -Encoding UTF8
+
+            try {
+                $restored = & $module {
+                    param($InputRoot, $ExportPath, $DashboardPath)
+                    Get-ShareSurferMenuInitialPaths -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $DashboardPath
+                } $inputRoot $defaultExport $defaultDashboard
+                Assert-Equal $restored.ExportPath $savedExport 'A normal launcher restart should restore the saved custom export path.'
+                Assert-Equal $restored.StandaloneDashboardPath $savedDashboard 'A normal launcher restart should restore the saved custom dashboard path.'
+                Assert-True ([bool]$restored.HydratedFromSavedConfig) 'Restored paths should identify their saved-config source.'
+                $restoredSettings = & $module {
+                    param($InputRoot)
+                    Get-ShareSurferMenuInitialSettings -InputRoot $InputRoot
+                } $inputRoot
+                Assert-Equal $restoredSettings.ObsAttribute 'info' 'A normal restart should restore the saved OBS attribute for ownership work.'
+                Assert-Equal $restoredSettings.AdLookupMode 'DirectoryOnly' 'A normal restart should restore the saved directory lookup mode.'
+                Assert-Equal $restoredSettings.ManagerIdentityFormat 'SamAccountName' 'A normal restart should restore the saved manager identity format.'
+                Assert-Equal $restoredSettings.AclExportMode 'FullEffective' 'A normal restart should restore the saved ACL export mode.'
+                Assert-Equal $restoredSettings.ConsoleMode 'Enhanced' 'A normal restart should restore the saved console preference when the launcher uses its default.'
+
+                $explicit = & $module {
+                    param($InputRoot, $ExportPath, $DashboardPath)
+                    Get-ShareSurferMenuInitialPaths -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $DashboardPath
+                } $inputRoot $explicitExport $explicitDashboard
+                Assert-Equal $explicit.ExportPath $explicitExport 'An explicitly different export path should not be overwritten by saved config.'
+                Assert-Equal $explicit.StandaloneDashboardPath $explicitDashboard 'An explicitly different dashboard path should not be overwritten by saved config.'
+                Assert-True (-not [bool]$explicit.HydratedFromSavedConfig) 'Explicit path overrides should remain authoritative.'
+                $explicitSettings = & $module {
+                    param($InputRoot)
+                    Get-ShareSurferMenuInitialSettings -InputRoot $InputRoot -ObsAttribute 'department' -AdLookupMode Ldap -ManagerIdentityFormat Mail -AclExportMode Compact -ConsoleMode Auto -PreserveObsAttribute -PreserveAdLookupMode -PreserveManagerIdentityFormat -PreserveAclExportMode -PreserveConsoleMode
+                } $inputRoot
+                Assert-Equal $explicitSettings.ObsAttribute 'department' 'An explicitly different OBS attribute should remain authoritative.'
+                Assert-Equal $explicitSettings.AdLookupMode 'Ldap' 'An explicitly different directory mode should remain authoritative.'
+            }
+            finally {
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurfer keeps unavailable choices non-actionable and exits cleanly'
         Body = {
             Import-Module $moduleManifest -Force
             $module = Get-Module ShareSurfer
             $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuRun-' + [guid]::NewGuid().ToString('N'))
             $exportPath = Join-Path $root 'export'
             New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
-            Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value 'ShareId' -Encoding UTF8
 
             $env:SHARESURFER_PLAIN_CONSOLE = '1'
             $script:shareSurferMenuAnswers = New-Object 'System.Collections.Generic.Queue[string]'
-            $script:shareSurferMenuAnswers.Enqueue('4')
-            $script:shareSurferMenuAnswers.Enqueue('N')
-            $script:shareSurferMenuAnswers.Enqueue('')
+            $script:shareSurferMenuAnswers.Enqueue('2')
             $script:shareSurferMenuAnswers.Enqueue('Q')
             function global:Read-Host {
                 param([string] $Prompt)
@@ -3267,7 +3381,7 @@ $tests = @(
 
             try {
                 Start-ShareSurfer -ExportPath $exportPath
-                Assert-Equal $script:shareSurferMenuAnswers.Count 0 'Menu should consume the selection, declined confirmation, return pause, and quit command.'
+                Assert-Equal $script:shareSurferMenuAnswers.Count 0 'Menu should reject the unavailable saved scan without another prompt, then accept Q.'
             }
             finally {
                 Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
@@ -3278,7 +3392,7 @@ $tests = @(
         }
     },
     @{
-        Name = 'Start-ShareSurfer guided scan preserves menu defaults in startup config'
+        Name = 'Start-ShareSurfer recommended first scan reaches review with four choices and defers ownership'
         Body = {
             Import-Module $moduleManifest -Force
             $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuStartup-' + [guid]::NewGuid().ToString('N'))
@@ -3291,18 +3405,7 @@ $tests = @(
 
             $env:SHARESURFER_PLAIN_CONSOLE = '1'
             $script:shareSurferMenuStartupAnswers = New-Object 'System.Collections.Generic.Queue[string]'
-            foreach ($answer in @(
-                '3', 'Y',
-                '', '', '', '', '',
-                '\\files01\Finance',
-                '', '', '',
-                '',
-                '',
-                '', '', '', 'Y',
-                '',
-                '',
-                'N', 'N'
-            )) {
+            foreach ($answer in @('', '\\files01\Finance', '', '', '', 'Q')) {
                 $script:shareSurferMenuStartupAnswers.Enqueue($answer)
             }
             function global:Read-Host {
@@ -3332,7 +3435,11 @@ $tests = @(
                 Assert-Equal $config.aclExportMode 'Compact' 'Menu-launched startup should preserve the menu ACL export mode.'
                 Assert-Equal $config.consoleMode 'Plain' 'Menu-launched startup should preserve the menu console mode in saved config.'
                 Assert-Equal $config.targetPaths[0] '\\files01\Finance' 'Menu-launched startup should save the prompted target path.'
-                Assert-Equal $script:shareSurferMenuStartupAnswers.Count 0 'Menu startup simulation should consume only the expected prompts.'
+                Assert-Equal $config.includeFiles $false 'Recommended first scan should collect folders only.'
+                Assert-Equal $config.includeSharePermissionDiagnostics $true 'Recommended first scan should enable share-permission diagnostics.'
+                Assert-Equal $config.skipIdentityEnrichment $false 'Recommended first scan should collect identity details.'
+                Assert-Equal ([string]$config.optionalInputs.ownerMappingPath) '' 'Recommended first scan should defer optional ownership files even when one is discovered.'
+                Assert-Equal $script:shareSurferMenuStartupAnswers.Count 0 'Home, target, location, defaults, save, and final quit should consume only six inputs.'
             }
             finally {
                 Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
@@ -3343,7 +3450,173 @@ $tests = @(
         }
     },
     @{
-        Name = 'Start-ShareSurfer scan menu runs saved rerun script when config exists'
+        Name = 'First-scan setup replaces existing saved files only after explicit confirmation'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferFirstScanReplace-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'export'
+            $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            $planPath = Join-Path $inputRoot 'operator-assistant.plan.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            Set-Content -LiteralPath $configPath -Value 'existing-config-sentinel' -Encoding UTF8
+            Set-Content -LiteralPath $planPath -Value 'existing-plan-sentinel' -Encoding UTF8
+            Set-Content -LiteralPath $rerunPath -Value 'existing-rerun-sentinel' -Encoding UTF8
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            try {
+                $script:shareSurferReplaceAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+                foreach ($answer in @('\\files01\Finance', '', '', '', 'N')) { $script:shareSurferReplaceAnswers.Enqueue($answer) }
+                function global:Read-Host {
+                    param([string] $Prompt)
+                    if ($script:shareSurferReplaceAnswers.Count -eq 0) { throw ('Unexpected replace-decline prompt: {0}' -f $Prompt) }
+                    $script:shareSurferReplaceAnswers.Dequeue()
+                }
+                $declined = Start-ShareSurferStartup -ReleaseRoot $repoRoot -InputRoot $inputRoot -ExportPath $exportPath -StandaloneDashboardPath $dashboardPath -Interactive -SkipUnblock
+                Assert-True ([bool]$declined.Cancelled) 'Declining replacement should return without writing startup files.'
+                Assert-Equal (Get-Content -LiteralPath $configPath -Raw).Trim() 'existing-config-sentinel' 'Declining replacement should preserve the existing config.'
+                Assert-Equal (Get-Content -LiteralPath $planPath -Raw).Trim() 'existing-plan-sentinel' 'Declining replacement should preserve the existing plan.'
+                Assert-Equal (Get-Content -LiteralPath $rerunPath -Raw).Trim() 'existing-rerun-sentinel' 'Declining replacement should preserve the existing rerun script.'
+
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                $script:shareSurferReplaceAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+                foreach ($answer in @('\\files01\Finance', '', '', '', 'Y')) { $script:shareSurferReplaceAnswers.Enqueue($answer) }
+                function global:Read-Host {
+                    param([string] $Prompt)
+                    if ($script:shareSurferReplaceAnswers.Count -eq 0) { throw ('Unexpected replace-accept prompt: {0}' -f $Prompt) }
+                    $script:shareSurferReplaceAnswers.Dequeue()
+                }
+                $accepted = Start-ShareSurferStartup -ReleaseRoot $repoRoot -InputRoot $inputRoot -ExportPath $exportPath -StandaloneDashboardPath $dashboardPath -Interactive -SkipUnblock
+                Assert-True (-not [bool]$accepted.Cancelled) 'Explicit replacement confirmation should allow startup generation to finish.'
+                $savedConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+                Assert-Equal $savedConfig.targetPaths[0] '\\files01\Finance' 'Confirmed replacement should write the reviewed target into valid config JSON.'
+                Assert-True ((Get-Content -LiteralPath $planPath -Raw).Trim() -ne 'existing-plan-sentinel') 'Confirmed replacement should update the operator plan.'
+                Assert-True ((Get-Content -LiteralPath $rerunPath -Raw).Trim() -ne 'existing-rerun-sentinel') 'Confirmed replacement should update the rerun script.'
+                Assert-Equal $script:shareSurferReplaceAnswers.Count 0 'Confirmed replacement should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferReplaceAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'First-scan flow cancels cleanly at every stage and preserves values on Back'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferFirstScanCancel-' + [guid]::NewGuid().ToString('N'))
+
+            function New-TestFirstScanState {
+                param([string] $Suffix)
+                $inputRoot = Join-Path $root ('inputs-' + $Suffix)
+                [pscustomobject]@{
+                    EnvironmentMode = 'Permissive'; ReleaseRoot = $repoRoot; InputRoot = $inputRoot
+                    ExportPath = (Join-Path $root ('export-' + $Suffix)); StandaloneDashboardPath = (Join-Path $root ('dashboard-' + $Suffix))
+                    TargetPath = @(); ObsAttribute = 'extensionAttribute10'; AdLookupMode = 'Auto'; ManagerIdentityFormat = 'MailTo'
+                    AclExportMode = 'Compact'; ConsoleMode = 'Plain'; IncludeFiles = $false; IncludeSharePermissionDiagnostics = $true
+                    SkipIdentityEnrichment = $false; SkipUnblock = $true; SaveConfigPath = (Join-Path $inputRoot 'sharesurfer-startup.config.json')
+                    HandoffPath = ''; OwnerMappingPath = ''; OwnershipEnrichmentPath = ''; OwnershipContextPath = ''
+                    OwnershipRelationshipPath = ''; OwnershipImportManifestPath = ''; DiscountedPrincipalPath = ''
+                    OwnershipSetupSummary = $null; DeferOwnershipInputs = $true; RunNow = $false
+                }
+            }
+
+            $cases = @(
+                [pscustomobject]@{ Name = 'target'; Answers = @('Q') },
+                [pscustomobject]@{ Name = 'target-empty'; Answers = @('', 'Q') },
+                [pscustomobject]@{ Name = 'location'; Answers = @('\\files01\Finance', 'Q') },
+                [pscustomobject]@{ Name = 'settings'; Answers = @('\\files01\Finance', '', 'Q') },
+                [pscustomobject]@{ Name = 'review'; Answers = @('\\files01\Finance', '', '', 'Q') }
+            )
+
+            try {
+                foreach ($case in $cases) {
+                    $script:firstScanCancelAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+                    foreach ($answer in @($case.Answers)) { $script:firstScanCancelAnswers.Enqueue([string]$answer) }
+                    function global:Read-Host {
+                        param([string] $Prompt)
+                        if ($script:firstScanCancelAnswers.Count -eq 0) { throw ('Unexpected cancellation prompt: {0}' -f $Prompt) }
+                        $script:firstScanCancelAnswers.Dequeue()
+                    }
+                    $state = New-TestFirstScanState -Suffix ([string]$case.Name)
+                    $result = & $module {
+                        param($State)
+                        Read-ShareSurferFirstScanConfiguration -State $State -ConsoleMode Plain -Force
+                    } $state
+                    Assert-Equal $result.Action 'Cancel' ('Q should cancel cleanly at the {0} stage.' -f [string]$case.Name)
+                    Assert-True (@($state.PSObject.Properties.Value | Where-Object { [string]$_ -in @('Q', 'Cancel') }).Count -eq 0) 'Cancellation must never become normal configuration data.'
+                    Assert-True (-not (Test-Path -LiteralPath $state.SaveConfigPath -PathType Leaf)) 'Cancelled flow must not write startup config.'
+                    Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                }
+
+                $script:firstScanCancelAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+                foreach ($answer in @('\\files01\Finance', 'B', '', '', '', 'Q')) { $script:firstScanCancelAnswers.Enqueue($answer) }
+                function global:Read-Host {
+                    param([string] $Prompt)
+                    if ($script:firstScanCancelAnswers.Count -eq 0) { throw ('Unexpected back-navigation prompt: {0}' -f $Prompt) }
+                    $script:firstScanCancelAnswers.Dequeue()
+                }
+                $backState = New-TestFirstScanState -Suffix 'back'
+                $backResult = & $module {
+                    param($State)
+                    Read-ShareSurferFirstScanConfiguration -State $State -ConsoleMode Plain -Force
+                } $backState
+                Assert-Equal $backResult.Action 'Cancel' 'Back-navigation scenario should reach the final Q without writing.'
+                Assert-Equal $backState.TargetPath[0] '\\files01\Finance' 'Returning from review location should preserve the previously entered target as the default.'
+
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                $script:firstScanCancelAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+                foreach ($answer in @('\\files01\Finance', '', '2', '1', '2', '', '', '', '', '', '', 'B', '', '', 'Q')) { $script:firstScanCancelAnswers.Enqueue($answer) }
+                function global:Read-Host {
+                    param([string] $Prompt)
+                    if ($script:firstScanCancelAnswers.Count -eq 0) { throw ('Unexpected custom-back prompt: {0}' -f $Prompt) }
+                    $script:firstScanCancelAnswers.Dequeue()
+                }
+                $customBackState = New-TestFirstScanState -Suffix 'custom-back'
+                $customBackResult = & $module {
+                    param($State)
+                    Read-ShareSurferFirstScanConfiguration -State $State -ConsoleMode Plain -Force
+                } $customBackState
+                Assert-Equal $customBackResult.Action 'Cancel' 'Custom Back scenario should return to review and then accept Q.'
+                Assert-Equal $customBackState.AclExportMode 'FullEffective' 'Returning from final review should preserve custom settings instead of reapplying recommended defaults.'
+                $technicalCommand = & $module {
+                    param($State)
+                    Get-ShareSurferFirstScanCommandPreview -State $State
+                } $customBackState
+                Assert-True ([string]$technicalCommand -like '*-AclExportMode*FullEffective*') 'Technical command should reproduce the reviewed custom ACL setting.'
+                Assert-True ([string]$technicalCommand -like '*-DisableOptionalInputDiscovery*') 'Technical command should preserve deferred ownership instead of rediscovering files.'
+                Assert-True ([string]$technicalCommand -like '*-SkipOwnershipSetup*') 'Technical command should preserve the reviewed decision to defer ownership setup.'
+                Assert-True ([string]$technicalCommand -notlike '*-Force*') 'Technical command should not silently authorize overwriting existing files.'
+
+                $customBackState.DeferOwnershipInputs = $false
+                $customBackState.OwnershipSetupSummary = [pscustomobject]@{
+                    CreateOwnerMappingDraftAfterScan = $true
+                    OwnerMappingDraftPath = (Join-Path $customBackState.InputRoot 'owner-mapping-draft.csv')
+                    OwnerMappingDraftReusableCommandPath = (Join-Path $customBackState.InputRoot 'owner-mapping-draft-rerun.ps1')
+                }
+                $draftTechnicalCommand = & $module {
+                    param($State)
+                    Get-ShareSurferFirstScanCommandPreview -State $State
+                } $customBackState
+                Assert-True ([string]$draftTechnicalCommand -like '*-CreateOwnerMappingDraftAfterScan*') 'Technical command should reproduce queued post-scan owner-mapping draft creation.'
+                Assert-True ([string]$draftTechnicalCommand -like '*-OwnerMappingDraftPath*owner-mapping-draft.csv*') 'Technical command should preserve the owner-mapping draft output path.'
+                Assert-True ([string]$draftTechnicalCommand -like '*-OwnerMappingDraftReusableCommandPath*owner-mapping-draft-rerun.ps1*') 'Technical command should preserve the owner-mapping draft rerun path.'
+                Assert-Equal $script:firstScanCancelAnswers.Count 0 'Custom Back scenario should consume the expected prompts.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name firstScanCancelAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurfer runs a saved workflow and refreshes home afterward'
         Body = {
             Import-Module $moduleManifest -Force
             $module = Get-Module ShareSurfer
@@ -3351,12 +3624,20 @@ $tests = @(
             $inputRoot = Join-Path $root 'inputs'
             $exportPath = Join-Path $root 'export'
             $dashboardPath = Join-Path $exportPath 'standalone-dashboard'
+            $savedExportPath = Join-Path $root 'saved-export'
+            $savedDashboardPath = Join-Path $savedExportPath 'standalone-dashboard'
             $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
             $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
             $sentinelPath = Join-Path $root 'rerun-executed.txt'
             New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            New-Item -ItemType Directory -Path $exportPath -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $exportPath 'shares.csv') -Value 'InvalidHeader' -Encoding UTF8
+            Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $savedExportPath -SkipIdentityEnrichment -Quiet | Out-Null
 
             $config = [ordered]@{
+                exportPath = $savedExportPath
+                standaloneDashboardPath = $savedDashboardPath
+                targetPaths = @('\\files01\Finance')
                 generatedFiles = [ordered]@{
                     operatorReusableCommandPath = $rerunPath
                 }
@@ -3371,13 +3652,15 @@ $tests = @(
                 param($InputRoot, $ExportPath, $DashboardPath)
                 Get-ShareSurferMenuEntries -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $DashboardPath -ConsoleMode Plain
             } $inputRoot $exportPath $dashboardPath)
-            $scan = @($entries | Where-Object { $_.Key -eq 'scan' })[0]
-            Assert-Equal ([string]$scan.Label) 'Run saved scan workflow' 'Saved config plus rerun script should make the menu scan action run the saved workflow.'
-            Assert-True ([string]$scan.CommandPreview -like ('*{0}*' -f $rerunPath)) 'Saved workflow preview should point to the rerun script.'
+            $saved = @($entries | Where-Object { $_.Key -eq 'saved_scan' })[0]
+            Assert-Equal ([string]$saved.Label) 'Run a saved scan' 'Saved config plus rerun script should unlock the saved-scan goal.'
+            Assert-True ([bool]$saved.Available) 'Saved workflow should be selectable when its config and rerun script exist.'
+            Assert-Equal ([string]$saved.RerunPath) $rerunPath 'Saved workflow should point to the configured rerun script.'
+            Assert-Equal ([string]$saved.ExportPath) $savedExportPath 'Saved workflow entry should retain its configured export path.'
 
             $env:SHARESURFER_PLAIN_CONSOLE = '1'
             $script:shareSurferSavedRunAnswers = New-Object 'System.Collections.Generic.Queue[string]'
-            foreach ($answer in @('3', 'Y')) {
+            foreach ($answer in @('2', 'Y', 'Q')) {
                 $script:shareSurferSavedRunAnswers.Enqueue($answer)
             }
             function global:Read-Host {
@@ -3389,21 +3672,174 @@ $tests = @(
             }
 
             try {
-                Start-ShareSurfer `
+                $menuOutput = (Start-ShareSurfer `
                     -ReleaseRoot $repoRoot `
                     -InputRoot $inputRoot `
                     -ExportPath $exportPath `
                     -StandaloneDashboardPath $dashboardPath `
-                    -ConsoleMode Plain
+                    -ConsoleMode Plain 6>&1 | Out-String)
 
                 Assert-True (Test-Path -LiteralPath $sentinelPath -PathType Leaf) 'Saved rerun script should execute from the menu.'
                 Assert-Equal (Get-Content -LiteralPath $sentinelPath -Raw).Trim() 'ran' 'Saved rerun script should write the expected sentinel content.'
-                Assert-Equal $script:shareSurferSavedRunAnswers.Count 0 'Saved-run menu simulation should consume selection and confirmation.'
+                Assert-True ([string]$menuOutput -like ('*Switching to the saved workflow export*{0}*' -f $savedExportPath)) 'Saved scan should switch from an explicit review path to the export bound to its rerun config.'
+                Assert-True ([string]$menuOutput -like ('*Export validation passed*{0}*' -f $savedExportPath)) 'Saved scan should validate the export produced by the saved workflow.'
+                Assert-Equal $script:shareSurferSavedRunAnswers.Count 0 'Saved-run flow should return to refreshed home and consume the final Q.'
             }
             finally {
                 Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferSavedRunAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurfer recovers from saved workflow errors and returns home'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuSavedFailure-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'export'
+            $configPath = Join-Path $inputRoot 'sharesurfer-startup.config.json'
+            $rerunPath = Join-Path $inputRoot 'operator-assistant-rerun.ps1'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            Set-Content -LiteralPath $configPath -Value (([ordered]@{ generatedFiles = [ordered]@{ operatorReusableCommandPath = $rerunPath } }) | ConvertTo-Json -Depth 5) -Encoding UTF8
+            Set-Content -LiteralPath $rerunPath -Value "throw 'synthetic saved workflow failure'" -Encoding UTF8
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferSavedFailureAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            foreach ($answer in @('2', 'Y', 'Q')) { $script:shareSurferSavedFailureAnswers.Enqueue($answer) }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferSavedFailureAnswers.Count -eq 0) { throw ('Unexpected saved-failure prompt: {0}' -f $Prompt) }
+                $script:shareSurferSavedFailureAnswers.Dequeue()
+            }
+
+            try {
+                Start-ShareSurfer -ReleaseRoot $repoRoot -InputRoot $inputRoot -ExportPath $exportPath -ConsoleMode Plain
+                Assert-Equal $script:shareSurferSavedFailureAnswers.Count 0 'A thrown saved workflow should be caught and return to home for Q.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferSavedFailureAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Advanced dashboard packaging requires successful current-session export validation'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuValidationGate-' + [guid]::NewGuid().ToString('N'))
+            $invalidExport = Join-Path $root 'invalid'
+            $validExport = Join-Path $root 'valid'
+            New-Item -ItemType Directory -Path $invalidExport -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $invalidExport 'shares.csv') -Value 'NotAValidHeader' -Encoding UTF8
+
+            try {
+                $invalidSession = [pscustomobject]@{ ValidationPassed = $false }
+                & $module {
+                    param($ExportPath, $Session)
+                    Invoke-ShareSurferMenuExportValidation -ExportPath $ExportPath -SessionState $Session | Out-Null
+                } $invalidExport $invalidSession
+                Assert-True (-not [bool]$invalidSession.ValidationPassed) 'Invalid export validation should fail closed.'
+                $invalidEntries = @(& $module {
+                    param($ExportPath, $ReleaseRoot, $Session)
+                    Get-ShareSurferAdvancedMenuEntries -ExportPath $ExportPath -StandaloneDashboardPath (Join-Path $ExportPath 'dashboard') -ReleaseRoot $ReleaseRoot -SessionState $Session
+                } $invalidExport $repoRoot $invalidSession)
+                $invalidDashboard = @($invalidEntries | Where-Object { $_.Key -eq 'dashboard' })[0]
+                Assert-True (-not [bool]$invalidDashboard.Available) 'Dashboard packaging must remain unavailable after failed validation.'
+
+                Invoke-ShareSurferScan -InputObject (New-TestInventory) -OutputPath $validExport -SkipIdentityEnrichment -Quiet | Out-Null
+                $validSession = [pscustomobject]@{ ValidationPassed = $false }
+                & $module {
+                    param($ExportPath, $Session)
+                    Invoke-ShareSurferMenuExportValidation -ExportPath $ExportPath -SessionState $Session | Out-Null
+                } $validExport $validSession
+                Assert-True ([bool]$validSession.ValidationPassed) 'Complete export validation should unlock the current session.'
+                $validEntries = @(& $module {
+                    param($ExportPath, $ReleaseRoot, $Session)
+                    Get-ShareSurferAdvancedMenuEntries -ExportPath $ExportPath -StandaloneDashboardPath (Join-Path $ExportPath 'dashboard') -ReleaseRoot $ReleaseRoot -SessionState $Session
+                } $validExport $repoRoot $validSession)
+                $validDashboard = @($validEntries | Where-Object { $_.Key -eq 'dashboard' })[0]
+                Assert-True ([bool]$validDashboard.Available) 'Dashboard packaging should unlock only after successful validation.'
+
+                $otherExport = Join-Path $root 'other-export'
+                New-Item -ItemType Directory -Path $otherExport -Force | Out-Null
+                Copy-Item -LiteralPath (Join-Path $validExport 'shares.csv') -Destination (Join-Path $otherExport 'shares.csv')
+                $otherEntries = @(& $module {
+                    param($ExportPath, $ReleaseRoot, $Session)
+                    Get-ShareSurferAdvancedMenuEntries -ExportPath $ExportPath -StandaloneDashboardPath (Join-Path $ExportPath 'dashboard') -ReleaseRoot $ReleaseRoot -SessionState $Session
+                } $otherExport $repoRoot $validSession)
+                $otherDashboard = @($otherEntries | Where-Object { $_.Key -eq 'dashboard' })[0]
+                Assert-True (-not [bool]$otherDashboard.Available) 'Validation for one export path must not unlock dashboard packaging for another export.'
+                Assert-True ([string]$otherDashboard.UnavailableReason -like '*Validate this export*') 'A different export should explain that it needs its own current-session validation.'
+
+                $packagedDashboard = Join-Path $validExport 'packaged-dashboard'
+                Remove-Item -LiteralPath (Join-Path $validExport 'items.csv') -Force
+                $env:SHARESURFER_PLAIN_CONSOLE = '1'
+                $script:shareSurferRevalidationAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+                foreach ($answer in @('3', 'Y', '6')) { $script:shareSurferRevalidationAnswers.Enqueue($answer) }
+                function global:Read-Host {
+                    param([string] $Prompt)
+                    if ($script:shareSurferRevalidationAnswers.Count -eq 0) { throw ('Unexpected packaging revalidation prompt: {0}' -f $Prompt) }
+                    $script:shareSurferRevalidationAnswers.Dequeue()
+                }
+                & $module {
+                    param($InputRoot, $ExportPath, $DashboardPath, $ReleaseRoot, $Session)
+                    Invoke-ShareSurferAdvancedMenu -InputRoot $InputRoot -ExportPath $ExportPath -StandaloneDashboardPath $DashboardPath -ReleaseRoot $ReleaseRoot -ConsoleMode Plain -SessionState $Session
+                } (Join-Path $root 'inputs') $validExport $packagedDashboard $repoRoot $validSession
+                Assert-True (-not (Test-Path -LiteralPath $packagedDashboard)) 'Dashboard packaging should stop when a required export file changes after validation.'
+                Assert-True (-not [bool]$validSession.ValidationPassed) 'Failed just-in-time revalidation should revoke the session validation token.'
+                Assert-Equal $script:shareSurferRevalidationAnswers.Count 0 'Revalidation failure should return to Advanced tools and consume Back to home.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferRevalidationAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Validated results offer an optional owner-mapping draft and return home'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferMenuOwnerDraft-' + [guid]::NewGuid().ToString('N'))
+            $inputRoot = Join-Path $root 'inputs'
+            $exportPath = Join-Path $root 'export'
+            $draftPath = Join-Path $inputRoot 'owner-mapping-draft.csv'
+            $rerunPath = Join-Path $inputRoot 'owner-mapping-draft-rerun.ps1'
+            New-Item -ItemType Directory -Path $inputRoot -Force | Out-Null
+            $inventory = New-TestInventory
+            $inventory.OwnerMappings = @()
+            Invoke-ShareSurferScan -InputObject $inventory -OutputPath $exportPath -SkipIdentityEnrichment -Quiet | Out-Null
+
+            $env:SHARESURFER_PLAIN_CONSOLE = '1'
+            $script:shareSurferOwnerDraftAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            foreach ($answer in @('3', '1', 'Q')) { $script:shareSurferOwnerDraftAnswers.Enqueue($answer) }
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferOwnerDraftAnswers.Count -eq 0) { throw ('Unexpected owner-draft prompt: {0}' -f $Prompt) }
+                $script:shareSurferOwnerDraftAnswers.Dequeue()
+            }
+
+            try {
+                Start-ShareSurfer -ReleaseRoot $repoRoot -InputRoot $inputRoot -ExportPath $exportPath -ConsoleMode Plain
+                Assert-True (Test-Path -LiteralPath $draftPath -PathType Leaf) 'Validated review should create the selected owner-mapping draft.'
+                Assert-True (Test-Path -LiteralPath $rerunPath -PathType Leaf) 'Owner-mapping draft creation should include a reusable command file.'
+                $draftRows = @(Import-Csv -LiteralPath $draftPath)
+                Assert-True ($draftRows.Count -gt 0) 'Owner-mapping draft should contain reviewable path candidates.'
+                Assert-True ($draftRows[0].PSObject.Properties.Name -contains 'Owner') 'Owner-mapping draft should include the Owner field for human completion.'
+                Assert-True ($draftRows[0].PSObject.Properties.Name -contains 'BusinessUnit') 'Owner-mapping draft should include the BusinessUnit field for human completion.'
+                Assert-Equal $script:shareSurferOwnerDraftAnswers.Count 0 'Owner-mapping draft flow should return to the refreshed home and consume Q.'
+            }
+            finally {
+                Remove-Item -Path Env:SHARESURFER_PLAIN_CONSOLE -ErrorAction SilentlyContinue
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferOwnerDraftAnswers -Scope Script -ErrorAction SilentlyContinue
                 Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
@@ -4570,6 +5006,10 @@ $tests = @(
             Import-Module $moduleManifest -Force
             $command = Get-Command -Name Start-ShareSurferStartup -Module ShareSurfer -ErrorAction Stop
             Assert-Equal $command.Name 'Start-ShareSurferStartup' 'Startup command should be exported by the module.'
+            Assert-True $command.Parameters.ContainsKey('DisableOptionalInputDiscovery') 'Startup command should support exact replay without implicit ownership discovery.'
+            Assert-True $command.Parameters.ContainsKey('CreateOwnerMappingDraftAfterScan') 'Startup command should support replaying queued owner-mapping draft creation.'
+            Assert-True $command.Parameters.ContainsKey('OwnerMappingDraftPath') 'Startup command should accept the reviewed owner-mapping draft path.'
+            Assert-True $command.Parameters.ContainsKey('OwnerMappingDraftReusableCommandPath') 'Startup command should accept the reviewed owner-mapping draft rerun path.'
 
             $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStartup-' + [guid]::NewGuid().ToString('N'))
             $inputRoot = Join-Path $root 'inputs'
@@ -4798,9 +5238,10 @@ $tests = @(
                     Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv'
                 } $inputRoot
 
-                Assert-Equal $answerNo 'no' 'Typing no should be preserved as operator input instead of silently skipping a found optional file.'
-                Assert-Equal $answerSkip '' 'Typing SKIP should explicitly skip a found optional file.'
-                Assert-Equal $answerEnter $expectedOwnerMappingPath 'Pressing Enter should use a found conventional optional file.'
+                Assert-Equal $answerNo.Action 'Accept' 'Optional path prompt should use the shared return-based result contract.'
+                Assert-Equal $answerNo.Value 'no' 'Typing no should be preserved as operator input instead of silently skipping a found optional file.'
+                Assert-Equal $answerSkip.Value '' 'Typing SKIP should explicitly skip a found optional file.'
+                Assert-Equal $answerEnter.Value $expectedOwnerMappingPath 'Pressing Enter should use a found conventional optional file.'
             }
             finally {
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
@@ -4834,6 +5275,7 @@ $tests = @(
                 } $inputRoot
 
                 Assert-Equal $summary.Skipped $false 'Ownership setup should not be marked skipped when prompts are enabled.'
+                Assert-Equal $summary.Cancelled $false 'Completed ownership setup should not be marked cancelled.'
                 Assert-Equal $summary.OwnershipEnrichmentOffered $true 'Ownership setup should offer enrichment when ownership-enrichment.csv is missing.'
                 Assert-Equal $summary.OwnershipEnrichmentBuilt $false 'Declining enrichment should return to startup without building enrichment.'
                 Assert-Equal $summary.OwnerMappingDraftOffered $true 'Ownership setup should offer a post-scan owner mapping draft when owner-mapping.csv is missing.'
@@ -4846,6 +5288,38 @@ $tests = @(
             finally {
                 Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
                 Remove-Variable -Name shareSurferOwnershipSetupAnswers -Scope Script -ErrorAction SilentlyContinue
+            }
+        }
+    },
+    @{
+        Name = 'Start-ShareSurferStartup ownership setup returns cancellation without treating Q as data'
+        Body = {
+            Import-Module $moduleManifest -Force
+            $module = Get-Module ShareSurfer
+            $root = Join-Path ([System.IO.Path]::GetTempPath()) ('ShareSurferStartupOwnershipCancel-' + [guid]::NewGuid().ToString('N'))
+
+            $script:shareSurferOwnershipCancelAnswers = New-Object 'System.Collections.Generic.Queue[string]'
+            $script:shareSurferOwnershipCancelAnswers.Enqueue('Q')
+            function global:Read-Host {
+                param([string] $Prompt)
+                if ($script:shareSurferOwnershipCancelAnswers.Count -eq 0) { throw ('Unexpected ownership cancellation prompt: {0}' -f $Prompt) }
+                $script:shareSurferOwnershipCancelAnswers.Dequeue()
+            }
+
+            try {
+                $summary = & $module {
+                    param($InputRoot)
+                    Invoke-ShareSurferStartupOwnershipSetup -InputRoot $InputRoot -ObsAttribute 'info' -AdLookupMode DirectoryOnly
+                } $root
+                Assert-True ([bool]$summary.Cancelled) 'Q should return an explicit cancelled ownership result.'
+                Assert-True ([string]$summary.Message -like '*cancelled*') 'Cancelled ownership setup should explain that no import started.'
+                Assert-True (@($summary.PSObject.Properties.Value | Where-Object { [string]$_ -eq 'Q' }).Count -eq 0) 'Q must not be stored as ownership configuration data.'
+                Assert-Equal $script:shareSurferOwnershipCancelAnswers.Count 0 'Ownership cancellation should consume only Q.'
+            }
+            finally {
+                Remove-Item -Path function:\Read-Host -ErrorAction SilentlyContinue
+                Remove-Variable -Name shareSurferOwnershipCancelAnswers -Scope Script -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
             }
         }
     },
@@ -8547,9 +9021,10 @@ $tests = @(
             Assert-True ($commandRecipeText -like '*Start-ShareSurferOperatorAssistant*') 'Command recipes should include the guided operator assistant.'
             Assert-True ($commandRecipeText -like '*Start-ShareSurferStartup*') 'Command recipes should include the guided startup command.'
             Assert-True ($commandRecipeText -like '*Start-ShareSurfer.ps1*') 'Command recipes should include the release-root startup launcher.'
-            Assert-True ($commandRecipeText -like '*offers to show the generated JSON/plan/rerun files*' -and $commandRecipeText -like '*run prompt defaults to*No*') 'Command recipes should explain the interactive review and run handoff.'
-            Assert-True ($commandRecipeText -like '*ownership-enrichment.csv*is missing*' -and $commandRecipeText -like '*Join-ShareSurferOwnershipSources -Interactive -BrowseForCsv -IncludeContextGraph*') 'Command recipes should explain startup ownership enrichment setup when enrichment is missing.'
-            Assert-True ($commandRecipeText -like '*owner-mapping.csv*is missing*' -and $commandRecipeText -like '*post-scan*New-ShareSurferOwnerMappingDraft*') 'Command recipes should explain startup owner mapping draft setup when owner mapping is missing.'
+            Assert-True ($commandRecipeText -like '*one goal-based home screen*' -and $commandRecipeText -like '*Start a first scan (recommended)*') 'Command recipes should explain the goal-based first-scan entry point.'
+            Assert-True ($commandRecipeText -like '*Run now*' -and $commandRecipeText -like '*Save plan and return home*' -and $commandRecipeText -like '*Show technical command*') 'Command recipes should explain the plain-language review actions.'
+            Assert-True ($commandRecipeText -like '*Ownership and HR inputs are deferred by default*' -and $commandRecipeText -like '*Add ownership or HR data*') 'Command recipes should explain that ownership enrichment is optional for the first scan.'
+            Assert-True ($commandRecipeText -like '*validated first scan*owner-mapping-draft.csv*' -and $commandRecipeText -like '*owner-mapping.csv*') 'Command recipes should explain the optional owner-mapping draft after validation.'
             Assert-True ($commandRecipeText -like '*Get-ChildItem -LiteralPath $releaseRoot -Recurse -File*') 'Command recipes should use the literal-path recursive unblock pattern.'
             Assert-True ($commandRecipeText -like '*Run once*' -and $commandRecipeText -like '*launcher itself*') 'Command recipes should explain the one launcher prompt boundary.'
             Assert-True ($commandRecipeText -like '*operator-assistant.plan.json*' -and $commandRecipeText -like '*operator-assistant-rerun.ps1*') 'Command recipes should show operator assistant plan and rerun outputs.'
@@ -8662,11 +9137,12 @@ $tests = @(
             Assert-True ($startupLauncherText -like '*explicitly cleared*downloaded-file marker*') 'Release-root launcher should report downloaded-file marker cleanup.'
             Assert-True ($startupLauncherText -like '*Import-Module $modulePath -Force -PassThru*') 'Release-root launcher should retain the imported module instance.'
             Assert-True ($startupLauncherText -like '*Invoke-ShareSurferLauncherModuleCommand*' -and $startupLauncherText -like '*Start-ShareSurfer*' -and $startupLauncherText -like '*ReleaseRoot = $releaseRoot*') 'Release-root launcher should enter the module-bound Start-ShareSurfer menu when no startup config path is supplied.'
+            Assert-True ($startupLauncherText -like '*$menuParams*' -and $startupLauncherText -like '*$PSBoundParameters.ContainsKey(''ObsAttribute'')*') 'Release-root launcher should distinguish explicit settings from defaults so saved context can be restored safely.'
             Assert-True ($startupLauncherText -like '*Invoke-ShareSurferLauncherModuleCommand*' -and $startupLauncherText -like '*Start-ShareSurferStartup*' -and $startupLauncherText -like '*Parameters $startupParams*') 'Release-root launcher should preserve startup config replay through the imported module command.'
             $startupCommandText = Get-Content -LiteralPath (Join-Path $repoRoot 'src/ShareSurfer/Public/Start-ShareSurferStartup.ps1') -Raw
-            Assert-True ($startupCommandText -like '*Invoke-ShareSurferStartupPostPlanHandoff*') 'Startup command should include an interactive post-plan handoff.'
-            Assert-True ($startupCommandText -like '*Show generated startup JSON, scan plan, and rerun script now?*') 'Startup command should offer to review generated files after prompts.'
-            Assert-True ($startupCommandText -like '*Run the generated diagnostic/scan/validate/dashboard script now?*') 'Startup command should offer to run the generated rerun script after review.'
+            Assert-True ($startupCommandText -like '*Read-ShareSurferFirstScanConfiguration*') 'Startup command should use the simplified first-scan configuration flow.'
+            Assert-True ($startupCommandText -like '*Continue with recommended settings*' -and $startupCommandText -like '*Customize technical settings*') 'Startup command should make recommended settings the primary decision.'
+            Assert-True ($startupCommandText -like '*Run now*' -and $startupCommandText -like '*Save plan and return home (recommended)*' -and $startupCommandText -like '*Show technical command*') 'Startup command should expose the approved final review actions.'
             $releaseMetadata = Get-Content -LiteralPath (Join-Path $repoRoot 'release-metadata.json') -Raw | ConvertFrom-Json
             $currentReleaseTag = [string]$releaseMetadata.currentPrereleaseTag
             $currentReleaseZip = [string]$releaseMetadata.zipAssetName
@@ -8680,10 +9156,11 @@ $tests = @(
             Assert-True ($readmeText -like '*Start-ShareSurferOperatorAssistant*') 'README should include the guided operator assistant command.'
             Assert-True ($readmeText -like '*Start-ShareSurferStartup*') 'README should include the guided startup command.'
             Assert-True ($readmeText -like '*Start-ShareSurfer.ps1*') 'README should include the release-root startup launcher.'
-            Assert-True ($readmeText -like '*ShareSurfer Start Menu*') 'README should explain that the release-root launcher opens the ShareSurfer Start Menu.'
-            Assert-True ($readmeText -like '*intensive share-permission diagnostics before the scan*' -and $readmeText -like '*run prompt defaults to No*') 'README should explain the diagnostic startup review and run handoff.'
-            Assert-True ($readmeText -like '*offers to build missing*ownership-enrichment.csv*' -or $readmeText -like '*missing*ownership-enrichment.csv*can launch the CSV ownership import picker*') 'README should explain startup ownership enrichment setup.'
-            Assert-True ($readmeText -like '*post-scan*owner-mapping-draft.csv*') 'README should explain startup owner mapping draft setup.'
+            Assert-True ($readmeText -like '*one goal-based home screen*' -and $readmeText -like '*Start a first scan (recommended)*') 'README should explain the goal-based home and recommended first-scan entry point.'
+            Assert-True ($readmeText -like '*folders only*compact ACL output*identity enrichment*permission diagnostics enabled*ownership inputs deferred*') 'README should explain the recommended first-scan defaults.'
+            Assert-True ($readmeText -like '*Run now*' -and $readmeText -like '*Save plan and return home*' -and $readmeText -like '*Show technical command*') 'README should explain the plain-language final review actions.'
+            Assert-True ($readmeText -like '*recommended first-scan preset does not require ownership files*' -and $readmeText -like '*Add ownership or HR data*') 'README should explain that ownership enrichment is optional for a first scan.'
+            Assert-True ($readmeText -like '*validated first scan*owner-mapping-draft.csv*') 'README should explain optional owner mapping draft creation after validation.'
             Assert-True ($readmeText -like '*share-permission-diagnostics*share_permission_diagnostics.md*') 'README should point operators to the share-permission diagnostic summary.'
             Assert-True ($readmeText -like '*operator-assistant.plan.json*' -and $readmeText -like '*operator-assistant-rerun.ps1*') 'README should explain operator assistant plan and rerun outputs.'
             Assert-True ($readmeText -like '*Pause Before Owner Signoff*') 'README should include owner signoff stop gates.'
@@ -8801,9 +9278,10 @@ $tests = @(
             Assert-True ($firstRunText -like '*Start-ShareSurferOperatorAssistant*') 'First-run guide should include the guided operator assistant.'
             Assert-True ($firstRunText -like '*Start-ShareSurferStartup*') 'First-run guide should include the guided startup command.'
             Assert-True ($firstRunText -like '*Start-ShareSurfer.ps1*') 'First-run guide should include the release-root startup launcher.'
-            Assert-True ($firstRunText -like '*generated diagnostic/scan/validate/dashboard script*' -and $firstRunText -like '*defaults to*No*') 'First-run guide should explain the diagnostic startup review and run handoff.'
-            Assert-True ($firstRunText -like '*ownership-enrichment.csv*is missing*' -and $firstRunText -like '*multi-CSV ownership import picker*') 'First-run guide should explain startup ownership enrichment setup.'
-            Assert-True ($firstRunText -like '*owner-mapping.csv*is missing*' -and $firstRunText -like '*owner-mapping-draft.csv*') 'First-run guide should explain startup owner mapping draft setup.'
+            Assert-True ($firstRunText -like '*Start a first scan (recommended)*' -and $firstRunText -like '*Continue with recommended settings*') 'First-run guide should explain the recommended goal-based path.'
+            Assert-True ($firstRunText -like '*Run now*' -and $firstRunText -like '*Save plan and return home*' -and $firstRunText -like '*Show technical command*') 'First-run guide should explain the final review actions.'
+            Assert-True ($firstRunText -like '*Ownership enrichment is optional for the first scan*' -and $firstRunText -like '*Add ownership or HR data*') 'First-run guide should defer ownership enrichment from the required first-scan path.'
+            Assert-True ($firstRunText -like '*validated first scan*owner-mapping-draft.csv*' -and $firstRunText -like '*save it as*owner-mapping.csv*') 'First-run guide should explain optional owner mapping draft completion after validation.'
             Assert-True ($firstRunText -like '*share-permission-diagnostics*share_permission_diagnostics.md*') 'First-run guide should point operators to the share-permission diagnostic summary.'
             Assert-True ($firstRunText -like '*operator-assistant.plan.json*' -and $firstRunText -like '*operator-assistant-rerun.ps1*') 'First-run guide should explain operator assistant outputs.'
             Assert-True ($firstRunText -like '*Stop gates are conditions*') 'First-run guide should explain stop gates before the longer walkthrough.'
@@ -8993,8 +9471,18 @@ $tests = @(
     }
 )
 
+$selectedTests = @(if ([string]::IsNullOrWhiteSpace($Name)) {
+    $tests
+}
+else {
+    $tests | Where-Object { [string]$_.Name -like ('*{0}*' -f $Name) }
+})
+if ($selectedTests.Count -eq 0) {
+    throw "No tests matched -Name '$Name'."
+}
+
 $passed = 0
-foreach ($test in $tests) {
+foreach ($test in $selectedTests) {
     try {
         & $test.Body
         $passed++
@@ -9006,4 +9494,4 @@ foreach ($test in $tests) {
     }
 }
 
-Write-Host ("{0}/{1} tests passed" -f $passed, $tests.Count)
+Write-Host ("{0}/{1} tests passed" -f $passed, $selectedTests.Count)

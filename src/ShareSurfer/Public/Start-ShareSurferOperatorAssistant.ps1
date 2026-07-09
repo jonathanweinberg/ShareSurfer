@@ -68,26 +68,77 @@ function Start-ShareSurferOperatorAssistant {
     }
 
     if ($Interactive) {
-        $ReleaseRoot = Read-ShareSurferAssistantText -Prompt 'ShareSurfer release root' -Value $ReleaseRoot
-        $InputRoot = Read-ShareSurferAssistantText -Prompt 'Input folder for optional CSVs and assistant files' -Value $InputRoot
-        if ($TargetPath.Count -eq 0) {
-            $targetAnswer = Read-ShareSurferAssistantText -Prompt 'Share or folder path to scan' -Value ''
-            if (-not [string]::IsNullOrWhiteSpace($targetAnswer)) {
-                $TargetPath = @($targetAnswer)
+        $newCancelledSummary = {
+            [pscustomobject]@{
+                Cancelled = $true
+                PlanPath = $PlanPath
+                ReusableCommandPath = $ReusableCommandPath
+                InputRoot = $InputRoot
+                TargetPath = @($TargetPath)
             }
         }
-        $ObsAttribute = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute
-        $AdLookupMode = Read-ShareSurferAssistantText -Prompt 'AD lookup mode' -Value $AdLookupMode
-        $ManagerIdentityFormat = Read-ShareSurferAssistantText -Prompt 'Manager identity format' -Value $ManagerIdentityFormat
-        $AclExportMode = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
+
+        $releaseRootResult = Read-ShareSurferAssistantText -Prompt 'ShareSurfer release root' -Value $ReleaseRoot -AllowQuit
+        if ($releaseRootResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $ReleaseRoot = [string]$releaseRootResult.Value
+
+        $inputRootResult = Read-ShareSurferAssistantText -Prompt 'Input folder for optional CSVs and assistant files' -Value $InputRoot -AllowQuit
+        if ($inputRootResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $InputRoot = [string]$inputRootResult.Value
+        if ($TargetPath.Count -eq 0) {
+            $targetAnswer = Read-ShareSurferAssistantText -Prompt 'Share or folder path to scan' -Value '' -AllowQuit
+            if ($targetAnswer.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+            if (-not [string]::IsNullOrWhiteSpace([string]$targetAnswer.Value)) {
+                $TargetPath = @([string]$targetAnswer.Value)
+            }
+        }
+
+        $obsResult = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute -AllowQuit
+        if ($obsResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $ObsAttribute = [string]$obsResult.Value
+
+        $adResult = Read-ShareSurferConsoleChoice -Title 'AD lookup mode' -Options @(
+            New-ShareSurferConsoleChoiceOption -Value 'Auto' -Label 'Automatic'
+            New-ShareSurferConsoleChoiceOption -Value 'ActiveDirectory' -Label 'Active Directory module only'
+            New-ShareSurferConsoleChoiceOption -Value 'Ldap' -Label 'Built-in LDAP'
+            New-ShareSurferConsoleChoiceOption -Value 'DirectoryOnly' -Label 'Do not query AD'
+        ) -DefaultValue $AdLookupMode -AllowQuit
+        if ($adResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $AdLookupMode = [string]$adResult.SelectedValue
+
+        $managerResult = Read-ShareSurferConsoleChoice -Title 'Manager identity format' -Options @(
+            New-ShareSurferConsoleChoiceOption -Value 'MailTo'
+            New-ShareSurferConsoleChoiceOption -Value 'Mail'
+            New-ShareSurferConsoleChoiceOption -Value 'UserPrincipalName'
+            New-ShareSurferConsoleChoiceOption -Value 'SamAccountName'
+            New-ShareSurferConsoleChoiceOption -Value 'DistinguishedName'
+        ) -DefaultValue $ManagerIdentityFormat -AllowQuit
+        if ($managerResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $ManagerIdentityFormat = [string]$managerResult.SelectedValue
+
+        $aclResult = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
             New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Compact' -Description 'Recommended for large reviews; suppresses repeated inherited rows in exported ACL evidence.'
             New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'FullEffective' -Description 'Writes every effective ACL row at every path.'
-        )
+        ) -AllowQuit
+        if ($aclResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $AclExportMode = [string]$aclResult.SelectedValue
+
         Write-ShareSurferOptionalInputDiscoverySummary -InputRoot $InputRoot
-        $OwnerMappingPath = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
-        $OwnershipEnrichmentPath = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
-        $DiscountedPrincipalPath = Read-ShareSurferOptionalInputPath -Prompt 'Discounted principals CSV path' -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
-        $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics)
+        $ownerMappingResult = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath -AllowQuit
+        if ($ownerMappingResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $OwnerMappingPath = [string]$ownerMappingResult.Value
+
+        $ownershipEnrichmentResult = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath -AllowQuit
+        if ($ownershipEnrichmentResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $OwnershipEnrichmentPath = [string]$ownershipEnrichmentResult.Value
+
+        $discountedResult = Read-ShareSurferOptionalInputPath -Prompt 'Discounted principals CSV path' -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath -AllowQuit
+        if ($discountedResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $DiscountedPrincipalPath = [string]$discountedResult.Value
+
+        $diagnosticsResult = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics) -AllowQuit
+        if ($diagnosticsResult.Action -in @('Back', 'Cancel')) { return (& $newCancelledSummary) }
+        $IncludeSharePermissionDiagnostics = [bool]$diagnosticsResult.Value
     }
     elseif (-not $DisableOptionalInputDiscovery) {
         $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
@@ -241,6 +292,7 @@ function Start-ShareSurferOperatorAssistant {
     $writtenReusableCommandPath = Write-ShareSurferReusableCommandFile -Path $ReusableCommandPath -CommandText ([string]$commands.Script) -NoCreateMissingFolders:$NoCreateMissingFolders
 
     [pscustomobject]@{
+        Cancelled = $false
         PlanPath = $PlanPath
         ReusableCommandPath = $writtenReusableCommandPath
         ReleaseRoot = $ReleaseRoot
@@ -279,11 +331,14 @@ function Read-ShareSurferAssistantText {
 
         [string] $Value = '',
 
-        [switch] $AllowBlank
+        [switch] $AllowBlank,
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit
     )
 
-    $result = Read-ShareSurferConsoleText -Prompt $Prompt -Default $Value
-    [string]$result.Value
+    Read-ShareSurferConsoleText -Prompt $Prompt -Default $Value -AllowBack:$AllowBack -AllowQuit:$AllowQuit
 }
 
 function Get-ShareSurferOptionalInputExpectedPath {
@@ -344,7 +399,11 @@ function Read-ShareSurferOptionalInputPath {
 
         [string] $FileName = '',
 
-        [string] $Value = ''
+        [string] $Value = '',
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit
     )
 
     $expectedPath = Get-ShareSurferOptionalInputExpectedPath -InputRoot $InputRoot -FileName $FileName
@@ -366,12 +425,20 @@ function Read-ShareSurferOptionalInputPath {
         $promptText = '{0} (path not found; Enter keeps, type SKIP to ignore)' -f $Prompt
     }
 
-    $answer = Read-ShareSurferAssistantText -Prompt $promptText -Value $defaultValue -AllowBlank
-    if ($answer -match '^(?i:skip)$') {
-        return ''
+    $answer = Read-ShareSurferAssistantText -Prompt $promptText -Value $defaultValue -AllowBlank -AllowBack:$AllowBack -AllowQuit:$AllowQuit
+    if ($answer.Action -in @('Back', 'Cancel')) {
+        return $answer
     }
 
-    $answer
+    $value = [string]$answer.Value
+    if ($value -match '^(?i:skip)$') {
+        $value = ''
+    }
+
+    [pscustomobject]@{
+        Action = 'Accept'
+        Value = $value
+    }
 }
 
 function Get-ShareSurferOptionalInputStatus {
