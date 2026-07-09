@@ -77,10 +77,46 @@ Assert-True (-not [bool]$consoleSmoke.RawKeys) 'Forced plain mode should not req
 $menuSmoke = & $module {
     Get-ShareSurferMenuEntries -InputRoot 'C:\ShareSurfer-0.1.0-pre.example\inputs' -ExportPath 'C:\ShareSurfer-0.1.0-pre.example\exports\startup-scan' -ObsAttribute 'info' -AdLookupMode DirectoryOnly -ManagerIdentityFormat Mail -ConsoleMode Plain
 }
-$scanMenuEntry = @($menuSmoke | Where-Object { $_.Key -eq 'scan' })[0]
-Assert-True ([string]$scanMenuEntry.CommandPreview -like '*-ObsAttribute ''info''*') 'Windows PowerShell 5.1 menu preview should preserve the OBS attribute.'
-Assert-True ([string]$scanMenuEntry.CommandPreview -like '*-AdLookupMode ''DirectoryOnly''*') 'Windows PowerShell 5.1 menu preview should preserve AD lookup mode.'
-Assert-True ([string]$scanMenuEntry.CommandPreview -like '*-ManagerIdentityFormat ''Mail''*') 'Windows PowerShell 5.1 menu preview should preserve manager format.'
+$firstScanMenuEntries = @($menuSmoke | Where-Object { $_.Key -eq 'first_scan' })
+Assert-True (@($menuSmoke).Count -eq 6) 'Windows PowerShell 5.1 goal-based home should expose six operator choices.'
+Assert-True ($firstScanMenuEntries.Count -eq 1) 'Windows PowerShell 5.1 goal-based home should expose exactly one first-scan goal.'
+$firstScanMenuEntry = $firstScanMenuEntries[0]
+Assert-True ([bool]$firstScanMenuEntry.Available) 'Windows PowerShell 5.1 goal-based home should keep the recommended first scan available.'
+
+$technicalCommandSmoke = & $module {
+    $state = [pscustomobject]@{
+        EnvironmentMode = 'Permissive'
+        ReleaseRoot = 'C:\ShareSurfer-0.1.0-pre.example'
+        InputRoot = 'C:\ShareSurfer-0.1.0-pre.example\inputs'
+        ExportPath = 'C:\ShareSurfer-0.1.0-pre.example\exports\startup-scan'
+        StandaloneDashboardPath = 'C:\ShareSurfer-0.1.0-pre.example\exports\startup-scan\standalone-dashboard'
+        TargetPath = @('\\files01\Finance')
+        ObsAttribute = 'info'
+        AdLookupMode = 'DirectoryOnly'
+        ManagerIdentityFormat = 'Mail'
+        AclExportMode = 'Compact'
+        ConsoleMode = 'Plain'
+        SaveConfigPath = 'C:\ShareSurfer-0.1.0-pre.example\inputs\sharesurfer-startup.config.json'
+        OwnerMappingPath = ''
+        OwnershipEnrichmentPath = ''
+        OwnershipContextPath = ''
+        OwnershipRelationshipPath = ''
+        OwnershipImportManifestPath = ''
+        DiscountedPrincipalPath = ''
+        HandoffPath = ''
+        IncludeFiles = $false
+        IncludeSharePermissionDiagnostics = $true
+        SkipIdentityEnrichment = $false
+        SkipUnblock = $false
+        DeferOwnershipInputs = $true
+        OwnershipSetupSummary = $null
+    }
+    Get-ShareSurferFirstScanCommandPreview -State $state
+}
+Assert-True ([string]$technicalCommandSmoke -like '*-ObsAttribute ''info''*') 'Windows PowerShell 5.1 technical preview should preserve the OBS attribute.'
+Assert-True ([string]$technicalCommandSmoke -like '*-AdLookupMode ''DirectoryOnly''*') 'Windows PowerShell 5.1 technical preview should preserve AD lookup mode.'
+Assert-True ([string]$technicalCommandSmoke -like '*-ManagerIdentityFormat ''Mail''*') 'Windows PowerShell 5.1 technical preview should preserve manager format.'
+Assert-True ([string]$technicalCommandSmoke -like '*-DisableOptionalInputDiscovery*') 'Windows PowerShell 5.1 technical preview should preserve deferred optional-input behavior.'
 
 $inventory = [pscustomobject]@{
     Shares = @(

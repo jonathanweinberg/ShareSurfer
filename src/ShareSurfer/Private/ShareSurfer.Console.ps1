@@ -7,7 +7,7 @@
 # Controls contract: prompts only advertise the actions enabled by that caller.
 #
 # Cancellation contract: prompts and wizards return results whose Action is
-# 'Cancelled'; they never throw. Flow entry points decide what cancel means.
+# 'Cancel'; they never throw. Flow entry points decide what cancel means.
 
 function Get-ShareSurferConsoleControlsLine {
     param(
@@ -155,7 +155,11 @@ function New-ShareSurferConsoleChoiceOption {
 
         [string] $Label = '',
 
-        [string] $Description = ''
+        [string] $Description = '',
+
+        [bool] $Enabled = $true,
+
+        [string] $UnavailableReason = ''
     )
 
     if ([string]::IsNullOrWhiteSpace($Label)) {
@@ -166,7 +170,55 @@ function New-ShareSurferConsoleChoiceOption {
         Value = $Value
         Label = $Label
         Description = $Description
+        Enabled = [bool]$Enabled
+        UnavailableReason = $UnavailableReason
     }
+}
+
+function Test-ShareSurferConsoleChoiceOptionEnabled {
+    param($Option)
+
+    if ($null -eq $Option) {
+        return $false
+    }
+    if ($null -eq $Option.PSObject.Properties['Enabled']) {
+        return $true
+    }
+
+    [bool]$Option.Enabled
+}
+
+function Get-ShareSurferConsoleEnabledChoiceIndex {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]] $Options,
+
+        [int] $StartIndex = 0,
+
+        [int] $Direction = 1,
+
+        [switch] $IncludeStart
+    )
+
+    $optionCount = @($Options).Count
+    if ($optionCount -eq 0) {
+        return -1
+    }
+
+    $step = if ($Direction -lt 0) { -1 } else { 1 }
+    $index = [Math]::Max(0, [Math]::Min($StartIndex, $optionCount - 1))
+    if (-not $IncludeStart) {
+        $index = ($index + $step + $optionCount) % $optionCount
+    }
+
+    for ($attempt = 0; $attempt -lt $optionCount; $attempt++) {
+        if (Test-ShareSurferConsoleChoiceOptionEnabled -Option @($Options)[$index]) {
+            return $index
+        }
+        $index = ($index + $step + $optionCount) % $optionCount
+    }
+
+    -1
 }
 
 function New-ShareSurferConsoleChoiceState {
@@ -179,16 +231,25 @@ function New-ShareSurferConsoleChoiceState {
 
     $normalizedOptions = @($Options | ForEach-Object {
         if ($null -ne $_.PSObject.Properties['Value']) {
-            $_
+            New-ShareSurferConsoleChoiceOption `
+                -Value ([string]$_.Value) `
+                -Label $(if ($null -eq $_.PSObject.Properties['Label']) { '' } else { [string]$_.Label }) `
+                -Description $(if ($null -eq $_.PSObject.Properties['Description']) { '' } else { [string]$_.Description }) `
+                -Enabled $(if ($null -eq $_.PSObject.Properties['Enabled']) { $true } else { [bool]$_.Enabled }) `
+                -UnavailableReason $(if ($null -eq $_.PSObject.Properties['UnavailableReason']) { '' } else { [string]$_.UnavailableReason })
         }
         else {
             New-ShareSurferConsoleChoiceOption -Value ([string]$_)
         }
     })
-    $selectedIndex = 0
+    $selectedIndex = Get-ShareSurferConsoleEnabledChoiceIndex -Options $normalizedOptions -StartIndex 0 -IncludeStart
+    if ($selectedIndex -lt 0) {
+        $selectedIndex = 0
+    }
     if (-not [string]::IsNullOrWhiteSpace($DefaultValue)) {
         for ($index = 0; $index -lt $normalizedOptions.Count; $index++) {
-            if ([string]$normalizedOptions[$index].Value -eq $DefaultValue -or [string]$normalizedOptions[$index].Label -eq $DefaultValue) {
+            if (([string]$normalizedOptions[$index].Value -eq $DefaultValue -or [string]$normalizedOptions[$index].Label -eq $DefaultValue) -and
+                (Test-ShareSurferConsoleChoiceOptionEnabled -Option $normalizedOptions[$index])) {
                 $selectedIndex = $index
                 break
             }
@@ -246,6 +307,11 @@ function Invoke-ShareSurferConsoleChoiceCommand {
 
     if ([string]::IsNullOrWhiteSpace($text) -or $upper -in @('ENTER', 'SELECT')) {
         $selected = Get-ShareSurferConsoleChoiceSelectedOption -State $State
+        if (-not (Test-ShareSurferConsoleChoiceOptionEnabled -Option $selected)) {
+            $reason = if ($null -ne $selected -and -not [string]::IsNullOrWhiteSpace([string]$selected.UnavailableReason)) { [string]$selected.UnavailableReason } else { 'This choice is not available yet.' }
+            $State.Message = $reason
+            return $State
+        }
         $State.Done = $true
         $State.Action = 'Select'
         if ($null -ne $selected) {
@@ -256,14 +322,20 @@ function Invoke-ShareSurferConsoleChoiceCommand {
 
     if ($upper -in @('UP', 'UPARROW')) {
         if ($optionCount -gt 0) {
-            $State.SelectedIndex = if ([int]$State.SelectedIndex -le 0) { $optionCount - 1 } else { [int]$State.SelectedIndex - 1 }
+            $nextIndex = Get-ShareSurferConsoleEnabledChoiceIndex -Options @($State.Options) -StartIndex ([int]$State.SelectedIndex) -Direction -1
+            if ($nextIndex -ge 0) {
+                $State.SelectedIndex = $nextIndex
+            }
         }
         return $State
     }
 
     if ($upper -in @('DOWN', 'DOWNARROW')) {
         if ($optionCount -gt 0) {
-            $State.SelectedIndex = if ([int]$State.SelectedIndex -ge ($optionCount - 1)) { 0 } else { [int]$State.SelectedIndex + 1 }
+            $nextIndex = Get-ShareSurferConsoleEnabledChoiceIndex -Options @($State.Options) -StartIndex ([int]$State.SelectedIndex) -Direction 1
+            if ($nextIndex -ge 0) {
+                $State.SelectedIndex = $nextIndex
+            }
         }
         return $State
     }
@@ -303,7 +375,7 @@ function Invoke-ShareSurferConsoleChoiceCommand {
 
     if ($upper -in @('Q', 'QUIT', 'ESC', 'ESCAPE') -and $AllowQuit) {
         $State.Done = $true
-        $State.Action = 'Cancelled'
+        $State.Action = 'Cancel'
         return $State
     }
     elseif ($upper -in @('Q', 'QUIT', 'ESC', 'ESCAPE')) {
@@ -316,6 +388,10 @@ function Invoke-ShareSurferConsoleChoiceCommand {
         if ($index -ge 1 -and $index -le $optionCount) {
             $State.SelectedIndex = $index - 1
             $selected = Get-ShareSurferConsoleChoiceSelectedOption -State $State
+            if (-not (Test-ShareSurferConsoleChoiceOptionEnabled -Option $selected)) {
+                $State.Message = if (-not [string]::IsNullOrWhiteSpace([string]$selected.UnavailableReason)) { [string]$selected.UnavailableReason } else { 'This choice is not available yet.' }
+                return $State
+            }
             $State.Done = $true
             $State.Action = 'Select'
             $State.SelectedValue = [string]$selected.Value
@@ -330,7 +406,8 @@ function Invoke-ShareSurferConsoleChoiceCommand {
         $booleanValue = if ($upper -in @('Y', 'YES')) { 'Yes' } else { 'No' }
         for ($index = 0; $index -lt $optionCount; $index++) {
             $option = @($State.Options)[$index]
-            if ([string]$option.Value -eq $booleanValue -or [string]$option.Label -eq $booleanValue) {
+            if (([string]$option.Value -eq $booleanValue -or [string]$option.Label -eq $booleanValue) -and
+                (Test-ShareSurferConsoleChoiceOptionEnabled -Option $option)) {
                 $State.SelectedIndex = $index
                 $State.Done = $true
                 $State.Action = 'Select'
@@ -389,6 +466,52 @@ function ConvertFrom-ShareSurferConsoleKeyInfo {
     ''
 }
 
+function ConvertTo-ShareSurferConsoleWrappedLines {
+    param(
+        [string] $Text = '',
+
+        [int] $Width = 120,
+
+        [string] $FirstPrefix = '',
+
+        [string] $ContinuationPrefix = ''
+    )
+
+    $effectiveWidth = [Math]::Max(40, $Width)
+    $result = New-Object System.Collections.Generic.List[string]
+    $paragraphs = @(([string]$Text) -split "`r?`n")
+    if ($paragraphs.Count -eq 0) {
+        $paragraphs = @('')
+    }
+
+    foreach ($paragraph in $paragraphs) {
+        if ([string]::IsNullOrWhiteSpace($paragraph)) {
+            $result.Add($FirstPrefix.TrimEnd())
+            continue
+        }
+
+        $current = $FirstPrefix
+        $prefix = $FirstPrefix
+        foreach ($word in @($paragraph -split '\s+')) {
+            if ([string]::IsNullOrWhiteSpace($word)) {
+                continue
+            }
+            $separator = if ([string]::IsNullOrWhiteSpace($current.Substring([Math]::Min($prefix.Length, $current.Length)))) { '' } else { ' ' }
+            if (($current.Length + $separator.Length + $word.Length) -gt $effectiveWidth -and $current.Length -gt $prefix.Length) {
+                $result.Add($current.TrimEnd())
+                $prefix = $ContinuationPrefix
+                $current = $prefix + $word
+            }
+            else {
+                $current = $current + $separator + $word
+            }
+        }
+        $result.Add($current.TrimEnd())
+    }
+
+    @($result.ToArray())
+}
+
 function Get-ShareSurferConsoleChoiceScreen {
     param(
         [Parameter(Mandatory = $true)]
@@ -407,26 +530,41 @@ function Get-ShareSurferConsoleChoiceScreen {
 
         [switch] $AllowCustom,
 
-        [switch] $UseArrowKeys
+        [switch] $UseArrowKeys,
+
+        [int] $Width = 120
     )
 
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add('')
     $lines.Add($Title)
     if (-not [string]::IsNullOrWhiteSpace($HelpText)) {
-        $lines.Add($HelpText)
+        foreach ($line in @(ConvertTo-ShareSurferConsoleWrappedLines -Text $HelpText -Width $Width)) {
+            $lines.Add($line)
+        }
     }
     $lines.Add((Get-ShareSurferConsoleControlsLine -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$UseArrowKeys))
     $lines.Add('')
     for ($index = 0; $index -lt @($State.Options).Count; $index++) {
         $option = @($State.Options)[$index]
-        $marker = if ($index -eq [int]$State.SelectedIndex) { '>' } else { ' ' }
+        $enabled = Test-ShareSurferConsoleChoiceOptionEnabled -Option $option
+        $marker = if (-not $enabled) { '-' } elseif ($index -eq [int]$State.SelectedIndex) { '>' } else { ' ' }
         $description = if ([string]::IsNullOrWhiteSpace([string]$option.Description)) { '' } else { ' - {0}' -f [string]$option.Description }
-        $lines.Add((' {0} {1}. {2}{3}' -f $marker, ($index + 1), [string]$option.Label, $description))
+        if (-not $enabled) {
+            $reason = if ([string]::IsNullOrWhiteSpace([string]$option.UnavailableReason)) { 'Not available yet.' } else { [string]$option.UnavailableReason }
+            $description = ' - Not available: {0}' -f $reason
+        }
+        $firstPrefix = ' {0} {1}. ' -f $marker, ($index + 1)
+        $continuationPrefix = ' ' * $firstPrefix.Length
+        foreach ($line in @(ConvertTo-ShareSurferConsoleWrappedLines -Text ('{0}{1}' -f [string]$option.Label, $description) -Width $Width -FirstPrefix $firstPrefix -ContinuationPrefix $continuationPrefix)) {
+            $lines.Add($line)
+        }
     }
     if (-not [string]::IsNullOrWhiteSpace([string]$State.Message)) {
         $lines.Add('')
-        $lines.Add([string]$State.Message)
+        foreach ($line in @(ConvertTo-ShareSurferConsoleWrappedLines -Text ([string]$State.Message) -Width $Width)) {
+            $lines.Add($line)
+        }
     }
 
     @($lines.ToArray())
@@ -452,7 +590,9 @@ function Show-ShareSurferConsoleChoice {
 
         [switch] $UseArrowKeys,
 
-        [switch] $ClearBeforeRender
+        [switch] $ClearBeforeRender,
+
+        [int] $Width = 120
     )
 
     if ($ClearBeforeRender) {
@@ -463,7 +603,7 @@ function Show-ShareSurferConsoleChoice {
         }
     }
 
-    Write-ShareSurferConsoleLines -Lines (Get-ShareSurferConsoleChoiceScreen -State $State -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$UseArrowKeys)
+    Write-ShareSurferConsoleLines -Lines (Get-ShareSurferConsoleChoiceScreen -State $State -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$UseArrowKeys -Width $Width)
 }
 
 function Read-ShareSurferConsoleChoice {
@@ -503,7 +643,7 @@ function Read-ShareSurferConsoleChoice {
     $renderedOnce = $false
     while (-not $state.Done) {
         if ($needsRender) {
-            Show-ShareSurferConsoleChoice -State $state -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$useRawKeys -ClearBeforeRender:([bool]$renderBehavior.ClearBeforeRender -and $renderedOnce)
+            Show-ShareSurferConsoleChoice -State $state -Title $Title -HelpText $HelpText -AllowSkip:$AllowSkip -AllowBack:$AllowBack -AllowQuit:$AllowQuit -AllowCustom:$AllowCustom -UseArrowKeys:$useRawKeys -ClearBeforeRender:([bool]$renderBehavior.ClearBeforeRender -and $renderedOnce) -Width ([int]$Capabilities.WindowWidth)
             $renderedOnce = $true
             $needsRender = $false
         }
@@ -579,9 +719,17 @@ function Invoke-ShareSurferConsoleTextCommand {
     $upper = $text.ToUpperInvariant()
 
     if ([string]::IsNullOrWhiteSpace($text)) {
+        $candidate = [string]$State.Default
+        if ($null -ne $Validate) {
+            $validationMessage = [string](& $Validate $candidate)
+            if (-not [string]::IsNullOrWhiteSpace($validationMessage)) {
+                $State.Message = $validationMessage
+                return $State
+            }
+        }
         $State.Done = $true
         $State.Action = 'Accept'
-        $State.Value = [string]$State.Default
+        $State.Value = $candidate
         return $State
     }
 
@@ -612,10 +760,14 @@ function Invoke-ShareSurferConsoleTextCommand {
         $State.Action = 'Back'
         return $State
     }
+    elseif ($upper -in @('B', 'BACK')) {
+        $State.Message = 'Back is not available on this prompt. Type ? for the available controls.'
+        return $State
+    }
 
     if ($upper -in @('Q', 'QUIT') -and $AllowQuit) {
         $State.Done = $true
-        $State.Action = 'Cancelled'
+        $State.Action = 'Cancel'
         return $State
     }
 
@@ -792,7 +944,7 @@ function Invoke-ShareSurferConsoleMultiSelectCommand {
 
     if ($upper -in @('Q', 'QUIT') -and $AllowQuit) {
         $State.Done = $true
-        $State.Action = 'Cancelled'
+        $State.Action = 'Cancel'
         return $State
     }
 
@@ -886,7 +1038,7 @@ function Read-ShareSurferConsoleMultiSelect {
 # The prompt-choice machine shipped in #364 under *-ShareSurferPromptChoice*
 # names inside Join-ShareSurferOwnershipSources.ps1. These shims keep those
 # names working while callers and tests migrate to the console layer names.
-# Note: Q now reports Action 'Cancelled' (previously 'Quit') per the
+# Note: Q now reports Action 'Cancel' (previously 'Quit') per the
 # cancellation contract in the staged TUI spec.
 
 function New-ShareSurferPromptChoiceOption {

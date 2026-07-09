@@ -151,17 +151,18 @@ if ([string]::IsNullOrWhiteSpace($StandaloneDashboardPath)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath) -and [string]::IsNullOrWhiteSpace($SaveConfigPath) -and -not $StartupOnly) {
-    Invoke-ShareSurferLauncherModuleCommand -Module $shareSurferModule -Name 'Start-ShareSurfer' -Parameters @{
+    $menuParams = @{
         ReleaseRoot = $releaseRoot
         InputRoot = $InputRoot
         ExportPath = $ExportPath
         StandaloneDashboardPath = $StandaloneDashboardPath
-        ObsAttribute = $ObsAttribute
-        AdLookupMode = $AdLookupMode
-        ManagerIdentityFormat = $ManagerIdentityFormat
-        AclExportMode = $AclExportMode
-        ConsoleMode = $ConsoleMode
     }
+    if ($PSBoundParameters.ContainsKey('ObsAttribute')) { $menuParams.ObsAttribute = $ObsAttribute }
+    if ($PSBoundParameters.ContainsKey('AdLookupMode')) { $menuParams.AdLookupMode = $AdLookupMode }
+    if ($PSBoundParameters.ContainsKey('ManagerIdentityFormat')) { $menuParams.ManagerIdentityFormat = $ManagerIdentityFormat }
+    if ($PSBoundParameters.ContainsKey('AclExportMode')) { $menuParams.AclExportMode = $AclExportMode }
+    if ($PSBoundParameters.ContainsKey('ConsoleMode')) { $menuParams.ConsoleMode = $ConsoleMode }
+    Invoke-ShareSurferLauncherModuleCommand -Module $shareSurferModule -Name 'Start-ShareSurfer' -Parameters $menuParams
     return
 }
 

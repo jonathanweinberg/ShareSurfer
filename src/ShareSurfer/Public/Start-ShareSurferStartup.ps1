@@ -44,6 +44,12 @@ function Start-ShareSurferStartup {
 
         [string] $DiscountedPrincipalPath = '',
 
+        [switch] $CreateOwnerMappingDraftAfterScan,
+
+        [string] $OwnerMappingDraftPath = '',
+
+        [string] $OwnerMappingDraftReusableCommandPath = '',
+
         [string] $HandoffPath = '',
 
         [string] $PlanPath = '',
@@ -61,6 +67,8 @@ function Start-ShareSurferStartup {
         [switch] $SkipUnblock,
 
         [switch] $SkipOwnershipSetup,
+
+        [switch] $DisableOptionalInputDiscovery,
 
         [switch] $NoCreateMissingFolders,
 
@@ -94,6 +102,7 @@ function Start-ShareSurferStartup {
         if ($null -ne $definition.PSObject.Properties['includeSharePermissionDiagnostics'] -and -not $boundParameters.ContainsKey('IncludeSharePermissionDiagnostics')) { $IncludeSharePermissionDiagnostics = [bool]$definition.includeSharePermissionDiagnostics }
         if ($null -ne $definition.PSObject.Properties['skipIdentityEnrichment'] -and -not $boundParameters.ContainsKey('SkipIdentityEnrichment')) { $SkipIdentityEnrichment = [bool]$definition.skipIdentityEnrichment }
         if ($null -ne $definition.PSObject.Properties['skipUnblock'] -and -not $boundParameters.ContainsKey('SkipUnblock')) { $SkipUnblock = [bool]$definition.skipUnblock }
+        if ($null -ne $definition.PSObject.Properties['disableOptionalInputDiscovery'] -and -not $boundParameters.ContainsKey('DisableOptionalInputDiscovery')) { $DisableOptionalInputDiscovery = [bool]$definition.disableOptionalInputDiscovery }
         if ($null -ne $definition.PSObject.Properties['optionalInputs']) {
             $configOptionalInputsLoaded = $true
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownerMappingPath'] -and -not $boundParameters.ContainsKey('OwnerMappingPath')) { $OwnerMappingPath = [string]$definition.optionalInputs.ownerMappingPath }
@@ -102,6 +111,11 @@ function Start-ShareSurferStartup {
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipRelationshipPath'] -and -not $boundParameters.ContainsKey('OwnershipRelationshipPath')) { $OwnershipRelationshipPath = [string]$definition.optionalInputs.ownershipRelationshipPath }
             if ($null -ne $definition.optionalInputs.PSObject.Properties['ownershipImportManifestPath'] -and -not $boundParameters.ContainsKey('OwnershipImportManifestPath')) { $OwnershipImportManifestPath = [string]$definition.optionalInputs.ownershipImportManifestPath }
             if ($null -ne $definition.optionalInputs.PSObject.Properties['discountedPrincipalPath'] -and -not $boundParameters.ContainsKey('DiscountedPrincipalPath')) { $DiscountedPrincipalPath = [string]$definition.optionalInputs.discountedPrincipalPath }
+        }
+        if ($null -ne $definition.PSObject.Properties['ownershipSetup']) {
+            if ($null -ne $definition.ownershipSetup.PSObject.Properties['CreateOwnerMappingDraftAfterScan'] -and -not $boundParameters.ContainsKey('CreateOwnerMappingDraftAfterScan')) { $CreateOwnerMappingDraftAfterScan = [bool]$definition.ownershipSetup.CreateOwnerMappingDraftAfterScan }
+            if ($null -ne $definition.ownershipSetup.PSObject.Properties['OwnerMappingDraftPath'] -and -not $boundParameters.ContainsKey('OwnerMappingDraftPath')) { $OwnerMappingDraftPath = [string]$definition.ownershipSetup.OwnerMappingDraftPath }
+            if ($null -ne $definition.ownershipSetup.PSObject.Properties['OwnerMappingDraftReusableCommandPath'] -and -not $boundParameters.ContainsKey('OwnerMappingDraftReusableCommandPath')) { $OwnerMappingDraftReusableCommandPath = [string]$definition.ownershipSetup.OwnerMappingDraftReusableCommandPath }
         }
         if ($null -ne $definition.PSObject.Properties['nonpermissive'] -and $null -ne $definition.nonpermissive.PSObject.Properties['handoffPath'] -and -not $boundParameters.ContainsKey('HandoffPath')) {
             $HandoffPath = [string]$definition.nonpermissive.handoffPath
@@ -151,203 +165,115 @@ function Start-ShareSurferStartup {
         -OwnershipRelationshipPath $OwnershipRelationshipPath `
         -OwnershipImportManifestPath $OwnershipImportManifestPath `
         -Skipped:$SkipOwnershipSetup
+    if ($CreateOwnerMappingDraftAfterScan) {
+        $ownershipSetupSummary.CreateOwnerMappingDraftAfterScan = $true
+        $ownershipSetupSummary.OwnerMappingDraftPath = if (-not [string]::IsNullOrWhiteSpace($OwnerMappingDraftPath)) { $OwnerMappingDraftPath } else { Join-Path $InputRoot 'owner-mapping-draft.csv' }
+        $ownershipSetupSummary.OwnerMappingDraftReusableCommandPath = if (-not [string]::IsNullOrWhiteSpace($OwnerMappingDraftReusableCommandPath)) { $OwnerMappingDraftReusableCommandPath } else { Join-Path $InputRoot 'owner-mapping-draft-rerun.ps1' }
+    }
+
+    $interactiveRunNow = $false
+    $interactiveReviewShown = $false
+    $deferOwnershipInputs = $false
 
     if ($Interactive) {
-        $buildOwnershipEnrichmentNow = $false
-        $skipOwnershipEnrichmentOffer = $false
-
-        $readOptionalInputDiscovery = {
-            Write-ShareSurferStartupStepHeader -Step 2 -Total 4 -Title 'Optional ownership inputs'
-            Write-ShareSurferOptionalInputDiscoverySummary -InputRoot $InputRoot
-            $ownershipInputMode = Read-ShareSurferStartupChoice `
-                -Prompt 'Optional ownership input mode' `
-                -Value 'UseDiscovered' `
-                -Options @(
-                    New-ShareSurferConsoleChoiceOption -Value 'UseDiscovered' -Label 'Use discovered files and skip missing files' -Description 'Best first run choice; ShareSurfer uses files found under inputs and leaves missing inputs blank.'
-                    New-ShareSurferConsoleChoiceOption -Value 'BuildOwnership' -Label 'Build ownership enrichment now' -Description 'Launches the guided CSV ownership import before startup continues.'
-                    New-ShareSurferConsoleChoiceOption -Value 'AdvancedCustomPaths' -Label 'Enter advanced custom paths' -Description 'Manually type paths when files live outside the inputs folder.'
-                ) `
-                -ConsoleMode $ConsoleMode
-
-            $buildOwnershipEnrichmentNow = $false
-            $skipOwnershipEnrichmentOffer = $false
-            switch ($ownershipInputMode) {
-                'BuildOwnership' {
-                    $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
-                    $OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
-                    $OwnershipContextPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_context.csv' -Value $OwnershipContextPath
-                    $OwnershipRelationshipPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_relationships.csv' -Value $OwnershipRelationshipPath
-                    $OwnershipImportManifestPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_import_manifest.csv' -Value $OwnershipImportManifestPath
-                    $DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
-                    $buildOwnershipEnrichmentNow = $true
-                    break
-                }
-                'AdvancedCustomPaths' {
-                    $OwnerMappingPath = Read-ShareSurferOptionalInputPath -Prompt 'Owner mapping CSV path' -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
-                    $OwnershipEnrichmentPath = Read-ShareSurferOptionalInputPath -Prompt 'Ownership enrichment CSV path' -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
-                    $DiscountedPrincipalPath = Read-ShareSurferOptionalInputPath -Prompt 'Discounted principals CSV path' -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
-                    break
-                }
-                default {
-                    $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
-                    $OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership-enrichment.csv' -Value $OwnershipEnrichmentPath
-                    $OwnershipContextPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_context.csv' -Value $OwnershipContextPath
-                    $OwnershipRelationshipPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_relationships.csv' -Value $OwnershipRelationshipPath
-                    $OwnershipImportManifestPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'ownership_import_manifest.csv' -Value $OwnershipImportManifestPath
-                    $DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'discounted-principals.csv' -Value $DiscountedPrincipalPath
-                    $skipOwnershipEnrichmentOffer = $true
-                    break
-                }
+        $interactiveState = [pscustomobject]@{
+            EnvironmentMode = $EnvironmentMode
+            ReleaseRoot = $ReleaseRoot
+            InputRoot = $InputRoot
+            ExportPath = $ExportPath
+            StandaloneDashboardPath = $StandaloneDashboardPath
+            TargetPath = @($TargetPath)
+            ObsAttribute = $ObsAttribute
+            AdLookupMode = $AdLookupMode
+            ManagerIdentityFormat = $ManagerIdentityFormat
+            AclExportMode = $AclExportMode
+            ConsoleMode = $ConsoleMode
+            IncludeFiles = [bool]$IncludeFiles
+            IncludeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
+            SkipIdentityEnrichment = [bool]$SkipIdentityEnrichment
+            SkipUnblock = [bool]$SkipUnblock
+            SaveConfigPath = $SaveConfigPath
+            HandoffPath = $HandoffPath
+            OwnerMappingPath = $OwnerMappingPath
+            OwnershipEnrichmentPath = $OwnershipEnrichmentPath
+            OwnershipContextPath = $OwnershipContextPath
+            OwnershipRelationshipPath = $OwnershipRelationshipPath
+            OwnershipImportManifestPath = $OwnershipImportManifestPath
+            DiscountedPrincipalPath = $DiscountedPrincipalPath
+            OwnershipSetupSummary = $ownershipSetupSummary
+            DeferOwnershipInputs = $true
+            RunNow = $false
+        }
+        $newCancelledStartupSummary = {
+            [pscustomobject]@{
+                Cancelled = $true
+                StartupConfigPath = [string]$interactiveState.SaveConfigPath
+                EnvironmentMode = [string]$interactiveState.EnvironmentMode
+                ReleaseRoot = [string]$interactiveState.ReleaseRoot
+                InputRoot = [string]$interactiveState.InputRoot
+                ExportPath = [string]$interactiveState.ExportPath
+                StandaloneDashboardPath = [string]$interactiveState.StandaloneDashboardPath
+                TargetPath = @($interactiveState.TargetPath)
+                ObsAttribute = [string]$interactiveState.ObsAttribute
+                AdLookupMode = [string]$interactiveState.AdLookupMode
+                ManagerIdentityFormat = [string]$interactiveState.ManagerIdentityFormat
+                AclExportMode = [string]$interactiveState.AclExportMode
             }
         }
 
-        $runOwnershipSetup = {
-            Write-ShareSurferStartupStepHeader -Step 3 -Total 4 -Title 'Guided ownership setup'
-            $ownershipSetupSummary = Invoke-ShareSurferStartupOwnershipSetup `
-                -InputRoot $InputRoot `
-                -OwnerMappingPath $OwnerMappingPath `
-                -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
-                -OwnershipContextPath $OwnershipContextPath `
-                -OwnershipRelationshipPath $OwnershipRelationshipPath `
-                -OwnershipImportManifestPath $OwnershipImportManifestPath `
-                -ObsAttribute $ObsAttribute `
-                -AdLookupMode $AdLookupMode `
-                -BuildOwnershipEnrichmentNow:$buildOwnershipEnrichmentNow `
-                -SkipOwnershipEnrichmentOffer:$skipOwnershipEnrichmentOffer `
-                -SkipOwnershipSetup:$SkipOwnershipSetup `
-                -NoCreateMissingFolders:$NoCreateMissingFolders `
-                -Force:$Force `
-                -ConsoleMode $ConsoleMode
-            $OwnerMappingPath = [string]$ownershipSetupSummary.OwnerMappingPath
-            $OwnershipEnrichmentPath = [string]$ownershipSetupSummary.OwnershipEnrichmentPath
-            $OwnershipContextPath = [string]$ownershipSetupSummary.OwnershipContextPath
-            $OwnershipRelationshipPath = [string]$ownershipSetupSummary.OwnershipRelationshipPath
-            $OwnershipImportManifestPath = [string]$ownershipSetupSummary.OwnershipImportManifestPath
+        $interactiveResult = Read-ShareSurferFirstScanConfiguration `
+            -State $interactiveState `
+            -ConsoleMode $ConsoleMode `
+            -NoCreateMissingFolders:$NoCreateMissingFolders `
+            -Force:$Force
+        if ($interactiveResult.Action -eq 'Cancel') {
+            Write-ShareSurferConsoleLines -Lines @('First-scan setup cancelled before writing config, plan, or rerun files.')
+            return (& $newCancelledStartupSummary)
         }
 
-        Write-ShareSurferStartupStepHeader -Step 1 -Total 4 -Title 'Core scan settings'
-        $EnvironmentMode = Read-ShareSurferStartupChoice -Prompt 'Startup path' -Value $EnvironmentMode -Options @(
-            New-ShareSurferConsoleChoiceOption -Value 'Permissive' -Label 'Permissive' -Description 'Collector host can scan and package dashboard output directly.'
-            New-ShareSurferConsoleChoiceOption -Value 'Nonpermissive' -Label 'Nonpermissive' -Description 'Collector host prepares validated handoff evidence for a separate review host.'
-        ) -ConsoleMode $ConsoleMode
-        $ReleaseRoot = Read-ShareSurferAssistantText -Prompt 'ShareSurfer release root' -Value $ReleaseRoot
-        $InputRoot = Read-ShareSurferAssistantText -Prompt 'Input folder for optional CSVs and startup files' -Value $InputRoot
-        $ExportPath = Read-ShareSurferAssistantText -Prompt 'Export folder for this scan' -Value $ExportPath
-        $StandaloneDashboardPath = Read-ShareSurferAssistantText -Prompt 'Standalone dashboard output folder' -Value $StandaloneDashboardPath
-        if ($TargetPath.Count -eq 0) {
-            $targetAnswer = Read-ShareSurferAssistantText -Prompt 'Share or folder path to scan' -Value ''
-            if (-not [string]::IsNullOrWhiteSpace($targetAnswer)) {
-                $TargetPath = @($targetAnswer)
-            }
-        }
-        $ObsAttribute = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute
-        $AdLookupMode = Read-ShareSurferStartupChoice -Prompt 'AD lookup mode' -Value $AdLookupMode -Options @(
-            New-ShareSurferConsoleChoiceOption -Value 'Auto' -Label 'Auto' -Description 'Try the AD module first, then supported fallback lookup paths.'
-            New-ShareSurferConsoleChoiceOption -Value 'ActiveDirectory' -Label 'ActiveDirectory' -Description 'Use the Microsoft ActiveDirectory module only.'
-            New-ShareSurferConsoleChoiceOption -Value 'Ldap' -Label 'Ldap' -Description 'Use built-in LDAP lookup without requiring the AD PowerShell module.'
-            New-ShareSurferConsoleChoiceOption -Value 'DirectoryOnly' -Label 'DirectoryOnly' -Description 'Use local/exported evidence only; do not query AD.'
-        ) -ConsoleMode $ConsoleMode
-        $ManagerIdentityFormat = Read-ShareSurferStartupChoice -Prompt 'Manager identity format' -Value $ManagerIdentityFormat -Options @(
-            New-ShareSurferConsoleChoiceOption -Value 'MailTo' -Label 'MailTo' -Description 'Preferred default: clickable mailto-style manager values when mail exists.'
-            New-ShareSurferConsoleChoiceOption -Value 'Mail' -Label 'Mail' -Description 'Manager email address only.'
-            New-ShareSurferConsoleChoiceOption -Value 'UserPrincipalName' -Label 'UserPrincipalName' -Description 'Manager UPN when available.'
-            New-ShareSurferConsoleChoiceOption -Value 'SamAccountName' -Label 'SamAccountName' -Description 'Manager account name.'
-            New-ShareSurferConsoleChoiceOption -Value 'DistinguishedName' -Label 'DistinguishedName' -Description 'Raw directory DN, useful for diagnostics.'
-        ) -ConsoleMode $ConsoleMode
-        . $readOptionalInputDiscovery
-        . $runOwnershipSetup
-        if ($EnvironmentMode -eq 'Nonpermissive') {
-            if ([string]::IsNullOrWhiteSpace($HandoffPath)) {
-                $HandoffPath = Join-Path (Join-Path (Split-Path -Parent $InputRoot) 'handoff') 'scan-001.zip'
-            }
-            $HandoffPath = Read-ShareSurferAssistantText -Prompt 'Validated export handoff ZIP path' -Value $HandoffPath
-        }
-        Write-ShareSurferStartupStepHeader -Step 4 -Total 4 -Title 'Scan options and config save'
-        $AclExportMode = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
-            New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Compact' -Description 'Recommended for large reviews; keeps explicit and boundary ACEs while suppressing repeated inherited export rows.'
-            New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'FullEffective' -Description 'Writes every effective ACL row at every path for deep forensic review.'
-        ) -ConsoleMode $ConsoleMode
-        $IncludeFiles = Read-ShareSurferStartupBoolean -Prompt 'Include file rows as well as folders?' -Value ([bool]$IncludeFiles) -ConsoleMode $ConsoleMode
-        $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics) -ConsoleMode $ConsoleMode
-        $SkipIdentityEnrichment = Read-ShareSurferStartupBoolean -Prompt 'Skip identity enrichment?' -Value ([bool]$SkipIdentityEnrichment) -ConsoleMode $ConsoleMode
-        $SkipUnblock = Read-ShareSurferStartupBoolean -Prompt 'Skip recursive PowerShell file unblock?' -Value ([bool]$SkipUnblock) -ConsoleMode $ConsoleMode
-        $SaveConfigPath = Read-ShareSurferAssistantText -Prompt 'Save startup JSON config path' -Value $SaveConfigPath
-        while ($true) {
-            Write-ShareSurferConsoleLines -Lines (Get-ShareSurferStartupSelectionsScreen `
-                -EnvironmentMode $EnvironmentMode `
-                -TargetPath @($TargetPath) `
-                -ExportPath $ExportPath `
-                -StandaloneDashboardPath $StandaloneDashboardPath `
-                -ObsAttribute $ObsAttribute `
-                -AdLookupMode $AdLookupMode `
-                -ManagerIdentityFormat $ManagerIdentityFormat `
-                -AclExportMode $AclExportMode `
-                -OwnerMappingPath $OwnerMappingPath `
-                -OwnershipEnrichmentPath $OwnershipEnrichmentPath `
-                -DiscountedPrincipalPath $DiscountedPrincipalPath `
-                -HandoffPath $HandoffPath `
-                -SaveConfigPath $SaveConfigPath)
-            $reviewAction = Read-ShareSurferStartupChoice -Prompt 'Review startup selections' -Value 'Continue' -Options @(
-                New-ShareSurferConsoleChoiceOption -Value 'Continue' -Label 'Continue' -Description 'Write the startup JSON and operator rerun script.'
-                New-ShareSurferConsoleChoiceOption -Value 'EditCore' -Label 'Edit core settings' -Description 'Change paths, target, OBS attribute, AD mode, or manager format.'
-                New-ShareSurferConsoleChoiceOption -Value 'EditOwnership' -Label 'Edit ownership inputs' -Description 'Revisit discovered files, ownership import, or custom optional paths.'
-                New-ShareSurferConsoleChoiceOption -Value 'EditScanOptions' -Label 'Edit scan options' -Description 'Change file rows, diagnostics, identity enrichment, unblock, or save path.'
-                New-ShareSurferConsoleChoiceOption -Value 'Cancel' -Label 'Cancel' -Description 'Exit before writing startup files.'
-            ) -ConsoleMode $ConsoleMode
+        $EnvironmentMode = [string]$interactiveState.EnvironmentMode
+        $ReleaseRoot = [string]$interactiveState.ReleaseRoot
+        $InputRoot = [string]$interactiveState.InputRoot
+        $ExportPath = [string]$interactiveState.ExportPath
+        $StandaloneDashboardPath = [string]$interactiveState.StandaloneDashboardPath
+        $TargetPath = @($interactiveState.TargetPath)
+        $ObsAttribute = [string]$interactiveState.ObsAttribute
+        $AdLookupMode = [string]$interactiveState.AdLookupMode
+        $ManagerIdentityFormat = [string]$interactiveState.ManagerIdentityFormat
+        $AclExportMode = [string]$interactiveState.AclExportMode
+        $IncludeFiles = [bool]$interactiveState.IncludeFiles
+        $IncludeSharePermissionDiagnostics = [bool]$interactiveState.IncludeSharePermissionDiagnostics
+        $SkipIdentityEnrichment = [bool]$interactiveState.SkipIdentityEnrichment
+        $SkipUnblock = [bool]$interactiveState.SkipUnblock
+        $SaveConfigPath = [string]$interactiveState.SaveConfigPath
+        $HandoffPath = [string]$interactiveState.HandoffPath
+        $OwnerMappingPath = [string]$interactiveState.OwnerMappingPath
+        $OwnershipEnrichmentPath = [string]$interactiveState.OwnershipEnrichmentPath
+        $OwnershipContextPath = [string]$interactiveState.OwnershipContextPath
+        $OwnershipRelationshipPath = [string]$interactiveState.OwnershipRelationshipPath
+        $OwnershipImportManifestPath = [string]$interactiveState.OwnershipImportManifestPath
+        $DiscountedPrincipalPath = [string]$interactiveState.DiscountedPrincipalPath
+        $ownershipSetupSummary = $interactiveState.OwnershipSetupSummary
+        $deferOwnershipInputs = [bool]$interactiveState.DeferOwnershipInputs
+        $interactiveRunNow = [bool]$interactiveState.RunNow
+        $interactiveReviewShown = $true
 
-            if ($reviewAction -eq 'Continue') {
-                break
+        $existingStartupFiles = @(@($SaveConfigPath, $PlanPath, $ReusableCommandPath) | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) -and (Test-Path -LiteralPath ([string]$_) -PathType Leaf) })
+        if ($existingStartupFiles.Count -gt 0 -and -not $Force) {
+            Write-ShareSurferConsoleLines -Lines @(
+                '',
+                'A saved first-scan setup already exists.',
+                'Replacing it updates the startup config, review plan, and rerun script only after you confirm below.'
+            )
+            $replace = Read-ShareSurferConsoleBoolean -Prompt 'Replace the existing saved first-scan setup?' -Default $false -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($replace.Action -in @('Back', 'Cancel') -or -not [bool]$replace.Value) {
+                Write-ShareSurferConsoleLines -Lines @('Existing startup files were kept. Returning home without writing changes.')
+                return (& $newCancelledStartupSummary)
             }
-            if ($reviewAction -eq 'Cancel') {
-                Write-ShareSurferConsoleLines -Lines @('Startup cancelled before writing config or rerun files.')
-                return [pscustomobject]@{
-                    Cancelled = $true
-                    StartupConfigPath = $SaveConfigPath
-                    EnvironmentMode = $EnvironmentMode
-                    InputRoot = $InputRoot
-                    ExportPath = $ExportPath
-                    TargetPath = @($TargetPath)
-                    ObsAttribute = $ObsAttribute
-                    AdLookupMode = $AdLookupMode
-                    ManagerIdentityFormat = $ManagerIdentityFormat
-                    AclExportMode = $AclExportMode
-                }
-            }
-            if ($reviewAction -eq 'EditCore') {
-                Write-ShareSurferStartupStepHeader -Step 1 -Total 4 -Title 'Edit core scan settings'
-                $ReleaseRoot = Read-ShareSurferAssistantText -Prompt 'ShareSurfer release root' -Value $ReleaseRoot
-                $InputRoot = Read-ShareSurferAssistantText -Prompt 'Input folder for optional CSVs and startup files' -Value $InputRoot
-                $ExportPath = Read-ShareSurferAssistantText -Prompt 'Export folder for this scan' -Value $ExportPath
-                $StandaloneDashboardPath = Read-ShareSurferAssistantText -Prompt 'Standalone dashboard output folder' -Value $StandaloneDashboardPath
-                $targetAnswer = Read-ShareSurferAssistantText -Prompt 'Share or folder path to scan' -Value (@($TargetPath) -join '; ')
-                if (-not [string]::IsNullOrWhiteSpace($targetAnswer)) {
-                    $TargetPath = @($targetAnswer -split ';' | ForEach-Object { ([string]$_).Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-                }
-                $ObsAttribute = Read-ShareSurferAssistantText -Prompt 'OBS attribute' -Value $ObsAttribute
-                $AdLookupMode = Read-ShareSurferStartupChoice -Prompt 'AD lookup mode' -Value $AdLookupMode -Choices @('Auto', 'ActiveDirectory', 'Ldap', 'DirectoryOnly') -ConsoleMode $ConsoleMode
-                $ManagerIdentityFormat = Read-ShareSurferStartupChoice -Prompt 'Manager identity format' -Value $ManagerIdentityFormat -Choices @('MailTo', 'Mail', 'UserPrincipalName', 'SamAccountName', 'DistinguishedName') -ConsoleMode $ConsoleMode
-                continue
-            }
-            if ($reviewAction -eq 'EditOwnership') {
-                . $readOptionalInputDiscovery
-                . $runOwnershipSetup
-                continue
-            }
-            if ($reviewAction -eq 'EditScanOptions') {
-                Write-ShareSurferStartupStepHeader -Step 4 -Total 4 -Title 'Edit scan options and config save'
-                $AclExportMode = Read-ShareSurferStartupChoice -Prompt 'ACL export mode' -Value $AclExportMode -Options @(
-                    New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Compact' -Description 'Recommended for large reviews; keeps explicit and boundary ACEs while suppressing repeated inherited export rows.'
-                    New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'FullEffective' -Description 'Writes every effective ACL row at every path for deep forensic review.'
-                ) -ConsoleMode $ConsoleMode
-                $IncludeFiles = Read-ShareSurferStartupBoolean -Prompt 'Include file rows as well as folders?' -Value ([bool]$IncludeFiles) -ConsoleMode $ConsoleMode
-                $IncludeSharePermissionDiagnostics = Read-ShareSurferStartupBoolean -Prompt 'Run intensive share-permission diagnostics before the scan?' -Value ([bool]$IncludeSharePermissionDiagnostics) -ConsoleMode $ConsoleMode
-                $SkipIdentityEnrichment = Read-ShareSurferStartupBoolean -Prompt 'Skip identity enrichment?' -Value ([bool]$SkipIdentityEnrichment) -ConsoleMode $ConsoleMode
-                $SkipUnblock = Read-ShareSurferStartupBoolean -Prompt 'Skip recursive PowerShell file unblock?' -Value ([bool]$SkipUnblock) -ConsoleMode $ConsoleMode
-                $SaveConfigPath = Read-ShareSurferAssistantText -Prompt 'Save startup JSON config path' -Value $SaveConfigPath
-            }
+            $Force = $true
         }
     }
-    elseif (-not $configOptionalInputsLoaded) {
+    elseif (-not $configOptionalInputsLoaded -and -not $deferOwnershipInputs -and -not $DisableOptionalInputDiscovery) {
         if (-not $boundParameters.ContainsKey('OwnerMappingPath')) {
             $OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot $InputRoot -FileName 'owner-mapping.csv' -Value $OwnerMappingPath
         }
@@ -417,7 +343,7 @@ function Start-ShareSurferStartup {
         -IncludeFiles:$IncludeFiles `
         -IncludeSharePermissionDiagnostics $IncludeSharePermissionDiagnostics `
         -SkipIdentityEnrichment:$SkipIdentityEnrichment `
-        -DisableOptionalInputDiscovery:$configOptionalInputsLoaded `
+        -DisableOptionalInputDiscovery:($configOptionalInputsLoaded -or $deferOwnershipInputs -or $DisableOptionalInputDiscovery) `
         -NoCreateMissingFolders:$NoCreateMissingFolders `
         -Force:$Force
 
@@ -451,6 +377,7 @@ function Start-ShareSurferStartup {
         includeSharePermissionDiagnostics = [bool]$IncludeSharePermissionDiagnostics
         skipIdentityEnrichment = [bool]$SkipIdentityEnrichment
         skipUnblock = [bool]$SkipUnblock
+        disableOptionalInputDiscovery = [bool]($configOptionalInputsLoaded -or $deferOwnershipInputs -or $DisableOptionalInputDiscovery)
         optionalInputs = [ordered]@{
             ownerMappingPath = $OwnerMappingPath
             ownershipEnrichmentPath = $OwnershipEnrichmentPath
@@ -492,18 +419,26 @@ function Start-ShareSurferStartup {
     Set-Content -LiteralPath $SaveConfigPath -Value ($startupConfig | ConvertTo-Json -Depth 8) -Encoding UTF8
 
     $postStartupSummary = [pscustomobject]@{
-        ReviewShown = $false
+        ReviewShown = [bool]$interactiveReviewShown
         RerunLaunched = $false
     }
     if ($Interactive) {
-        $postStartupSummary = Invoke-ShareSurferStartupPostPlanHandoff `
-            -StartupConfigPath $SaveConfigPath `
-            -OperatorPlanPath $assistantSummary.PlanPath `
-            -ReusableCommandPath $assistantSummary.ReusableCommandPath `
-            -ConsoleMode $ConsoleMode
+        Write-ShareSurferConsoleLines -Lines @(
+            '',
+            'First-scan startup files are ready:',
+            ('  Startup config: {0}' -f $SaveConfigPath),
+            ('  Operator plan:  {0}' -f [string]$assistantSummary.PlanPath),
+            ('  Rerun script:   {0}' -f [string]$assistantSummary.ReusableCommandPath)
+        )
+        if ($interactiveRunNow) {
+            Write-ShareSurferConsoleLines -Lines @(('Running the reviewed first-scan workflow: {0}' -f [string]$assistantSummary.ReusableCommandPath))
+            & ([string]$assistantSummary.ReusableCommandPath) | Out-Host
+            $postStartupSummary.RerunLaunched = $true
+        }
     }
 
     [pscustomobject]@{
+        Cancelled = $false
         StartupConfigPath = $SaveConfigPath
         EnvironmentMode = $EnvironmentMode
         ReleaseRoot = $ReleaseRoot
@@ -549,6 +484,339 @@ function Start-ShareSurferStartup {
     }
 }
 
+function Get-ShareSurferFirstScanCommandPreview {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $parts.Add('Start-ShareSurferStartup')
+    $parts.Add(('-EnvironmentMode {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.EnvironmentMode))))
+    $parts.Add(('-ReleaseRoot {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.ReleaseRoot))))
+    $parts.Add(('-InputRoot {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.InputRoot))))
+    $parts.Add(('-ExportPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.ExportPath))))
+    $parts.Add(('-StandaloneDashboardPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.StandaloneDashboardPath))))
+    $parts.Add(('-TargetPath {0}' -f ((@($State.TargetPath) | ForEach-Object { ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$_) }) -join ', ')))
+    $parts.Add(('-ObsAttribute {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.ObsAttribute))))
+    $parts.Add(('-AdLookupMode {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.AdLookupMode))))
+    $parts.Add(('-ManagerIdentityFormat {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.ManagerIdentityFormat))))
+    $parts.Add(('-AclExportMode {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.AclExportMode))))
+    $parts.Add(('-ConsoleMode {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.ConsoleMode))))
+    $parts.Add(('-SaveConfigPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.SaveConfigPath))))
+    foreach ($optionalInput in @(
+        [pscustomobject]@{ Name = 'OwnerMappingPath'; Value = [string]$State.OwnerMappingPath },
+        [pscustomobject]@{ Name = 'OwnershipEnrichmentPath'; Value = [string]$State.OwnershipEnrichmentPath },
+        [pscustomobject]@{ Name = 'OwnershipContextPath'; Value = [string]$State.OwnershipContextPath },
+        [pscustomobject]@{ Name = 'OwnershipRelationshipPath'; Value = [string]$State.OwnershipRelationshipPath },
+        [pscustomobject]@{ Name = 'OwnershipImportManifestPath'; Value = [string]$State.OwnershipImportManifestPath },
+        [pscustomobject]@{ Name = 'DiscountedPrincipalPath'; Value = [string]$State.DiscountedPrincipalPath }
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$optionalInput.Value)) {
+            $parts.Add(('-{0} {1}' -f [string]$optionalInput.Name, (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$optionalInput.Value))))
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace([string]$State.HandoffPath)) {
+        $parts.Add(('-HandoffPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$State.HandoffPath))))
+    }
+    if ([bool]$State.IncludeFiles) { $parts.Add('-IncludeFiles') }
+    if (-not [bool]$State.IncludeSharePermissionDiagnostics) { $parts.Add('-IncludeSharePermissionDiagnostics:$false') }
+    if ([bool]$State.SkipIdentityEnrichment) { $parts.Add('-SkipIdentityEnrichment') }
+    if ([bool]$State.SkipUnblock) { $parts.Add('-SkipUnblock') }
+    if ([bool]$State.DeferOwnershipInputs) { $parts.Add('-SkipOwnershipSetup') }
+    $ownershipSetupSummary = $State.OwnershipSetupSummary
+    if ($null -ne $ownershipSetupSummary -and [bool]$ownershipSetupSummary.CreateOwnerMappingDraftAfterScan) {
+        $parts.Add('-CreateOwnerMappingDraftAfterScan')
+        if (-not [string]::IsNullOrWhiteSpace([string]$ownershipSetupSummary.OwnerMappingDraftPath)) {
+            $parts.Add(('-OwnerMappingDraftPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$ownershipSetupSummary.OwnerMappingDraftPath))))
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$ownershipSetupSummary.OwnerMappingDraftReusableCommandPath)) {
+            $parts.Add(('-OwnerMappingDraftReusableCommandPath {0}' -f (ConvertTo-ShareSurferPowerShellLiteral -Value ([string]$ownershipSetupSummary.OwnerMappingDraftReusableCommandPath))))
+        }
+    }
+    $parts.Add('-DisableOptionalInputDiscovery')
+    $parts.ToArray() -join ' '
+}
+
+function Get-ShareSurferFirstScanReviewScreen {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State
+    )
+
+    $reviewLocation = if ([string]$State.EnvironmentMode -eq 'Nonpermissive') { 'Separate review computer after an approved handoff' } else { 'This computer' }
+    $identityText = if ([bool]$State.SkipIdentityEnrichment) { 'No' } else { 'Yes' }
+    $diagnosticsText = if ([bool]$State.IncludeSharePermissionDiagnostics) { 'Yes' } else { 'No' }
+    $fileText = if ([bool]$State.IncludeFiles) { 'Folders and files' } else { 'Folders only' }
+    $ownershipText = if ([bool]$State.DeferOwnershipInputs) { 'Deferred until the basic scan succeeds' } else { 'Use selected or discovered ownership inputs' }
+
+    @(
+        '',
+        'First-scan review',
+        ('  Target: {0}' -f (@($State.TargetPath) -join '; ')),
+        ('  Review results: {0}' -f $reviewLocation),
+        ('  Collect: {0}' -f $fileText),
+        ('  Permission detail: {0}' -f [string]$State.AclExportMode),
+        ('  Collect identity details: {0}' -f $identityText),
+        ('  Run permission diagnostics: {0}' -f $diagnosticsText),
+        ('  Ownership or HR data: {0}' -f $ownershipText),
+        ('  Export folder: {0}' -f [string]$State.ExportPath),
+        ('  Dashboard folder: {0}' -f [string]$State.StandaloneDashboardPath),
+        '',
+        'Nothing changes share or file permissions. Save plan writes reviewable JSON and a rerun script; Run now writes them and then starts the saved workflow.',
+        $(if ([string]$State.EnvironmentMode -eq 'Nonpermissive') { 'Collection still runs on this computer. After validation, package and transfer the evidence through your approved process.' } else { 'Validation and dashboard review stay on this computer unless you later prepare a handoff.' })
+    )
+}
+
+function Read-ShareSurferFirstScanCustomization {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Plain',
+
+        [switch] $NoCreateMissingFolders,
+
+        [switch] $Force
+    )
+
+    while ($true) {
+        $menu = Read-ShareSurferConsoleChoice -Title 'Customize first-scan settings' -Options @(
+            New-ShareSurferConsoleChoiceOption -Value 'Scan' -Label 'Scan and directory details' -Description 'Permission detail, folders/files, identity lookup, diagnostics, OBS attribute, and AD lookup.'
+            New-ShareSurferConsoleChoiceOption -Value 'Paths' -Label 'Output paths' -Description 'Export and standalone dashboard folders.'
+            New-ShareSurferConsoleChoiceOption -Value 'Ownership' -Label 'Ownership or HR data' -Description 'Defer it, use discovered files, or build enrichment now.'
+            New-ShareSurferConsoleChoiceOption -Value 'Continue' -Label 'Continue to review' -Description 'Keep these custom settings and review the plan.'
+        ) -DefaultValue 'Continue' -HelpText 'Only change settings your environment requires. B returns to the recommended/custom choice.' -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+
+        if ($menu.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+        if ($menu.Action -eq 'Back') { return [pscustomobject]@{ Action = 'Back' } }
+        if ($menu.Action -ne 'Select') { continue }
+        if ([string]$menu.SelectedValue -eq 'Continue') { return [pscustomobject]@{ Action = 'Continue' } }
+
+        if ([string]$menu.SelectedValue -eq 'Scan') {
+            $acl = Read-ShareSurferConsoleChoice -Title 'Permission detail' -Options @(
+                New-ShareSurferConsoleChoiceOption -Value 'Compact' -Label 'Recommended (compact)' -Description 'Keep explicit and boundary permissions while suppressing repeated inherited rows.'
+                New-ShareSurferConsoleChoiceOption -Value 'FullEffective' -Label 'Full effective detail' -Description 'Write every effective permission row at every path; output can be much larger.'
+            ) -DefaultValue ([string]$State.AclExportMode) -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($acl.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($acl.Action -eq 'Back') { continue }
+            $State.AclExportMode = [string]$acl.SelectedValue
+
+            $files = Read-ShareSurferConsoleBoolean -Prompt 'Collect file rows as well as folders?' -Default ([bool]$State.IncludeFiles) -HelpText 'Folder-only collection is the faster recommended first scan.' -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($files.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($files.Action -eq 'Back') { continue }
+            $State.IncludeFiles = [bool]$files.Value
+
+            $identity = Read-ShareSurferConsoleBoolean -Prompt 'Collect identity and manager details?' -Default (-not [bool]$State.SkipIdentityEnrichment) -HelpText 'Recommended when the collector can query directory data.' -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($identity.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($identity.Action -eq 'Back') { continue }
+            $State.SkipIdentityEnrichment = (-not [bool]$identity.Value)
+
+            $diagnostics = Read-ShareSurferConsoleBoolean -Prompt 'Run share-permission diagnostics?' -Default ([bool]$State.IncludeSharePermissionDiagnostics) -HelpText 'Recommended. It adds collection-method evidence and may take longer on remote or restricted shares.' -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($diagnostics.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($diagnostics.Action -eq 'Back') { continue }
+            $State.IncludeSharePermissionDiagnostics = [bool]$diagnostics.Value
+
+            $ad = Read-ShareSurferConsoleChoice -Title 'Directory lookup method' -Options @(
+                New-ShareSurferConsoleChoiceOption -Value 'Auto' -Label 'Automatic (recommended)' -Description 'Try the AD module, then supported fallback lookup methods.'
+                New-ShareSurferConsoleChoiceOption -Value 'ActiveDirectory' -Label 'Active Directory module only'
+                New-ShareSurferConsoleChoiceOption -Value 'Ldap' -Label 'Built-in LDAP lookup'
+                New-ShareSurferConsoleChoiceOption -Value 'DirectoryOnly' -Label 'Do not query AD' -Description 'Use only local or exported evidence.'
+            ) -DefaultValue ([string]$State.AdLookupMode) -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($ad.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($ad.Action -eq 'Back') { continue }
+            $State.AdLookupMode = [string]$ad.SelectedValue
+
+            $obs = Read-ShareSurferConsoleText -Prompt 'Directory attribute used for OBS or org context' -Default ([string]$State.ObsAttribute) -HelpText 'Press Enter to keep the current attribute. Use ? for help, B to return, or Q to cancel.' -AllowBack -AllowQuit
+            if ($obs.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($obs.Action -eq 'Back') { continue }
+            $State.ObsAttribute = [string]$obs.Value
+            continue
+        }
+
+        if ([string]$menu.SelectedValue -eq 'Paths') {
+            $export = Read-ShareSurferConsoleText -Prompt 'Export folder' -Default ([string]$State.ExportPath) -AllowBack -AllowQuit -Validate {
+                param($value)
+                if ([string]::IsNullOrWhiteSpace([string]$value)) { return 'Enter an export folder.' }
+                ''
+            }
+            if ($export.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($export.Action -eq 'Back') { continue }
+            $State.ExportPath = [string]$export.Value
+
+            $dashboard = Read-ShareSurferConsoleText -Prompt 'Standalone dashboard folder' -Default ([string]$State.StandaloneDashboardPath) -AllowBack -AllowQuit -Validate {
+                param($value)
+                if ([string]::IsNullOrWhiteSpace([string]$value)) { return 'Enter a dashboard output folder.' }
+                ''
+            }
+            if ($dashboard.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($dashboard.Action -eq 'Back') { continue }
+            $State.StandaloneDashboardPath = [string]$dashboard.Value
+
+            continue
+        }
+
+        if ([string]$menu.SelectedValue -eq 'Ownership') {
+            $ownership = Read-ShareSurferConsoleChoice -Title 'Ownership or HR data for this first scan' -Options @(
+                New-ShareSurferConsoleChoiceOption -Value 'Defer' -Label 'Defer until after the basic scan (recommended)' -Description 'The scan runs without optional ownership files.'
+                New-ShareSurferConsoleChoiceOption -Value 'Discovered' -Label 'Use files already under the input folder' -Description 'Use recognized ownership files and skip any that are missing.'
+                New-ShareSurferConsoleChoiceOption -Value 'Build' -Label 'Build ownership enrichment now' -Description 'Open the guided CSV ownership-import workflow.'
+            ) -DefaultValue $(if ([bool]$State.DeferOwnershipInputs) { 'Defer' } else { 'Discovered' }) -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($ownership.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel' } }
+            if ($ownership.Action -eq 'Back') { continue }
+
+            if ([string]$ownership.SelectedValue -eq 'Defer') {
+                $State.DeferOwnershipInputs = $true
+                $State.OwnerMappingPath = ''
+                $State.OwnershipEnrichmentPath = ''
+                $State.OwnershipContextPath = ''
+                $State.OwnershipRelationshipPath = ''
+                $State.OwnershipImportManifestPath = ''
+                $State.DiscountedPrincipalPath = ''
+                $State.OwnershipSetupSummary = New-ShareSurferStartupOwnershipSetupSummary -Skipped
+                continue
+            }
+
+            $State.DeferOwnershipInputs = $false
+            $State.OwnerMappingPath = Resolve-ShareSurferOptionalInputPath -InputRoot ([string]$State.InputRoot) -FileName 'owner-mapping.csv' -Value ([string]$State.OwnerMappingPath)
+            $State.OwnershipEnrichmentPath = Resolve-ShareSurferOptionalInputPath -InputRoot ([string]$State.InputRoot) -FileName 'ownership-enrichment.csv' -Value ([string]$State.OwnershipEnrichmentPath)
+            $State.OwnershipContextPath = Resolve-ShareSurferOptionalInputPath -InputRoot ([string]$State.InputRoot) -FileName 'ownership_context.csv' -Value ([string]$State.OwnershipContextPath)
+            $State.OwnershipRelationshipPath = Resolve-ShareSurferOptionalInputPath -InputRoot ([string]$State.InputRoot) -FileName 'ownership_relationships.csv' -Value ([string]$State.OwnershipRelationshipPath)
+            $State.OwnershipImportManifestPath = Resolve-ShareSurferOptionalInputPath -InputRoot ([string]$State.InputRoot) -FileName 'ownership_import_manifest.csv' -Value ([string]$State.OwnershipImportManifestPath)
+            $State.DiscountedPrincipalPath = Resolve-ShareSurferOptionalInputPath -InputRoot ([string]$State.InputRoot) -FileName 'discounted-principals.csv' -Value ([string]$State.DiscountedPrincipalPath)
+            if ([string]$ownership.SelectedValue -eq 'Build') {
+                $summary = Invoke-ShareSurferStartupOwnershipSetup `
+                    -InputRoot ([string]$State.InputRoot) `
+                    -OwnerMappingPath ([string]$State.OwnerMappingPath) `
+                    -OwnershipEnrichmentPath ([string]$State.OwnershipEnrichmentPath) `
+                    -OwnershipContextPath ([string]$State.OwnershipContextPath) `
+                    -OwnershipRelationshipPath ([string]$State.OwnershipRelationshipPath) `
+                    -OwnershipImportManifestPath ([string]$State.OwnershipImportManifestPath) `
+                    -ObsAttribute ([string]$State.ObsAttribute) `
+                    -AdLookupMode ([string]$State.AdLookupMode) `
+                    -BuildOwnershipEnrichmentNow `
+                    -NoCreateMissingFolders:$NoCreateMissingFolders `
+                    -Force:$Force `
+                    -ConsoleMode $ConsoleMode
+                if ($null -ne $summary.PSObject.Properties['Cancelled'] -and [bool]$summary.Cancelled) {
+                    return [pscustomobject]@{ Action = 'Cancel' }
+                }
+                $State.OwnershipSetupSummary = $summary
+                $State.OwnerMappingPath = [string]$summary.OwnerMappingPath
+                $State.OwnershipEnrichmentPath = [string]$summary.OwnershipEnrichmentPath
+                $State.OwnershipContextPath = [string]$summary.OwnershipContextPath
+                $State.OwnershipRelationshipPath = [string]$summary.OwnershipRelationshipPath
+                $State.OwnershipImportManifestPath = [string]$summary.OwnershipImportManifestPath
+            }
+            else {
+                $State.OwnershipSetupSummary = New-ShareSurferStartupOwnershipSetupSummary `
+                    -OwnerMappingPath ([string]$State.OwnerMappingPath) `
+                    -OwnershipEnrichmentPath ([string]$State.OwnershipEnrichmentPath) `
+                    -OwnershipContextPath ([string]$State.OwnershipContextPath) `
+                    -OwnershipRelationshipPath ([string]$State.OwnershipRelationshipPath) `
+                    -OwnershipImportManifestPath ([string]$State.OwnershipImportManifestPath)
+            }
+        }
+    }
+}
+
+function Read-ShareSurferFirstScanConfiguration {
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [ValidateSet('Auto', 'Enhanced', 'Plain')]
+        [string] $ConsoleMode = 'Plain',
+
+        [switch] $NoCreateMissingFolders,
+
+        [switch] $Force
+    )
+
+    $stage = 0
+    $settingsMode = 'Recommended'
+    while ($stage -lt 4) {
+        if ($stage -eq 0) {
+            Write-ShareSurferStartupStepHeader -Step 1 -Total 4 -Title 'What should ShareSurfer scan?'
+            $target = Read-ShareSurferConsoleText -Prompt 'UNC share or folder path' -Default (@($State.TargetPath) -join '; ') -HelpText 'Start with one known small or medium share, such as \\files01\Finance. Enter accepts the current target; B returns home; Q cancels.' -AllowBack -AllowQuit -Validate {
+                param($value)
+                if ([string]::IsNullOrWhiteSpace([string]$value)) { return 'Enter one share or folder path to scan.' }
+                ''
+            }
+            if ($target.Action -in @('Back', 'Cancel')) { return [pscustomobject]@{ Action = 'Cancel'; State = $State } }
+            $State.TargetPath = @(([string]$target.Value) -split ';' | ForEach-Object { ([string]$_).Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+            $stage++
+            continue
+        }
+
+        if ($stage -eq 1) {
+            Write-ShareSurferStartupStepHeader -Step 2 -Total 4 -Title 'Where will results be reviewed?'
+            $location = Read-ShareSurferConsoleChoice -Title 'Review location' -Options @(
+                New-ShareSurferConsoleChoiceOption -Value 'Permissive' -Label 'On this computer (recommended)' -Description 'Collect, validate, and package the dashboard on the collector computer.'
+                New-ShareSurferConsoleChoiceOption -Value 'Nonpermissive' -Label 'On a separate review computer' -Description 'Collection still runs here; after validation, transfer the evidence through your approved process.'
+            ) -DefaultValue ([string]$State.EnvironmentMode) -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($location.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel'; State = $State } }
+            if ($location.Action -eq 'Back') { $stage--; continue }
+            $State.EnvironmentMode = [string]$location.SelectedValue
+            if ([string]$State.EnvironmentMode -eq 'Nonpermissive' -and [string]::IsNullOrWhiteSpace([string]$State.HandoffPath)) {
+                $State.HandoffPath = Join-Path (Join-Path (Split-Path -Parent ([string]$State.InputRoot)) 'handoff') 'scan-001.zip'
+            }
+            $stage++
+            continue
+        }
+
+        if ($stage -eq 2) {
+            Write-ShareSurferStartupStepHeader -Step 3 -Total 4 -Title 'Choose recommended or custom settings'
+            $settings = Read-ShareSurferConsoleChoice -Title 'First-scan settings' -Options @(
+                New-ShareSurferConsoleChoiceOption -Value 'Recommended' -Label 'Continue with recommended settings' -Description 'Folders only, compact permissions, identity details and diagnostics on, ownership data deferred.'
+                New-ShareSurferConsoleChoiceOption -Value 'Customize' -Label 'Customize technical settings' -Description 'Change scan detail, lookup method, output paths, or optional ownership data.'
+            ) -DefaultValue $settingsMode -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($settings.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel'; State = $State } }
+            if ($settings.Action -eq 'Back') { $stage--; continue }
+            $settingsMode = [string]$settings.SelectedValue
+            if ([string]$settings.SelectedValue -eq 'Recommended') {
+                $State.AclExportMode = 'Compact'
+                $State.IncludeFiles = $false
+                $State.SkipIdentityEnrichment = $false
+                $State.IncludeSharePermissionDiagnostics = $true
+                $State.DeferOwnershipInputs = $true
+                $State.OwnerMappingPath = ''
+                $State.OwnershipEnrichmentPath = ''
+                $State.OwnershipContextPath = ''
+                $State.OwnershipRelationshipPath = ''
+                $State.OwnershipImportManifestPath = ''
+                $State.DiscountedPrincipalPath = ''
+                $State.OwnershipSetupSummary = New-ShareSurferStartupOwnershipSetupSummary -Skipped
+                $stage++
+                continue
+            }
+
+            $custom = Read-ShareSurferFirstScanCustomization -State $State -ConsoleMode $ConsoleMode -NoCreateMissingFolders:$NoCreateMissingFolders -Force:$Force
+            if ($custom.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel'; State = $State } }
+            if ($custom.Action -eq 'Back') { continue }
+            $stage++
+            continue
+        }
+
+        Write-ShareSurferStartupStepHeader -Step 4 -Total 4 -Title 'Review and act'
+        Write-ShareSurferConsoleLines -Lines (Get-ShareSurferFirstScanReviewScreen -State $State)
+        $review = Read-ShareSurferConsoleChoice -Title 'What should ShareSurfer do?' -Options @(
+            New-ShareSurferConsoleChoiceOption -Value 'Run' -Label 'Run now' -Description 'Write the saved plan and start its diagnostic, scan, validation, and dashboard workflow.'
+            New-ShareSurferConsoleChoiceOption -Value 'Save' -Label 'Save plan and return home (recommended)' -Description 'Write the config, plan, and rerun script without starting collection.'
+            New-ShareSurferConsoleChoiceOption -Value 'Details' -Label 'Show technical command' -Description 'Display the exact non-interactive startup command for review or copy/paste.'
+        ) -DefaultValue 'Save' -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+        if ($review.Action -eq 'Cancel') { return [pscustomobject]@{ Action = 'Cancel'; State = $State } }
+        if ($review.Action -eq 'Back') { $stage--; continue }
+        if ([string]$review.SelectedValue -eq 'Details') {
+            Write-ShareSurferConsoleLines -Lines @('', 'Technical command', ('  {0}' -f (Get-ShareSurferFirstScanCommandPreview -State $State)))
+            continue
+        }
+        $State.RunNow = ([string]$review.SelectedValue -eq 'Run')
+        return [pscustomobject]@{ Action = 'Continue'; State = $State }
+    }
+}
+
 function New-ShareSurferStartupOwnershipSetupSummary {
     param(
         [string] $OwnerMappingPath = '',
@@ -565,6 +833,7 @@ function New-ShareSurferStartupOwnershipSetupSummary {
     )
 
     [pscustomobject]@{
+        Cancelled = $false
         Skipped = [bool]$Skipped
         OwnershipEnrichmentOffered = $false
         OwnershipEnrichmentBuilt = $false
@@ -646,7 +915,13 @@ function Invoke-ShareSurferStartupOwnershipSetup {
             Write-Host ''
             Write-Host 'Ownership enrichment was not found. This optional setup can combine HR, OBS, project, or ownership CSVs before the scan.'
             Write-Host 'It can also save a reusable ownership import definition so the interview does not have to be repeated next time.'
-            $runOwnershipImport = Read-ShareSurferStartupBoolean -Prompt 'Build ownership enrichment now from CSV files?' -Value $false -ConsoleMode $ConsoleMode
+            $runOwnershipChoice = Read-ShareSurferStartupBoolean -Prompt 'Build ownership enrichment now from CSV files?' -Value $false -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+            if ($runOwnershipChoice.Action -in @('Back', 'Cancel')) {
+                $summary.Cancelled = $true
+                $summary.Message = 'Ownership setup was cancelled; no ownership import was started.'
+                return $summary
+            }
+            $runOwnershipImport = [bool]$runOwnershipChoice.Value
         }
         else {
             Write-Host ''
@@ -696,6 +971,10 @@ function Invoke-ShareSurferStartupOwnershipSetup {
                         $outputProperty.Value = ''
                     }
                 }
+                if ($_.Exception.Message -like '*cancelled by operator*') {
+                    $summary.Cancelled = $true
+                    return $summary
+                }
             }
         }
     }
@@ -706,7 +985,13 @@ function Invoke-ShareSurferStartupOwnershipSetup {
         Write-Host ''
         Write-Host 'Owner mapping was not found. A useful owner-mapping draft usually needs scan output, so ShareSurfer can create it after the scan finishes.'
         Write-Host 'The draft will still need a person to fill Owner and BusinessUnit before it is used for a final owner/business-unit report.'
-        $createDraft = Read-ShareSurferStartupBoolean -Prompt 'Add post-scan owner-mapping draft creation to the generated rerun script?' -Value $true -ConsoleMode $ConsoleMode
+        $createDraftChoice = Read-ShareSurferStartupBoolean -Prompt 'Add post-scan owner-mapping draft creation to the generated rerun script?' -Value $true -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+        if ($createDraftChoice.Action -in @('Back', 'Cancel')) {
+            $summary.Cancelled = $true
+            $summary.Message = 'Ownership setup was cancelled before owner-mapping draft selection.'
+            return $summary
+        }
+        $createDraft = [bool]$createDraftChoice.Value
         if ($createDraft) {
             $summary.CreateOwnerMappingDraftAfterScan = $true
             $summary.OwnerMappingDraftPath = Join-Path $InputRoot 'owner-mapping-draft.csv'
@@ -743,7 +1028,11 @@ function Invoke-ShareSurferStartupPostPlanHandoff {
     Write-Host ('  Rerun script:    {0}' -f $ReusableCommandPath)
 
     $reviewShown = $false
-    $showGeneratedFiles = Read-ShareSurferStartupBoolean -Prompt 'Show generated startup JSON, scan plan, and rerun script now?' -Value $true -ConsoleMode $ConsoleMode
+    $showGeneratedFilesChoice = Read-ShareSurferStartupBoolean -Prompt 'Show generated startup JSON, scan plan, and rerun script now?' -Value $false -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+    if ($showGeneratedFilesChoice.Action -eq 'Cancel') {
+        return [pscustomobject]@{ ReviewShown = $false; RerunLaunched = $false }
+    }
+    $showGeneratedFiles = [bool]$showGeneratedFilesChoice.Value
     if ($showGeneratedFiles) {
         foreach ($reviewFile in @(
             [pscustomobject]@{ Label = 'Startup JSON config'; Path = $StartupConfigPath },
@@ -764,7 +1053,11 @@ function Invoke-ShareSurferStartupPostPlanHandoff {
 
     Write-Host ''
     Write-Host 'The rerun script runs share-permission diagnostics, collection, export validation, and standalone dashboard packaging from the validated export folder.'
-    $runNow = Read-ShareSurferStartupBoolean -Prompt 'Run the generated diagnostic/scan/validate/dashboard script now?' -Value $false -ConsoleMode $ConsoleMode
+    $runNowChoice = Read-ShareSurferStartupBoolean -Prompt 'Run the generated diagnostic/scan/validate/dashboard script now?' -Value $false -AllowBack -AllowQuit -ConsoleMode $ConsoleMode
+    if ($runNowChoice.Action -eq 'Cancel') {
+        return [pscustomobject]@{ ReviewShown = $reviewShown; RerunLaunched = $false }
+    }
+    $runNow = [bool]$runNowChoice.Value
     if ($runNow) {
         Write-Host ('Running generated ShareSurfer script: {0}' -f $ReusableCommandPath)
         & $ReusableCommandPath | Out-Host
@@ -879,7 +1172,11 @@ function Read-ShareSurferStartupChoice {
         [object[]] $Options = @(),
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Plain'
+        [string] $ConsoleMode = 'Plain',
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit
     )
 
     $choiceOptions = @($Options)
@@ -890,14 +1187,7 @@ function Read-ShareSurferStartupChoice {
         throw "No choices were supplied for prompt: $Prompt"
     }
 
-    $result = Read-ShareSurferConsoleChoice -Title $Prompt -Options $choiceOptions -DefaultValue $Value -ConsoleMode $ConsoleMode -AllowQuit
-    if ($result.Action -eq 'Cancelled') {
-        return 'Cancel'
-    }
-    if ($result.Action -eq 'Select') {
-        return [string]$result.SelectedValue
-    }
-    [string]$Value
+    Read-ShareSurferConsoleChoice -Title $Prompt -Options $choiceOptions -DefaultValue $Value -ConsoleMode $ConsoleMode -AllowBack:$AllowBack -AllowQuit:$AllowQuit
 }
 
 function Read-ShareSurferStartupBoolean {
@@ -908,11 +1198,14 @@ function Read-ShareSurferStartupBoolean {
         [bool] $Value = $false,
 
         [ValidateSet('Auto', 'Enhanced', 'Plain')]
-        [string] $ConsoleMode = 'Plain'
+        [string] $ConsoleMode = 'Plain',
+
+        [switch] $AllowBack,
+
+        [switch] $AllowQuit
     )
 
-    $result = Read-ShareSurferConsoleBoolean -Prompt $Prompt -Default $Value -ConsoleMode $ConsoleMode
-    [bool]$result.Value
+    Read-ShareSurferConsoleBoolean -Prompt $Prompt -Default $Value -AllowBack:$AllowBack -AllowQuit:$AllowQuit -ConsoleMode $ConsoleMode
 }
 
 function Write-ShareSurferStartupStepHeader {
